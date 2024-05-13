@@ -13,6 +13,7 @@
 
 namespace igl {
 namespace vulkan {
+    std::atomic_int s_buffer_count = 0;
 
 VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
                            VkDevice device,
@@ -26,6 +27,9 @@ VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
   usageFlags_(usageFlags),
   memFlags_(memFlags) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+
+    ++s_buffer_count;
+    IGL_LOG_ERROR("[VulkanBuffer][LeakDetect]new VulkanBuffer, Remain count::%d", s_buffer_count.load());
 
   IGL_ASSERT(bufferSize > 0);
 
@@ -113,6 +117,9 @@ VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
 
 VulkanBuffer::~VulkanBuffer() {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
+
+    --s_buffer_count;
+    IGL_LOG_ERROR("[VulkanBuffer][LeakDetect]delete VulkanBuffer, Remain count:%d", s_buffer_count.load());
 
   if (IGL_VULKAN_USE_VMA) {
     if (mappedPtr_) {
