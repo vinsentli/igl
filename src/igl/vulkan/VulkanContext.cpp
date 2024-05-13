@@ -361,7 +361,9 @@ VulkanContext::VulkanContext(const VulkanContextConfig& config,
 
   vulkan::functions::initialize(*tableImpl_);
 
+#if IGL_USE_GLSLANG
   glslang_initialize_process();
+#endif
 
   createInstance(numExtraInstanceExtensions, extraInstanceExtensions);
 
@@ -452,7 +454,9 @@ VulkanContext::~VulkanContext() {
 #endif // defined(VK_EXT_debug_utils) && !IGL_PLATFORM_ANDROID
   vf_.vkDestroyInstance(vkInstance_, nullptr);
 
+#if IGL_USE_GLSLANG
   glslang_finalize_process();
+#endif
 
 #if IGL_DEBUG || defined(IGL_FORCE_ENABLE_LOGS)
   if (config_.enableExtraLogs) {

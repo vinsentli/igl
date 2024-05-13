@@ -18,12 +18,14 @@
 namespace igl {
 namespace vulkan {
 
+#if IGL_USE_GLSLANG
 Result compileShader(const VulkanFunctionTable& vf,
                      VkDevice device,
                      VkShaderStageFlagBits stage,
                      const char* code,
                      std::vector<uint32_t>& outSPIRV,
                      const glslang_resource_t* glslLangResource = nullptr);
+#endif
 
 /**
  * @brief RAII wrapper for a Vulkan shader module.

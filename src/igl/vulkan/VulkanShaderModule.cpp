@@ -7,7 +7,10 @@
 
 #include <igl/vulkan/VulkanShaderModule.h>
 
+#if IGL_USE_GLSLANG
 #include <glslang/Include/glslang_c_interface.h>
+#endif
+
 #include <igl/vulkan/Common.h>
 
 namespace {
@@ -56,6 +59,7 @@ void logShaderSource(const char* text) {
 namespace igl {
 namespace vulkan {
 
+#if IGL_USE_GLSLANG
 Result compileShader(const VulkanFunctionTable& vf,
                      VkDevice device,
                      VkShaderStageFlagBits stage,
@@ -127,6 +131,7 @@ Result compileShader(const VulkanFunctionTable& vf,
 
   return Result();
 }
+#endif
 
 VulkanShaderModule::VulkanShaderModule(const VulkanFunctionTable& vf,
                                        VkDevice device,

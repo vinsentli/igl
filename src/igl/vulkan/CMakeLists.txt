@@ -8,6 +8,8 @@ cmake_minimum_required(VERSION 3.16)
 
 project(IGLVulkan CXX C)
 
+#add_definitions("-DIGL_USE_GLSLANG=1")
+
 file(GLOB SRC_FILES LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.cpp *.c util/*.cpp)
 file(GLOB HEADER_FILES LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.h util/*.h)
 
@@ -34,16 +36,17 @@ set(ENABLE_OPT              OFF CACHE BOOL "")
 set(ENABLE_SPVREMAPPER      OFF CACHE BOOL "")
 set(SKIP_GLSLANG_INSTALL    ON  CACHE BOOL "")
 add_subdirectory(${IGL_ROOT_DIR}/third-party/deps/src/glslang "glslang")
-igl_set_folder(GenericCodeGen     "third-party/glslang")
-igl_set_folder(glslang            "third-party/glslang")
-igl_set_folder(MachineIndependent "third-party/glslang")
-igl_set_folder(OGLCompiler        "third-party/glslang")
-igl_set_folder(OSDependent        "third-party/glslang")
+#igl_set_folder(GenericCodeGen     "third-party/glslang")
+#igl_set_folder(glslang            "third-party/glslang")
+#igl_set_folder(MachineIndependent "third-party/glslang")
+#igl_set_folder(OGLCompiler        "third-party/glslang")
+#igl_set_folder(OSDependent        "third-party/glslang")
 igl_set_folder(SPIRV              "third-party/glslang")
-igl_set_folder(glslang-default-resource-limits "third-party/glslang")
+#igl_set_folder(glslang-default-resource-limits "third-party/glslang")
 # cmake-format: on
 
-target_link_libraries(IGLVulkan PUBLIC glslang SPIRV glslang-default-resource-limits)
+target_link_libraries(IGLVulkan PUBLIC SPIRV)
+#target_link_libraries(IGLVulkan PUBLIC glslang SPIRV glslang-default-resource-limits)
 
 find_package(Vulkan REQUIRED)
 

@@ -9,7 +9,11 @@
 
 #pragma once
 
+#if IGL_USE_GLSLANG
 #include <glslang/Include/glslang_c_interface.h>
+#else
+#include <stdbool.h>
+#endif
 
 #include <igl/Macros.h>
 #include <igl/vulkan/VulkanFunctionTable.h>
@@ -424,9 +428,11 @@ VkBufferImageCopy ivkGetBufferImageCopy3D(uint32_t bufferOffset,
                                           const VkExtent3D extent,
                                           VkImageSubresourceLayers imageSubresource);
 
+#if IGL_USE_GLSLANG
 glslang_input_t ivkGetGLSLangInput(VkShaderStageFlagBits stage,
                                    const glslang_resource_t* resource,
                                    const char* shaderCode);
+#endif
 
 void ivkImageMemoryBarrier(const struct VulkanFunctionTable* vt,
                            VkCommandBuffer buffer,
@@ -517,8 +523,10 @@ VkResult ivkVmaCreateAllocator(const struct VulkanFunctionTable* vt,
                                VkDeviceSize preferredLargeHeapBlockSize,
                                VmaAllocator* outVma);
 
+#if IGL_USE_GLSLANG
 void ivkGlslangResource(glslang_resource_t* glslangResource,
                         const VkPhysicalDeviceProperties* deviceProperties);
+#endif
 
 #ifdef __cplusplus
 }

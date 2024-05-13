@@ -305,6 +305,8 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage
                                                                Result* outResult) const {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
+#if IGL_USE_GLSLANG
+
   VkDevice device = ctx_->device_->getVkDevice();
   const VkShaderStageFlagBits vkStage = shaderStageToVkShaderStage(stage);
   IGL_ASSERT(vkStage != VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM);
@@ -403,6 +405,9 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage
       device,
       vkShaderModule,
       util::getReflectionData(spirv.data(), spirv.size() * sizeof(uint32_t)));
+#else
+  return nullptr;
+#endif
 }
 
 std::shared_ptr<IFramebuffer> Device::createFramebuffer(const FramebufferDesc& desc,

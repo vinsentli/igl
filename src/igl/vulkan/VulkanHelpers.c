@@ -1254,6 +1254,7 @@ VkRect2D ivkGetRect2D(int32_t x, int32_t y, uint32_t width, uint32_t height) {
   return rect;
 }
 
+#if IGL_USE_GLSLANG
 static glslang_stage_t getGLSLangShaderStage(VkShaderStageFlagBits stage) {
   switch (stage) {
   case VK_SHADER_STAGE_VERTEX_BIT:
@@ -1295,6 +1296,7 @@ glslang_input_t ivkGetGLSLangInput(VkShaderStageFlagBits stage,
   };
   return input;
 }
+#endif
 
 VkResult ivkCreateShaderModuleFromSPIRV(const struct VulkanFunctionTable* vt,
                                         VkDevice device,
@@ -1662,6 +1664,7 @@ VkResult ivkVmaCreateAllocator(const struct VulkanFunctionTable* vt,
   return vmaCreateAllocator(&ci, outVma);
 }
 
+#if IGL_USE_GLSLANG
 void ivkGlslangResource(glslang_resource_t* glslangResource,
                         const VkPhysicalDeviceProperties* deviceProperties) {
   const VkPhysicalDeviceLimits* limits = deviceProperties ? &deviceProperties->limits : NULL;
@@ -1780,3 +1783,4 @@ void ivkGlslangResource(glslang_resource_t* glslangResource,
 
   *glslangResource = resource;
 }
+#endif
