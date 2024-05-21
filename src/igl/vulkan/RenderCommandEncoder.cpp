@@ -132,6 +132,8 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
                                       Result* outResult) {
   IGL_PROFILER_FUNCTION();
 
+  processDependencies(dependencies);
+
   framebuffer_ = framebuffer;
   dependencies_ = dependencies;
 
@@ -682,17 +684,52 @@ void RenderCommandEncoder::drawIndexed(PrimitiveType primitiveType,
       cmdBuffer_, (uint32_t)indexCount, instanceCount, 0, baseVertex, baseInstance);
 }
 
+void RenderCommandEncoder::drawIndexed(PrimitiveType primitiveType,
+                                       size_t indexCount,
+                                       uint32_t instanceCount,
+                                       uint32_t firstIndex,
+                                       int32_t vertexOffset,
+                                       uint32_t baseInstance) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DRAW);
+  IGL_PROFILER_ZONE_GPU_COLOR_VK(
+      "drawIndexed()", ctx_.tracyCtx_, cmdBuffer_, IGL_PROFILER_COLOR_DRAW);
+
+  ctx_.drawCallCount_ += drawCallCountEnabled_;
+
+  if (indexCount == 0) {
+    // IGL/OpenGL tests rely on this behavior due to how state caching is organized over there.
+    // If we do not return here, Validation Layers will complain.
+    return;
+  }
+
+  IGL_ASSERT_MSG(rps_, "Did you forget to call bindRenderPipelineState()?");
+
+  ensureVertexBuffers();
+
+  dynamicState_.setTopology(primitiveTypeToVkPrimitiveTopology(primitiveType));
+  flushDynamicState();
+
+#if IGL_VULKAN_PRINT_COMMANDS
+  IGL_LOG_INFO("%p vkCmdDrawIndexed(%u, %u, %u, %i, %u)\n",
+               cmdBuffer_,
+               (uint32_t)indexCount,
+               instanceCount,
+               firstIndex,
+               vertexOffset,
+               baseInstance);
+#endif // IGL_VULKAN_PRINT_COMMANDS
+  ctx_.vf_.vkCmdDrawIndexed(
+      cmdBuffer_, (uint32_t)indexCount, instanceCount, firstIndex, vertexOffset, baseInstance);
+}
+
 void RenderCommandEncoder::drawIndexedIndirect(PrimitiveType primitiveType,
-                                               IndexFormat indexFormat,
-                                               IBuffer& indexBuffer,
                                                IBuffer& indirectBuffer,
                                                size_t indirectBufferOffset) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DRAW);
   IGL_PROFILER_ZONE_GPU_COLOR_VK(
       "drawIndexedIndirect()", ctx_.tracyCtx_, cmdBuffer_, IGL_PROFILER_COLOR_DRAW);
 
-  multiDrawIndexedIndirect(
-      primitiveType, indexFormat, indexBuffer, indirectBuffer, indirectBufferOffset, 1, 0);
+  multiDrawIndexedIndirect(primitiveType, indirectBuffer, indirectBufferOffset, 1, 0);
 }
 
 void RenderCommandEncoder::multiDrawIndirect(PrimitiveType primitiveType,
@@ -723,8 +760,6 @@ void RenderCommandEncoder::multiDrawIndirect(PrimitiveType primitiveType,
 }
 
 void RenderCommandEncoder::multiDrawIndexedIndirect(PrimitiveType primitiveType,
-                                                    IndexFormat indexFormat,
-                                                    IBuffer& indexBuffer,
                                                     IBuffer& indirectBuffer,
                                                     size_t indirectBufferOffset,
                                                     uint32_t drawCount,
@@ -742,11 +777,7 @@ void RenderCommandEncoder::multiDrawIndexedIndirect(PrimitiveType primitiveType,
 
   ctx_.drawCallCount_ += drawCallCountEnabled_;
 
-  const igl::vulkan::Buffer* bufIndex = static_cast<igl::vulkan::Buffer*>(&indexBuffer);
   const igl::vulkan::Buffer* bufIndirect = static_cast<igl::vulkan::Buffer*>(&indirectBuffer);
-
-  const VkIndexType type = indexFormatToVkIndexType(indexFormat);
-  ctx_.vf_.vkCmdBindIndexBuffer(cmdBuffer_, bufIndex->getVkBuffer(), 0, type);
 
   ctx_.vf_.vkCmdDrawIndexedIndirect(cmdBuffer_,
                                     bufIndirect->getVkBuffer(),
@@ -925,6 +956,55 @@ void RenderCommandEncoder::blitColorImage(const igl::vulkan::VulkanImage& srcIma
                              destSubresourceRange);
 
   destImage.imageLayout_ = targetLayout;
+}
+
+void RenderCommandEncoder::processDependencies(const Dependencies& dependencies) {
+  // 1. Process all textures
+  {
+    const Dependencies* deps = &dependencies;
+
+    while (deps) {
+      for (ITexture* IGL_NULLABLE tex : deps->textures) {
+        if (!tex) {
+          break;
+        }
+        transitionToShaderReadOnly(cmdBuffer_, tex);
+      }
+      deps = deps->next;
+    }
+  }
+
+  // 2. Process all buffers
+  {
+    const Dependencies* deps = &dependencies;
+
+    while (deps) {
+      for (IBuffer* IGL_NULLABLE buf : deps->buffers) {
+        if (!buf) {
+          break;
+        }
+        VkPipelineStageFlags dstStageFlags =
+            VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        const auto* vkBuf = static_cast<const igl::vulkan::Buffer*>(buf);
+        const VkBufferUsageFlags flags = vkBuf->getBufferUsageFlags();
+        if ((flags & VK_BUFFER_USAGE_INDEX_BUFFER_BIT) ||
+            (flags & VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)) {
+          dstStageFlags |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+        }
+        if (flags & VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT) {
+          dstStageFlags |= VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+        }
+        // compute-to-graphics barrier
+        ivkBufferBarrier(&ctx_.vf_,
+                         cmdBuffer_,
+                         vkBuf->getVkBuffer(),
+                         vkBuf->getBufferUsageFlags(),
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         dstStageFlags);
+      }
+      deps = deps->next;
+    }
+  }
 }
 
 } // namespace vulkan

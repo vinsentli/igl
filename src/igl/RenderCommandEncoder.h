@@ -88,11 +88,14 @@ class IRenderCommandEncoder : public ICommandEncoder {
                            size_t indexBufferOffset,
                            uint32_t instanceCount = 1,
                            int32_t baseVertex = 0,
-                           uint32_t baseInstance = 0) = 0;
-  // NOTE: indexBufferOffset parameter is supported in Metal but not OpenGL
+                           uint32_t baseInstance = 0) = 0; // old-n-sad
+  virtual void drawIndexed(PrimitiveType primitiveType,
+                           size_t indexCount,
+                           uint32_t instanceCount = 1,
+                           uint32_t firstIndex = 0,
+                           int32_t vertexOffset = 0,
+                           uint32_t baseInstance = 0) = 0; // new-n-rad
   virtual void drawIndexedIndirect(PrimitiveType primitiveType,
-                                   IndexFormat indexFormat,
-                                   IBuffer& indexBuffer,
                                    IBuffer& indirectBuffer,
                                    size_t indirectBufferOffset) = 0;
   virtual void multiDrawIndirect(PrimitiveType primitiveType,
@@ -101,8 +104,6 @@ class IRenderCommandEncoder : public ICommandEncoder {
                                  uint32_t drawCount,
                                  uint32_t stride = 0) = 0;
   virtual void multiDrawIndexedIndirect(PrimitiveType primitiveType,
-                                        IndexFormat indexFormat,
-                                        IBuffer& indexBuffer,
                                         IBuffer& indirectBuffer,
                                         size_t indirectBufferOffset,
                                         uint32_t drawCount,

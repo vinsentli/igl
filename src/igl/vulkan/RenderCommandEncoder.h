@@ -87,9 +87,13 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
                    uint32_t instanceCount,
                    int32_t baseVertex,
                    uint32_t baseInstance) override;
+  void drawIndexed(PrimitiveType primitiveType,
+                   size_t indexCount,
+                   uint32_t instanceCount,
+                   uint32_t firstIndex,
+                   int32_t vertexOffset,
+                   uint32_t baseInstance) override;
   void drawIndexedIndirect(PrimitiveType primitiveType,
-                           IndexFormat indexFormat,
-                           IBuffer& indexBuffer,
                            IBuffer& indirectBuffer,
                            size_t indirectBufferOffset) override;
   void multiDrawIndirect(PrimitiveType primitiveType,
@@ -98,8 +102,6 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
                          uint32_t drawCount,
                          uint32_t stride = 0) override;
   void multiDrawIndexedIndirect(PrimitiveType primitiveType,
-                                IndexFormat indexFormat,
-                                IBuffer& indexBuffer,
                                 IBuffer& indirectBuffer,
                                 size_t indirectBufferOffset,
                                 uint32_t drawCount,
@@ -140,6 +142,7 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
                   const std::shared_ptr<IFramebuffer>& framebuffer,
                   const Dependencies& dependencies,
                   Result* outResult);
+  void processDependencies(const Dependencies& dependencies);
 
  private:
   VulkanContext& ctx_;

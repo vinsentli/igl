@@ -13,6 +13,7 @@
 #include <igl/vulkan/Framebuffer.h>
 #include <igl/vulkan/RenderCommandEncoder.h>
 #include <igl/vulkan/Texture.h>
+#include <igl/vulkan/VulkanBuffer.h>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanImage.h>
 #include <igl/vulkan/VulkanImageView.h>
@@ -39,12 +40,6 @@ std::unique_ptr<IRenderCommandEncoder> CommandBuffer::createRenderCommandEncoder
   IGL_ASSERT(framebuffer);
 
   framebuffer_ = framebuffer;
-
-  for (ITexture* IGL_NULLABLE tex : dependencies.textures) {
-    if (tex) {
-      transitionToShaderReadOnly(wrapper_.cmdBuf_, tex);
-    }
-  }
 
   // prepare all the color attachments
   for (const auto i : framebuffer->getColorAttachmentIndices()) {
