@@ -7,39 +7,37 @@
 
 // @fb-only
 
-#include "XrAppImplVulkan.h"
-
-#include <shell/openxr/XrLog.h>
+#include <shell/openxr/mobile/vulkan/XrAppImplVulkan.h>
 
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/HWDevice.h>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanDevice.h>
 
+#include <shell/openxr/XrLog.h>
 #include <shell/openxr/XrSwapchainProvider.h>
 #include <shell/openxr/mobile/vulkan/XrSwapchainProviderImplVulkan.h>
 
 namespace igl::shell::openxr::mobile {
 std::vector<const char*> XrAppImplVulkan::getXrRequiredExtensions() const {
-  return {XR_KHR_VULKAN_ENABLE_EXTENSION_NAME,
-          XR_FB_SWAPCHAIN_UPDATE_STATE_VULKAN_EXTENSION_NAME,
-          XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
-#if defined(IGL_CMAKE_BUILD)
-          XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME
+  return {
+      XR_KHR_VULKAN_ENABLE_EXTENSION_NAME,
+      XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
+  };
+}
+
+std::vector<const char*> XrAppImplVulkan::getXrOptionalExtensions() const {
+  return {
+#if IGL_PLATFORM_ANDROID
+      XR_FB_SWAPCHAIN_UPDATE_STATE_VULKAN_EXTENSION_NAME,
 #endif
   };
 }
 
-void* XrAppImplVulkan::getInstanceCreateExtension() {
-#if defined(IGL_CMAKE_BUILD)
-  return &instanceCreateInfoAndroid_;
-#else
-  return nullptr;
-#endif
-}
-
 std::unique_ptr<igl::IDevice> XrAppImplVulkan::initIGL(XrInstance instance, XrSystemId systemId) {
   // Get the API requirements.
+  // XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING is returned on calls to xrCreateSession
+  // if this function has not been called for the instance and systemId before xrCreateSession.
   PFN_xrGetVulkanGraphicsRequirementsKHR pfnGetVulkanGraphicsRequirementsKHR = NULL;
   XR_CHECK(xrGetInstanceProcAddr(instance,
                                  "xrGetVulkanGraphicsRequirementsKHR",
@@ -61,7 +59,7 @@ std::unique_ptr<igl::IDevice> XrAppImplVulkan::initIGL(XrInstance instance, XrSy
       instance, systemId, bufferSize, &bufferSize, requiredVkInstanceExtensionsBuffer_.data()));
   requiredVkInstanceExtensions_ = processExtensionsBuffer(requiredVkInstanceExtensionsBuffer_);
 
-  IGL_LOG_INFO("Number of required Vulkan extensions: %d", requiredVkInstanceExtensions_.size());
+  IGL_LOG_INFO("Number of required Vulkan extensions: %d\n", requiredVkInstanceExtensions_.size());
 
   // Get the required device extensions.
   bufferSize = 0;
@@ -88,17 +86,30 @@ std::unique_ptr<igl::IDevice> XrAppImplVulkan::initIGL(XrInstance instance, XrSy
                                  "xrGetVulkanGraphicsDeviceKHR",
                                  (PFN_xrVoidFunction*)(&pfnGetVulkanGraphicsDeviceKHR)));
 
+  const std::vector<HWDeviceDesc> devices =
+      vulkan::HWDevice::queryDevices(*context, HWDeviceQueryDesc(HWDeviceType::Unknown), nullptr);
+  if (devices.empty()) {
+    IGL_LOG_ERROR("IGL: Failed to find a suitable Vulkan hardware device.\n");
+    return nullptr;
+  }
+
   // Let OpenXR find a suitable Vulkan physical device.
   VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
   XR_CHECK(
       pfnGetVulkanGraphicsDeviceKHR(instance, systemId, context->getVkInstance(), &physicalDevice));
   if (physicalDevice == VK_NULL_HANDLE) {
-    IGL_LOG_ERROR("OpenXR: Failed to get vulkan physical device");
+    IGL_LOG_ERROR("OpenXR: Failed to get vulkan physical device.\n");
     return nullptr;
   }
 
-  igl::HWDeviceDesc hwDevice(reinterpret_cast<uintptr_t>(physicalDevice),
-                             igl::HWDeviceType::IntegratedGpu);
+  igl::HWDeviceDesc hwDevice(0, HWDeviceType::Unknown);
+  for (const auto& device : devices) {
+    if (device.guid == reinterpret_cast<uintptr_t>(physicalDevice)) {
+      hwDevice = device;
+      IGL_LOG_INFO("IGL: Selected hardware device: %s", device.name.c_str());
+      break;
+    }
+  }
 
   auto device = igl::vulkan::HWDevice::create(std::move(context),
                                               hwDevice,
@@ -136,10 +147,10 @@ XrSession XrAppImplVulkan::initXrSession(XrInstance instance,
   XrSession session;
   XR_CHECK(xrResult = xrCreateSession(instance, &sessionCreateInfo, &session));
   if (xrResult != XR_SUCCESS) {
-    IGL_LOG_ERROR("Failed to create XR session: %d.", xrResult);
+    IGL_LOG_ERROR("Failed to create XR session: %d\n", xrResult);
     return XR_NULL_HANDLE;
   }
-  IGL_LOG_INFO("XR session created");
+  IGL_LOG_INFO("XR session created.\n");
 
   return session;
 } // namespace igl::shell::openxr::mobile

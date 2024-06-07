@@ -18,7 +18,8 @@ TEST_F(TextureTest, Upload) {
   const TextureDesc texDesc = TextureDesc::new2D(TextureFormat::RGBA_UNorm8,
                                                  kOffscreenTexWidth,
                                                  kOffscreenTexHeight,
-                                                 TextureDesc::TextureUsageBits::Sampled);
+                                                 TextureDesc::TextureUsageBits::Sampled |
+                                                     TextureDesc::TextureUsageBits::Attachment);
   inputTexture_ = iglDev_->createTexture(texDesc, &ret);
   ASSERT_EQ(ret.code, Result::Code::Ok);
   ASSERT_TRUE(inputTexture_ != nullptr);
@@ -83,7 +84,7 @@ TEST_F(TextureTest, Passthrough) {
   cmds->bindSamplerState(textureUnit_, BindTarget::kFragment, samp_.get());
 
   cmds->bindIndexBuffer(*ib_, IndexFormat::UInt16);
-  cmds->drawIndexed(PrimitiveType::Triangle, 6);
+  cmds->drawIndexed(6);
 
   cmds->endEncoding();
 
@@ -155,7 +156,7 @@ TEST_F(TextureTest, PassthroughSubTexture) {
   cmds->bindSamplerState(textureUnit_, BindTarget::kFragment, samp_.get());
 
   cmds->bindIndexBuffer(*ib_, IndexFormat::UInt16);
-  cmds->drawIndexed(PrimitiveType::Triangle, 6);
+  cmds->drawIndexed(6);
 
   cmds->endEncoding();
 
@@ -224,7 +225,7 @@ TEST_F(TextureTest, FBCopy) {
 
   // draw 0 indices here just to clear the FB
   cmds->bindIndexBuffer(*ib_, IndexFormat::UInt16);
-  cmds->drawIndexed(PrimitiveType::Triangle, 0);
+  cmds->drawIndexed(0);
   cmds->endEncoding();
 
   cmdQueue_->submit(*cmdBuf_);
@@ -255,7 +256,7 @@ TEST_F(TextureTest, FBCopy) {
   cmds->bindVertexBuffer(data::shader::simpleUvIndex, *uv_);
   cmds->bindRenderPipelineState(pipelineState);
   cmds->bindIndexBuffer(*ib_, IndexFormat::UInt16);
-  cmds->drawIndexed(PrimitiveType::Triangle, 0);
+  cmds->drawIndexed(0);
   cmds->endEncoding();
 
   cmdQueue_->submit(*cmdBuf_);
@@ -285,7 +286,7 @@ TEST_F(TextureTest, FBCopy) {
   cmds->bindSamplerState(textureUnit_, BindTarget::kFragment, samp_.get());
 
   cmds->bindIndexBuffer(*ib_, IndexFormat::UInt16);
-  cmds->drawIndexed(PrimitiveType::Triangle, 6);
+  cmds->drawIndexed(6);
 
   cmds->endEncoding();
 
@@ -521,7 +522,7 @@ TEST_F(TextureTest, UploadAlignment) {
     cmds->bindSamplerState(textureUnit_, BindTarget::kFragment, samp_.get());
 
     cmds->bindIndexBuffer(*ib_, IndexFormat::UInt16);
-    cmds->drawIndexed(PrimitiveType::Triangle, 6);
+    cmds->drawIndexed(6);
 
     cmds->endEncoding();
 
@@ -617,7 +618,7 @@ TEST_F(TextureTest, Resize) {
   cmds->bindSamplerState(textureUnit_, BindTarget::kFragment, samp_.get());
 
   cmds->bindIndexBuffer(*ib_, IndexFormat::UInt16);
-  cmds->drawIndexed(PrimitiveType::Triangle, 6);
+  cmds->drawIndexed(6);
 
   cmds->endEncoding();
 

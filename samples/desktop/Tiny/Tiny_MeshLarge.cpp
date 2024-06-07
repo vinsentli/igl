@@ -1922,12 +1922,12 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
 #if USE_OPENGL_BACKEND
     int start = 0;
     for (auto numVertices : shapeVertexCnt_) {
-      commands->draw(PrimitiveType::Triangle, start, numVertices);
+      commands->draw(numVertices, 1, start);
       start += numVertices;
     }
 #else
     commands->bindIndexBuffer(*ib0_, igl::IndexFormat::UInt32);
-    commands->drawIndexed(PrimitiveType::Triangle, indexData_.size());
+    commands->drawIndexed(indexData_.size());
 #endif
     commands->popDebugGroupLabel();
     commands->endEncoding();
@@ -2002,11 +2002,11 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
       commands->bindTexture(1, igl::BindTarget::kFragment, ambientTextureReference.get());
       commands->bindTexture(2, igl::BindTarget::kFragment, diffuseTextureReference.get());
       commands->bindTexture(3, igl::BindTarget::kFragment, alphaTextureReference.get());
-      commands->draw(PrimitiveType::Triangle, shapeStart, numVertices);
+      commands->draw(numVertices, 1, shapeStart);
       if (enableWireframe_) {
         commands->bindRenderPipelineState(renderPipelineState_MeshWireframe_);
         commands->bindVertexBuffer(0, *vb0_);
-        commands->draw(PrimitiveType::Triangle, shapeStart, numVertices);
+        commands->draw(numVertices, 1, shapeStart);
 
         // Bind the non-wireframe pipeline and the vertex buffer
         commands->bindRenderPipelineState(renderPipelineState_Mesh_);
@@ -2021,10 +2021,10 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
     commands->bindSamplerState(0, igl::BindTarget::kFragment, samplerShadow_.get());
     commands->bindSamplerState(1, igl::BindTarget::kFragment, sampler_.get());
     commands->bindIndexBuffer(*ib0_, IndexFormat::UInt32);
-    commands->drawIndexed(PrimitiveType::Triangle, indexData_.size());
+    commands->drawIndexed(indexData_.size());
     if (enableWireframe_) {
       commands->bindRenderPipelineState(renderPipelineState_MeshWireframe_);
-      commands->drawIndexed(PrimitiveType::Triangle, indexData_.size());
+      commands->drawIndexed(indexData_.size());
     }
 #endif
     commands->popDebugGroupLabel();
@@ -2035,7 +2035,7 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
     commands->bindSamplerState(1, igl::BindTarget::kFragment, sampler_.get());
     commands->pushDebugGroupLabel("Render Skybox", igl::Color(0, 1, 0));
     commands->bindDepthStencilState(depthStencilStateLEqual_);
-    commands->draw(PrimitiveType::Triangle, 0, 3 * 6 * 2);
+    commands->draw(3u * 6u * 2u);
     commands->popDebugGroupLabel();
     commands->endEncoding();
 
@@ -2084,7 +2084,7 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
                           kNumSamplesMSAA > 1 ? fbOffscreen_->getResolveColorAttachment(0).get()
                                               : fbOffscreen_->getColorAttachment(0).get());
     commands->bindSamplerState(0, igl::BindTarget::kFragment, sampler_.get());
-    commands->draw(PrimitiveType::Triangle, 0, 3);
+    commands->draw(3);
     commands->popDebugGroupLabel();
 
 #if IGL_WITH_IGLU

@@ -13,30 +13,12 @@
 
 #include <array>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
-#if defined(IGL_CMAKE_BUILD)
-
-#if IGL_BACKEND_VULKAN
-#include <igl/vulkan/Common.h>
-#endif // IGL_BACKEND_VULKAN
-
-#if IGL_BACKEND_OPENGL
-#include <igl/opengl/GLIncludes.h>
-#endif // IGL_BACKEND_OPENGL
-
-#if IGL_PLATFORM_ANDROID
-#include <jni.h>
-#if IGL_BACKEND_OPENGL
-#include <EGL/egl.h>
-#endif // IGL_BACKEND_OPENGL
-#endif // IGL_PLATFORM_ANDROID
-
-#include <openxr/openxr_platform.h>
-
-#endif // IGL_CMAKE_BUILD
-
-#include <openxr/openxr.h>
+#include <shell/openxr/XrComposition.h>
+#include <shell/openxr/XrPlatform.h>
+#include <shell/openxr/XrRefreshRate.h>
 
 #include <glm/glm.hpp>
 
@@ -49,7 +31,9 @@ struct AAssetManager;
 
 // forward declarations
 namespace igl::shell::openxr {
+class XrHands;
 class XrSwapchainProvider;
+class XrPassthrough;
 namespace impl {
 class XrAppImpl;
 }
@@ -59,7 +43,7 @@ namespace igl::shell::openxr {
 
 class XrApp {
  public:
-  XrApp(std::unique_ptr<impl::XrAppImpl>&& impl);
+  XrApp(std::unique_ptr<impl::XrAppImpl>&& impl, bool shouldPresent = true);
   ~XrApp();
 
   inline bool initialized() const {
@@ -67,13 +51,7 @@ class XrApp {
   }
 
   struct InitParams {
-    enum RefreshRateMode {
-      UseDefault,
-      UseMaxRefreshRate,
-      UseSpecificRefreshRate,
-    };
-    RefreshRateMode refreshRateMode_ = RefreshRateMode::UseDefault;
-    float desiredSpecificRefreshRate_ = 90.0f;
+    XrRefreshRate::Params refreshRateParams;
   };
   bool initialize(const struct android_app* app, const InitParams& params);
 
@@ -107,10 +85,6 @@ class XrApp {
   bool checkExtensions();
   bool createInstance();
   bool createSystem();
-  bool createPassthrough();
-  bool createHandsTracking();
-  void updateHandMeshes();
-  void updateHandTracking();
   bool enumerateViewConfigurations();
   void enumerateReferenceSpaces();
   void enumerateBlendModes();
@@ -123,28 +97,23 @@ class XrApp {
   void render();
   void endFrame(XrFrameState frameState);
 
-  float getCurrentRefreshRate();
-  float getMaxRefreshRate();
-  bool setRefreshRate(float refreshRate);
-  void setMaxRefreshRate();
-  bool isRefreshRateSupported(float refreshRate);
-  const std::vector<float>& getSupportedRefreshRates();
+  void updateQuadComposition() noexcept;
 
- private:
-  static constexpr uint32_t kNumViews = 2; // 2 for stereo
+  [[nodiscard]] inline bool passthroughSupported() const noexcept;
+  [[nodiscard]] inline bool passthroughEnabled() const noexcept;
 
-  void queryCurrentRefreshRate();
-  void querySupportedRefreshRates();
-  void setupProjectionAndDepth(std::vector<XrCompositionLayerProjectionView>& projectionViews,
-                               std::vector<XrCompositionLayerDepthInfoKHR>& depthInfos);
-  void endFrameQuadLayerComposition(XrFrameState frameState);
+  [[nodiscard]] inline bool handsTrackingSupported() const noexcept;
+  [[nodiscard]] inline bool handsTrackingMeshSupported() const noexcept;
+  [[nodiscard]] inline bool refreshRateExtensionSupported() const noexcept;
+  [[nodiscard]] inline bool instanceCreateInfoAndroidSupported() const noexcept;
+  [[nodiscard]] inline bool alphaBlendCompositionSupported() const noexcept;
 
   void* nativeWindow_ = nullptr;
   bool resumed_ = false;
   bool sessionActive_ = false;
 
   std::vector<XrExtensionProperties> extensions_;
-  std::vector<const char*> requiredExtensions_;
+  std::vector<const char*> enabledExtensions_;
 
   XrInstanceProperties instanceProps_ = {
       .type = XR_TYPE_INSTANCE_PROPERTIES,
@@ -156,59 +125,38 @@ class XrApp {
       .next = nullptr,
   };
 
+#if IGL_PLATFORM_ANDROID
+  XrInstanceCreateInfoAndroidKHR instanceCreateInfoAndroid_ = {
+      .type = XR_TYPE_INSTANCE_CREATE_INFO_ANDROID_KHR,
+  };
+#endif // IGL_PLATFORM_ANDROID
+
+  std::unordered_set<std::string> supportedOptionalXrExtensions_;
+
   XrInstance instance_ = XR_NULL_HANDLE;
   XrSystemId systemId_ = XR_NULL_SYSTEM_ID;
   XrSession session_ = XR_NULL_HANDLE;
 
-  XrViewConfigurationProperties viewConfigProps_ = {.type = XR_TYPE_VIEW_CONFIGURATION_PROPERTIES};
-  std::array<XrViewConfigurationView, kNumViews> viewports_;
-  std::array<XrView, kNumViews> views_;
-  std::array<XrPosef, kNumViews> viewStagePoses_;
-  std::array<glm::mat4, kNumViews> viewTransforms_;
-  std::array<glm::vec3, kNumViews> cameraPositions_;
-
   bool useSinglePassStereo_ = true;
+  bool additiveBlendingSupported_ = false;
   bool useQuadLayerComposition_ = false;
-  uint32_t numQuadLayersPerView_ = 1;
-  igl::shell::QuadLayerParams quadLayersParams_;
 
-  // If useSinglePassStereo_ is true, only one XrSwapchainProvider will be created.
-  std::vector<std::unique_ptr<XrSwapchainProvider>> swapchainProviders_;
+  XrViewConfigurationProperties viewConfigProps_ = {.type = XR_TYPE_VIEW_CONFIGURATION_PROPERTIES};
+  std::array<XrViewConfigurationView, XrComposition::kNumViews> viewports_{};
+  std::array<XrView, XrComposition::kNumViews> views_{};
+  std::array<XrPosef, XrComposition::kNumViews> viewStagePoses_{};
+  std::array<glm::mat4, XrComposition::kNumViews> viewTransforms_{};
+  std::array<glm::vec3, XrComposition::kNumViews> cameraPositions_{};
+
+  std::vector<std::unique_ptr<XrComposition>> compositionLayers_;
 
   XrSpace headSpace_ = XR_NULL_HANDLE;
   XrSpace currentSpace_ = XR_NULL_HANDLE;
   bool stageSpaceSupported_ = false;
 
-  bool additiveBlendingSupported_ = false;
-
-  XrPassthroughFB passthrough_;
-  XrPassthroughLayerFB passthrougLayer_;
-
-  bool passthroughSupported_ = false;
-  PFN_xrCreatePassthroughFB xrCreatePassthroughFB_ = nullptr;
-  PFN_xrDestroyPassthroughFB xrDestroyPassthroughFB_ = nullptr;
-  PFN_xrPassthroughStartFB xrPassthroughStartFB_ = nullptr;
-  PFN_xrCreatePassthroughLayerFB xrCreatePassthroughLayerFB_ = nullptr;
-  PFN_xrDestroyPassthroughLayerFB xrDestroyPassthroughLayerFB_ = nullptr;
-  PFN_xrPassthroughLayerSetStyleFB xrPassthroughLayerSetStyleFB_ = nullptr;
-
-  bool handsTrackingSupported_ = false;
-  bool handsTrackingMeshSupported_ = false;
-  PFN_xrCreateHandTrackerEXT xrCreateHandTrackerEXT_ = nullptr;
-  PFN_xrDestroyHandTrackerEXT xrDestroyHandTrackerEXT_ = nullptr;
-  PFN_xrLocateHandJointsEXT xrLocateHandJointsEXT_ = nullptr;
-  PFN_xrGetHandMeshFB xrGetHandMeshFB_ = nullptr;
-
-  XrHandTrackerEXT leftHandTracker_ = XR_NULL_HANDLE;
-  XrHandTrackerEXT rightHandTracker_ = XR_NULL_HANDLE;
-
-  bool refreshRateExtensionSupported_ = false;
-  std::vector<float> supportedRefreshRates_;
-  float currentRefreshRate_ = 0.0f;
-
-  PFN_xrGetDisplayRefreshRateFB xrGetDisplayRefreshRateFB_ = nullptr;
-  PFN_xrEnumerateDisplayRefreshRatesFB xrEnumerateDisplayRefreshRatesFB_ = nullptr;
-  PFN_xrRequestDisplayRefreshRateFB xrRequestDisplayRefreshRateFB_ = nullptr;
+  std::unique_ptr<XrPassthrough> passthrough_;
+  std::unique_ptr<XrHands> hands_;
+  std::unique_ptr<XrRefreshRate> refreshRate_;
 
   std::unique_ptr<impl::XrAppImpl> impl_;
 

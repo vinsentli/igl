@@ -644,21 +644,18 @@ void RenderCommandEncoder::draw(PrimitiveType primitiveType,
       cmdBuffer_, (uint32_t)vertexCount, instanceCount, (uint32_t)vertexStart, baseInstance);
 }
 
-void RenderCommandEncoder::drawIndexed(PrimitiveType primitiveType,
-                                       size_t indexCount,
-                                       IndexFormat indexFormat,
-                                       IBuffer& indexBuffer,
-                                       size_t indexBufferOffset,
-                                       uint32_t instanceCount,
-                                       int32_t baseVertex,
-                                       uint32_t baseInstance) {
+void RenderCommandEncoder::draw(size_t vertexCount,
+                                uint32_t instanceCount,
+                                uint32_t firstVertex,
+                                uint32_t baseInstance) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DRAW);
-  IGL_PROFILER_ZONE_GPU_COLOR_VK(
-      "drawIndexed()", ctx_.tracyCtx_, cmdBuffer_, IGL_PROFILER_COLOR_DRAW);
+  IGL_PROFILER_ZONE_GPU_COLOR_VK("draw()", ctx_.tracyCtx_, cmdBuffer_, IGL_PROFILER_COLOR_DRAW);
 
   ctx_.drawCallCount_ += drawCallCountEnabled_;
 
-  if (indexCount == 0) {
+  if (vertexCount == 0) {
+    // IGL/OpenGL tests rely on this behavior due to how state caching is organized over there.
+    // If we do not return here, Validation Layers will complain.
     return;
   }
 
@@ -666,22 +663,20 @@ void RenderCommandEncoder::drawIndexed(PrimitiveType primitiveType,
 
   ensureVertexBuffers();
 
-  dynamicState_.setTopology(primitiveTypeToVkPrimitiveTopology(primitiveType));
+  dynamicState_.setTopology(
+      primitiveTypeToVkPrimitiveTopology(rps_->getRenderPipelineDesc().topology));
   flushDynamicState();
 
-  const igl::vulkan::Buffer* buf = static_cast<igl::vulkan::Buffer*>(&indexBuffer);
-
-  const VkIndexType type = indexFormatToVkIndexType(indexFormat);
 #if IGL_VULKAN_PRINT_COMMANDS
-  IGL_LOG_INFO("%p vkCmdBindIndexBuffer(%u)\n", cmdBuffer_, (uint32_t)indexBufferOffset);
+  IGL_LOG_INFO("%p vkCmdDraw(%u, %u, %u, %u)\n",
+               cmdBuffer_,
+               (uint32_t)vertexCount,
+               instanceCount,
+               firstVertex,
+               baseInstance);
 #endif // IGL_VULKAN_PRINT_COMMANDS
-  ctx_.vf_.vkCmdBindIndexBuffer(cmdBuffer_, buf->getVkBuffer(), indexBufferOffset, type);
 
-#if IGL_VULKAN_PRINT_COMMANDS
-  IGL_LOG_INFO("%p vkCmdDrawIndexed(%u, %u)\n", cmdBuffer_, (uint32_t)indexCount, instanceCount);
-#endif // IGL_VULKAN_PRINT_COMMANDS
-  ctx_.vf_.vkCmdDrawIndexed(
-      cmdBuffer_, (uint32_t)indexCount, instanceCount, 0, baseVertex, baseInstance);
+  ctx_.vf_.vkCmdDraw(cmdBuffer_, (uint32_t)vertexCount, instanceCount, firstVertex, baseInstance);
 }
 
 void RenderCommandEncoder::drawIndexed(PrimitiveType primitiveType,
@@ -722,18 +717,45 @@ void RenderCommandEncoder::drawIndexed(PrimitiveType primitiveType,
       cmdBuffer_, (uint32_t)indexCount, instanceCount, firstIndex, vertexOffset, baseInstance);
 }
 
-void RenderCommandEncoder::drawIndexedIndirect(PrimitiveType primitiveType,
-                                               IBuffer& indirectBuffer,
-                                               size_t indirectBufferOffset) {
+void RenderCommandEncoder::drawIndexed(size_t indexCount,
+                                       uint32_t instanceCount,
+                                       uint32_t firstIndex,
+                                       int32_t vertexOffset,
+                                       uint32_t baseInstance) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DRAW);
   IGL_PROFILER_ZONE_GPU_COLOR_VK(
-      "drawIndexedIndirect()", ctx_.tracyCtx_, cmdBuffer_, IGL_PROFILER_COLOR_DRAW);
+      "drawIndexed()", ctx_.tracyCtx_, cmdBuffer_, IGL_PROFILER_COLOR_DRAW);
 
-  multiDrawIndexedIndirect(primitiveType, indirectBuffer, indirectBufferOffset, 1, 0);
+  ctx_.drawCallCount_ += drawCallCountEnabled_;
+
+  if (indexCount == 0) {
+    // IGL/OpenGL tests rely on this behavior due to how state caching is organized over there.
+    // If we do not return here, Validation Layers will complain.
+    return;
+  }
+
+  IGL_ASSERT_MSG(rps_, "Did you forget to call bindRenderPipelineState()?");
+
+  ensureVertexBuffers();
+
+  dynamicState_.setTopology(
+      primitiveTypeToVkPrimitiveTopology(rps_->getRenderPipelineDesc().topology));
+  flushDynamicState();
+
+#if IGL_VULKAN_PRINT_COMMANDS
+  IGL_LOG_INFO("%p vkCmdDrawIndexed(%u, %u, %u, %i, %u)\n",
+               cmdBuffer_,
+               (uint32_t)indexCount,
+               instanceCount,
+               firstIndex,
+               vertexOffset,
+               baseInstance);
+#endif // IGL_VULKAN_PRINT_COMMANDS
+  ctx_.vf_.vkCmdDrawIndexed(
+      cmdBuffer_, (uint32_t)indexCount, instanceCount, firstIndex, vertexOffset, baseInstance);
 }
 
-void RenderCommandEncoder::multiDrawIndirect(PrimitiveType primitiveType,
-                                             IBuffer& indirectBuffer,
+void RenderCommandEncoder::multiDrawIndirect(IBuffer& indirectBuffer,
                                              size_t indirectBufferOffset,
                                              uint32_t drawCount,
                                              uint32_t stride) {
@@ -745,7 +767,8 @@ void RenderCommandEncoder::multiDrawIndirect(PrimitiveType primitiveType,
 
   ensureVertexBuffers();
 
-  dynamicState_.setTopology(primitiveTypeToVkPrimitiveTopology(primitiveType));
+  dynamicState_.setTopology(
+      primitiveTypeToVkPrimitiveTopology(rps_->getRenderPipelineDesc().topology));
   flushDynamicState();
 
   ctx_.drawCallCount_ += drawCallCountEnabled_;
@@ -759,8 +782,7 @@ void RenderCommandEncoder::multiDrawIndirect(PrimitiveType primitiveType,
                              stride ? stride : sizeof(VkDrawIndirectCommand));
 }
 
-void RenderCommandEncoder::multiDrawIndexedIndirect(PrimitiveType primitiveType,
-                                                    IBuffer& indirectBuffer,
+void RenderCommandEncoder::multiDrawIndexedIndirect(IBuffer& indirectBuffer,
                                                     size_t indirectBufferOffset,
                                                     uint32_t drawCount,
                                                     uint32_t stride) {
@@ -772,7 +794,8 @@ void RenderCommandEncoder::multiDrawIndexedIndirect(PrimitiveType primitiveType,
 
   ensureVertexBuffers();
 
-  dynamicState_.setTopology(primitiveTypeToVkPrimitiveTopology(primitiveType));
+  dynamicState_.setTopology(
+      primitiveTypeToVkPrimitiveTopology(rps_->getRenderPipelineDesc().topology));
   flushDynamicState();
 
   ctx_.drawCallCount_ += drawCallCountEnabled_;

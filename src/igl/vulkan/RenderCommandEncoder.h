@@ -79,30 +79,26 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
             size_t vertexCount,
             uint32_t instanceCount,
             uint32_t baseInstance) override;
-  void drawIndexed(PrimitiveType primitiveType,
-                   size_t indexCount,
-                   IndexFormat indexFormat,
-                   IBuffer& indexBuffer,
-                   size_t indexBufferOffset,
-                   uint32_t instanceCount,
-                   int32_t baseVertex,
-                   uint32_t baseInstance) override;
+  void draw(size_t vertexCount,
+            uint32_t instanceCount,
+            uint32_t firstVertex,
+            uint32_t baseInstance) override;
   void drawIndexed(PrimitiveType primitiveType,
                    size_t indexCount,
                    uint32_t instanceCount,
                    uint32_t firstIndex,
                    int32_t vertexOffset,
                    uint32_t baseInstance) override;
-  void drawIndexedIndirect(PrimitiveType primitiveType,
-                           IBuffer& indirectBuffer,
-                           size_t indirectBufferOffset) override;
-  void multiDrawIndirect(PrimitiveType primitiveType,
-                         IBuffer& indirectBuffer,
+  void drawIndexed(size_t indexCount,
+                   uint32_t instanceCount,
+                   uint32_t firstIndex,
+                   int32_t vertexOffset,
+                   uint32_t baseInstance) override;
+  void multiDrawIndirect(IBuffer& indirectBuffer,
                          size_t indirectBufferOffset,
                          uint32_t drawCount,
                          uint32_t stride = 0) override;
-  void multiDrawIndexedIndirect(PrimitiveType primitiveType,
-                                IBuffer& indirectBuffer,
+  void multiDrawIndexedIndirect(IBuffer& indirectBuffer,
                                 size_t indirectBufferOffset,
                                 uint32_t drawCount,
                                 uint32_t stride = 0) override;

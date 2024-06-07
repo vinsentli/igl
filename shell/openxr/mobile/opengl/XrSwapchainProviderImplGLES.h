@@ -5,45 +5,37 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// @fb-only
+
 #pragma once
 
-#include <vector>
-
-#include <android/native_window_jni.h>
-
-#include <EGL/egl.h>
-#include <GLES3/gl3.h>
-
-#ifndef XR_USE_GRAPHICS_API_OPENGL_ES
-#define XR_USE_GRAPHICS_API_OPENGL_ES
-#endif
-#include <openxr/openxr_platform.h>
-
+#include <shell/openxr/XrPlatform.h>
 #include <shell/openxr/impl/XrSwapchainProviderImpl.h>
 
 namespace igl::shell::openxr::mobile {
 class XrSwapchainProviderImplGLES final : public impl::XrSwapchainProviderImpl {
  public:
-  int64_t preferredColorFormat() const final {
-    return GL_SRGB8_ALPHA8;
+  // NOLINTNEXTLINE(bugprone-exception-escape)
+  [[nodiscard]] std::vector<int64_t> preferredColorFormats() const noexcept final {
+    return {GL_SRGB8_ALPHA8};
   }
-  int64_t preferredDepthFormat() const final {
-    return GL_DEPTH_COMPONENT16;
+  // NOLINTNEXTLINE(bugprone-exception-escape)
+  [[nodiscard]] std::vector<int64_t> preferredDepthFormats() const noexcept final {
+    return {GL_DEPTH_COMPONENT16};
   }
+
   void enumerateImages(igl::IDevice& device,
                        XrSwapchain colorSwapchain,
                        XrSwapchain depthSwapchain,
-                       int64_t selectedColorFormat,
-                       int64_t selectedDepthFormat,
-                       const XrViewConfigurationView& viewport,
-                       uint32_t numViews) final;
-  igl::SurfaceTextures getSurfaceTextures(igl::IDevice& device,
-                                          const XrSwapchain& colorSwapchain,
-                                          const XrSwapchain& depthSwapchain,
-                                          int64_t selectedColorFormat,
-                                          int64_t selectedDepthFormat,
-                                          const XrViewConfigurationView& viewport,
-                                          uint32_t numViews) final;
+                       const impl::SwapchainImageInfo& swapchainImageInfo,
+                       uint8_t numViews) noexcept final;
+
+  [[nodiscard]] igl::SurfaceTextures getSurfaceTextures(
+      igl::IDevice& device,
+      XrSwapchain colorSwapchain,
+      XrSwapchain depthSwapchain,
+      const impl::SwapchainImageInfo& swapchainImageInfo,
+      uint8_t numViews) noexcept final;
 
  private:
   std::vector<uint32_t> colorImages_;

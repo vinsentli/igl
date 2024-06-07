@@ -7,42 +7,33 @@
 
 #pragma once
 
-#include <array>
-
-#include <android/native_window_jni.h>
-
-#define VK_USE_PLATFORM_ANDROID_KHR
-#include <igl/vulkan/Common.h>
-
-#ifndef XR_USE_GRAPHICS_API_VULKAN
-#define XR_USE_GRAPHICS_API_VULKAN
-#endif
-#include <openxr/openxr_platform.h>
+#include <shell/openxr/XrPlatform.h>
 
 #include <shell/openxr/impl/XrAppImpl.h>
+
+#include <vector>
 
 namespace igl::shell::openxr::mobile {
 class XrSwapchainProvider;
 class XrAppImplVulkan : public impl::XrAppImpl {
  public:
-  std::vector<const char*> getXrRequiredExtensions() const override;
-  void* getInstanceCreateExtension() override;
-  std::unique_ptr<igl::IDevice> initIGL(XrInstance instance, XrSystemId systemId) override;
-  XrSession initXrSession(XrInstance instance, XrSystemId systemId, igl::IDevice& device) override;
-  std::unique_ptr<impl::XrSwapchainProviderImpl> createSwapchainProviderImpl() const override;
+  [[nodiscard]] std::vector<const char*> getXrRequiredExtensions() const override;
+  [[nodiscard]] std::vector<const char*> getXrOptionalExtensions() const override;
+
+  [[nodiscard]] std::unique_ptr<igl::IDevice> initIGL(XrInstance instance,
+                                                      XrSystemId systemId) override;
+  [[nodiscard]] XrSession initXrSession(XrInstance instance,
+                                        XrSystemId systemId,
+                                        igl::IDevice& device) override;
+  [[nodiscard]] std::unique_ptr<impl::XrSwapchainProviderImpl> createSwapchainProviderImpl()
+      const override;
 
  private:
   std::vector<const char*> processExtensionsBuffer(std::vector<char>& buffer);
 
- private:
   XrGraphicsRequirementsVulkanKHR graphicsRequirements_ = {
       .type = XR_TYPE_GRAPHICS_REQUIREMENTS_VULKAN_KHR,
   };
-#if defined(IGL_CMAKE_BUILD)
-  XrInstanceCreateInfoAndroidKHR instanceCreateInfoAndroid_ = {
-      .type = XR_TYPE_INSTANCE_CREATE_INFO_ANDROID_KHR,
-  };
-#endif // IGL_CMAKE_BUILD
 
   std::vector<const char*> requiredVkInstanceExtensions_;
   std::vector<char> requiredVkInstanceExtensionsBuffer_;

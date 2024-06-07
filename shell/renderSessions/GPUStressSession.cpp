@@ -893,7 +893,7 @@ void GPUStressSession::drawCubes(const igl::SurfaceTextures& surfaceTextures,
         vertUniformBuffer->bind(device, *pipelineState_, *commands);
       }
 
-      commands->drawIndexed(PrimitiveType::Triangle, indexData.size());
+      commands->drawIndexed(indexData.size());
     }
   }
 }
@@ -1115,13 +1115,17 @@ std::string GPUStressSession::getCurrentUsageString() const {
 }
 void GPUStressSession::setNumLayers(size_t numLayers) {
 #if !defined(IGL_PLATFORM_WIN)
-  QuadLayerParams params;
+  igl::shell::QuadLayerParams params;
+  params.layerInfo.reserve(numLayers);
   for (int i = 0; i < numLayers; i++) {
-    params.positions.emplace_back(0.f, 0.f, 0.f);
-    params.sizes.emplace_back(1.f, 1.f);
+    params.layerInfo.emplace_back({.position = {0.f, 0.f, 0.f},
+                                   .size = {1.f, 1.f},
+                                   .blendMode = igl::shell::LayerBlendMode::AlphaBlend});
   }
 
-  appParamsRef().quadLayerParams.emplace(params);
+  appParamsRef().quadLayerParamsGetter = [params]() -> igl::shell::QuadLayerParams {
+    return params;
+  };
 #endif
 }
 } // namespace igl::shell
