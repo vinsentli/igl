@@ -1505,6 +1505,17 @@ void IContext::drawArrays(GLenum mode, GLint first, GLsizei count) {
   APILOG_DEC_DRAW_COUNT();
 }
 
+void IContext::drawArraysInstanced(GLenum mode, GLint first, GLsizei count, GLsizei instancecount) {
+  drawCallCount_++;
+
+  IGL_PROFILER_ZONE_GPU_OGL("drawArraysInstanced()");
+
+  IGLCALL(DrawArraysInstanced)(mode, first, count, instancecount);
+  APILOG("glDrawArraysInstanced(%s, %d, %u, %u)\n", GL_ENUM_TO_STRING(mode), first, count, instancecount);
+  GLCHECK_ERRORS();
+  APILOG_DEC_DRAW_COUNT();
+}
+
 void IContext::drawBuffers(GLsizei n, GLenum* buffers) {
   if (drawBuffersProc_ == nullptr) {
     if (deviceFeatureSet_.hasFeature(DeviceFeatures::MultipleRenderTargets)) {
@@ -1539,6 +1550,23 @@ void IContext::drawElements(GLenum mode, GLsizei count, GLenum type, const GLvoi
          indices);
   GLCHECK_ERRORS();
   APILOG_DEC_DRAW_COUNT();
+}
+
+void IContext::drawElementsInstanced(GLenum mode, GLsizei count, GLenum type, const GLvoid* indices, GLsizei instancecount) {
+    drawCallCount_++;
+
+    IGL_PROFILER_ZONE_GPU_COLOR_OGL("drawElementsInstanced()", IGL_PROFILER_COLOR_DRAW);
+
+    IGLCALL(DrawElementsInstanced)(mode, count, type, indices, instancecount);
+
+    APILOG("glDrawElementsInstanced(%s, %u, %s, %p, %u)\n",
+           GL_ENUM_TO_STRING(mode),
+           count,
+           GL_ENUM_TO_STRING(type),
+           indices,
+           instancecount);
+    GLCHECK_ERRORS();
+    APILOG_DEC_DRAW_COUNT();
 }
 
 void IContext::drawElementsIndirect(GLenum mode, GLenum type, const GLvoid* indirect) {

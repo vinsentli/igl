@@ -265,12 +265,36 @@ void RenderCommandAdapter::drawArrays(GLenum mode, GLint first, GLsizei count) {
   didDraw();
 }
 
+void RenderCommandAdapter::drawArraysInstanced(GLenum mode, GLint first, GLsizei count, GLsizei instancecount) {
+  willDraw();
+  if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DrawArraysInstanced)) {
+    getContext().drawArraysInstanced(toMockWireframeMode(mode), first, count, instancecount);
+  }else {
+    IGL_ASSERT_NOT_IMPLEMENTED();
+  }
+  didDraw();
+}
+
 void RenderCommandAdapter::drawElements(GLenum mode,
                                         GLsizei indexCount,
                                         GLenum indexType,
                                         const GLvoid* indexOffset) {
   willDraw();
   getContext().drawElements(toMockWireframeMode(mode), indexCount, indexType, indexOffset);
+  didDraw();
+}
+
+void RenderCommandAdapter::drawElementsInstanced(GLenum mode, 
+                                                 GLsizei indexCount,
+                                                 GLenum indexType,
+                                                 const GLvoid* indexOffset,
+                                                 GLsizei instancecount){
+  willDraw();
+  if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DrawElementsInstanced)) {
+    getContext().drawElementsInstanced(toMockWireframeMode(mode), indexCount, indexType, indexOffset, instancecount);
+  } else {
+    IGL_ASSERT_NOT_IMPLEMENTED();
+  }
   didDraw();
 }
 

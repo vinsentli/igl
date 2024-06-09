@@ -160,6 +160,13 @@ IGL_EXTERN_BEGIN
 #else
 #define CAN_CALL_glGetStringi 0
 #endif
+#if defined(GL_VERSION_3_1) || defined(GL_ES_VERSION_3_0)
+#define CAN_CALL_glDrawElementsInstanced CAN_CALL
+#define CAN_CALL_glDrawArraysInstanced CAN_CALL
+#else
+#define CAN_CALL_glDrawElementsInstanced 0
+#define CAN_CALL_glDrawArraysInstanced 0
+#endif
 #if defined(GL_VERSION_4_3) || defined(GL_ES_VERSION_3_2)
 #define CAN_CALL_glDebugMessageCallback CAN_CALL
 #define CAN_CALL_glDebugMessageInsert CAN_CALL
@@ -382,6 +389,34 @@ void iglVertexAttribDivisor(GLuint index, GLuint divisor) {
                           PFNIGLVERTEXATTRIBDIVISORPROC,
                           index,
                           divisor);
+}
+
+void iglDrawElementsInstanced(GLenum mode,
+                              GLsizei count,
+                              GLenum type,
+                              const void * indices,
+                              GLsizei instancecount) {
+  GLEXTENSION_METHOD_BODY(CAN_CALL_glDrawElementsInstanced,
+                          glDrawElementsInstanced,
+                          PFNIGLDRAWELEMENTSINSTANCEDPROC,
+                          mode,
+                          count,
+                          type,
+                          indices,
+                          instancecount);
+}
+
+void iglDrawArraysInstanced(GLenum mode,
+                            GLint first,
+                            GLsizei count,
+                            GLsizei primcount) {
+  GLEXTENSION_METHOD_BODY(CAN_CALL_glDrawArraysInstanced,
+                          glDrawArraysInstanced,
+                          PFNIGLDRAWARRAYSINSTANCEDPROC,
+                          mode,
+                          first,
+                          count,
+                          primcount);
 }
 
 ///--------------------------------------

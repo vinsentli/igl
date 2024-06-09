@@ -83,6 +83,8 @@ enum class InternalFeatures {
   UnpackRowLength,           // GL_UNPACK_ROW_LENGTH is supported with glPixelStorei
   VertexArrayObject,         // VAOS are available
   VertexAttribDivisor,       // glVertexAttribDivisor is supported
+  DrawElementsInstanced,     // glDrawElementsInstanced is supported
+  DrawArraysInstanced,       // glDrawArraysInstanced is supported
 };
 // clang-format on
 
