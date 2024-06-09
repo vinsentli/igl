@@ -15,29 +15,27 @@
 
 namespace igl::shell {
 
-
-
 class DrawIndirectSession : public RenderSession {
  public:
   explicit DrawIndirectSession(std::shared_ptr<Platform> platform) :
     RenderSession(std::move(platform)) {}
   void initialize() noexcept override;
   void update(igl::SurfaceTextures surfaceTextures) noexcept override;
-    
-    typedef struct {
-        uint32_t vertexCount;
-        uint32_t instanceCount;
-        uint32_t vertexStart;
-        uint32_t baseInstance;
-    } DrawArraysIndirectCommand;
-    
-    typedef  struct {
-            uint  count;
-            uint  instanceCount;
-            uint  firstIndex;
-            int  baseVertex;
-            uint  baseInstance;
-        } DrawElementsIndirectCommand;
+
+  typedef struct {
+    uint32_t vertexCount;
+    uint32_t instanceCount;
+    uint32_t vertexStart;
+    uint32_t baseInstance;
+  } DrawArraysIndirectCommand;
+
+  typedef struct {
+    uint count;
+    uint instanceCount;
+    uint firstIndex;
+    int baseVertex;
+    uint baseInstance;
+  } DrawElementsIndirectCommand;
 
  private:
   std::shared_ptr<ICommandQueue> commandQueue_;

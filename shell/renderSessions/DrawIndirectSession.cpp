@@ -176,81 +176,81 @@ void DrawIndirectSession::initialize() noexcept {
   renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
   renderPass_.colorAttachments[0].clearColor = getPlatform().getDevice().backendDebugColor();
   renderPass_.depthAttachment.loadAction = LoadAction::DontCare;
-    
-    if (!vertex_buffer_) {
-      glm::vec2 translations[100];
-      int index = 0;
-      float offset = 0.1f;
-      for (int y = -10; y < 10; y += 2) {
-        for (int x = -10; x < 10; x += 2) {
-          glm::vec2 translation;
-          translation.x = (float)x / 10.0f + offset;
-          translation.y = (float)y / 10.0f + offset;
-          translations[index++] = translation;
-        }
-      }
 
-      BufferDesc desc;
-      desc.type = BufferDesc::BufferTypeBits::Vertex;
-      desc.length = sizeof(glm::vec2) * 100;
-      desc.data = translations;
-      vertex_buffer_ = getPlatform().getDevice().createBuffer(desc, nullptr);
-      IGL_ASSERT(vertex_buffer_);
-    }
-      
-      if (!index_buffer_){
-          int16_t indexes[6] = {0, 1, 2, 3, 4, 5};
-       
-          BufferDesc desc;
-          desc.type = BufferDesc::BufferTypeBits::Index;
-          desc.length = sizeof(indexes);
-          desc.data = &indexes;
-          index_buffer_ = getPlatform().getDevice().createBuffer(desc, nullptr);
-          IGL_ASSERT(index_buffer_);
+  if (!vertex_buffer_) {
+    glm::vec2 translations[100];
+    int index = 0;
+    float offset = 0.1f;
+    for (int y = -10; y < 10; y += 2) {
+      for (int x = -10; x < 10; x += 2) {
+        glm::vec2 translation;
+        translation.x = (float)x / 10.0f + offset;
+        translation.y = (float)y / 10.0f + offset;
+        translations[index++] = translation;
       }
-      
-      if (!DrawArraysIndirectCommand_buffer_){
-          DrawArraysIndirectCommand args[2];
-          args[0].vertexStart = 0;
-          args[0].vertexCount = 6;
-          args[0].baseInstance = 0;
-          args[0].instanceCount = 30;
-          
-          args[1].vertexStart = 0;
-          args[1].vertexCount = 6;
-          args[1].baseInstance = 60;
-          args[1].instanceCount = 30;
-       
-          BufferDesc desc;
-          desc.type = BufferDesc::BufferTypeBits::Vertex;
-          desc.length = sizeof(args);
-          desc.data = &args;
-          DrawArraysIndirectCommand_buffer_ = getPlatform().getDevice().createBuffer(desc, nullptr);
-          IGL_ASSERT(DrawArraysIndirectCommand_buffer_);
-      }
-    
-    if (!DrawElementsIndirectCommand_buffer_){
-        DrawElementsIndirectCommand args[2];
-        args[0].baseVertex = 0;
-        args[0].firstIndex = 0;
-        args[0].count = 6;
-        args[0].baseInstance = 0;
-        args[0].instanceCount = 25;
-        
-        args[1].baseVertex = 0;
-        args[1].firstIndex = 0;
-        args[1].count = 6;
-        args[1].baseInstance = 75;
-        args[1].instanceCount = 25;
-     
-        BufferDesc desc;
-//        desc.type = BufferDesc::BufferTypeBits::Indirect | BufferDesc::BufferTypeBits::Vertex;
-        desc.type = BufferDesc::BufferTypeBits::Vertex;
-        desc.length = sizeof(args);
-        desc.data = &args;
-        DrawElementsIndirectCommand_buffer_ = getPlatform().getDevice().createBuffer(desc, nullptr);
-        IGL_ASSERT(DrawElementsIndirectCommand_buffer_);
     }
+
+    BufferDesc desc;
+    desc.type = BufferDesc::BufferTypeBits::Vertex;
+    desc.length = sizeof(glm::vec2) * 100;
+    desc.data = translations;
+    vertex_buffer_ = getPlatform().getDevice().createBuffer(desc, nullptr);
+    IGL_ASSERT(vertex_buffer_);
+  }
+
+  if (!index_buffer_) {
+    int16_t indexes[6] = {0, 1, 2, 3, 4, 5};
+
+    BufferDesc desc;
+    desc.type = BufferDesc::BufferTypeBits::Index;
+    desc.length = sizeof(indexes);
+    desc.data = &indexes;
+    index_buffer_ = getPlatform().getDevice().createBuffer(desc, nullptr);
+    IGL_ASSERT(index_buffer_);
+  }
+
+  if (!DrawArraysIndirectCommand_buffer_) {
+    DrawArraysIndirectCommand args[2];
+    args[0].vertexStart = 0;
+    args[0].vertexCount = 6;
+    args[0].baseInstance = 0;
+    args[0].instanceCount = 30;
+
+    args[1].vertexStart = 0;
+    args[1].vertexCount = 6;
+    args[1].baseInstance = 60;
+    args[1].instanceCount = 30;
+
+    BufferDesc desc;
+    desc.type = BufferDesc::BufferTypeBits::Vertex;
+    desc.length = sizeof(args);
+    desc.data = &args;
+    DrawArraysIndirectCommand_buffer_ = getPlatform().getDevice().createBuffer(desc, nullptr);
+    IGL_ASSERT(DrawArraysIndirectCommand_buffer_);
+  }
+
+  if (!DrawElementsIndirectCommand_buffer_) {
+    DrawElementsIndirectCommand args[2];
+    args[0].baseVertex = 0;
+    args[0].firstIndex = 0;
+    args[0].count = 6;
+    args[0].baseInstance = 0;
+    args[0].instanceCount = 25;
+
+    args[1].baseVertex = 0;
+    args[1].firstIndex = 0;
+    args[1].count = 6;
+    args[1].baseInstance = 75;
+    args[1].instanceCount = 25;
+
+    BufferDesc desc;
+    //        desc.type = BufferDesc::BufferTypeBits::Indirect | BufferDesc::BufferTypeBits::Vertex;
+    desc.type = BufferDesc::BufferTypeBits::Vertex;
+    desc.length = sizeof(args);
+    desc.data = &args;
+    DrawElementsIndirectCommand_buffer_ = getPlatform().getDevice().createBuffer(desc, nullptr);
+    IGL_ASSERT(DrawElementsIndirectCommand_buffer_);
+  }
 }
 
 void DrawIndirectSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
@@ -310,9 +310,9 @@ void DrawIndirectSession::update(igl::SurfaceTextures surfaceTextures) noexcept 
   commands->pushDebugGroupLabel("Render Triangle", igl::Color(1, 0, 0));
   commands->bindVertexBuffer(1, *vertex_buffer_);
   commands->bindIndexBuffer(*index_buffer_, IndexFormat::UInt16);
-  //commands->multiDrawIndirect(*DrawArraysIndirectCommand_buffer_, 0, 2);
-    commands->multiDrawIndexedIndirect(*DrawElementsIndirectCommand_buffer_, 0, 2);
-//    commands->drawIndexed(6);
+  // commands->multiDrawIndirect(*DrawArraysIndirectCommand_buffer_, 0, 2);
+  commands->multiDrawIndexedIndirect(*DrawElementsIndirectCommand_buffer_, 0, 2);
+  //    commands->drawIndexed(6);
   commands->popDebugGroupLabel();
   commands->endEncoding();
 
