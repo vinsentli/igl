@@ -222,7 +222,7 @@ void DrawIndirectSession::initialize() noexcept {
     args[1].instanceCount = 30;
 
     BufferDesc desc;
-    desc.type = BufferDesc::BufferTypeBits::Vertex;
+    desc.type = BufferDesc::BufferTypeBits::Indirect;
     desc.length = sizeof(args);
     desc.data = &args;
     DrawArraysIndirectCommand_buffer_ = getPlatform().getDevice().createBuffer(desc, nullptr);
