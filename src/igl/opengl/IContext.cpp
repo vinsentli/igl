@@ -1516,6 +1516,19 @@ void IContext::drawArraysInstanced(GLenum mode, GLint first, GLsizei count, GLsi
   APILOG_DEC_DRAW_COUNT();
 }
 
+void IContext::drawArraysIndirect(GLenum mode, const GLvoid* indirect) {
+  drawCallCount_++;
+
+  IGL_PROFILER_ZONE_GPU_COLOR_OGL("drawArraysIndirect()", IGL_PROFILER_COLOR_DRAW);
+
+  IGLCALL(DrawArraysIndirect)(mode, indirect);
+  APILOG("glDrawArraysIndirect(%s, %s, %p)\n",
+         GL_ENUM_TO_STRING(mode),
+         indirect);
+  GLCHECK_ERRORS();
+  APILOG_DEC_DRAW_COUNT();
+}
+
 void IContext::drawBuffers(GLsizei n, GLenum* buffers) {
   if (drawBuffersProc_ == nullptr) {
     if (deviceFeatureSet_.hasFeature(DeviceFeatures::MultipleRenderTargets)) {

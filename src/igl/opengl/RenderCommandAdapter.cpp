@@ -275,6 +275,19 @@ void RenderCommandAdapter::drawArraysInstanced(GLenum mode, GLint first, GLsizei
   didDraw();
 }
 
+void RenderCommandAdapter::drawArraysIndirect(GLenum mode,
+                                              Buffer& indirectBuffer,
+                                              const GLvoid* indirectBufferOffset) {
+  willDraw();
+  if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DrawArraysIndirect)) {
+    bindBufferWithShaderStorageBufferOverride(indirectBuffer, GL_DRAW_INDIRECT_BUFFER);
+    getContext().drawArraysIndirect(toMockWireframeMode(mode), indirectBufferOffset);
+  } else {
+    IGL_ASSERT_NOT_IMPLEMENTED();
+  }
+  didDraw();
+}
+
 void RenderCommandAdapter::drawElements(GLenum mode,
                                         GLsizei indexCount,
                                         GLenum indexType,

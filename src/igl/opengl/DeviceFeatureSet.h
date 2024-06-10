@@ -85,6 +85,7 @@ enum class InternalFeatures {
   VertexAttribDivisor,       // glVertexAttribDivisor is supported
   DrawElementsInstanced,     // glDrawElementsInstanced is supported
   DrawArraysInstanced,       // glDrawArraysInstanced is supported
+  DrawArraysIndirect,        // glDrawArraysIndirect is supported
 };
 // clang-format on
 
