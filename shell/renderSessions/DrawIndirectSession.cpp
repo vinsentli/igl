@@ -245,7 +245,7 @@ void DrawIndirectSession::initialize() noexcept {
 
     BufferDesc desc;
     //        desc.type = BufferDesc::BufferTypeBits::Indirect | BufferDesc::BufferTypeBits::Vertex;
-    desc.type = BufferDesc::BufferTypeBits::Vertex;
+    desc.type = BufferDesc::BufferTypeBits::Indirect;
     desc.length = sizeof(args);
     desc.data = &args;
     DrawElementsIndirectCommand_buffer_ = getPlatform().getDevice().createBuffer(desc, nullptr);
