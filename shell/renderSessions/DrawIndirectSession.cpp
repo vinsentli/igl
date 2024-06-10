@@ -310,9 +310,9 @@ void DrawIndirectSession::update(igl::SurfaceTextures surfaceTextures) noexcept 
   commands->pushDebugGroupLabel("Render Triangle", igl::Color(1, 0, 0));
   commands->bindVertexBuffer(1, *vertex_buffer_);
   commands->bindIndexBuffer(*index_buffer_, IndexFormat::UInt16);
-  // commands->multiDrawIndirect(*DrawArraysIndirectCommand_buffer_, 0, 2);
+//   commands->multiDrawIndirect(*DrawArraysIndirectCommand_buffer_, 0, 2);
   commands->multiDrawIndexedIndirect(*DrawElementsIndirectCommand_buffer_, 0, 2);
-  //    commands->drawIndexed(6);
+//      commands->drawIndexed(6, 10);
   commands->popDebugGroupLabel();
   commands->endEncoding();
 
