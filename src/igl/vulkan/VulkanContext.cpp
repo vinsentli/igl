@@ -591,7 +591,8 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
   vf_.vkGetPhysicalDeviceFeatures2(vkPhysicalDevice_, &vkPhysicalDeviceFeatures2_);
   vf_.vkGetPhysicalDeviceProperties2(vkPhysicalDevice_, &vkPhysicalDeviceProperties2_);
 
-  const uint32_t apiVersion = vkPhysicalDeviceProperties2_.properties.apiVersion;
+  //const uint32_t apiVersion = vkPhysicalDeviceProperties2_.properties.apiVersion;
+  const uint32_t apiVersion = VK_MAKE_VERSION(1, 1, 0);
 
   if (config_.enableExtraLogs) {
     IGL_LOG_INFO("Vulkan physical device: %s\n",
