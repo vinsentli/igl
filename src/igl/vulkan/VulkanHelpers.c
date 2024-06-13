@@ -699,7 +699,7 @@ VkAttachmentDescription2 ivkGetAttachmentDescriptionColor(VkFormat format,
                                                           VkImageLayout initialLayout,
                                                           VkImageLayout finalLayout) {
   const VkAttachmentDescription2 desc = {
-      .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+      //.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2, //@vinsentli
       .format = format,
       .samples = VK_SAMPLE_COUNT_1_BIT,
       .loadOp = loadOp,
@@ -714,10 +714,10 @@ VkAttachmentDescription2 ivkGetAttachmentDescriptionColor(VkFormat format,
 
 VkAttachmentReference2 ivkGetAttachmentReferenceColor(uint32_t idx) {
   const VkAttachmentReference2 ref = {
-      .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+      //.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2, //@vinsentli
       .attachment = idx,
       .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      //.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, //@vinsentli
   };
   return ref;
 }

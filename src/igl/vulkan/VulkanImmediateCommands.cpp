@@ -247,7 +247,8 @@ void VulkanImmediateCommands::waitSemaphore(VkSemaphore semaphore) {
 }
 
 VkSemaphore VulkanImmediateCommands::acquireLastSubmitSemaphore() {
-  return std::exchange(lastSubmitSemaphore_, VK_NULL_HANDLE);
+    //return std::exchange(lastSubmitSemaphore_, VK_NULL_HANDLE); //@vinsentli
+  return std::exchange(lastSubmitSemaphore_, nullptr);
 }
 
 VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::getLastSubmitHandle() const {

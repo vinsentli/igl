@@ -11,6 +11,7 @@
 #include <set>
 #include <vector>
 
+#include "TencentVulkan.h"
 #include <igl/IGLSafeC.h>
 
 // For vk_mem_alloc.h, define this before including VulkanContext.h in exactly

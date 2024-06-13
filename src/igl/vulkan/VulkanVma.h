@@ -8,7 +8,15 @@
 #pragma once
 
 /* Configuration defines for vk_mem_alloc.h */
-#define VMA_VULKAN_VERSION 1002000
+//#define VMA_VULKAN_VERSION 1002000
+//@vinsentli begin
+#define VMA_VULKAN_VERSION 1001000
+
+#define VK_API_VERSION_VARIANT(version) ((uint32_t)(version) >> 29)
+#define VK_API_VERSION_MAJOR(version) (((uint32_t)(version) >> 22) & 0x7FU)
+#define VK_API_VERSION_MINOR(version) (((uint32_t)(version) >> 12) & 0x3FFU)
+#define VK_API_VERSION_PATCH(version) ((uint32_t)(version) & 0xFFFU)
+//@vinsentli end
 
 /* The following defines tell VMA to load Vulkan functions dynamically
  * For this to work, we need to provide pointers to vkGetInstanceProcAddr and vkGetDeviceProcAddr to
