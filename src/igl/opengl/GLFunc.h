@@ -105,6 +105,7 @@ using PFNIGLDISPATCHCOMPUTEPROC = void (*)(GLuint num_groups_x,
                                            GLuint num_groups_z);
 using PFNIGLDRAWBUFFERSPROC = void (*)(GLsizei, const GLenum*);
 using PFNIGLDRAWELEMENTSINDIRECTPROC = void (*)(GLenum mode, GLenum type, const GLvoid* indirect);
+using PFNIGLDRAWARRAYSINDIRECTPROC = void (*)(GLenum mode, const GLvoid* indirect);
 using PFNIGLFENCESYNCPROC = GLsync (*)(GLenum condition, GLbitfield flags);
 using PFNIGLFRAMEBUFFERRENDERBUFFERPROC = void (*)(GLenum target,
                                                    GLenum attachment,
@@ -277,14 +278,16 @@ using PFNIGLUNIFORMBLOCKBINDINGPROC = void (*)(GLuint pid,
                                                GLuint uniformBlockIndex,
                                                GLuint uniformBlockBinding);
 using PFNIGLUNMAPBUFFERPROC = void (*)(GLenum target);
-
 using PFNIGLVERTEXATTRIBDIVISORPROC = void (*)(GLuint index, GLuint divisor);
-
 using PFNIGLDRAWELEMENTSINSTANCEDPROC = void (*)(GLenum mode,
                                                  GLsizei count,
                                                  GLenum type,
                                                  const void * indices,
                                                  GLsizei primcount);
+using PFNIGLDRAWARRAYSINSTANCEDPROC = void (*)(GLenum mode,
+                                               GLint first,
+                                               GLsizei count,
+                                               GLsizei primcount);
 
 ///--------------------------------------
 /// MARK: - OpenGL ES / OpenGL
@@ -360,6 +363,7 @@ void iglDrawElementsInstanced(GLenum mode,
                               GLenum type,
                               const void * indices,
                               GLsizei instancecount);
+void iglDrawArraysInstanced(GLenum mode, GLint first, GLsizei count, GLsizei instancecount);
 
 ///--------------------------------------
 /// MARK: - GL_APPLE_framebuffer_multisample
@@ -392,6 +396,8 @@ void iglDispatchCompute(GLuint num_groups_x, GLuint num_groups_y, GLuint num_gro
 /// MARK: - GL_ARB_draw_indirect
 
 void iglDrawElementsIndirect(GLenum mode, GLenum type, const GLvoid* indirect);
+
+void iglDrawArraysIndirect(GLenum mode, const GLvoid* indirect);
 
 ///--------------------------------------
 /// MARK: - GL_ARB_ES2_compatibility

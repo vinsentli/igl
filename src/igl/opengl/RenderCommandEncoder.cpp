@@ -364,16 +364,19 @@ void RenderCommandEncoder::draw(size_t vertexCount,
                                 uint32_t instanceCount,
                                 uint32_t firstVertex,
                                 uint32_t baseInstance) {
-  (void)instanceCount;
   (void)baseInstance;
 
-  IGL_ASSERT_MSG(instanceCount == 1, "Instancing is not implemented");
   IGL_ASSERT_MSG(baseInstance == 0, "Instancing is not implemented");
 
   if (IGL_VERIFY(adapter_)) {
     getCommandBuffer().incrementCurrentDrawCount();
     auto mode = toGlPrimitive(adapter_->pipelineState().getRenderPipelineDesc().topology);
-    adapter_->drawArrays(mode, (GLsizei)firstVertex, (GLsizei)vertexCount);
+    if (instanceCount > 1) {
+      adapter_->drawArraysInstanced(
+          mode, (GLsizei)firstVertex, (GLsizei)vertexCount, (GLsizei)instanceCount);
+    } else {
+      adapter_->drawArrays(mode, (GLsizei)firstVertex, (GLsizei)vertexCount);
+    }
   }
 }
 
@@ -396,10 +399,15 @@ void RenderCommandEncoder::drawIndexed(PrimitiveType primitiveType,
   if (IGL_VERIFY(adapter_ && indexType_)) {
     getCommandBuffer().incrementCurrentDrawCount();
     auto mode = toGlPrimitive(primitiveType);
-    if (instanceCount > 1){
-      adapter_->drawElementsInstanced(mode, (GLsizei)indexCount, indexType_, (uint8_t*)indexBufferOffset_ + indexOffsetBytes, instanceCount);
+    if (instanceCount > 1) {
+      adapter_->drawElementsInstanced(mode,
+                                      (GLsizei)indexCount,
+                                      indexType_,
+                                      (uint8_t*)indexBufferOffset_ + indexOffsetBytes,
+                                      instanceCount);
     } else {
-      adapter_->drawElements(mode, (GLsizei)indexCount, indexType_, (uint8_t*)indexBufferOffset_ + indexOffsetBytes);
+      adapter_->drawElements(
+          mode, (GLsizei)indexCount, indexType_, (uint8_t*)indexBufferOffset_ + indexOffsetBytes);
     }
   }
 }
@@ -429,11 +437,19 @@ void RenderCommandEncoder::drawIndexed(size_t indexCount,
   }
 }
 
-void RenderCommandEncoder::multiDrawIndirect(IBuffer& /*indirectBuffer*/,
-                                             size_t /*indirectBufferOffset*/,
-                                             uint32_t /*drawCount*/,
-                                             uint32_t /*stride*/) {
-  IGL_ASSERT_NOT_IMPLEMENTED();
+void RenderCommandEncoder::multiDrawIndirect(IBuffer& indirectBuffer,
+                                             size_t indirectBufferOffset,
+                                             uint32_t drawCount,
+                                             uint32_t stride) {
+  if (IGL_VERIFY(adapter_)) {
+    getCommandBuffer().incrementCurrentDrawCount();
+    const auto mode = toGlPrimitive(adapter_->pipelineState().getRenderPipelineDesc().topology);
+    const auto* indirectBufferOffsetPtr = reinterpret_cast<uint8_t*>(indirectBufferOffset);
+    for (uint32_t i = 0; i != drawCount; i++) {
+      adapter_->drawArraysIndirect(mode, (Buffer&)indirectBuffer, indirectBufferOffsetPtr);
+      indirectBufferOffsetPtr += stride ? stride : 16u; // sizeof(DrawArraysIndirectCommand)
+    }
+  }
 }
 
 void RenderCommandEncoder::multiDrawIndexedIndirect(IBuffer& indirectBuffer,

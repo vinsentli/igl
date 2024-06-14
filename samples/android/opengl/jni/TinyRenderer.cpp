@@ -11,7 +11,6 @@
 
 #include <EGL/egl.h>
 #include <android/log.h>
-#include <cmath>
 #include <igl/IGL.h>
 #include <igl/ShaderCreator.h>
 #include <igl/opengl/egl/HWDevice.h>
@@ -188,9 +187,10 @@ void TinyRenderer::render() {
 
   auto cmds = buffer->createRenderCommandEncoder(renderPassDesc_, framebuffer_);
 
-  cmds->bindVertexBuffer(0, vertexBuffer_);
+  cmds->bindVertexBuffer(0, *vertexBuffer_);
+  cmds->bindIndexBuffer(*indexBuffer_, IndexFormat::UInt16);
   cmds->bindRenderPipelineState(pipelineState_);
-  cmds->drawIndexed(PrimitiveType::Triangle, 6, IndexFormat::UInt16, *indexBuffer_, 0);
+  cmds->drawIndexed(6);
 
   cmds->endEncoding();
   buffer->present(viewTexture);

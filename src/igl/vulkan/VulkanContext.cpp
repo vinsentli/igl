@@ -23,6 +23,10 @@
 #define VOLK_IMPLEMENTATION
 #endif // IGL_CMAKE_BUILD
 
+#if IGL_USE_GLSLANG
+#include <igl/glslang/GlslCompiler.h>
+#endif
+
 #include <igl/vulkan/Buffer.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/EnhancedShaderDebuggingStore.h>
@@ -362,7 +366,7 @@ VulkanContext::VulkanContext(const VulkanContextConfig& config,
   vulkan::functions::initialize(*tableImpl_);
 
 #if IGL_USE_GLSLANG
-  glslang_initialize_process();
+  glslang::initializeCompiler();
 #endif
 
   createInstance(numExtraInstanceExtensions, extraInstanceExtensions);
@@ -455,7 +459,7 @@ VulkanContext::~VulkanContext() {
   vf_.vkDestroyInstance(vkInstance_, nullptr);
 
 #if IGL_USE_GLSLANG
-  glslang_finalize_process();
+  glslang::finalizeCompiler();
 #endif
 
 #if IGL_DEBUG || defined(IGL_FORCE_ENABLE_LOGS)

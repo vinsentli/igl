@@ -360,6 +360,9 @@ Result VertexInputState::create(const VertexInputStateDesc& desc) {
     attribInfo.sampleFunction = desc.inputBindings[bufferIndex].sampleFunction;
     attribInfo.sampleRate = desc.inputBindings[bufferIndex].sampleRate;
 
+    attribInfo.sampleFunction = desc.inputBindings[bufferIndex].sampleFunction;
+    attribInfo.sampleRate = desc.inputBindings[bufferIndex].sampleRate;
+
     bufferOGLAttribMap_[bufferIndex].push_back(attribInfo);
   }
 
