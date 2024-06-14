@@ -8,8 +8,10 @@
 #include <igl/vulkan/Device.h>
 
 #include <cstring>
+#if IGL_USE_GLSLANG
 #include <igl/glslang/GlslCompiler.h>
 #include <igl/glslang/GlslangHelpers.h>
+#endif
 #include <igl/vulkan/Buffer.h>
 #include <igl/vulkan/CommandQueue.h>
 #include <igl/vulkan/Common.h>

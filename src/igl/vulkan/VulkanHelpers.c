@@ -714,10 +714,10 @@ VkAttachmentDescription2 ivkGetAttachmentDescriptionColor(VkFormat format,
 
 VkAttachmentReference2 ivkGetAttachmentReferenceColor(uint32_t idx) {
   const VkAttachmentReference2 ref = {
-      .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-      .attachment = idx,
-      .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+    .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+    .attachment = idx,
+    .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
   };
   return ref;
 }

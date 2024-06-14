@@ -247,7 +247,11 @@ void VulkanImmediateCommands::waitSemaphore(VkSemaphore semaphore) {
 }
 
 VkSemaphore VulkanImmediateCommands::acquireLastSubmitSemaphore() {
+#if ANDROID_USE_VULKAN_V1_1
+  return std::exchange(lastSubmitSemaphore_, nullptr);
+#else
   return std::exchange(lastSubmitSemaphore_, VK_NULL_HANDLE);
+#endif
 }
 
 VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::getLastSubmitHandle() const {
