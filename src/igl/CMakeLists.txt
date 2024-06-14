@@ -34,7 +34,7 @@ endif()
 igl_set_cxxstd(IGLLibrary 17)
 igl_set_folder(IGLLibrary "IGL")
 
-add_subdirectory(glslang)
+#add_subdirectory(glslang)
 
 if(IGL_WITH_OPENGL OR IGL_WITH_OPENGLES OR IGL_WITH_WEBGL)
   add_subdirectory(opengl)
