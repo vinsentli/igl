@@ -26,16 +26,11 @@ set(ENABLE_OPT              OFF CACHE BOOL "")
 set(ENABLE_SPVREMAPPER      OFF CACHE BOOL "")
 set(SKIP_GLSLANG_INSTALL    ON  CACHE BOOL "")
 add_subdirectory(${IGL_ROOT_DIR}/third-party/deps/src/glslang "glslang")
-igl_set_folder(GenericCodeGen     "third-party/glslang")
-igl_set_folder(glslang            "third-party/glslang")
-igl_set_folder(MachineIndependent "third-party/glslang")
-igl_set_folder(OGLCompiler        "third-party/glslang")
-igl_set_folder(OSDependent        "third-party/glslang")
 igl_set_folder(SPIRV              "third-party/glslang")
-igl_set_folder(glslang-default-resource-limits "third-party/glslang")
 # cmake-format: on
 
-target_link_libraries(IGLGlslang PUBLIC glslang SPIRV glslang-default-resource-limits)
+target_link_libraries(IGLGlslang PUBLIC SPIRV)
+#target_link_libraries(IGLGlslang PUBLIC glslang SPIRV glslang-default-resource-limits)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   target_compile_options(IGLGlslang PRIVATE "-Wno-nullability-completeness")
