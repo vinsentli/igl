@@ -17,6 +17,7 @@
 
 namespace igl {
 namespace vulkan {
+  
 /**
  * @brief RAII wrapper for a Vulkan shader module.
  */
