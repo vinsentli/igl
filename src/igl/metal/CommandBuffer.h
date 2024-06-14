@@ -40,6 +40,9 @@ class CommandBuffer final : public ICommandBuffer,
   IGL_INLINE id<MTLCommandBuffer> get() const {
     return value_;
   }
+                                
+  //@tencent only
+  void * getImpl() override { return (__bridge void *)value_;}
 
  private:
   id<MTLCommandBuffer> value_;

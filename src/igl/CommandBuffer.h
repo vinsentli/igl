@@ -133,6 +133,9 @@ class ICommandBuffer {
   void incrementCurrentDrawCount() {
     statistics_.currentDrawCount++;
   }
+    
+  //@tencent only
+  virtual void* IGL_NULLABLE getImpl() { return NULL;}
 
  private:
   CommandBufferStatistics statistics_;

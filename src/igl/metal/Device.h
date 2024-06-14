@@ -63,6 +63,9 @@ class Device : public IDevice {
   IGL_INLINE id<MTLDevice> get() const {
     return device_;
   }
+    
+  //@tencent only
+  void * getImpl() override { return (__bridge void *)device_;}
 
   // ICapabilities
   bool hasFeature(DeviceFeatures feature) const override;

@@ -373,6 +373,10 @@ class IDevice : public ICapabilities {
       inDevelopmentFlags_ &= ~(1ull << pos);
     }
   }
+    
+  
+  //@tencent only
+  virtual void * IGL_NULLABLE getImpl() { return NULL;}
 
  protected:
   virtual void beginScope();
