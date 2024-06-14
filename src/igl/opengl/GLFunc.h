@@ -278,12 +278,12 @@ using PFNIGLUNIFORMBLOCKBINDINGPROC = void (*)(GLuint pid,
                                                GLuint uniformBlockIndex,
                                                GLuint uniformBlockBinding);
 using PFNIGLUNMAPBUFFERPROC = void (*)(GLenum target);
+
 using PFNIGLVERTEXATTRIBDIVISORPROC = void (*)(GLuint index, GLuint divisor);
-using PFNIGLDRAWELEMENTSINSTANCEDPROC = void (*)(GLenum mode,
-                                                 GLsizei count,
-                                                 GLenum type,
-                                                 const void * indices,
-                                                 GLsizei primcount);
+
+using PFNIGLDRAWELEMENTSINSTANCEDPROC =
+    void (*)(GLenum mode, GLsizei count, GLenum type, const void* indices, GLsizei primcount);
+
 using PFNIGLDRAWARRAYSINSTANCEDPROC = void (*)(GLenum mode,
                                                GLint first,
                                                GLsizei count,
@@ -361,7 +361,7 @@ void iglVertexAttribDivisor(GLuint index, GLuint divisor);
 void iglDrawElementsInstanced(GLenum mode,
                               GLsizei count,
                               GLenum type,
-                              const void * indices,
+                              const void* indices,
                               GLsizei instancecount);
 void iglDrawArraysInstanced(GLenum mode, GLint first, GLsizei count, GLsizei instancecount);
 

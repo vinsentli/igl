@@ -356,9 +356,6 @@ Result VertexInputState::create(const VertexInputStateDesc& desc) {
                    attribInfo.numComponents,
                    attribInfo.componentType,
                    attribInfo.normalized);
-      
-    attribInfo.sampleFunction = desc.inputBindings[bufferIndex].sampleFunction;
-    attribInfo.sampleRate = desc.inputBindings[bufferIndex].sampleRate;
 
     attribInfo.sampleFunction = desc.inputBindings[bufferIndex].sampleFunction;
     attribInfo.sampleRate = desc.inputBindings[bufferIndex].sampleRate;

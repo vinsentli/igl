@@ -391,6 +391,7 @@ void RenderCommandEncoder::drawIndexed(PrimitiveType primitiveType,
   (void)baseInstance;
 
   IGL_ASSERT_MSG(vertexOffset == 0, "vertexOffset is not implemented");
+  IGL_ASSERT_MSG(baseInstance == 0, "Instancing is not implemented");
   IGL_ASSERT_MSG(indexType_, "No index buffer bound");
 
   const size_t indexOffsetBytes =

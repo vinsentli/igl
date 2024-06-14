@@ -162,9 +162,12 @@ IGL_EXTERN_BEGIN
 #endif
 #if defined(GL_VERSION_3_1) || defined(GL_ES_VERSION_3_0)
 #define CAN_CALL_glDrawElementsInstanced CAN_CALL
-#define CAN_CALL_glDrawArraysInstanced CAN_CALL
 #else
 #define CAN_CALL_glDrawElementsInstanced 0
+#endif
+#if defined(GL_VERSION_3_1) || defined(GL_ES_VERSION_3_0)
+#define CAN_CALL_glDrawArraysInstanced CAN_CALL
+#else
 #define CAN_CALL_glDrawArraysInstanced 0
 #endif
 #if defined(GL_VERSION_4_3) || defined(GL_ES_VERSION_3_2)
