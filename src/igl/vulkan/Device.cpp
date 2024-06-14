@@ -8,6 +8,8 @@
 #include <igl/vulkan/Device.h>
 
 #include <cstring>
+#include <igl/glslang/GlslCompiler.h>
+#include <igl/glslang/GlslangHelpers.h>
 #include <igl/vulkan/Buffer.h>
 #include <igl/vulkan/CommandQueue.h>
 #include <igl/vulkan/Common.h>
@@ -305,6 +307,8 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage
                                                                Result* outResult) const {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
+#if IGL_USE_GLSLANG
+
   VkDevice device = ctx_->device_->getVkDevice();
   const VkShaderStageFlagBits vkStage = shaderStageToVkShaderStage(stage);
   IGL_ASSERT(vkStage != VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM);
@@ -370,12 +374,12 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage
     source = sourcePatched.c_str();
   }
 
-  glslang_resource_t glslangResource;
-  ivkGlslangResource(&glslangResource, &ctx_->getVkPhysicalDeviceProperties());
+  glslang_resource_t glslangResource = {};
+  glslangGetDefaultResource(&glslangResource);
+  ivkUpdateGlslangResource(&glslangResource, &ctx_->getVkPhysicalDeviceProperties());
 
   std::vector<uint32_t> spirv;
-  const Result result =
-      igl::vulkan::compileShader(ctx_->vf_, device, vkStage, source, spirv, &glslangResource);
+  const Result result = glslang::compileShader(stage, source, spirv, &glslangResource);
 
   VkShaderModule vkShaderModule = VK_NULL_HANDLE;
   VK_ASSERT(ivkCreateShaderModuleFromSPIRV(
@@ -403,6 +407,9 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage
       device,
       vkShaderModule,
       util::getReflectionData(spirv.data(), spirv.size() * sizeof(uint32_t)));
+#else
+  return nullptr;
+#endif
 }
 
 std::shared_ptr<IFramebuffer> Device::createFramebuffer(const FramebufferDesc& desc,

@@ -85,6 +85,9 @@ class RenderCommandEncoder final : public IRenderCommandEncoder {
   void setStencilReferenceValues(uint32_t frontValue, uint32_t backValue) override;
   void setBlendColor(Color color) override;
   void setDepthBias(float depthBias, float slopeScale, float clamp) override;
+    
+  //@tencent only
+  void * getImpl() override { return (__bridge void *)encoder_;}
 
   static MTLPrimitiveType convertPrimitiveType(PrimitiveType value);
   static MTLIndexType convertIndexType(IndexFormat value);

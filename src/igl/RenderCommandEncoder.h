@@ -107,6 +107,9 @@ class IRenderCommandEncoder : public ICommandEncoder {
   virtual void setStencilReferenceValues(uint32_t frontValue, uint32_t backValue) = 0;
   virtual void setBlendColor(Color color) = 0;
   virtual void setDepthBias(float depthBias, float slopeScale, float clamp) = 0;
+    
+  //@tencent only
+  virtual void * getImpl() { return NULL;}
 };
 
 } // namespace igl
