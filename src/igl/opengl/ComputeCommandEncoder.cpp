@@ -65,8 +65,7 @@ void ComputeCommandEncoder::pushDebugGroupLabel(const char* label,
                                                 const igl::Color& /*color*/) const {
   IGL_ASSERT(label != nullptr && *label);
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DebugMessage)) {
-    std::string_view labelSV(label);
-    getContext().pushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, labelSV.length(), labelSV.data());
+    getContext().pushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, label);
   } else {
     IGL_LOG_ERROR_ONCE(
         "ComputeCommandEncoder::pushDebugGroupLabel not supported in this context!\n");
@@ -77,13 +76,12 @@ void ComputeCommandEncoder::insertDebugEventLabel(const char* label,
                                                   const igl::Color& /*color*/) const {
   IGL_ASSERT(label != nullptr && *label);
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DebugMessage)) {
-    std::string_view labelSV(label);
     getContext().debugMessageInsert(GL_DEBUG_SOURCE_APPLICATION,
                                     GL_DEBUG_TYPE_MARKER,
                                     0,
                                     GL_DEBUG_SEVERITY_LOW,
-                                    labelSV.length(),
-                                    labelSV.data());
+                                    -1,
+                                    label);
   } else {
     IGL_LOG_ERROR_ONCE(
         "ComputeCommandEncoder::insertDebugEventLabel not supported in this context!\n");

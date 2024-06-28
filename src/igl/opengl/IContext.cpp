@@ -2580,7 +2580,7 @@ void IContext::popDebugGroup() {
     --debugStackSize_;
     GLCALL_PROC(popDebugGroupProc_);
     APILOG("glPopDebugGroup()\n");
-    GLCHECK_ERRORS();
+    //GLCHECK_ERRORS();
   } else if (debugStackSize_ >= maxDebugStackSize_) {
     --debugStackSize_;
     IGL_LOG_ERROR_ONCE("Debug group stack size was exceeded, ignoring pop\n");

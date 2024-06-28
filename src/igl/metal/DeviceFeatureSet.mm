@@ -106,8 +106,10 @@ DeviceFeatureSet::DeviceFeatureSet(id<MTLDevice> device) {
     }
   }
 
-  // get max buffer length
-  maxBufferLength_ = [device maxBufferLength];
+  // get max buffer length 
+  if (@available(macOS 10.14, iOS 12.0, *)) {
+    maxBufferLength_ = [device maxBufferLength];
+  }
 
   if (@available(macOS 11.0, iOS 14.0, *)) {
     // this API became available as of iOS 14 and macOS 11

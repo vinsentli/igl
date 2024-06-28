@@ -28,8 +28,8 @@ VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
   memFlags_(memFlags) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
-    ++s_buffer_count;
-    IGL_LOG_ERROR("[VulkanBuffer][LeakDetect]new VulkanBuffer, Remain count::%d", s_buffer_count.load());
+//    ++s_buffer_count;
+//    IGL_LOG_ERROR("[VulkanBuffer][LeakDetect]new VulkanBuffer, Remain count::%d", s_buffer_count.load());
 
   IGL_ASSERT(bufferSize > 0);
 
@@ -118,8 +118,8 @@ VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
 VulkanBuffer::~VulkanBuffer() {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
 
-    --s_buffer_count;
-    IGL_LOG_ERROR("[VulkanBuffer][LeakDetect]delete VulkanBuffer, Remain count:%d", s_buffer_count.load());
+//    --s_buffer_count;
+//    IGL_LOG_ERROR("[VulkanBuffer][LeakDetect]delete VulkanBuffer, Remain count:%d", s_buffer_count.load());
 
   if (IGL_VULKAN_USE_VMA) {
     if (mappedPtr_) {

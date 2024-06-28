@@ -71,8 +71,8 @@ class Device : public IDevice {
                                                   Result* outResult) override;
 
   // debug markers useful in GPU captures
-  void pushMarker(int len, const char* name);
-  void popMarker();
+  void pushMarker(int len, const char* name) override;
+  void popMarker() override;
 
   const PlatformDevice& getPlatformDevice() const noexcept override = 0;
 

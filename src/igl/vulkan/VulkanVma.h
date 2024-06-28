@@ -6,16 +6,9 @@
  */
 
 #pragma once
-#include "AdaptVulkanV1_2.h"
 
 /* Configuration defines for vk_mem_alloc.h */
-
-#if ANDROID_USE_VULKAN_V1_1
-#define VMA_VULKAN_VERSION 1001000
-#else
 #define VMA_VULKAN_VERSION 1002000
-#endif
-
 
 /* The following defines tell VMA to load Vulkan functions dynamically
  * For this to work, we need to provide pointers to vkGetInstanceProcAddr and vkGetDeviceProcAddr to

@@ -148,7 +148,7 @@ VkResult ivkCreateInstance(const struct VulkanFunctionTable* vt,
       .pNext = enableValidation ? &features : NULL,
 #endif
       .pApplicationInfo = &appInfo,
-#if !IGL_PLATFORM_ANDROID && !IGL_PLATFORM_MACOS
+#if !IGL_PLATFORM_MACOS
       .enabledLayerCount = enableValidation ? IGL_ARRAY_NUM_ELEMENTS(kDefaultValidationLayers) : 0,
       .ppEnabledLayerNames = enableValidation ? kDefaultValidationLayers : NULL,
 #endif

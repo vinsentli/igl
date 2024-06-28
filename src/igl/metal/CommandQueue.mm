@@ -73,13 +73,15 @@ SubmitHandle CommandQueue::submit(const igl::ICommandBuffer& commandBuffer, bool
 }
 
 void CommandQueue::startCapture(id<MTLCommandQueue> queue) {
-  MTLCaptureManager* captureManager = [MTLCaptureManager sharedCaptureManager];
-  MTLCaptureDescriptor* captureDescriptor = [[MTLCaptureDescriptor alloc] init];
-  captureDescriptor.captureObject = queue;
-
-  NSError* error;
-  if (![captureManager startCaptureWithDescriptor:captureDescriptor error:&error]) {
-    NSLog(@"Failed to start capture, error %@", error);
+  if (@available(macOS 10.15, iOS 13.0, *)) {
+    MTLCaptureManager* captureManager = [MTLCaptureManager sharedCaptureManager];
+    MTLCaptureDescriptor* captureDescriptor = [[MTLCaptureDescriptor alloc] init];
+    captureDescriptor.captureObject = queue;
+        
+    NSError* error;
+    if (![captureManager startCaptureWithDescriptor:captureDescriptor error:&error]) {
+      NSLog(@"Failed to start capture, error %@", error);
+    }
   }
 }
 

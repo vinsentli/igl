@@ -377,6 +377,8 @@ class IDevice : public ICapabilities {
   
   //@tencent only
   virtual void * IGL_NULLABLE getImpl() { return NULL;}
+  virtual void pushMarker(int len, const char* IGL_NONNULL name) {}
+  virtual void popMarker() {}
 
  protected:
   virtual void beginScope();
