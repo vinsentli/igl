@@ -74,26 +74,15 @@ class IRenderCommandEncoder : public ICommandEncoder {
   /// Binds an individual uniform. Exclusively for use when uniform blocks are not supported.
   virtual void bindUniform(const UniformDesc& uniformDesc, const void* data) = 0;
 
-  virtual void draw(PrimitiveType primitiveType,
-                    size_t vertexStart,
-                    size_t vertexCount,
-                    uint32_t instanceCount = 1,
-                    uint32_t baseInstance = 0) = 0; // old-n-sad
   virtual void draw(size_t vertexCount,
                     uint32_t instanceCount = 1,
                     uint32_t firstVertex = 0,
-                    uint32_t baseInstance = 0) {} // new-n-rad
-  virtual void drawIndexed(PrimitiveType primitiveType,
-                           size_t indexCount,
-                           uint32_t instanceCount = 1,
-                           uint32_t firstIndex = 0,
-                           int32_t vertexOffset = 0,
-                           uint32_t baseInstance = 0) = 0; // old-n-sad
+                    uint32_t baseInstance = 0) = 0;
   virtual void drawIndexed(size_t indexCount,
                            uint32_t instanceCount = 1,
                            uint32_t firstIndex = 0,
                            int32_t vertexOffset = 0,
-                           uint32_t baseInstance = 0) = 0; // new-n-rad
+                           uint32_t baseInstance = 0) = 0;
   virtual void multiDrawIndirect(IBuffer& indirectBuffer,
                                  size_t indirectBufferOffset,
                                  uint32_t drawCount = 1,

@@ -11,9 +11,7 @@
 
 #include "VulkanBuffer.h"
 
-namespace igl {
-namespace vulkan {
-    std::atomic_int s_buffer_count = 0;
+namespace igl::vulkan {
 
 VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
                            VkDevice device,
@@ -222,5 +220,4 @@ void VulkanBuffer::bufferSubData(size_t offset, size_t size, const void* data) {
   }
 }
 
-} // namespace vulkan
-} // namespace igl
+} // namespace igl::vulkan

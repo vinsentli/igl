@@ -74,21 +74,10 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
   /// implement!
   void bindUniform(const UniformDesc& uniformDesc, const void* data) override;
 
-  void draw(PrimitiveType primitiveType,
-            size_t vertexStart,
-            size_t vertexCount,
-            uint32_t instanceCount,
-            uint32_t baseInstance) override;
   void draw(size_t vertexCount,
             uint32_t instanceCount,
             uint32_t firstVertex,
             uint32_t baseInstance) override;
-  void drawIndexed(PrimitiveType primitiveType,
-                   size_t indexCount,
-                   uint32_t instanceCount,
-                   uint32_t firstIndex,
-                   int32_t vertexOffset,
-                   uint32_t baseInstance) override;
   void drawIndexed(size_t indexCount,
                    uint32_t instanceCount,
                    uint32_t firstIndex,
@@ -108,7 +97,7 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
   void setBlendColor(Color color) override;
   void setDepthBias(float depthBias, float slopeScale, float clamp) override;
 
-  VkCommandBuffer getVkCommandBuffer() const {
+  [[nodiscard]] VkCommandBuffer getVkCommandBuffer() const {
     return cmdBuffer_;
   }
 

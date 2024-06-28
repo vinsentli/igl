@@ -20,6 +20,8 @@ endif()
 if(ANDROID)
   list(APPEND SRC_FILES android/LogDefault.cpp)
   list(APPEND HEADER_FILES android/LogDefault.h)
+  list(APPEND SRC_FILES android/NativeHWBuffer.cpp)
+  list(APPEND HEADER_FILES android/NativeHWBuffer.h)
 endif()
 
 add_library(IGLLibrary ${SRC_FILES} ${HEADER_FILES})

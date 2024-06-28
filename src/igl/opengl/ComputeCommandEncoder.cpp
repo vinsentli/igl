@@ -19,8 +19,7 @@
 #include <igl/opengl/Shader.h>
 #include <igl/opengl/Texture.h>
 
-namespace igl {
-namespace opengl {
+namespace igl::opengl {
 
 ///----------------------------------------------------------------------------
 /// MARK: - ComputeCommandEncoder
@@ -76,12 +75,8 @@ void ComputeCommandEncoder::insertDebugEventLabel(const char* label,
                                                   const igl::Color& /*color*/) const {
   IGL_ASSERT(label != nullptr && *label);
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DebugMessage)) {
-    getContext().debugMessageInsert(GL_DEBUG_SOURCE_APPLICATION,
-                                    GL_DEBUG_TYPE_MARKER,
-                                    0,
-                                    GL_DEBUG_SEVERITY_LOW,
-                                    -1,
-                                    label);
+    getContext().debugMessageInsert(
+        GL_DEBUG_SOURCE_APPLICATION, GL_DEBUG_TYPE_MARKER, 0, GL_DEBUG_SEVERITY_LOW, -1, label);
   } else {
     IGL_LOG_ERROR_ONCE(
         "ComputeCommandEncoder::insertDebugEventLabel not supported in this context!\n");
@@ -135,5 +130,4 @@ void ComputeCommandEncoder::bindPushConstants(const void* /*data*/,
   IGL_ASSERT_NOT_IMPLEMENTED();
 }
 
-} // namespace opengl
-} // namespace igl
+} // namespace igl::opengl

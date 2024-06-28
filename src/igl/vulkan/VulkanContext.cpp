@@ -9,6 +9,7 @@
 #include <cstring>
 #include <memory>
 #include <set>
+#include <utility>
 #include <vector>
 
 #include "AdaptVulkanV1_2.h"
@@ -113,9 +114,8 @@ vulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT msgSeverity,
   }
 #endif
 
-  if (isError) {
+  if (IGL_UNEXPECTED(isError)) {
     if (ctx->config_.terminateOnValidationError) {
-      IGL_ASSERT(false);
       std::terminate();
     }
   }
@@ -199,8 +199,7 @@ bool validateImageLimits(VkImageType imageType,
 
 } // namespace
 
-namespace igl {
-namespace vulkan {
+namespace igl::vulkan {
 
 // @fb-only
 class DescriptorPoolsArena final {
@@ -346,12 +345,14 @@ struct VulkanContextImpl final {
   }
 };
 
-VulkanContext::VulkanContext(const VulkanContextConfig& config,
+VulkanContext::VulkanContext(VulkanContextConfig config,
                              void* window,
                              size_t numExtraInstanceExtensions,
                              const char** extraInstanceExtensions,
                              void* display) :
-  tableImpl_(std::make_unique<VulkanFunctionTable>()), vf_(*tableImpl_), config_(config) {
+  tableImpl_(std::make_unique<VulkanFunctionTable>()),
+  vf_(*tableImpl_),
+  config_(std::move(config)) {
   IGL_PROFILER_THREAD("MainThread");
 
   pimpl_ = std::make_unique<VulkanContextImpl>();
@@ -438,6 +439,11 @@ VulkanContext::~VulkanContext() {
     if (pimpl_->dpBindless_ != VK_NULL_HANDLE) {
       vf_.vkDestroyDescriptorPool(device, pimpl_->dpBindless_, nullptr);
     }
+    for (auto& p : ycbcrConversionInfos_) {
+      if (p.second.conversion != VK_NULL_HANDLE) {
+        vf_.vkDestroySamplerYcbcrConversion(device, p.second.conversion, nullptr);
+      }
+    }
     pimpl_->arenaCombinedImageSamplers_.clear();
     pimpl_->arenaBuffersUniform_.clear();
     pimpl_->arenaBuffersStorage_.clear();
@@ -455,9 +461,13 @@ VulkanContext::~VulkanContext() {
 
   device_.reset(nullptr); // Device has to be destroyed prior to Instance
 #if defined(VK_EXT_debug_utils) && !IGL_PLATFORM_ANDROID
-  vf_.vkDestroyDebugUtilsMessengerEXT(vkInstance_, vkDebugUtilsMessenger_, nullptr);
+  if (vf_.vkDestroyDebugUtilsMessengerEXT != nullptr) {
+    vf_.vkDestroyDebugUtilsMessengerEXT(vkInstance_, vkDebugUtilsMessenger_, nullptr);
+  }
 #endif // defined(VK_EXT_debug_utils) && !IGL_PLATFORM_ANDROID
-  vf_.vkDestroyInstance(vkInstance_, nullptr);
+  if (vf_.vkDestroyInstance != nullptr) {
+    vf_.vkDestroyInstance(vkInstance_, nullptr);
+  }
 
 #if IGL_USE_GLSLANG
   glslang::finalizeCompiler();
@@ -537,6 +547,11 @@ igl::Result VulkanContext::queryDevices(const HWDeviceQueryDesc& desc,
 
   // Physical devices
   uint32_t deviceCount = 0;
+
+  if (vf_.vkEnumeratePhysicalDevices == nullptr) {
+    return Result(Result::Code::Unsupported, "Vulkan functions are not loaded");
+  }
+
   VK_ASSERT_RETURN(vf_.vkEnumeratePhysicalDevices(vkInstance_, &deviceCount, nullptr));
   std::vector<VkPhysicalDevice> vkDevices(deviceCount);
   VK_ASSERT_RETURN(vf_.vkEnumeratePhysicalDevices(vkInstance_, &deviceCount, vkDevices.data()));
@@ -828,6 +843,7 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
                                                               VK_SAMPLER_ADDRESS_MODE_REPEAT,
                                                               0.0f,
                                                               0.0f),
+                                      VK_FORMAT_UNDEFINED,
                                       "Sampler: default"));
   IGL_ASSERT(samplers_.numObjects() == 1);
 
@@ -922,26 +938,37 @@ void VulkanContext::growBindlessDescriptorPool(uint32_t newMaxTextures, uint32_t
 
   // create default descriptor set layout which is going to be shared by graphics pipelines
   constexpr uint32_t kNumBindings = 7;
+  constexpr VkShaderStageFlags stageFlags =
+      VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
   const std::array<VkDescriptorSetLayoutBinding, kNumBindings> bindings = {
       ivkGetDescriptorSetLayoutBinding(kBinding_Texture2D,
                                        VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                                       pimpl_->currentMaxBindlessTextures_),
+                                       pimpl_->currentMaxBindlessTextures_,
+                                       stageFlags),
       ivkGetDescriptorSetLayoutBinding(kBinding_Texture2DArray,
                                        VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                                       pimpl_->currentMaxBindlessTextures_),
+                                       pimpl_->currentMaxBindlessTextures_,
+                                       stageFlags),
       ivkGetDescriptorSetLayoutBinding(kBinding_Texture3D,
                                        VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                                       pimpl_->currentMaxBindlessTextures_),
+                                       pimpl_->currentMaxBindlessTextures_,
+                                       stageFlags),
       ivkGetDescriptorSetLayoutBinding(kBinding_TextureCube,
                                        VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                                       pimpl_->currentMaxBindlessTextures_),
-      ivkGetDescriptorSetLayoutBinding(
-          kBinding_Sampler, VK_DESCRIPTOR_TYPE_SAMPLER, pimpl_->currentMaxBindlessSamplers_),
-      ivkGetDescriptorSetLayoutBinding(
-          kBinding_SamplerShadow, VK_DESCRIPTOR_TYPE_SAMPLER, pimpl_->currentMaxBindlessSamplers_),
+                                       pimpl_->currentMaxBindlessTextures_,
+                                       stageFlags),
+      ivkGetDescriptorSetLayoutBinding(kBinding_Sampler,
+                                       VK_DESCRIPTOR_TYPE_SAMPLER,
+                                       pimpl_->currentMaxBindlessSamplers_,
+                                       stageFlags),
+      ivkGetDescriptorSetLayoutBinding(kBinding_SamplerShadow,
+                                       VK_DESCRIPTOR_TYPE_SAMPLER,
+                                       pimpl_->currentMaxBindlessSamplers_,
+                                       stageFlags),
       ivkGetDescriptorSetLayoutBinding(kBinding_StorageImages,
                                        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                       pimpl_->currentMaxBindlessTextures_),
+                                       pimpl_->currentMaxBindlessTextures_,
+                                       stageFlags),
   };
   const uint32_t flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
                          VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT |
@@ -1315,12 +1342,13 @@ std::shared_ptr<VulkanTexture> VulkanContext::createTextureFromVkImage(
 }
 
 std::shared_ptr<VulkanSampler> VulkanContext::createSampler(const VkSamplerCreateInfo& ci,
+                                                            VkFormat yuvVkFormat,
                                                             igl::Result* outResult,
                                                             const char* debugName) const {
   IGL_PROFILER_FUNCTION();
 
   const SamplerHandle handle = samplers_.create(
-      std::make_shared<VulkanSampler>(*this, device_->getVkDevice(), ci, debugName));
+      std::make_shared<VulkanSampler>(*this, device_->getVkDevice(), ci, yuvVkFormat, debugName));
 
   auto sampler = *samplers_.get(handle);
 
@@ -1662,5 +1690,70 @@ VkDescriptorSet VulkanContext::getBindlessVkDescriptorSet() const {
   return config_.enableDescriptorIndexing ? pimpl_->dsBindless_ : VK_NULL_HANDLE;
 }
 
-} // namespace vulkan
-} // namespace igl
+VkSamplerYcbcrConversionInfo VulkanContext::getOrCreateYcbcrConversionInfo(VkFormat format) const {
+  auto it = ycbcrConversionInfos_.find(format);
+
+  if (it != ycbcrConversionInfos_.end()) {
+    return it->second;
+  }
+
+  if (!IGL_VERIFY(vkPhysicalDeviceSamplerYcbcrConversionFeatures_.samplerYcbcrConversion)) {
+    IGL_ASSERT_MSG(false, "Ycbcr samplers are not supported");
+    return {};
+  }
+
+  VkFormatProperties props;
+  vkGetPhysicalDeviceFormatProperties(getVkPhysicalDevice(), format, &props);
+
+  const bool cosited =
+      (props.optimalTilingFeatures & VK_FORMAT_FEATURE_COSITED_CHROMA_SAMPLES_BIT) != 0;
+  const bool midpoint =
+      (props.optimalTilingFeatures & VK_FORMAT_FEATURE_MIDPOINT_CHROMA_SAMPLES_BIT) != 0;
+
+  if (!IGL_VERIFY(cosited || midpoint)) {
+    IGL_ASSERT_MSG(cosited || midpoint, "Unsupported Ycbcr feature");
+    return {};
+  }
+
+  VkSamplerYcbcrConversionCreateInfo ciYcbcr = ivkGetSamplerYcbcrCreateInfo(format);
+
+  if (midpoint) {
+    ciYcbcr.xChromaOffset = VK_CHROMA_LOCATION_MIDPOINT;
+    ciYcbcr.yChromaOffset = VK_CHROMA_LOCATION_MIDPOINT;
+  } else {
+    ciYcbcr.xChromaOffset = VK_CHROMA_LOCATION_COSITED_EVEN;
+    ciYcbcr.yChromaOffset = VK_CHROMA_LOCATION_COSITED_EVEN;
+  }
+
+  VkSamplerYcbcrConversionInfo info = {
+      VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_INFO,
+      nullptr,
+      VK_NULL_HANDLE,
+  };
+  vf_.vkCreateSamplerYcbcrConversion(getVkDevice(), &ciYcbcr, nullptr, &info.conversion);
+
+  // check properties
+  VkSamplerYcbcrConversionImageFormatProperties samplerYcbcrConversionImageFormatProps = {
+      VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_IMAGE_FORMAT_PROPERTIES, nullptr, 0};
+  VkImageFormatProperties2 imageFormatProps = {
+      VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2, &samplerYcbcrConversionImageFormatProps, {}};
+  const VkPhysicalDeviceImageFormatInfo2 imageFormatInfo = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+      nullptr,
+      format,
+      VK_IMAGE_TYPE_2D,
+      VK_IMAGE_TILING_OPTIMAL,
+      VK_IMAGE_USAGE_SAMPLED_BIT,
+      VK_IMAGE_CREATE_DISJOINT_BIT,
+  };
+  vkGetPhysicalDeviceImageFormatProperties2(
+      getVkPhysicalDevice(), &imageFormatInfo, &imageFormatProps);
+
+  IGL_ASSERT(samplerYcbcrConversionImageFormatProps.combinedImageSamplerDescriptorCount <= 3);
+
+  ycbcrConversionInfos_[format] = info;
+
+  return info;
+}
+
+} // namespace igl::vulkan

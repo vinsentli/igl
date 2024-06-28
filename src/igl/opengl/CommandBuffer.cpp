@@ -12,8 +12,7 @@
 #include <igl/opengl/IContext.h>
 #include <igl/opengl/RenderCommandEncoder.h>
 
-namespace igl {
-namespace opengl {
+namespace igl::opengl {
 
 CommandBuffer::CommandBuffer(std::shared_ptr<IContext> context) : context_(std::move(context)) {}
 
@@ -65,5 +64,4 @@ IContext& CommandBuffer::getContext() const {
   return *context_;
 }
 
-} // namespace opengl
-} // namespace igl
+} // namespace igl::opengl

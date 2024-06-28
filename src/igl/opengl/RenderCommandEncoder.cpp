@@ -22,8 +22,7 @@
 #include <igl/opengl/UniformAdapter.h>
 #include <igl/opengl/VertexInputState.h>
 
-namespace igl {
-namespace opengl {
+namespace igl::opengl {
 
 namespace {
 GLenum toGlPrimitive(PrimitiveType t) {
@@ -67,7 +66,7 @@ std::unique_ptr<RenderCommandEncoder> RenderCommandEncoder::create(
     std::shared_ptr<CommandBuffer> commandBuffer,
     const RenderPassDesc& renderPass,
     const std::shared_ptr<IFramebuffer>& framebuffer,
-    const Dependencies& dependencies,
+    const Dependencies& /*dependencies*/,
     Result* outResult) {
   if (!commandBuffer) {
     Result::setResult(outResult, Result::Code::ArgumentNull, "commandBuffer was null");
@@ -88,7 +87,7 @@ void RenderCommandEncoder::beginEncoding(const RenderPassDesc& renderPass,
   // Save caller state
   auto& context = getContext();
 
-  scissorEnabled_ = context.isEnabled(GL_SCISSOR_TEST);
+  scissorEnabled_ = (context.isEnabled(GL_SCISSOR_TEST) != 0u);
   context.disable(GL_SCISSOR_TEST); // only turn on if bindScissorRect is called
 
   auto& pool = context.getAdapterPool();
@@ -206,12 +205,8 @@ void RenderCommandEncoder::insertDebugEventLabel(const char* label,
   IGL_ASSERT(adapter_);
   IGL_ASSERT(label != nullptr && *label);
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DebugMessage)) {
-    getContext().debugMessageInsert(GL_DEBUG_SOURCE_APPLICATION,
-                                    GL_DEBUG_TYPE_MARKER,
-                                    0,
-                                    GL_DEBUG_SEVERITY_LOW,
-                                    -1,
-                                    label);
+    getContext().debugMessageInsert(
+        GL_DEBUG_SOURCE_APPLICATION, GL_DEBUG_TYPE_MARKER, 0, GL_DEBUG_SEVERITY_LOW, -1, label);
   } else {
     IGL_LOG_ERROR_ONCE(
         "RenderCommandEncoder::insertDebugEventLabel not supported in this context!\n");
@@ -340,24 +335,6 @@ void RenderCommandEncoder::bindTexture(size_t index, uint8_t bindTarget, ITextur
   }
 }
 
-void RenderCommandEncoder::draw(PrimitiveType primitiveType,
-                                size_t vertexStart,
-                                size_t vertexCount,
-                                uint32_t instanceCount,
-                                uint32_t baseInstance) {
-  (void)instanceCount;
-  (void)baseInstance;
-
-  IGL_ASSERT_MSG(instanceCount == 1, "Instancing is not implemented");
-  IGL_ASSERT_MSG(baseInstance == 0, "Instancing is not implemented");
-
-  if (IGL_VERIFY(adapter_)) {
-    getCommandBuffer().incrementCurrentDrawCount();
-    auto mode = toGlPrimitive(primitiveType);
-    adapter_->drawArrays(mode, (GLsizei)vertexStart, (GLsizei)vertexCount);
-  }
-}
-
 void RenderCommandEncoder::draw(size_t vertexCount,
                                 uint32_t instanceCount,
                                 uint32_t firstVertex,
@@ -378,49 +355,14 @@ void RenderCommandEncoder::draw(size_t vertexCount,
   }
 }
 
-void RenderCommandEncoder::drawIndexed(PrimitiveType primitiveType,
-                                       size_t indexCount,
-                                       uint32_t instanceCount,
-                                       uint32_t firstIndex,
-                                       int32_t vertexOffset,
-                                       uint32_t baseInstance) {
-  (void)instanceCount;
-  (void)vertexOffset;
-  (void)baseInstance;
-
-  IGL_ASSERT_MSG(vertexOffset == 0, "vertexOffset is not implemented");
-  IGL_ASSERT_MSG(baseInstance == 0, "Instancing is not implemented");
-  IGL_ASSERT_MSG(indexType_, "No index buffer bound");
-
-  const size_t indexOffsetBytes =
-      static_cast<size_t>(firstIndex) * (indexType_ == GL_UNSIGNED_INT ? 4u : 2u);
-
-  if (IGL_VERIFY(adapter_ && indexType_)) {
-    getCommandBuffer().incrementCurrentDrawCount();
-    auto mode = toGlPrimitive(primitiveType);
-    if (instanceCount > 1) {
-      adapter_->drawElementsInstanced(mode,
-                                      (GLsizei)indexCount,
-                                      indexType_,
-                                      (uint8_t*)indexBufferOffset_ + indexOffsetBytes,
-                                      instanceCount);
-    } else {
-      adapter_->drawElements(
-          mode, (GLsizei)indexCount, indexType_, (uint8_t*)indexBufferOffset_ + indexOffsetBytes);
-    }
-  }
-}
-
 void RenderCommandEncoder::drawIndexed(size_t indexCount,
                                        uint32_t instanceCount,
                                        uint32_t firstIndex,
                                        int32_t vertexOffset,
                                        uint32_t baseInstance) {
-  (void)instanceCount;
   (void)vertexOffset;
   (void)baseInstance;
 
-  IGL_ASSERT_MSG(instanceCount == 1, "Instancing is not implemented");
   IGL_ASSERT_MSG(vertexOffset == 0, "vertexOffset is not implemented");
   IGL_ASSERT_MSG(baseInstance == 0, "Instancing is not implemented");
   IGL_ASSERT_MSG(indexType_, "No index buffer bound");
@@ -431,8 +373,16 @@ void RenderCommandEncoder::drawIndexed(size_t indexCount,
   if (IGL_VERIFY(adapter_ && indexType_)) {
     getCommandBuffer().incrementCurrentDrawCount();
     auto mode = toGlPrimitive(adapter_->pipelineState().getRenderPipelineDesc().topology);
-    adapter_->drawElements(
-        mode, (GLsizei)indexCount, indexType_, (uint8_t*)indexBufferOffset_ + indexOffsetBytes);
+    if (instanceCount > 1) {
+      adapter_->drawElementsInstanced(mode,
+                                      (GLsizei)indexCount,
+                                      indexType_,
+                                      (uint8_t*)indexBufferOffset_ + indexOffsetBytes,
+                                      instanceCount);
+    } else {
+      adapter_->drawElements(
+          mode, (GLsizei)indexCount, indexType_, (uint8_t*)indexBufferOffset_ + indexOffsetBytes);
+    }
   }
 }
 
@@ -495,5 +445,4 @@ void RenderCommandEncoder::setDepthBias(float depthBias, float slopeScale, float
   }
 }
 
-} // namespace opengl
-} // namespace igl
+} // namespace igl::opengl
