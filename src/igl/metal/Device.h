@@ -79,7 +79,7 @@ class Device : public IDevice {
   }
     
   //@tencent only
-  void * getImpl() override { return (__bridge void *)device_;}
+  void * IGL_NONNULL getImpl() override { return (__bridge void *)device_;}
 
   // ICapabilities
   [[nodiscard]] bool hasFeature(DeviceFeatures feature) const override;
