@@ -90,21 +90,26 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(CALaye
     return nullptr;
   }
 #if (!TARGET_OS_SIMULATOR || __IPHONE_OS_VERSION_MAX_ALLOWED >= 130000)
-  if ([nativeDrawable isKindOfClass:[CAMetalLayer class]]) {
-    id<CAMetalDrawable> drawableObject = [(CAMetalLayer*)nativeDrawable nextDrawable];
-    if (!drawableObject) {
-      Result::setResult(outResult, Result::Code::RuntimeError, "Could not retrieve a drawable.");
-      return nullptr;
+    if (@available(macOS 10.11, iOS 13.0, *)){
+        if ([nativeDrawable isKindOfClass:[CAMetalLayer class]]) {
+            id<CAMetalDrawable> drawableObject = [(CAMetalLayer*)nativeDrawable nextDrawable];
+            if (!drawableObject) {
+                Result::setResult(outResult, Result::Code::RuntimeError, "Could not retrieve a drawable.");
+                return nullptr;
+            }
+            
+            return createTextureFromNativeDrawable(drawableObject, outResult);
+        } else {
+            // Layer is not CAMetalLayer
+            // This should never hit, unless there's a new layer type that supports Metal
+            IGL_ASSERT_NOT_IMPLEMENTED();
+            Result::setResult(outResult, Result::Code::Unsupported);
+            return nullptr;
+        }
+    } else {
+        Result::setResult(outResult, Result::Code::Unsupported);
+        return nullptr;
     }
-
-    return createTextureFromNativeDrawable(drawableObject, outResult);
-  } else {
-    // Layer is not CAMetalLayer
-    // This should never hit, unless there's a new layer type that supports Metal
-    IGL_ASSERT_NOT_IMPLEMENTED();
-    Result::setResult(outResult, Result::Code::Unsupported);
-    return nullptr;
-  }
 #else
   Result::setResult(outResult, Result::Code::Unsupported);
   return nullptr;
@@ -207,16 +212,20 @@ TextureFormat PlatformDevice::getNativeDrawableTextureFormat(CALayer* nativeDraw
   TextureFormat formatResult = TextureFormat::Invalid;
 
 #if (!TARGET_OS_SIMULATOR || __IPHONE_OS_VERSION_MAX_ALLOWED >= 130000)
-  if ([nativeDrawable isKindOfClass:[CAMetalLayer class]]) {
-    auto metalLayer = (CAMetalLayer*)nativeDrawable;
-    formatResult = Texture::mtlPixelFormatToTextureFormat(metalLayer.pixelFormat);
-    Result::setOk(outResult);
-  } else {
-    // Layer is not CAMetalLayer
-    // This should never hit, unless there's a new layer type that supports Metal
-    IGL_ASSERT_NOT_IMPLEMENTED();
-    Result::setResult(outResult, Result::Code::Unsupported);
-  }
+    if (@available(macOS 10.11, iOS 13.0, *)){
+        if ([nativeDrawable isKindOfClass:[CAMetalLayer class]]) {
+            auto metalLayer = (CAMetalLayer*)nativeDrawable;
+            formatResult = Texture::mtlPixelFormatToTextureFormat(metalLayer.pixelFormat);
+            Result::setOk(outResult);
+        } else {
+            // Layer is not CAMetalLayer
+            // This should never hit, unless there's a new layer type that supports Metal
+            IGL_ASSERT_NOT_IMPLEMENTED();
+            Result::setResult(outResult, Result::Code::Unsupported);
+        }
+    } else {
+        Result::setResult(outResult, Result::Code::Unsupported);
+    }
 #else
   Result::setResult(outResult, Result::Code::Unsupported, "Metal not supported on iOS simulator.");
 #endif
