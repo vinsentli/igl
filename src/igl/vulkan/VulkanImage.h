@@ -14,9 +14,9 @@
 #include <igl/vulkan/VulkanHelpers.h>
 #include <igl/vulkan/VulkanImageView.h>
 
-#if IGL_PLATFORM_ANDROID && __ANDROID_MIN_SDK_VERSION__ >= 26
+#if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 struct AHardwareBuffer;
-#endif
+#endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
 namespace igl::vulkan {
 
@@ -174,9 +174,9 @@ class VulkanImage final {
                                             VkImageUsageFlags usageFlags,
                                             VkImageCreateFlags createFlags,
                                             VkSampleCountFlagBits samples,
-#if IGL_PLATFORM_ANDROID && __ANDROID_MIN_SDK_VERSION__ >= 26
+#if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
                                             AHardwareBuffer* hwBuffer,
-#endif // IGL_PLATFORM_ANDROID
+#endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
                                             const char* debugName = nullptr);
 #endif // IGL_PLATFORM_WIN || IGL_PLATFORM_LINUX || IGL_PLATFORM_ANDROID
 
@@ -262,6 +262,9 @@ class VulkanImage final {
   void flushMappedMemory() const;
 
  public:
+  // Vulkan as for v1.3.210 supports max 3 planes for multi-plane images.
+  static constexpr uint8_t kMaxImagePlanes = 3;
+
   const VulkanContext* ctx_ = nullptr;
   VkPhysicalDevice physicalDevice_ = VK_NULL_HANDLE;
   VkDevice device_ = VK_NULL_HANDLE;
@@ -269,7 +272,7 @@ class VulkanImage final {
   VkImageUsageFlags usageFlags_ = 0;
   // Separate VkDeviceMemory objects to support disjoint multiplanar images
   // @fb-only
-  VkDeviceMemory vkMemory_[3] = {VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE};
+  VkDeviceMemory vkMemory_[kMaxImagePlanes] = {VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE};
   VmaAllocation vmaAllocation_ = VK_NULL_HANDLE;
   VkFormatProperties formatProperties_{};
   void* mappedPtr_ = nullptr;
@@ -329,9 +332,9 @@ class VulkanImage final {
               VkImageCreateFlags createFlags,
               VkSampleCountFlagBits samples,
               VkExternalMemoryHandleTypeFlags compatibleHandleTypes,
-#if IGL_PLATFORM_ANDROID && __ANDROID_MIN_SDK_VERSION__ >= 26
+#if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
               AHardwareBuffer* hwBuffer,
-#endif // IGL_PLATFORM_ANDROID
+#endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
               const char* debugName);
 #endif // IGL_PLATFORM_WIN || IGL_PLATFORM_LINUX || IGL_PLATFORM_ANDROID
 

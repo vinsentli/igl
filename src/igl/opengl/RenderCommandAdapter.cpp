@@ -93,7 +93,7 @@ void RenderCommandAdapter::setDepthStencilState(
 void RenderCommandAdapter::setStencilReferenceValue(uint32_t value, Result* outResult) {
   frontStencilReferenceValue_ = value;
   backStencilReferenceValue_ = value;
-    
+  
   setDirty(StateMask::DEPTH_STENCIL);
   Result::setOk(outResult);
 }
@@ -153,7 +153,7 @@ void RenderCommandAdapter::setUniformBuffer(const std::shared_ptr<Buffer>& buffe
                                             size_t offset,
                                             int index,
                                             Result* outResult) {
-  uniformAdapter_.setUniformBuffer(buffer, offset, index, outResult);
+  uniformAdapter_.setUniformBuffer(buffer.get(), offset, index, outResult);
 }
 
 void RenderCommandAdapter::clearVertexTexture() {

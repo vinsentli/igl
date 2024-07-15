@@ -12,10 +12,12 @@
 
 namespace igl::metal {
 
+class Device;
+
 class CommandBuffer final : public ICommandBuffer,
                             public std::enable_shared_from_this<CommandBuffer> {
  public:
-  explicit CommandBuffer(id<MTLCommandBuffer> value);
+  CommandBuffer(igl::metal::Device& device, id<MTLCommandBuffer> value);
   ~CommandBuffer() override = default;
 
   std::unique_ptr<IComputeCommandEncoder> createComputeCommandEncoder() override;
@@ -43,7 +45,12 @@ class CommandBuffer final : public ICommandBuffer,
   //@tencent only
   void * getImpl() override { return (__bridge void *)value_;}
 
+  igl::metal::Device& device() {
+    return device_;
+  }
+
  private:
+  igl::metal::Device& device_;
   id<MTLCommandBuffer> value_;
 };
 

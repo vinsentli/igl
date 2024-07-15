@@ -55,6 +55,10 @@ class IRenderCommandEncoder : public ICommandEncoder {
                           const std::shared_ptr<IBuffer>& buffer,
                           size_t bufferOffset,
                           size_t bufferSize = 0) = 0;
+  virtual void bindBuffer(uint32_t index,
+                          IBuffer* buffer,
+                          size_t bufferOffset = 0,
+                          size_t bufferSize = 0) {}
   // On Vulkan and OpenGL: bind a vertex buffer (as in "a buffer with vertices").
   // On Metal: bind any buffer to the vertex stage. Apps should take care there are no 'index'
   // collisions between bindVertexBuffer() and bindBuffer()
@@ -74,6 +78,9 @@ class IRenderCommandEncoder : public ICommandEncoder {
   /// Binds an individual uniform. Exclusively for use when uniform blocks are not supported.
   virtual void bindUniform(const UniformDesc& uniformDesc, const void* data) = 0;
 
+  virtual void bindBindGroup(BindGroupTextureHandle handle) = 0;
+  virtual void bindBindGroup(BindGroupBufferHandle handle) = 0;
+
   virtual void draw(size_t vertexCount,
                     uint32_t instanceCount = 1,
                     uint32_t firstVertex = 0,
@@ -84,11 +91,11 @@ class IRenderCommandEncoder : public ICommandEncoder {
                            int32_t vertexOffset = 0,
                            uint32_t baseInstance = 0) = 0;
   virtual void multiDrawIndirect(IBuffer& indirectBuffer,
-                                 size_t indirectBufferOffset,
+                                 size_t indirectBufferOffset = 0,
                                  uint32_t drawCount = 1,
                                  uint32_t stride = 0) = 0;
   virtual void multiDrawIndexedIndirect(IBuffer& indirectBuffer,
-                                        size_t indirectBufferOffset,
+                                        size_t indirectBufferOffset = 0,
                                         uint32_t drawCount = 1,
                                         uint32_t stride = 0) = 0;
 

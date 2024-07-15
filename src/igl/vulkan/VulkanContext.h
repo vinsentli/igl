@@ -12,6 +12,7 @@
 #include <memory>
 #include <unordered_map>
 
+#include <igl/CommandEncoder.h>
 #include <igl/HWDevice.h>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanDevice.h>
@@ -94,6 +95,7 @@ struct VulkanContextConfig {
   bool enableBufferDeviceAddress = false;
   bool enableExtraLogs = true;
   bool enableDescriptorIndexing = false;
+  // @fb-only
 
   igl::ColorSpace swapChainColorSpace = igl::ColorSpace::SRGB_NONLINEAR;
   igl::TextureFormat requestedSwapChainTextureFormat = igl::TextureFormat::RGBA_UNorm8;
@@ -233,6 +235,8 @@ class VulkanContext final {
 
   VkSamplerYcbcrConversionInfo getOrCreateYcbcrConversionInfo(VkFormat format) const;
 
+  void freeResourcesForDescriptorSetLayout(VkDescriptorSetLayout dsl) const;
+
 #if defined(IGL_WITH_TRACY_GPU)
   TracyVkCtx tracyCtx_ = nullptr;
   std::unique_ptr<VulkanCommandPool> profilingCommandPool_;
@@ -338,6 +342,8 @@ class VulkanContext final {
   mutable Pool<SamplerTag, std::shared_ptr<VulkanSampler>> samplers_;
   // a texture/sampler was created since the last descriptor set update
   mutable bool awaitingCreation_ = false;
+  Pool<BindGroupBufferTag, BindGroupBufferDesc> bindGroupBuffersPool_;
+  Pool<BindGroupTextureTag, BindGroupTextureDesc> bindGroupTexturesPool_;
 
   mutable size_t drawCallCount_ = 0;
 

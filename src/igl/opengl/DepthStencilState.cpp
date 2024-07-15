@@ -65,7 +65,8 @@ GLenum DepthStencilState::convertStencilOperation(igl::StencilOperation value) {
   IGL_UNREACHABLE_RETURN(GL_ZERO)
 }
 
-void DepthStencilState::bind(uint32_t frontStencilReferenceValue, uint32_t backStencilReferenceValue) {
+void DepthStencilState::bind(uint32_t frontStencilReferenceValue,
+                             uint32_t backStencilReferenceValue) {
   getContext().depthMask(static_cast<GLboolean>(desc_.isDepthWriteEnabled));
 
   // https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/glDepthFunc.xhtml

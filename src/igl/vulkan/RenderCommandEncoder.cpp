@@ -235,8 +235,19 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
   dynamicState_.renderPassIndex_ = renderPassHandle.index;
   dynamicState_.depthBiasEnable_ = false;
 
-  const VkRenderPassBeginInfo bi = fb.getRenderPassBeginInfo(
+  VkRenderPassBeginInfo bi = fb.getRenderPassBeginInfo(
       renderPassHandle.pass, mipLevel, layer, (uint32_t)clearValues.size(), clearValues.data());
+
+  // clang-format off
+  // @fb-only
+      // @fb-only
+      // @fb-only
+      // @fb-only
+  // @fb-only
+  // clang-format on
+  // @fb-only
+    // @fb-only
+  // @fb-only
 
   const uint32_t width = std::max(fb.getWidth() >> mipLevel, 1u);
   const uint32_t height = std::max(fb.getHeight() >> mipLevel, 1u);
@@ -712,7 +723,8 @@ void RenderCommandEncoder::multiDrawIndexedIndirect(IBuffer& indirectBuffer,
 void RenderCommandEncoder::setStencilReferenceValue(uint32_t value) {
   IGL_PROFILER_FUNCTION();
 
-  setStencilReferenceValues(value, value);
+  ctx_.vf_.vkCmdSetStencilReference(
+      cmdBuffer_, VK_STENCIL_FACE_FRONT_BIT | VK_STENCIL_FACE_BACK_BIT, value);
 }
 
 void RenderCommandEncoder::setStencilReferenceValues(uint32_t frontValue, uint32_t backValue) {
@@ -802,7 +814,6 @@ void RenderCommandEncoder::blitColorImage(const igl::vulkan::VulkanImage& srcIma
                                           const igl::vulkan::VulkanImage& destImage,
                                           const igl::TextureRangeDesc& srcRange,
                                           const igl::TextureRangeDesc& destRange) {
-  const auto& wrapper = ctx_.immediate_->acquire();
   const VkImageSubresourceRange srcResourceRange = {
       srcImage.getImageAspectFlags(),
       static_cast<uint32_t>(srcRange.mipLevel),
@@ -817,13 +828,13 @@ void RenderCommandEncoder::blitColorImage(const igl::vulkan::VulkanImage& srcIma
       static_cast<uint32_t>(destRange.layer),
       static_cast<uint32_t>(destRange.numLayers),
   };
-  srcImage.transitionLayout(wrapper.cmdBuf_,
+  srcImage.transitionLayout(cmdBuffer_,
                             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                             VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                             VK_PIPELINE_STAGE_TRANSFER_BIT,
                             srcResourceRange);
 
-  destImage.transitionLayout(wrapper.cmdBuf_,
+  destImage.transitionLayout(cmdBuffer_,
                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                              VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                              VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -840,7 +851,7 @@ void RenderCommandEncoder::blitColorImage(const igl::vulkan::VulkanImage& srcIma
         static_cast<int32_t>(destRange.height + destRange.y),
         1}}};
   ivkCmdBlitImage(&ctx_.vf_,
-                  wrapper.cmdBuf_,
+                  cmdBuffer_,
                   srcImage.getVkImage(),
                   destImage.getVkImage(),
                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -872,7 +883,7 @@ void RenderCommandEncoder::blitColorImage(const igl::vulkan::VulkanImage& srcIma
   IGL_ASSERT_MSG(targetLayout != VK_IMAGE_LAYOUT_UNDEFINED, "Missing usage flags");
 
   // 3. Transition TRANSFER_DST_OPTIMAL into `targetLayout`
-  destImage.transitionLayout(wrapper.cmdBuf_,
+  destImage.transitionLayout(cmdBuffer_,
                              targetLayout,
                              VK_PIPELINE_STAGE_TRANSFER_BIT,
                              VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
@@ -926,6 +937,38 @@ void RenderCommandEncoder::processDependencies(const Dependencies& dependencies)
                          dstStageFlags);
       }
       deps = deps->next;
+    }
+  }
+}
+
+void RenderCommandEncoder::bindBindGroup(BindGroupTextureHandle handle) {
+  if (handle.empty()) {
+    return;
+  }
+
+  // this is a dummy placeholder code to be replaced with actual Vulkan descriptors management
+  const BindGroupTextureDesc* desc = ctx_.bindGroupTexturesPool_.get(handle);
+
+  for (uint32_t i = 0; i != IGL_TEXTURE_SAMPLERS_MAX; i++) {
+    if (desc->textures[i]) {
+      IGL_ASSERT(desc->samplers[i]);
+      bindTexture(i, BindTarget::kAllGraphics, desc->textures[i].get());
+      bindSamplerState(i, BindTarget::kAllGraphics, desc->samplers[i].get());
+    }
+  }
+}
+
+void RenderCommandEncoder::bindBindGroup(BindGroupBufferHandle handle) {
+  if (handle.empty()) {
+    return;
+  }
+
+  // this is a dummy placeholder code to be replaced with actual Vulkan descriptors management
+  const BindGroupBufferDesc* desc = ctx_.bindGroupBuffersPool_.get(handle);
+
+  for (uint32_t i = 0; i != IGL_UNIFORM_BLOCKS_BINDING_MAX; i++) {
+    if (desc->buffers[i]) {
+      bindBuffer(i, desc->buffers[i], desc->offset[i], desc->size[i]);
     }
   }
 }

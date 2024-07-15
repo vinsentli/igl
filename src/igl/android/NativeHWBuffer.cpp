@@ -7,7 +7,7 @@
 
 #include "NativeHWBuffer.h"
 
-#if IGL_PLATFORM_ANDROID && __ANDROID_MIN_SDK_VERSION__ >= 26
+#if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
 #include <android/hardware_buffer.h>
 
@@ -45,6 +45,9 @@ uint32_t getNativeHWFormat(TextureFormat iglFormat) {
 
   case TextureFormat::S_UInt8:
     return AHARDWAREBUFFER_FORMAT_S8_UINT;
+
+  case TextureFormat::YUV_NV12:
+    return AHARDWAREBUFFER_FORMAT_YCbCr_420_SP_VENUS;
 
   default:
     return 0;
@@ -99,6 +102,9 @@ TextureFormat getIglFormat(uint32_t nativeFormat) {
 
   case AHARDWAREBUFFER_FORMAT_S8_UINT:
     return TextureFormat::S_UInt8;
+
+  case AHARDWAREBUFFER_FORMAT_YCbCr_420_SP_VENUS:
+    return TextureFormat::YUV_NV12;
 
   default:
     return TextureFormat::Invalid;
@@ -187,9 +193,15 @@ Result INativeHWTextureBuffer::attachHWBuffer(AHardwareBuffer* buffer) {
     return Result(Result::Code::Unsupported, "Can not create texture for hardware buffer");
   }
 
-  hwBuffer_ = buffer;
+  Result result = createTextureInternal(desc, buffer);
+  if (!result.isOk()) {
+    AHardwareBuffer_release(buffer);
+  } else {
+    hwBuffer_ = buffer;
+    textureDesc_ = desc;
+  }
 
-  return createTextureInternal(desc, buffer);
+  return result;
 }
 
 Result INativeHWTextureBuffer::createHWBuffer(const TextureDesc& desc,
@@ -219,6 +231,7 @@ Result INativeHWTextureBuffer::createHWBuffer(const TextureDesc& desc,
     AHardwareBuffer_release(buffer);
   } else {
     hwBuffer_ = buffer;
+    textureDesc_ = desc;
   }
 
   return result;
@@ -264,10 +277,14 @@ Result INativeHWTextureBuffer::unlockHWBuffer() const {
   return Result();
 }
 
-AHardwareBuffer* INativeHWTextureBuffer::getHardwareBuffer() {
+AHardwareBuffer* INativeHWTextureBuffer::getHardwareBuffer() const {
   return hwBuffer_;
+}
+
+TextureDesc INativeHWTextureBuffer::getTextureDesc() const {
+  return textureDesc_;
 }
 
 } // namespace igl::android
 
-#endif
+#endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)

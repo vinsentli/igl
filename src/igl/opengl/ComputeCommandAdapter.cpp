@@ -34,7 +34,7 @@ ComputeCommandAdapter::ComputeCommandAdapter(IContext& context) :
 
 void ComputeCommandAdapter::clearTextures() {}
 
-void ComputeCommandAdapter::setTexture(ITexture* texture, size_t index) {
+void ComputeCommandAdapter::setTexture(ITexture* texture, uint32_t index) {
   if (!IGL_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
     return;
   }
@@ -70,7 +70,7 @@ void ComputeCommandAdapter::setBlockUniform(const std::shared_ptr<Buffer>& buffe
                                             size_t offset,
                                             int index,
                                             Result* outResult) {
-  uniformAdapter_.setUniformBuffer(buffer, offset, index, outResult);
+  uniformAdapter_.setUniformBuffer(buffer.get(), offset, index, outResult);
 }
 
 void ComputeCommandAdapter::dispatchThreadGroups(const Dimensions& threadgroupCount,

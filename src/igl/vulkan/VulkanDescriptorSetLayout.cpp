@@ -12,20 +12,24 @@
 
 namespace igl::vulkan {
 
-VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(const VulkanFunctionTable& vf,
-                                                     VkDevice device,
+VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(const VulkanContext& ctx,
                                                      VkDescriptorSetLayoutCreateFlags flags,
                                                      uint32_t numBindings,
                                                      const VkDescriptorSetLayoutBinding* bindings,
                                                      const VkDescriptorBindingFlags* bindingFlags,
                                                      const char* debugName) :
-  vf_(vf), device_(device), numBindings_(numBindings) {
+  ctx_(ctx), numBindings_(numBindings) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
-  VK_ASSERT(ivkCreateDescriptorSetLayout(
-      &vf, device, flags, numBindings, bindings, bindingFlags, &vkDescriptorSetLayout_));
-  VK_ASSERT(ivkSetDebugObjectName(&vf,
-                                  device_,
+  VK_ASSERT(ivkCreateDescriptorSetLayout(&ctx.vf_,
+                                         ctx.getVkDevice(),
+                                         flags,
+                                         numBindings,
+                                         bindings,
+                                         bindingFlags,
+                                         &vkDescriptorSetLayout_));
+  VK_ASSERT(ivkSetDebugObjectName(&ctx.vf_,
+                                  ctx.getVkDevice(),
                                   VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
                                   (uint64_t)vkDescriptorSetLayout_,
                                   debugName));
@@ -33,8 +37,11 @@ VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(const VulkanFunctionTable& 
 
 VulkanDescriptorSetLayout::~VulkanDescriptorSetLayout() {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
-
-  vf_.vkDestroyDescriptorSetLayout(device_, vkDescriptorSetLayout_, nullptr);
+  ctx_.freeResourcesForDescriptorSetLayout(vkDescriptorSetLayout_);
+  ctx_.deferredTask(std::packaged_task<void()>(
+      [vf = &ctx_.vf_, device = ctx_.getVkDevice(), layout = vkDescriptorSetLayout_] {
+        vf->vkDestroyDescriptorSetLayout(device, layout, nullptr);
+      }));
 }
 
 } // namespace igl::vulkan

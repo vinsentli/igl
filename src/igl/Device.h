@@ -17,7 +17,8 @@
 
 namespace igl {
 
-struct BindGroupDesc;
+struct BindGroupBufferDesc;
+struct BindGroupTextureDesc;
 struct BufferDesc;
 struct CommandQueueDesc;
 struct ComputePipelineDesc;
@@ -74,25 +75,15 @@ class IDevice : public ICapabilities {
  public:
   ~IDevice() override = default;
 
-  virtual Holder<igl::BindGroupHandle> createBindGroup(const BindGroupDesc& desc,
-                                                       Result* IGL_NULLABLE outResult) {
-    (void)desc;
+  virtual Holder<BindGroupTextureHandle> createBindGroup(
+      const BindGroupTextureDesc& desc,
+      Result* IGL_NULLABLE outResult = nullptr) = 0;
+  virtual Holder<BindGroupBufferHandle> createBindGroup(
+      const BindGroupBufferDesc& desc,
+      Result* IGL_NULLABLE outResult = nullptr) = 0;
 
-    IGL_ASSERT_NOT_IMPLEMENTED();
-
-    Result::setResult(outResult,
-                      Result(Result::Code::Unimplemented, "Bind groups are not implemented (yet)"));
-
-    return {};
-  }
-
-  virtual void destroy(igl::BindGroupHandle handle) {
-    if (!handle) {
-      return;
-    }
-
-    IGL_ASSERT_NOT_IMPLEMENTED();
-  }
+  virtual void destroy(igl::BindGroupTextureHandle handle) = 0;
+  virtual void destroy(igl::BindGroupBufferHandle handle) = 0;
 
   /**
    * @brief Creates a command queue.

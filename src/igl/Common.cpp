@@ -64,7 +64,13 @@ void optimizedMemcpy(void* dst, const void* src, size_t size) {
   }
 }
 
-void destroy(igl::IDevice* IGL_NULLABLE device, igl::BindGroupHandle handle) {
+void destroy(igl::IDevice* IGL_NULLABLE device, igl::BindGroupTextureHandle handle) {
+  if (device) {
+    device->destroy(handle);
+  }
+}
+
+void destroy(igl::IDevice* IGL_NULLABLE device, igl::BindGroupBufferHandle handle) {
   if (device) {
     device->destroy(handle);
   }
