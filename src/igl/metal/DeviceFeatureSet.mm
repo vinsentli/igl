@@ -148,6 +148,8 @@ bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
   // No current Metal devices support packed, uncompressed RGB textures.
   case DeviceFeatures::TextureFormatRGB:
     return false;
+  case DeviceFeatures::TextureCompressionAstc:
+    return true;
   case DeviceFeatures::ExplicitBindingExt:
   case DeviceFeatures::StandardDerivativeExt:
   case DeviceFeatures::ShaderTextureLodExt:

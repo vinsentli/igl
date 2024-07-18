@@ -247,6 +247,9 @@ bool DeviceFeatureSet::isFeatureSupported(DeviceFeatures feature) const {
 
   case DeviceFeatures::TextureFormatRGB:
     return true;
+          
+  case DeviceFeatures::TextureCompressionAstc:
+    return isTextureFeatureSupported(TextureFeatures::TextureCompressionAstc);
 
   case DeviceFeatures::ReadWriteFramebuffer:
     return hasDesktopOrESVersion(*this, GLVersion::v3_0, GLVersion::v3_0_ES) ||

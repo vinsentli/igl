@@ -493,6 +493,8 @@ bool Device::hasFeature(DeviceFeatures feature) const {
     return supportsFormat(ctx_->vf_, physicalDevice, VK_FORMAT_R8G8_UNORM);
   case DeviceFeatures::TextureFormatRGB:
     return supportsFormat(ctx_->vf_, physicalDevice, VK_FORMAT_R8G8B8_SRGB);
+  case DeviceFeatures::TextureCompressionAstc:
+    return true;
   case DeviceFeatures::ReadWriteFramebuffer:
     return true;
   case DeviceFeatures::TextureNotPot:
