@@ -53,10 +53,7 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
   void bindRenderPipelineState(const std::shared_ptr<IRenderPipelineState>& pipelineState) override;
   void bindDepthStencilState(const std::shared_ptr<IDepthStencilState>& depthStencilState) override;
 
-  void bindBuffer(int index,
-                  const std::shared_ptr<IBuffer>& buffer,
-                  size_t bufferOffset,
-                  size_t bufferSize) override;
+  void bindBuffer(uint32_t index, IBuffer* buffer, size_t bufferOffset, size_t bufferSize) override;
   void bindVertexBuffer(uint32_t index, IBuffer& buffer, size_t bufferOffset) override;
   void bindIndexBuffer(IBuffer& buffer, IndexFormat format, size_t bufferOffset) override;
 
@@ -75,7 +72,9 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
   void bindUniform(const UniformDesc& uniformDesc, const void* data) override;
 
   void bindBindGroup(BindGroupTextureHandle handle) override;
-  void bindBindGroup(BindGroupBufferHandle handle) override;
+  void bindBindGroup(BindGroupBufferHandle handle,
+                     uint32_t numDynamicOffsets = 0,
+                     const uint32_t* dynamicOffsets = nullptr) override;
 
   void draw(size_t vertexCount,
             uint32_t instanceCount,

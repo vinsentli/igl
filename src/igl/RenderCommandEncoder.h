@@ -51,14 +51,10 @@ class IRenderCommandEncoder : public ICommandEncoder {
   // `bufferOffset` is the offset into the buffer where the data starts
   // `bufferSize` is the size of the buffer to bind used for additional validation (0 means the
   // remaining size starting from `bufferOffset`)
-  virtual void bindBuffer(int index,
-                          const std::shared_ptr<IBuffer>& buffer,
-                          size_t bufferOffset,
-                          size_t bufferSize = 0) = 0;
   virtual void bindBuffer(uint32_t index,
                           IBuffer* buffer,
                           size_t bufferOffset = 0,
-                          size_t bufferSize = 0) {}
+                          size_t bufferSize = 0) = 0;
   // On Vulkan and OpenGL: bind a vertex buffer (as in "a buffer with vertices").
   // On Metal: bind any buffer to the vertex stage. Apps should take care there are no 'index'
   // collisions between bindVertexBuffer() and bindBuffer()
@@ -79,7 +75,11 @@ class IRenderCommandEncoder : public ICommandEncoder {
   virtual void bindUniform(const UniformDesc& uniformDesc, const void* data) = 0;
 
   virtual void bindBindGroup(BindGroupTextureHandle handle) = 0;
-  virtual void bindBindGroup(BindGroupBufferHandle handle) = 0;
+  // if any uniform/storage buffers are marked as dynamic, then `dynamicOffsets` should include one
+  // element for each `isDynamic` array element
+  virtual void bindBindGroup(BindGroupBufferHandle handle,
+                             uint32_t numDynamicOffsets = 0,
+                             const uint32_t* dynamicOffsets = nullptr) = 0;
 
   virtual void draw(size_t vertexCount,
                     uint32_t instanceCount = 1,

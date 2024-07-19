@@ -43,7 +43,8 @@ class Device final : public IDevice {
                                         Result* IGL_NULLABLE outResult) const noexcept override;
 
   std::shared_ptr<IDepthStencilState> createDepthStencilState(const DepthStencilStateDesc& desc,
-                                                              Result* IGL_NULLABLE outResult) const override;
+                                                              Result* IGL_NULLABLE
+                                                                  outResult) const override;
 
   std::unique_ptr<IShaderStages> createShaderStages(const ShaderStagesDesc& desc,
                                                     Result* IGL_NULLABLE outResult) const override;
@@ -54,17 +55,21 @@ class Device final : public IDevice {
                                           Result* IGL_NULLABLE outResult) const noexcept override;
 
   std::shared_ptr<IVertexInputState> createVertexInputState(const VertexInputStateDesc& desc,
-                                                            Result* IGL_NULLABLE outResult) const override;
+                                                            Result* IGL_NULLABLE
+                                                                outResult) const override;
 
   // Pipelines
   std::shared_ptr<IComputePipelineState> createComputePipeline(const ComputePipelineDesc& desc,
-                                                               Result* IGL_NULLABLE outResult) const override;
+                                                               Result* IGL_NULLABLE
+                                                                   outResult) const override;
   std::shared_ptr<IRenderPipelineState> createRenderPipeline(const RenderPipelineDesc& desc,
-                                                             Result* IGL_NULLABLE outResult) const override;
+                                                             Result* IGL_NULLABLE
+                                                                 outResult) const override;
 
   // Shaders
   std::unique_ptr<IShaderLibrary> createShaderLibrary(const ShaderLibraryDesc& desc,
-                                                      Result* IGL_NULLABLE outResult) const override;
+                                                      Result* IGL_NULLABLE
+                                                          outResult) const override;
 
   std::shared_ptr<IShaderModule> createShaderModule(const ShaderModuleDesc& desc,
                                                     Result* IGL_NULLABLE outResult) const override;
@@ -96,12 +101,12 @@ class Device final : public IDevice {
   }
 
  private:
-  std::shared_ptr<VulkanShaderModule> createShaderModule(const void* IGL_NONNULL data,
+  std::shared_ptr<VulkanShaderModule> createShaderModule(const void* IGL_NULLABLE data,
                                                          size_t length,
                                                          const std::string& debugName,
                                                          Result* IGL_NULLABLE outResult) const;
   std::shared_ptr<VulkanShaderModule> createShaderModule(ShaderStage stage,
-                                                         const char* IGL_NONNULL source,
+                                                         const char* IGL_NULLABLE source,
                                                          const std::string& debugName,
                                                          Result* IGL_NULLABLE outResult) const;
 

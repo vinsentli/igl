@@ -258,16 +258,14 @@ void RenderCommandEncoder::bindUniform(const UniformDesc& uniformDesc, const voi
   }
 }
 
-void RenderCommandEncoder::bindBuffer(int index,
-                                      const std::shared_ptr<IBuffer>& buffer,
+void RenderCommandEncoder::bindBuffer(uint32_t index,
+                                      IBuffer* buffer,
                                       size_t offset,
                                       size_t bufferSize) {
   (void)bufferSize;
 
-  IGL_ASSERT_MSG(index >= 0, "Invalid index passed to bindBuffer: %d", index);
-
   if (IGL_VERIFY(adapter_) && buffer) {
-    auto glBuffer = std::static_pointer_cast<Buffer>(buffer);
+    auto* glBuffer = static_cast<Buffer*>(buffer);
     auto bufferType = glBuffer->getType();
 
     if (bufferType == Buffer::Type::Uniform) {
@@ -461,18 +459,33 @@ void RenderCommandEncoder::bindBindGroup(BindGroupTextureHandle handle) {
   }
 }
 
-void RenderCommandEncoder::bindBindGroup(BindGroupBufferHandle handle) {
+void RenderCommandEncoder::bindBindGroup(BindGroupBufferHandle handle,
+                                         uint32_t numDynamicOffsets,
+                                         const uint32_t* dynamicOffsets) {
   if (handle.empty()) {
     return;
   }
 
   const BindGroupBufferDesc* desc = getContext().bindGroupBuffersPool_.get(handle);
 
+  uint32_t dynamicOffset = 0;
+
   for (uint32_t i = 0; i != IGL_UNIFORM_BLOCKS_BINDING_MAX; i++) {
     if (desc->buffers[i]) {
-      bindBuffer(i, desc->buffers[i], desc->offset[i], desc->size[i]);
+      if (desc->isDynamicBufferMask & (1 << i)) {
+        IGL_ASSERT_MSG(dynamicOffsets, "No dynamic offsets provided");
+        IGL_ASSERT_MSG(dynamicOffset < numDynamicOffsets, "Not enough dynamic offsets provided");
+        bindBuffer(i,
+                   desc->buffers[i].get(),
+                   desc->offset[i] + dynamicOffsets[dynamicOffset++],
+                   desc->size[i]);
+      } else {
+        bindBuffer(i, desc->buffers[i].get(), desc->offset[i], desc->size[i]);
+      }
     }
   }
+
+  IGL_ASSERT_MSG(dynamicOffset == numDynamicOffsets, "Not all dynamic offsets were consumed");
 }
 
 } // namespace igl::opengl

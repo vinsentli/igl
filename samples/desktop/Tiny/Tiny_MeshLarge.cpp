@@ -1918,8 +1918,8 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
     const int ubPerFrameShadowIdx = 0;
     const int ubPerObjectIdx = 1;
 #endif
-    commands->bindBuffer(ubPerFrameShadowIdx, ubPerFrameShadow_[frameIndex], 0);
-    commands->bindBuffer(ubPerObjectIdx, ubPerObject_[frameIndex], 0);
+    commands->bindBuffer(ubPerFrameShadowIdx, ubPerFrameShadow_[frameIndex].get());
+    commands->bindBuffer(ubPerObjectIdx, ubPerObject_[frameIndex].get());
 
 #if USE_OPENGL_BACKEND
     int start = 0;
@@ -1972,9 +1972,9 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
     const int ubPerObjectIdx = 1;
     const int sbIdx = 2;
 #endif
-    commands->bindBuffer(ubPerFrameIdx, ubPerFrame_[frameIndex], 0);
-    commands->bindBuffer(ubPerObjectIdx, ubPerObject_[frameIndex], 0);
-    commands->bindBuffer(sbIdx, sbMaterials_, 0);
+    commands->bindBuffer(ubPerFrameIdx, ubPerFrame_[frameIndex].get());
+    commands->bindBuffer(ubPerObjectIdx, ubPerObject_[frameIndex].get());
+    commands->bindBuffer(sbIdx, sbMaterials_.get());
     commands->bindTexture(0, igl::BindTarget::kFragment, fbShadowMap_->getDepthAttachment().get());
     commands->bindTexture(4, igl::BindTarget::kFragment, skyboxTextureIrradiance_.get());
     commands->bindSamplerState(0, igl::BindTarget::kFragment, samplerShadow_.get());
@@ -2647,30 +2647,8 @@ int main(int /*argc*/, char* /*argv*/[]) {
                            ImVec2(ImGui::GetIO().DisplaySize.x, 32));
         ImGui::End();
       }
-      // a nice FPS counter
-      {
-        const ImGuiWindowFlags flags =
-            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
-            ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
-        const ImGuiViewport* v = ImGui::GetMainViewport();
-        IGL_ASSERT(v);
-        ImGui::SetNextWindowPos(
-            {
-                v->WorkPos.x + v->WorkSize.x - 15.0f,
-                v->WorkPos.y + 15.0f,
-            },
-            ImGuiCond_Always,
-            {1.0f, 0.0f});
-        ImGui::SetNextWindowBgAlpha(0.30f);
-        ImGui::SetNextWindowSize(ImVec2(ImGui::CalcTextSize("FPS : _______").x, 0));
-        if (ImGui::Begin("##FPS", nullptr, flags)) {
-          ImGui::Text("FPS : %i", (int)fps_.getAverageFPS());
-          ImGui::Text("Ms  : %.1f", 1000.0 / fps_.getAverageFPS());
-        }
-        ImGui::End();
-      }
 
+      imguiSession_->drawFPS(fps_.getAverageFPS());
 #endif // IGL_WITH_IGLU
     }
 

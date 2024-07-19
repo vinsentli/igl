@@ -59,10 +59,7 @@ class RenderCommandEncoder final : public IRenderCommandEncoder, public WithCont
   // The data pointer must remain valid until the commandBuffer's execution has been completed by
   // CommandQueue::submit()
   void bindUniform(const UniformDesc& uniformDesc, const void* data) override;
-  void bindBuffer(int index,
-                  const std::shared_ptr<IBuffer>& buffer,
-                  size_t bufferOffset,
-                  size_t bufferSize) override;
+  void bindBuffer(uint32_t index, IBuffer* buffer, size_t bufferOffset, size_t bufferSize) override;
   void bindVertexBuffer(uint32_t index, IBuffer& buffer, size_t bufferOffset) override;
   void bindIndexBuffer(IBuffer& buffer, IndexFormat format, size_t bufferOffset) override;
   void bindBytes(size_t index, uint8_t target, const void* data, size_t length) override;
@@ -71,7 +68,9 @@ class RenderCommandEncoder final : public IRenderCommandEncoder, public WithCont
   void bindTexture(size_t index, uint8_t target, ITexture* texture) override;
 
   void bindBindGroup(BindGroupTextureHandle handle) override;
-  void bindBindGroup(BindGroupBufferHandle handle) override;
+  void bindBindGroup(BindGroupBufferHandle handle,
+                     uint32_t numDynamicOffsets,
+                     const uint32_t* dynamicOffsets) override;
 
   void draw(size_t vertexCount,
             uint32_t instanceCount,
