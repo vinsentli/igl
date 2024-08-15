@@ -149,7 +149,7 @@ VkResult VulkanImmediateCommands::wait(const SubmitHandle handle, uint64_t timeo
   if (!IGL_VERIFY(!buffers_[handle.bufferIndex_].isEncoding_)) {
     // we are waiting for a buffer which has not been submitted - this is probably a logic error
     // somewhere in the calling code
-    return VK_ERROR_UNKNOWN;
+    return (VkResult)VK_ERROR_UNKNOWN;
   }
 
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_WAIT);
