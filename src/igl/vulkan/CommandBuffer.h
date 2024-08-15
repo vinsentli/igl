@@ -41,7 +41,7 @@ class CommandBuffer final : public ICommandBuffer,
    */
   std::unique_ptr<IRenderCommandEncoder> createRenderCommandEncoder(
       const RenderPassDesc& renderPass,
-      std::shared_ptr<IFramebuffer> framebuffer,
+      const std::shared_ptr<IFramebuffer>& framebuffer,
       const Dependencies& dependencies,
       Result* outResult) override;
 
@@ -53,7 +53,7 @@ class CommandBuffer final : public ICommandBuffer,
    * texture to the VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL layout if the texture's samples is
    * equal to 1 (it's non multi-sampled).
    */
-  void present(std::shared_ptr<ITexture> surface) const override;
+  void present(const std::shared_ptr<ITexture>& surface) const override;
 
   void pushDebugGroupLabel(const char* label, const igl::Color& color) const override;
 
@@ -73,9 +73,9 @@ class CommandBuffer final : public ICommandBuffer,
     return isFromSwapchain_;
   }
 
-  std::shared_ptr<igl::IFramebuffer> getFramebuffer() const;
+  const std::shared_ptr<igl::IFramebuffer>& getFramebuffer() const;
 
-  std::shared_ptr<ITexture> getPresentedSurface() const;
+  const std::shared_ptr<ITexture>& getPresentedSurface() const;
 
  private:
   friend class CommandQueue;

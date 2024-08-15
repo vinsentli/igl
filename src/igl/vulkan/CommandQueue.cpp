@@ -24,8 +24,14 @@ CommandQueue::CommandQueue(Device& device, const CommandQueueDesc& desc) :
 }
 
 std::shared_ptr<ICommandBuffer> CommandQueue::createCommandBuffer(const CommandBufferDesc& desc,
-                                                                  Result* /*outResult*/) {
+                                                                  Result* outResult) {
   IGL_PROFILER_FUNCTION();
+
+  const VulkanContext& ctx = device_.getVulkanContext();
+  if (!ctx.immediate_->canAcquire()) {
+    Result::setResult(outResult, Result::Code::RuntimeError, "Could not acquire a command buffer");
+    return nullptr;
+  }
 
   // for now, we want only 1 command buffer
   IGL_ASSERT(!isInsideFrame_);
@@ -70,7 +76,7 @@ SubmitHandle CommandQueue::endCommandBuffer(const igl::vulkan::VulkanContext& ct
   const bool shouldPresent = isGraphicsQueue && ctx.hasSwapchain() &&
                              cmdBuffer->isFromSwapchain() && present;
   if (shouldPresent) {
-    ctx.immediate_->waitSemaphore(ctx.swapchain_->acquireSemaphore_->vkSemaphore_);
+    ctx.immediate_->waitSemaphore(ctx.swapchain_->getSemaphore());
   }
 
   cmdBuffer->lastSubmitHandle_ = ctx.immediate_->submit(cmdBuffer->wrapper_);
@@ -107,7 +113,7 @@ void CommandQueue::enhancedShaderDebuggingPass(const igl::vulkan::VulkanContext&
   const auto min = std::min_element(indices.begin(), indices.end());
 
   const auto resolveAttachment = cmdBuffer->getFramebuffer()->getResolveColorAttachment(*min);
-  const std::shared_ptr<igl::IFramebuffer> framebuffer =
+  const std::shared_ptr<igl::IFramebuffer>& framebuffer =
       resolveAttachment ? debugger->framebuffer(device_, resolveAttachment)
                         : cmdBuffer->getFramebuffer();
 
@@ -129,7 +135,7 @@ void CommandQueue::enhancedShaderDebuggingPass(const igl::vulkan::VulkanContext&
   {
     // Bind the line buffer
     auto* vkEncoder = static_cast<RenderCommandEncoder*>(cmdEncoder.get());
-    vkEncoder->binder().bindStorageBuffer(
+    vkEncoder->binder().bindBuffer(
         EnhancedShaderDebuggingStore::kBufferIndex,
         static_cast<igl::vulkan::Buffer*>(debugger->vertexBuffer().get()),
         sizeof(EnhancedShaderDebuggingStore::Header),

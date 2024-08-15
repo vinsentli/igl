@@ -92,6 +92,10 @@ bool RenderPipelineDesc::operator==(const RenderPipelineDesc& other) const {
     }
   }
 
+  if (isDynamicBufferMask != other.isDynamicBufferMask) {
+    return false;
+  }
+
   return debugName == other.debugName;
 }
 
@@ -106,9 +110,10 @@ size_t std::hash<RenderPipelineDesc>::operator()(const RenderPipelineDesc& key) 
   hash ^= std::hash<uintptr_t>()(reinterpret_cast<uintptr_t>(key.shaderStages.get()));
   hash ^= std::hash<RenderPipelineDesc::TargetDesc>()(key.targetDesc);
   hash ^= std::hash<int>()(EnumToValue(key.cullMode));
-  hash ^= std::hash<int>()(key.sampleCount);
+  hash ^= std::hash<uint32_t>()(key.sampleCount);
   hash ^= std::hash<int>()(EnumToValue(key.frontFaceWinding));
   hash ^= std::hash<int>()(EnumToValue(key.polygonFillMode));
+  hash ^= std::hash<uint32_t>()(key.isDynamicBufferMask);
   hash ^= std::hash<igl::NameHandle>()(key.debugName);
 
   for (const auto& i : key.vertexUnitSamplerMap) {
@@ -121,8 +126,10 @@ size_t std::hash<RenderPipelineDesc>::operator()(const RenderPipelineDesc& key) 
   }
   for (const auto& i : key.uniformBlockBindingMap) {
     hash ^= std::hash<size_t>()(i.first);
-    hash ^= std::hash<igl::NameHandle>()(i.second.first);
-    hash ^= std::hash<igl::NameHandle>()(i.second.second);
+    for (const auto& names : i.second) {
+      hash ^= std::hash<igl::NameHandle>()(names.first);
+      hash ^= std::hash<igl::NameHandle>()(names.second);
+    }
   }
   for (const auto& i : key.immutableSamplers) {
     hash ^= std::hash<uintptr_t>()(reinterpret_cast<uintptr_t>(i.get()));

@@ -32,7 +32,7 @@ std::unique_ptr<IComputeCommandEncoder> CommandBuffer::createComputeCommandEncod
 
 std::unique_ptr<IRenderCommandEncoder> CommandBuffer::createRenderCommandEncoder(
     const RenderPassDesc& renderPass,
-    std::shared_ptr<IFramebuffer> framebuffer,
+    const std::shared_ptr<IFramebuffer>& framebuffer,
     const Dependencies& dependencies,
     Result* outResult) {
   IGL_PROFILER_FUNCTION();
@@ -69,7 +69,7 @@ std::unique_ptr<IRenderCommandEncoder> CommandBuffer::createRenderCommandEncoder
       shared_from_this(), ctx_, renderPass, framebuffer, dependencies, outResult);
 
   if (ctx_.enhancedShaderDebuggingStore_) {
-    encoder->binder().bindStorageBuffer(
+    encoder->binder().bindBuffer(
         EnhancedShaderDebuggingStore::kBufferIndex,
         static_cast<igl::vulkan::Buffer*>(ctx_.enhancedShaderDebuggingStore_->vertexBuffer().get()),
         0,
@@ -79,7 +79,7 @@ std::unique_ptr<IRenderCommandEncoder> CommandBuffer::createRenderCommandEncoder
   return encoder;
 }
 
-void CommandBuffer::present(std::shared_ptr<ITexture> surface) const {
+void CommandBuffer::present(const std::shared_ptr<ITexture>& surface) const {
   IGL_PROFILER_FUNCTION();
 
   IGL_ASSERT(surface);
@@ -139,18 +139,18 @@ void CommandBuffer::popDebugGroupLabel() const {
 void CommandBuffer::waitUntilCompleted() {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_WAIT);
 
-  ctx_.immediate_->wait(lastSubmitHandle_);
+  ctx_.immediate_->wait(lastSubmitHandle_, ctx_.config_.fenceTimeoutNanoseconds);
 
   lastSubmitHandle_ = VulkanImmediateCommands::SubmitHandle();
 }
 
 void CommandBuffer::waitUntilScheduled() {}
 
-std::shared_ptr<igl::IFramebuffer> CommandBuffer::getFramebuffer() const {
+const std::shared_ptr<igl::IFramebuffer>& CommandBuffer::getFramebuffer() const {
   return framebuffer_;
 }
 
-std::shared_ptr<ITexture> CommandBuffer::getPresentedSurface() const {
+const std::shared_ptr<ITexture>& CommandBuffer::getPresentedSurface() const {
   return presentedSurface_;
 }
 

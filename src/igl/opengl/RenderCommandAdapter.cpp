@@ -90,21 +90,11 @@ void RenderCommandAdapter::setDepthStencilState(
   setDirty(StateMask::DEPTH_STENCIL);
 }
 
-void RenderCommandAdapter::setStencilReferenceValue(uint32_t value, Result* outResult) {
+void RenderCommandAdapter::setStencilReferenceValue(uint32_t value) {
   frontStencilReferenceValue_ = value;
   backStencilReferenceValue_ = value;
   
   setDirty(StateMask::DEPTH_STENCIL);
-  Result::setOk(outResult);
-}
-
-void RenderCommandAdapter::setStencilReferenceValues(uint32_t frontValue,
-                                                     uint32_t backValue,
-                                                     Result* outResult) {
-  frontStencilReferenceValue_ = frontValue;
-  backStencilReferenceValue_ = backValue;
-  setDirty(StateMask::DEPTH_STENCIL);
-  Result::setOk(outResult);
 }
 
 void RenderCommandAdapter::setBlendColor(Color color) {
@@ -428,6 +418,14 @@ void RenderCommandAdapter::willDraw() {
           samplerState->bind(texture);
         }
         CLEAR_DIRTY(fragmentTextureStatesDirty_, index);
+      }
+    }
+
+    if (getContext().shouldValidateShaders()) {
+      const auto* stages = pipelineState->getShaderStages();
+      if (stages) {
+        const auto result = stages->validate();
+        IGL_ASSERT_MSG(result.isOk(), result.message.c_str());
       }
     }
   }

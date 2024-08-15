@@ -58,12 +58,12 @@ int toGlType(IndexFormat format) {
 
 } // namespace
 
-RenderCommandEncoder::RenderCommandEncoder(std::shared_ptr<CommandBuffer> commandBuffer) :
-  IRenderCommandEncoder(std::move(commandBuffer)),
+RenderCommandEncoder::RenderCommandEncoder(const std::shared_ptr<CommandBuffer>& commandBuffer) :
+  IRenderCommandEncoder(commandBuffer),
   WithContext(static_cast<CommandBuffer&>(getCommandBuffer()).getContext()) {}
 
 std::unique_ptr<RenderCommandEncoder> RenderCommandEncoder::create(
-    std::shared_ptr<CommandBuffer> commandBuffer,
+    const std::shared_ptr<CommandBuffer>& commandBuffer,
     const RenderPassDesc& renderPass,
     const std::shared_ptr<IFramebuffer>& framebuffer,
     const Dependencies& /*dependencies*/,
@@ -73,8 +73,7 @@ std::unique_ptr<RenderCommandEncoder> RenderCommandEncoder::create(
     return {};
   }
 
-  std::unique_ptr<RenderCommandEncoder> newEncoder(
-      new RenderCommandEncoder(std::move(commandBuffer)));
+  std::unique_ptr<RenderCommandEncoder> newEncoder(new RenderCommandEncoder(commandBuffer));
   newEncoder->beginEncoding(renderPass, framebuffer, outResult);
   return newEncoder;
 }
@@ -422,12 +421,6 @@ void RenderCommandEncoder::multiDrawIndexedIndirect(IBuffer& indirectBuffer,
 void RenderCommandEncoder::setStencilReferenceValue(uint32_t value) {
   if (IGL_VERIFY(adapter_)) {
     adapter_->setStencilReferenceValue(value);
-  }
-}
-
-void RenderCommandEncoder::setStencilReferenceValues(uint32_t frontValue, uint32_t backValue) {
-  if (IGL_VERIFY(adapter_)) {
-    adapter_->setStencilReferenceValues(frontValue, backValue);
   }
 }
 

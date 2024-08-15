@@ -22,7 +22,7 @@ import javax.microedition.khronos.egl.EGLDisplay;
 import javax.microedition.khronos.opengles.GL10;
 
 /// Simple view that sets up a GLES 2.0 rendering context
-class SampleView extends GLSurfaceView {
+public class SampleView extends GLSurfaceView {
   private static String TAG = "SampleView";
   private float lastTouchX = 0.0f;
   private float lastTouchY = 0.0f;
@@ -41,6 +41,15 @@ class SampleView extends GLSurfaceView {
     setEGLConfigChooser(new ConfigChooser(backendTypeID));
 
     setRenderer(new Renderer(context));
+  }
+
+  @Override
+  public void setBackgroundColor(int color) {
+    int A = (color >> 24) & 0xff;
+    int R = (color >> 16) & 0xff;
+    int G = (color >> 8) & 0xff;
+    int B = (color) & 0xff;
+    SampleLib.setClearColorValue(R, G, B, A);
   }
 
   @Override

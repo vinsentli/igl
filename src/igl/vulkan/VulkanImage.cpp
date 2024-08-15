@@ -711,7 +711,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
 
     const VkImageMemoryRequirementsInfo2 imageMemoryRequirementInfo = {
         VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
-        &imagePlaneMemoryRequirementsInfo,
+        numPlanes > 1 ? &imagePlaneMemoryRequirementsInfo : nullptr,
         vkImage_};
 
     VkMemoryRequirements2 memoryRequirements = {VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, nullptr};
@@ -738,7 +738,8 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
         VkBindImagePlaneMemoryInfo{VK_STRUCTURE_TYPE_BIND_IMAGE_PLANE_MEMORY_INFO,
                                    nullptr,
                                    (VkImageAspectFlagBits)(VK_IMAGE_ASPECT_PLANE_0_BIT << p)};
-    bindInfo[p] = ivkGetBindImageMemoryInfo(&bindImagePlaneMemoryInfo[p], vkImage_, vkMemory_[p]);
+    bindInfo[p] = ivkGetBindImageMemoryInfo(
+        numPlanes > 1 ? &bindImagePlaneMemoryInfo[p] : nullptr, vkImage_, vkMemory_[p]);
   }
   VK_ASSERT(ctx_->vf_.vkBindImageMemory2(device_, numPlanes, bindInfo.data()));
 
@@ -774,7 +775,7 @@ void VulkanImage::destroy() {
 
   if (!isExternallyManaged_) {
     if (vkMemory_[1] == VK_NULL_HANDLE) {
-      if (IGL_VULKAN_USE_VMA && !isImported_ && !isExported_) {
+      if (vmaAllocation_) {
         if (mappedPtr_) {
           vmaUnmapMemory((VmaAllocator)ctx_->getVmaAllocator(), vmaAllocation_);
         }
@@ -847,6 +848,10 @@ void VulkanImage::transitionLayout(VkCommandBuffer cmdBuf,
                                    VkPipelineStageFlags srcStageMask,
                                    VkPipelineStageFlags dstStageMask,
                                    const VkImageSubresourceRange& subresourceRange) const {
+  if (!IGL_VERIFY(cmdBuf)) {
+    return;
+  }
+
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_TRANSITION);
 
   VkAccessFlags srcAccessMask = 0;
@@ -971,6 +976,9 @@ void VulkanImage::clearColorImage(VkCommandBuffer commandBuffer,
   IGL_ASSERT(usageFlags_ & VK_IMAGE_USAGE_TRANSFER_DST_BIT);
   IGL_ASSERT(samples_ == VK_SAMPLE_COUNT_1_BIT);
   IGL_ASSERT(!isDepthOrStencilFormat_);
+  if (!IGL_VERIFY(commandBuffer)) {
+    return;
+  }
 
   const VkImageLayout oldLayout = imageLayout_;
 
@@ -1033,6 +1041,9 @@ VkImageAspectFlags VulkanImage::getImageAspectFlags() const {
 void VulkanImage::generateMipmap(VkCommandBuffer commandBuffer,
                                  const TextureRangeDesc& range) const {
   IGL_PROFILER_FUNCTION();
+  if (!IGL_VERIFY(commandBuffer)) {
+    return;
+  }
 
   // Check if device supports downscaling for color or depth/stencil buffer based on image format
   {
@@ -1258,7 +1269,7 @@ void VulkanImage::flushMappedMemory() const {
     return;
   }
 
-  if (IGL_VULKAN_USE_VMA) {
+  if (vmaAllocation_) {
     vmaFlushAllocation((VmaAllocator)ctx_->getVmaAllocator(), vmaAllocation_, 0, VK_WHOLE_SIZE);
   } else {
     const VkMappedMemoryRange memoryRange{

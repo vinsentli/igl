@@ -10,7 +10,6 @@
 #include "GPUStressSession.h"
 #include <IGLU/imgui/Session.h>
 #include <IGLU/managedUniformBuffer/ManagedUniformBuffer.h>
-#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -64,7 +63,7 @@ std::atomic<bool> kEnableBlending = false; // turn this on to see the effects of
 // make this number little to make all the cubes tiny on screen so fill isn't a
 // problem
 std::atomic<bool> kUseMSAA = true;
-const int kMsaaSamples = 4; // this is the max number possible
+const uint32_t kMsaaSamples = 4u; // this is the max number possible
 const float kScaleFill = 1.f;
 // each light will add about 45 ish instructions to your pixel shader (tested
 // using powerVR compiler so grain of salt)arc lint --engine LintCPP
@@ -634,9 +633,6 @@ void GPUStressSession::initialize() noexcept {
   //  changed pixels we send to the delphi.
   appParamsRef().sizeX = .5f;
   appParamsRef().sizeY = .5f;
-  lastTime_ = std::chrono::duration_cast<std::chrono::microseconds>(
-                  std::chrono::high_resolution_clock::now().time_since_epoch())
-                  .count();
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
     return;
@@ -897,10 +893,6 @@ void GPUStressSession::drawCubes(const igl::SurfaceTextures& surfaceTextures,
 }
 
 void GPUStressSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
-  const long long newTime = std::chrono::duration_cast<std::chrono::microseconds>(
-                                std::chrono::high_resolution_clock::now().time_since_epoch())
-                                .count();
-
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
     return;
@@ -915,9 +907,7 @@ void GPUStressSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
   thrashCPU();
   thrashMemory();
 
-  const long long delta = (newTime - lastTime_);
-  fps_.updateFPS((double)delta / 1000000.0);
-  lastTime_ = newTime;
+  fps_.updateFPS(getDeltaSeconds());
 
   initState(surfaceTextures);
 

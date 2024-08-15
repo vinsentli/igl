@@ -157,7 +157,7 @@ igl::RenderPassDesc EnhancedShaderDebuggingStore::renderPassDesc(
   return desc;
 }
 
-std::shared_ptr<igl::IFramebuffer> EnhancedShaderDebuggingStore::framebuffer(
+const std::shared_ptr<igl::IFramebuffer>& EnhancedShaderDebuggingStore::framebuffer(
     igl::vulkan::Device& device,
     const std::shared_ptr<igl::ITexture>& resolveAttachment) const {
   auto foundFramebuffer = framebuffers_.find(resolveAttachment);
@@ -221,8 +221,8 @@ std::shared_ptr<igl::IRenderPipelineState> EnhancedShaderDebuggingStore::pipelin
     }
 
     // Only check for MSAA while desc.sampleCount == 1. Otherwise we already checked and updated it
-    if (desc.sampleCount == 1 && framebuffer->getResolveColorAttachment(index)) {
-      desc.sampleCount = (int)framebuffer->getColorAttachment(index)->getSamples();
+    if (desc.sampleCount == 1u && framebuffer->getResolveColorAttachment(index)) {
+      desc.sampleCount = framebuffer->getColorAttachment(index)->getSamples();
     }
 
     desc.targetDesc.colorAttachments[index].textureFormat =

@@ -95,7 +95,6 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
                                 uint32_t stride = 0) override;
 
   void setStencilReferenceValue(uint32_t value) override;
-  void setStencilReferenceValues(uint32_t frontValue, uint32_t backValue) override;
   void setBlendColor(Color color) override;
   void setDepthBias(float depthBias, float slopeScale, float clamp) override;
 
@@ -152,6 +151,10 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
   Dependencies dependencies_ = {};
 
   const igl::vulkan::RenderPipelineState* rps_ = nullptr;
+  igl::BindGroupTextureHandle pendingBindGroupTexture_ = {};
+  igl::BindGroupBufferHandle pendingBindGroupBuffer_ = {};
+  uint32_t numDynamicOffsets_ = 0;
+  uint32_t dynamicOffsets_[IGL_UNIFORM_BLOCKS_BINDING_MAX] = {};
 };
 
 } // namespace igl::vulkan

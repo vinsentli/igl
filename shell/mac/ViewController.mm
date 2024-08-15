@@ -102,6 +102,9 @@ using namespace igl;
 }
 
 - (void)teardown {
+  if (session_) {
+    session_->teardown();
+  }
   session_ = nullptr;
   shellPlatform_ = nullptr;
 }
@@ -312,6 +315,8 @@ using namespace igl;
     igl::vulkan::VulkanContextConfig vulkanContextConfig;
     vulkanContextConfig.terminateOnValidationError = true;
     vulkanContextConfig.enhancedShaderDebugging = false;
+    vulkanContextConfig.enableBufferDeviceAddress = true;
+
     // Disables OS Level Color Management to achieve parity with OpenGL
     vulkanContextConfig.swapChainColorSpace = igl::ColorSpace::PASS_THROUGH;
     vulkanContextConfig.requestedSwapChainTextureFormat =

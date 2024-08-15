@@ -22,6 +22,7 @@ ComputePipelineState::ComputePipelineState(const igl::vulkan::Device& device,
   PipelineState(device.getVulkanContext(),
                 desc.shaderStages.get(),
                 nullptr,
+                0,
                 desc.debugName.c_str()),
   device_(device),
   desc_(std::move(desc)) {}
@@ -63,8 +64,7 @@ VkPipeline ComputePipelineState::getVkPipeline() const {
   // @fb-only
   const VkDescriptorSetLayout DSLs[] = {
       dslCombinedImageSamplers_->getVkDescriptorSetLayout(),
-      dslUniformBuffers_->getVkDescriptorSetLayout(),
-      dslStorageBuffers_->getVkDescriptorSetLayout(),
+      dslBuffers_->getVkDescriptorSetLayout(),
       ctx.getBindlessVkDescriptorSetLayout(),
   };
 

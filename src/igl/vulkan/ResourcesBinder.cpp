@@ -24,10 +24,10 @@ ResourcesBinder::ResourcesBinder(const std::shared_ptr<CommandBuffer>& commandBu
                                  VkPipelineBindPoint bindPoint) :
   ctx_(ctx), cmdBuffer_(commandBuffer->getVkCommandBuffer()), bindPoint_(bindPoint) {}
 
-void ResourcesBinder::bindUniformBuffer(uint32_t index,
-                                        igl::vulkan::Buffer* buffer,
-                                        size_t bufferOffset,
-                                        size_t bufferSize) {
+void ResourcesBinder::bindBuffer(uint32_t index,
+                                 igl::vulkan::Buffer* buffer,
+                                 size_t bufferOffset,
+                                 size_t bufferSize) {
   IGL_PROFILER_FUNCTION();
 
   if (!IGL_VERIFY(index < IGL_UNIFORM_BLOCKS_BINDING_MAX)) {
@@ -35,38 +35,35 @@ void ResourcesBinder::bindUniformBuffer(uint32_t index,
     return;
   }
 
-  IGL_ASSERT_MSG((buffer->getBufferType() & BufferDesc::BufferTypeBits::Uniform) != 0,
-                 "The buffer must be a uniform buffer");
+  const bool isUniformBuffer =
+      ((buffer->getBufferType() & BufferDesc::BufferTypeBits::Uniform) != 0);
+
+  IGL_ASSERT_MSG(isUniformBuffer ||
+                     ((buffer->getBufferType() & BufferDesc::BufferTypeBits::Storage) != 0),
+                 "The buffer must be a uniform or storage buffer");
+#if 0
+  if (isUniformBuffer && bufferOffset) {
+    const uint32_t alignment = static_cast<uint32_t>(
+        ctx_.getVkPhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment);
+    if (!IGL_VERIFY((alignment == 0) || (bufferOffset % alignment == 0))) {
+      IGL_LOG_ERROR(
+          "`bufferOffset = %u` must be a multiple of "
+          "`VkPhysicalDeviceLimits::minUniformBufferOffsetAlignment = %u`",
+          static_cast<uint32_t>(bufferOffset),
+          alignment);
+      return;
+    }
+  }
+#else
+  (void)isUniformBuffer;
+#endif
 
   VkBuffer buf = buffer ? buffer->getVkBuffer() : ctx_.dummyUniformBuffer_->getVkBuffer();
-  VkDescriptorBufferInfo& slot = bindingsUniformBuffers_.buffers[index];
+  VkDescriptorBufferInfo& slot = bindingsBuffers_.buffers[index];
 
   if (slot.buffer != buf || slot.offset != bufferOffset) {
     slot = {buf, bufferOffset, bufferSize ? bufferSize : VK_WHOLE_SIZE};
-    isDirtyFlags_ |= DirtyFlagBits_UniformBuffers;
-  }
-}
-
-void ResourcesBinder::bindStorageBuffer(uint32_t index,
-                                        igl::vulkan::Buffer* buffer,
-                                        size_t bufferOffset,
-                                        size_t bufferSize) {
-  IGL_PROFILER_FUNCTION();
-
-  if (!IGL_VERIFY(index < IGL_UNIFORM_BLOCKS_BINDING_MAX)) {
-    IGL_ASSERT_MSG(false, "Buffer index should not exceed kMaxBindingSlots");
-    return;
-  }
-
-  IGL_ASSERT_MSG((buffer->getBufferType() & BufferDesc::BufferTypeBits::Storage) != 0,
-                 "The buffer must be a storage buffer");
-
-  VkBuffer buf = buffer ? buffer->getVkBuffer() : ctx_.dummyStorageBuffer_->getVkBuffer();
-  VkDescriptorBufferInfo& slot = bindingsStorageBuffers_.buffers[index];
-
-  if (slot.buffer != buf || slot.offset != bufferOffset) {
-    slot = {buf, bufferOffset, bufferSize ? bufferSize : VK_WHOLE_SIZE};
-    isDirtyFlags_ |= DirtyFlagBits_StorageBuffers;
+    isDirtyFlags_ |= DirtyFlagBits_Buffers;
   }
 }
 
@@ -153,38 +150,25 @@ void ResourcesBinder::updateBindings(VkPipelineLayout layout, const vulkan::Pipe
                                 *state.dslCombinedImageSamplers_,
                                 state.info_);
   }
-  if (isDirtyFlags_ & DirtyFlagBits_UniformBuffers) {
-    ctx_.updateBindingsUniformBuffers(cmdBuffer_,
-                                      layout,
-                                      bindPoint_,
-                                      bindingsUniformBuffers_,
-                                      *state.dslUniformBuffers_,
-                                      state.info_);
-  }
-  if (isDirtyFlags_ & DirtyFlagBits_StorageBuffers) {
-    ctx_.updateBindingsStorageBuffers(cmdBuffer_,
-                                      layout,
-                                      bindPoint_,
-                                      bindingsStorageBuffers_,
-                                      *state.dslStorageBuffers_,
-                                      state.info_);
+  if (isDirtyFlags_ & DirtyFlagBits_Buffers) {
+    ctx_.updateBindingsBuffers(
+        cmdBuffer_, layout, bindPoint_, bindingsBuffers_, *state.dslBuffers_, state.info_);
   }
 
   isDirtyFlags_ = 0;
 }
 
 void ResourcesBinder::bindPipeline(VkPipeline pipeline, const util::SpvModuleInfo* info) {
+  IGL_PROFILER_FUNCTION();
+
   if (lastPipelineBound_ == pipeline) {
     return;
   }
 
   if (info) {
     // a new pipeline might want a new descriptors configuration
-    if (!info->uniformBuffers.empty()) {
-      isDirtyFlags_ |= DirtyFlagBits_UniformBuffers;
-    }
-    if (!info->storageBuffers.empty()) {
-      isDirtyFlags_ |= DirtyFlagBits_StorageBuffers;
+    if (!info->buffers.empty()) {
+      isDirtyFlags_ |= DirtyFlagBits_Buffers;
     }
     if (!info->textures.empty()) {
       isDirtyFlags_ |= DirtyFlagBits_Textures;

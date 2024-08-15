@@ -76,6 +76,7 @@ PipelineState::PipelineState(
     const VulkanContext& ctx,
     IShaderStages* stages,
     std::shared_ptr<ISamplerState> immutableSamplers[IGL_TEXTURE_SAMPLERS_MAX],
+    uint32_t isDynamicBufferMask,
     const char* debugName) {
   IGL_ASSERT(stages);
 
@@ -105,39 +106,28 @@ PipelineState::PipelineState(
         bindingFlags.data(),
         IGL_FORMAT("Descriptor Set Layout (COMBINED_IMAGE_SAMPLER): {}", debugName).c_str());
   }
-  // 1. Uniform buffers
+  // 1. Buffers
   {
     std::vector<VkDescriptorSetLayoutBinding> bindings;
-    bindings.reserve(info_.uniformBuffers.size());
-    for (const auto& b : info_.uniformBuffers) {
-      bindings.emplace_back(ivkGetDescriptorSetLayoutBinding(
-          b.bindingLocation, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, stageFlags_));
+    bindings.reserve(info_.buffers.size());
+    for (const auto& b : info_.buffers) {
+      const bool isDynamic = (isDynamicBufferMask & (1ul << b.bindingLocation)) != 0;
+      const VkDescriptorType type = b.isStorage
+                                        ? (isDynamic ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
+                                                     : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+                                        : (isDynamic ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+                                                     : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+      bindings.emplace_back(
+          ivkGetDescriptorSetLayoutBinding(b.bindingLocation, type, 1, stageFlags_));
     }
     std::vector<VkDescriptorBindingFlags> bindingFlags(bindings.size());
-    dslUniformBuffers_ = std::make_unique<VulkanDescriptorSetLayout>(
+    dslBuffers_ = std::make_unique<VulkanDescriptorSetLayout>(
         ctx,
         VkDescriptorSetLayoutCreateFlags{},
         static_cast<uint32_t>(bindings.size()),
         bindings.data(),
         bindingFlags.data(),
-        IGL_FORMAT("Descriptor Set Layout (UNIFORM_BUFFER): {}", debugName).c_str());
-  }
-  // 2. Storage buffers
-  {
-    std::vector<VkDescriptorSetLayoutBinding> bindings;
-    bindings.reserve(info_.storageBuffers.size());
-    for (const auto& b : info_.storageBuffers) {
-      bindings.emplace_back(ivkGetDescriptorSetLayoutBinding(
-          b.bindingLocation, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, stageFlags_));
-    }
-    std::vector<VkDescriptorBindingFlags> bindingFlags(bindings.size());
-    dslStorageBuffers_ = std::make_unique<VulkanDescriptorSetLayout>(
-        ctx,
-        VkDescriptorSetLayoutCreateFlags{},
-        static_cast<uint32_t>(bindings.size()),
-        bindings.data(),
-        bindingFlags.data(),
-        IGL_FORMAT("Descriptor Set Layout (STORAGE_BUFFER): {}", debugName).c_str());
+        IGL_FORMAT("Descriptor Set Layout (BUFFERS): {}", debugName).c_str());
   }
 }
 

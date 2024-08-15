@@ -59,15 +59,13 @@ struct VulkanImageViewCreateInfo;
 /*
  * Descriptor sets:
  *  0 - combined image samplers
- *  1 - uniform buffers
- *  2 - storage buffers
- *  3 - bindless textures/samplers  <--  optional
+ *  1 - uniform/storage buffers
+ *  2 - bindless textures/samplers  <--  optional
  */
 enum {
   kBindPoint_CombinedImageSamplers = 0,
-  kBindPoint_BuffersUniform = 1,
-  kBindPoint_BuffersStorage = 2,
-  kBindPoint_Bindless = 3,
+  kBindPoint_Buffers = 1,
+  kBindPoint_Bindless = 2,
 };
 
 struct DeviceQueues {
@@ -118,21 +116,24 @@ struct VulkanContextConfig {
   // Using a smaller heap size would increase the chance of memory deallocation and result in less
   // memory wastage.
   size_t vmaPreferredLargeHeapBlockSize = 0;
+
+  // Specifies a default fence timeout value.
+  uint64_t fenceTimeoutNanoseconds = UINT64_MAX;
 };
 
 class VulkanContext final {
  public:
   VulkanContext(VulkanContextConfig config,
-                void* window,
+                void* IGL_NULLABLE window,
                 size_t numExtraInstanceExtensions,
-                const char** extraInstanceExtensions,
-                void* display = nullptr);
+                const char* IGL_NULLABLE* IGL_NULLABLE extraInstanceExtensions,
+                void* IGL_NULLABLE display = nullptr);
   ~VulkanContext();
 
   igl::Result queryDevices(const HWDeviceQueryDesc& desc, std::vector<HWDeviceDesc>& outDevices);
   igl::Result initContext(const HWDeviceDesc& desc,
                           size_t numExtraDeviceExtensions = 0,
-                          const char** extraDeviceExtensions = nullptr);
+                          const char* IGL_NULLABLE* IGL_NULLABLE extraDeviceExtensions = nullptr);
 
   igl::Result initSwapchain(uint32_t width, uint32_t height);
   VkExtent2D getSwapchainExtent() const;
@@ -147,39 +148,40 @@ class VulkanContext final {
                           VkMemoryPropertyFlags memFlags,
                           VkImageCreateFlags flags,
                           VkSampleCountFlagBits samples,
-                          igl::Result* outResult,
-                          const char* debugName = nullptr) const;
-  std::unique_ptr<VulkanImage> createImageFromFileDescriptor(int32_t fileDescriptor,
-                                                             uint64_t memoryAllocationSize,
-                                                             VkImageType imageType,
-                                                             VkExtent3D extent,
-                                                             VkFormat format,
-                                                             uint32_t mipLevels,
-                                                             uint32_t arrayLayers,
-                                                             VkImageTiling tiling,
-                                                             VkImageUsageFlags usageFlags,
-                                                             VkImageCreateFlags flags,
-                                                             VkSampleCountFlagBits samples,
-                                                             igl::Result* outResult,
-                                                             const char* debugName = nullptr) const;
+                          igl::Result* IGL_NULLABLE outResult,
+                          const char* IGL_NULLABLE debugName = nullptr) const;
+  std::unique_ptr<VulkanImage> createImageFromFileDescriptor(
+      int32_t fileDescriptor,
+      uint64_t memoryAllocationSize,
+      VkImageType imageType,
+      VkExtent3D extent,
+      VkFormat format,
+      uint32_t mipLevels,
+      uint32_t arrayLayers,
+      VkImageTiling tiling,
+      VkImageUsageFlags usageFlags,
+      VkImageCreateFlags flags,
+      VkSampleCountFlagBits samples,
+      igl::Result* IGL_NULLABLE outResult,
+      const char* IGL_NULLABLE debugName = nullptr) const;
   std::unique_ptr<VulkanBuffer> createBuffer(VkDeviceSize bufferSize,
                                              VkBufferUsageFlags usageFlags,
                                              VkMemoryPropertyFlags memFlags,
-                                             igl::Result* outResult,
-                                             const char* debugName = nullptr) const;
+                                             igl::Result* IGL_NULLABLE outResult,
+                                             const char* IGL_NULLABLE debugName = nullptr) const;
   std::shared_ptr<VulkanTexture> createTexture(VulkanImage&& image,
                                                VulkanImageView&& imageView,
-                                               const char* debugName) const;
+                                               const char* IGL_NULLABLE debugName) const;
   std::shared_ptr<VulkanTexture> createTextureFromVkImage(
       VkImage vkImage,
       VulkanImageCreateInfo imageCreateInfo,
       VulkanImageViewCreateInfo imageViewCreateInfo,
-      const char* debugName) const;
+      const char* IGL_NULLABLE debugName) const;
 
   std::shared_ptr<VulkanSampler> createSampler(const VkSamplerCreateInfo& ci,
                                                VkFormat yuvVkFormat,
-                                               igl::Result* outResult,
-                                               const char* debugName = nullptr) const;
+                                               igl::Result* IGL_NULLABLE outResult,
+                                               const char* IGL_NULLABLE debugName = nullptr) const;
 
   bool hasSwapchain() const noexcept {
     return swapchain_ != nullptr;
@@ -231,7 +233,7 @@ class VulkanContext final {
 
   bool areValidationLayersEnabled() const;
 
-  void* getVmaAllocator() const;
+  void* IGL_NULLABLE getVmaAllocator() const;
 
   VkSamplerYcbcrConversionInfo getOrCreateYcbcrConversionInfo(VkFormat format) const;
 
@@ -244,13 +246,24 @@ class VulkanContext final {
 #endif
 
  private:
-  void createInstance(size_t numExtraExtensions, const char** extraExtensions);
-  void createSurface(void* window, void* display);
-  void checkAndUpdateDescriptorSets();
+  void createInstance(size_t numExtraExtensions,
+                      const char* IGL_NULLABLE* IGL_NULLABLE extraExtensions);
+  void createSurface(void* window, void* IGL_NULLABLE display);
+  VkResult checkAndUpdateDescriptorSets();
   void querySurfaceCapabilities();
   void processDeferredTasks() const;
   void waitDeferredTasks();
   void growBindlessDescriptorPool(uint32_t newMaxTextures, uint32_t newMaxSamplers);
+  igl::BindGroupTextureHandle createBindGroup(const BindGroupTextureDesc& desc,
+                                              const IRenderPipelineState* compatiblePipeline,
+                                              Result* outResult);
+  igl::BindGroupBufferHandle createBindGroup(const BindGroupBufferDesc& desc, Result* outResult);
+  void destroy(igl::BindGroupTextureHandle handle);
+  void destroy(igl::BindGroupBufferHandle handle);
+  VkDescriptorSet getBindGroupDescriptorSet(igl::BindGroupTextureHandle handle) const;
+  VkDescriptorSet getBindGroupDescriptorSet(igl::BindGroupBufferHandle handle) const;
+  uint32_t getBindGroupUsageMask(igl::BindGroupTextureHandle handle) const;
+  uint32_t getBindGroupUsageMask(igl::BindGroupBufferHandle handle) const;
 
  private:
   friend class igl::vulkan::Device;
@@ -342,8 +355,6 @@ class VulkanContext final {
   mutable Pool<SamplerTag, std::shared_ptr<VulkanSampler>> samplers_;
   // a texture/sampler was created since the last descriptor set update
   mutable bool awaitingCreation_ = false;
-  Pool<BindGroupBufferTag, BindGroupBufferDesc> bindGroupBuffersPool_;
-  Pool<BindGroupTextureTag, BindGroupTextureDesc> bindGroupTexturesPool_;
 
   mutable size_t drawCallCount_ = 0;
 
@@ -365,18 +376,12 @@ class VulkanContext final {
                               const BindingsTextures& data,
                               const VulkanDescriptorSetLayout& dsl,
                               const util::SpvModuleInfo& info) const;
-  void updateBindingsUniformBuffers(VkCommandBuffer cmdBuf,
-                                    VkPipelineLayout layout,
-                                    VkPipelineBindPoint bindPoint,
-                                    BindingsBuffers& data,
-                                    const VulkanDescriptorSetLayout& dsl,
-                                    const util::SpvModuleInfo& info) const;
-  void updateBindingsStorageBuffers(VkCommandBuffer cmdBuf,
-                                    VkPipelineLayout layout,
-                                    VkPipelineBindPoint bindPoint,
-                                    BindingsBuffers& data,
-                                    const VulkanDescriptorSetLayout& dsl,
-                                    const util::SpvModuleInfo& info) const;
+  void updateBindingsBuffers(VkCommandBuffer cmdBuf,
+                             VkPipelineLayout layout,
+                             VkPipelineBindPoint bindPoint,
+                             BindingsBuffers& data,
+                             const VulkanDescriptorSetLayout& dsl,
+                             const util::SpvModuleInfo& info) const;
   void markSubmitted(const SubmitHandle& handle) const;
 
   struct DeferredTask {

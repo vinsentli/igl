@@ -218,8 +218,8 @@ layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 #ifdef VULKAN
 // kBinding_StorageImages in VulkanContext.cpp
-layout (set = 3, binding = 6, rgba8) uniform readonly  image2D kTextures2Din[];
-layout (set = 3, binding = 6, rgba8) uniform writeonly image2D kTextures2Dout[];
+layout (set = 2, binding = 6, rgba8) uniform readonly  image2D kTextures2Din[];
+layout (set = 2, binding = 6, rgba8) uniform writeonly image2D kTextures2Dout[];
 
 layout(push_constant) uniform PushConstants {
   uint textureId;
@@ -321,7 +321,7 @@ layout(set = 1, binding = 1, std140) uniform PerObject {
   UniformsPerObject perObject;
 };
 
-layout(set = 2, binding = 2, std430) readonly buffer Materials {
+layout(set = 1, binding = 2, std430) readonly buffer Materials {
   Material mtl[];
 } mat;
 #else
@@ -1527,11 +1527,17 @@ void createRenderPipelines() {
 // @fb-only
 #if USE_OPENGL_BACKEND
     desc.uniformBlockBindingMap.emplace(
-        0, std::make_pair(IGL_NAMEHANDLE("PerFrame"), igl::NameHandle{}));
+        0,
+        std::vector<std::pair<igl::NameHandle, igl::NameHandle>>{
+            std::make_pair(IGL_NAMEHANDLE("PerFrame"), igl::NameHandle{})});
     desc.uniformBlockBindingMap.emplace(
-        1, std::make_pair(IGL_NAMEHANDLE("PerObject"), igl::NameHandle{}));
+        1,
+        std::vector<std::pair<igl::NameHandle, igl::NameHandle>>{
+            std::make_pair(IGL_NAMEHANDLE("PerObject"), igl::NameHandle{})});
     desc.uniformBlockBindingMap.emplace(
-        2, std::make_pair(IGL_NAMEHANDLE("MeshMaterials"), igl::NameHandle{}));
+        2,
+        std::vector<std::pair<igl::NameHandle, igl::NameHandle>>{
+            std::make_pair(IGL_NAMEHANDLE("MeshMaterials"), igl::NameHandle{})});
 #endif
     desc.cullMode = igl::CullMode::Back;
     desc.frontFaceWinding = igl::WindingMode::CounterClockwise;
@@ -1555,9 +1561,13 @@ void createRenderPipelines() {
     desc.fragmentUnitSamplerMap.clear();
     desc.uniformBlockBindingMap.clear();
     desc.uniformBlockBindingMap.emplace(
-        0, std::make_pair(IGL_NAMEHANDLE("PerFrame"), igl::NameHandle{}));
+        0,
+        std::vector<std::pair<igl::NameHandle, igl::NameHandle>>{
+            std::make_pair(IGL_NAMEHANDLE("PerFrame"), igl::NameHandle{})});
     desc.uniformBlockBindingMap.emplace(
-        1, std::make_pair(IGL_NAMEHANDLE("PerObject"), igl::NameHandle{}));
+        1,
+        std::vector<std::pair<igl::NameHandle, igl::NameHandle>>{
+            std::make_pair(IGL_NAMEHANDLE("PerObject"), igl::NameHandle{})});
 #endif
     desc.shaderStages =
         ShaderStagesCreator::fromModuleStringInput(*device_,

@@ -32,6 +32,14 @@ void RenderCommandEncoder::initialize(const std::shared_ptr<CommandBuffer>& comm
     return;
   }
   MTLRenderPassDescriptor* metalRenderPassDesc = [MTLRenderPassDescriptor renderPassDescriptor];
+  if (!metalRenderPassDesc) {
+    static const char* kFailedToCreateRenderPassDesc =
+        "Failed to create Metal render pass descriptor";
+    IGL_ASSERT_MSG(false, kFailedToCreateRenderPassDesc);
+    Result::setResult(outResult, Result::Code::RuntimeError, kFailedToCreateRenderPassDesc);
+    return;
+  }
+
   const FramebufferDesc& desc = static_cast<const Framebuffer&>(*framebuffer).get();
 
   // Colors
@@ -243,11 +251,6 @@ void RenderCommandEncoder::setDepthBias(float depthBias, float slopeScale, float
 void RenderCommandEncoder::setStencilReferenceValue(uint32_t value) {
   IGL_ASSERT(encoder_);
   [encoder_ setStencilReferenceValue:value];
-}
-
-void RenderCommandEncoder::setStencilReferenceValues(uint32_t frontValue, uint32_t backValue) {
-  IGL_ASSERT(encoder_);
-  [encoder_ setStencilFrontReferenceValue:frontValue backReferenceValue:backValue];
 }
 
 void RenderCommandEncoder::bindBuffer(uint32_t index,

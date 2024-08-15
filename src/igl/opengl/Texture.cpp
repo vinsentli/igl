@@ -18,10 +18,10 @@ namespace igl::opengl {
 
 Dimensions Texture::getDimensions() const {
   return Dimensions{
-      static_cast<size_t>(width_), static_cast<size_t>(height_), static_cast<size_t>(depth_)};
+      static_cast<uint32_t>(width_), static_cast<uint32_t>(height_), static_cast<uint32_t>(depth_)};
 }
 
-size_t Texture::getNumLayers() const {
+uint32_t Texture::getNumLayers() const {
   return numLayers_;
 }
 
@@ -110,7 +110,7 @@ GLint Texture::getAlignment(size_t stride, size_t mipLevel) const {
   }
 
   // Clamp to 1 to account for non-square textures.
-  const auto srcWidth = std::max(getDimensions().width >> mipLevel, static_cast<size_t>(1));
+  const auto srcWidth = std::max(getDimensions().width >> mipLevel, 1u);
 
   const auto pixelBytesPerRow = getProperties().getBytesPerRow(srcWidth);
 

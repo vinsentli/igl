@@ -85,6 +85,29 @@ VkFormat invertRedAndBlue(VkFormat format) {
   }
 }
 
+VkStencilOp stencilOperationToVkStencilOp(igl::StencilOperation op) {
+  switch (op) {
+  case igl::StencilOperation::Keep:
+    return VK_STENCIL_OP_KEEP;
+  case igl::StencilOperation::Zero:
+    return VK_STENCIL_OP_ZERO;
+  case igl::StencilOperation::Replace:
+    return VK_STENCIL_OP_REPLACE;
+  case igl::StencilOperation::IncrementClamp:
+    return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+  case igl::StencilOperation::DecrementClamp:
+    return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+  case igl::StencilOperation::Invert:
+    return VK_STENCIL_OP_INVERT;
+  case igl::StencilOperation::IncrementWrap:
+    return VK_STENCIL_OP_INCREMENT_AND_WRAP;
+  case igl::StencilOperation::DecrementWrap:
+    return VK_STENCIL_OP_DECREMENT_AND_WRAP;
+  }
+  IGL_ASSERT_NOT_REACHED();
+  return VK_STENCIL_OP_KEEP;
+}
+
 VkFormat textureFormatToVkFormat(igl::TextureFormat format) {
   using TextureFormat = ::igl::TextureFormat;
   switch (format) {
@@ -594,21 +617,12 @@ void ensureShaderModule(IShaderModule* sm) {
       continue;
     }
   }
-  for (const auto& b : info.uniformBuffers) {
-    if (!IGL_VERIFY(b.descriptorSet == kBindPoint_BuffersUniform)) {
+  for (const auto& b : info.buffers) {
+    if (!IGL_VERIFY(b.descriptorSet == kBindPoint_Buffers)) {
       IGL_LOG_ERROR(
-          "Missing descriptor set id for uniform buffers: the shader should contain \"layout(set = "
+          "Missing descriptor set id for buffers: the shader should contain \"layout(set = "
           "%u, ...)\"",
-          kBindPoint_BuffersUniform);
-      continue;
-    }
-  }
-  for (const auto& b : info.storageBuffers) {
-    if (!IGL_VERIFY(b.descriptorSet == kBindPoint_BuffersStorage)) {
-      IGL_LOG_ERROR(
-          "Missing descriptor set id for storage buffers: the shader should contain \"layout(set = "
-          "%u, ...)\"",
-          kBindPoint_BuffersStorage);
+          kBindPoint_Buffers);
       continue;
     }
   }

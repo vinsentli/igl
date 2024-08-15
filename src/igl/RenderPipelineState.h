@@ -194,16 +194,19 @@ struct RenderPipelineDesc {
   std::unordered_map<size_t, igl::NameHandle> fragmentUnitSamplerMap;
 
   /*
-   * GL Only: Mapping of Uniform Block Binding points <-> Uniform Block Names
-   * Uniform Block Binding Point should be < IGL_UNIFORM_BLOCKS_BINDING_MAX
-   * Names are a pair as, depending on shader implementation, OpenGL reflection
-   * may find a block by its block name or its instance name.
-   *
+   * GL Only:
+   * Maps block binding points to vectors of (BlockName, blockInstanceName) pairs of all uniform
+   * blocks that should use this binding point.
+   * Uniform Block Binding Point should be < IGL_UNIFORM_BLOCKS_BINDING_MAX.
    * This should only be populated if explicit binding is not supported or used.
    */
-  std::unordered_map<size_t, std::pair<igl::NameHandle, igl::NameHandle>> uniformBlockBindingMap;
+  std::unordered_map<size_t, std::vector<std::pair<igl::NameHandle, igl::NameHandle>>>
+      uniformBlockBindingMap;
 
-  int sampleCount = 1; // MSAA
+  uint32_t sampleCount = 1u; // MSAA
+
+  // Vulkan only: specify if buffer binding locations correspond to Vulkan dynamic buffers
+  uint32_t isDynamicBufferMask = 0; // one bit per each buffer
 
   // Vulkan only: immutable samplers per each binding slot (for example, Ycbcr conversion etc)
   // @fb-only

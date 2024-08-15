@@ -26,6 +26,7 @@ class PipelineState {
   PipelineState(const VulkanContext& ctx,
                 IShaderStages* stages,
                 std::shared_ptr<ISamplerState> immutableSamplers[IGL_TEXTURE_SAMPLERS_MAX],
+                uint32_t isDynamicBufferMask,
                 const char* debugName);
   virtual ~PipelineState() = default;
 
@@ -50,8 +51,7 @@ class PipelineState {
   mutable VkDescriptorSetLayout lastBindlessVkDescriptorSetLayout_ = VK_NULL_HANDLE;
 
   std::unique_ptr<VulkanDescriptorSetLayout> dslCombinedImageSamplers_;
-  std::unique_ptr<VulkanDescriptorSetLayout> dslUniformBuffers_;
-  std::unique_ptr<VulkanDescriptorSetLayout> dslStorageBuffers_;
+  std::unique_ptr<VulkanDescriptorSetLayout> dslBuffers_;
 };
 
 } // namespace igl::vulkan
