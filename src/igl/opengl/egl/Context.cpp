@@ -83,6 +83,8 @@ EGLDisplay getDefaultEGLDisplay() {
 // typical high-quality attrib list
 EGLint attribs[] = {
     // 32 bit color
+    EGL_BUFFER_SIZE,
+    32,
     EGL_RED_SIZE,
     8,
     EGL_GREEN_SIZE,
@@ -94,8 +96,11 @@ EGLint attribs[] = {
     // 16-bit depth
     EGL_DEPTH_SIZE,
     16,
+    EGL_STENCIL_SIZE, 8,
     EGL_SURFACE_TYPE,
-    EGL_PBUFFER_BIT,
+    EGL_WINDOW_BIT,
+    EGL_SAMPLE_BUFFERS,GL_TRUE,
+    EGL_SAMPLES,2,
     // want opengl-es 2.x conformant CONTEXT
     EGL_RENDERABLE_TYPE,
     EGL_OPENGL_ES2_BIT,
