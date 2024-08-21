@@ -16,7 +16,9 @@ namespace igl::shell {
 
 ImageLoaderAndroid::ImageLoaderAndroid(FileLoader& fileLoader) : ImageLoader(fileLoader) {}
 
-ImageData ImageLoaderAndroid::loadImageData(const std::string& imageName) noexcept {
+ImageData ImageLoaderAndroid::loadImageData(
+    const std::string& imageName,
+    std::optional<igl::TextureFormat> preferredFormat) noexcept {
   if (imageName.empty()) {
     IGL_LOG_ERROR("Error in loadBinaryData(): empty fileName\n");
     return {};
@@ -31,7 +33,7 @@ ImageData ImageLoaderAndroid::loadImageData(const std::string& imageName) noexce
 
   // Load file
   AAsset* asset = AAssetManager_open(assetManager_, imageName.c_str(), AASSET_MODE_BUFFER);
-  if (IGL_UNEXPECTED(asset == nullptr)) {
+  if (asset == nullptr) {
     IGL_LOG_ERROR("Error in loadImageData(): failed to open file %s\n", imageName.c_str());
     return {};
   }
@@ -52,7 +54,7 @@ ImageData ImageLoaderAndroid::loadImageData(const std::string& imageName) noexce
   }
   AAsset_close(asset);
 
-  return loadImageDataFromMemory(buffer.get(), length);
+  return loadImageDataFromMemory(buffer.get(), length, preferredFormat);
 }
 
 } // namespace igl::shell

@@ -401,6 +401,7 @@ VulkanContext::VulkanContext(VulkanContextConfig config,
                              const char* IGL_NULLABLE* IGL_NULLABLE extraInstanceExtensions,
                              void* IGL_NULLABLE display) :
   tableImpl_(std::make_unique<VulkanFunctionTable>()),
+  features_(VK_API_VERSION_1_1, config),
   vf_(*tableImpl_),
   config_(std::move(config)) {
   IGL_PROFILER_THREAD("MainThread");
@@ -1703,7 +1704,7 @@ void VulkanContext::processDeferredTasks() const {
 
   std::lock_guard<std::mutex> lockGuard(deferredTasksMutex_);
 
-  while (!deferredTasks_.empty() && immediate_->isRecycled(deferredTasks_.front().handle_)) {
+  while (!deferredTasks_.empty() && immediate_->isReady(deferredTasks_.front().handle_)) {
     if (frameId && frameId <= deferredTasks_.front().frameId_ + kNumWaitFrames) {
       // do not check anything if it is not yet older than kNumWaitFrames
       break;
@@ -1741,7 +1742,8 @@ VkSamplerYcbcrConversionInfo VulkanContext::getOrCreateYcbcrConversionInfo(VkFor
     return it->second;
   }
 
-  if (!IGL_VERIFY(vkPhysicalDeviceSamplerYcbcrConversionFeatures_.samplerYcbcrConversion)) {
+  if (!IGL_VERIFY(
+          features_.VkPhysicalDeviceSamplerYcbcrConversionFeatures_.samplerYcbcrConversion)) {
     IGL_ASSERT_MSG(false, "Ycbcr samplers are not supported");
     return {};
   }
@@ -1805,10 +1807,10 @@ void VulkanContext::freeResourcesForDescriptorSetLayout(VkDescriptorSetLayout ds
   pimpl_->arenaCombinedImageSamplers_.erase(dsl);
 }
 
-igl::BindGroupTextureHandle VulkanContext::createBindGroup(
-    const BindGroupTextureDesc& desc,
-    const IRenderPipelineState* IGL_NULLABLE compatiblePipeline,
-    Result* IGL_NULLABLE outResult) {
+igl::BindGroupTextureHandle VulkanContext::createBindGroup(const BindGroupTextureDesc& desc,
+                                                           const IRenderPipelineState* IGL_NULLABLE
+                                                               compatiblePipeline,
+                                                           Result* IGL_NULLABLE outResult) {
   VkDevice device = getVkDevice();
 
   BindGroupMetadataTextures metadata{desc};
@@ -2114,6 +2116,10 @@ VkDescriptorSet IGL_NULLABLE VulkanContext::getBindGroupDescriptorSet(igl::BindG
 
 uint32_t VulkanContext::getBindGroupUsageMask(igl::BindGroupBufferHandle handle) const {
   return handle.valid() ? pimpl_->bindGroupBuffersPool_.get(handle)->usageMask : 0;
+}
+
+const VulkanFeatures& VulkanContext::features() const noexcept {
+  return features_;
 }
 
 } // namespace igl::vulkan

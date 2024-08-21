@@ -742,4 +742,143 @@ INSTANTIATE_TEST_SUITE_P(
       return name;
     });
 
+// ivkGetWriteDescriptorSet_BufferInfo *******************************
+class GetWriteDescriptorSet_BufferInfoTest
+  : public ::testing::TestWithParam<std::tuple<uint32_t, VkDescriptorType, uint32_t>> {};
+
+TEST_P(GetWriteDescriptorSet_BufferInfoTest, GetWriteDescriptorSet_BufferInfo) {
+  constexpr VkDescriptorSet descSet = VK_NULL_HANDLE;
+  const uint32_t dstBinding = std::get<0>(GetParam());
+  const VkDescriptorType descType = std::get<1>(GetParam());
+  const uint32_t numDescs = std::get<2>(GetParam());
+
+  const std::array<VkDescriptorBufferInfo, 2> pBufferInfo = {
+      VkDescriptorBufferInfo{VK_NULL_HANDLE, 0, VK_WHOLE_SIZE},
+      VkDescriptorBufferInfo{VK_NULL_HANDLE, 0, VK_WHOLE_SIZE}};
+
+  const VkWriteDescriptorSet bufferDescSet = ivkGetWriteDescriptorSet_BufferInfo(
+      descSet, dstBinding, descType, numDescs, pBufferInfo.data());
+
+  EXPECT_EQ(bufferDescSet.sType, VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET);
+  EXPECT_EQ(bufferDescSet.pNext, nullptr);
+  EXPECT_EQ(bufferDescSet.dstSet, descSet);
+  EXPECT_EQ(bufferDescSet.dstBinding, dstBinding);
+  EXPECT_EQ(bufferDescSet.dstArrayElement, 0);
+  EXPECT_EQ(bufferDescSet.descriptorCount, numDescs);
+  EXPECT_EQ(bufferDescSet.descriptorType, descType);
+  EXPECT_EQ(bufferDescSet.pImageInfo, nullptr);
+  EXPECT_EQ(bufferDescSet.pBufferInfo, pBufferInfo.data());
+  EXPECT_EQ(bufferDescSet.pTexelBufferView, nullptr);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AllCombinations,
+    GetWriteDescriptorSet_BufferInfoTest,
+    ::testing::Combine(::testing::Values(0, 1),
+                       ::testing::Values(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER),
+                       ::testing::Values(1, 2)),
+    [](const testing::TestParamInfo<GetWriteDescriptorSet_BufferInfoTest::ParamType>& info) {
+      const std::string name = "_dstBinding_" + std::to_string(std::get<0>(info.param)) +
+                               "__descriptorType_" + std::to_string(std::get<1>(info.param)) +
+                               "__numberDescriptors_" + std::to_string(std::get<2>(info.param));
+      return name;
+    });
+
+// ivkGetPipelineLayoutCreateInfo *******************************
+class GetPipelineLayoutCreateInfoTest
+  : public ::testing::TestWithParam<std::tuple<uint32_t, VkShaderStageFlags, bool>> {};
+
+TEST_P(GetPipelineLayoutCreateInfoTest, GetPipelineLayoutCreateInfo) {
+  const uint32_t numLayouts = std::get<0>(GetParam());
+  const VkShaderStageFlags shaderFlags = std::get<1>(GetParam());
+  const bool addPushContantRange = std::get<2>(GetParam());
+
+  const std::array<VkDescriptorSetLayout, 2> pDescSetLayout = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+
+  const VkPushConstantRange pPushConstants = {shaderFlags, 0, 0};
+
+  const VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = ivkGetPipelineLayoutCreateInfo(
+      numLayouts, pDescSetLayout.data(), addPushContantRange ? &pPushConstants : nullptr);
+
+  EXPECT_EQ(pipelineLayoutCreateInfo.sType, VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
+  EXPECT_EQ(pipelineLayoutCreateInfo.pNext, nullptr);
+  EXPECT_EQ(pipelineLayoutCreateInfo.flags, 0);
+  EXPECT_EQ(pipelineLayoutCreateInfo.setLayoutCount, numLayouts);
+  EXPECT_EQ(pipelineLayoutCreateInfo.pSetLayouts, pDescSetLayout.data());
+  EXPECT_EQ(pipelineLayoutCreateInfo.pushConstantRangeCount,
+            static_cast<uint32_t>(addPushContantRange));
+  EXPECT_EQ(pipelineLayoutCreateInfo.pPushConstantRanges,
+            addPushContantRange ? &pPushConstants : nullptr);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AllCombinations,
+    GetPipelineLayoutCreateInfoTest,
+    ::testing::Combine(::testing::Values(0, 1, 2),
+                       ::testing::Values(VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT),
+                       ::testing::Bool()),
+    [](const testing::TestParamInfo<GetPipelineLayoutCreateInfoTest::ParamType>& info) {
+      const std::string name = "_numLayouts_" + std::to_string(std::get<0>(info.param)) +
+                               "__shaderFlagBits_" + std::to_string(std::get<1>(info.param)) +
+                               "__addPushConstantRange_" + std::to_string(std::get<2>(info.param));
+      return name;
+    });
+
+// ivkGetPushConstantRange *******************************
+class GetPushConstantRangeTest
+  : public ::testing::TestWithParam<std::tuple<VkShaderStageFlags, uint32_t, uint32_t>> {};
+
+TEST_P(GetPushConstantRangeTest, GetPushConstantRange) {
+  const VkShaderStageFlags shaderStageFlags = std::get<0>(GetParam());
+  const uint32_t offset = std::get<1>(GetParam());
+  const uint32_t size = std::get<2>(GetParam());
+
+  const VkPushConstantRange pushConstantRange =
+      ivkGetPushConstantRange(shaderStageFlags, offset, size);
+
+  EXPECT_EQ(pushConstantRange.stageFlags, shaderStageFlags);
+  EXPECT_EQ(pushConstantRange.offset, offset);
+  EXPECT_EQ(pushConstantRange.size, size);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AllCombinations,
+    GetPushConstantRangeTest,
+    ::testing::Combine(::testing::Values(VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT),
+                       ::testing::Values(0, 100),
+                       ::testing::Values(1000, 2000)),
+    [](const testing::TestParamInfo<GetPushConstantRangeTest::ParamType>& info) {
+      const std::string name = "_shaderStageFlags_" + std::to_string(std::get<0>(info.param)) +
+                               "__offset_" + std::to_string(std::get<1>(info.param)) + "__size_" +
+                               std::to_string(std::get<2>(info.param));
+      return name;
+    });
+
+// ivkGetViewport *******************************
+class GetViewportTest : public ::testing::TestWithParam<std::tuple<float, float, float, float>> {};
+
+TEST_P(GetViewportTest, GetViewport) {
+  const float x = std::get<0>(GetParam());
+  const float y = std::get<1>(GetParam());
+  const float width = std::get<2>(GetParam());
+  const float height = std::get<3>(GetParam());
+
+  const VkViewport viewport = ivkGetViewport(x, y, width, height);
+
+  EXPECT_EQ(viewport.x, x);
+  EXPECT_EQ(viewport.y, y);
+  EXPECT_EQ(viewport.width, width);
+  EXPECT_EQ(viewport.height, height);
+  EXPECT_EQ(viewport.minDepth, 0.0f);
+  EXPECT_EQ(viewport.maxDepth, +1.0f);
+}
+
+INSTANTIATE_TEST_SUITE_P(AllCombinations,
+                         GetViewportTest,
+                         ::testing::Combine(::testing::Values(0.f, 50.f),
+                                            ::testing::Values(0.f, 50.f),
+                                            ::testing::Values(100.f, 500.f),
+                                            ::testing::Values(100.f, 500.f)));
+
 } // namespace igl::tests

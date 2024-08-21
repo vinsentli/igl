@@ -81,7 +81,7 @@ RenderCommandEncoder::RenderCommandEncoder(const std::shared_ptr<CommandBuffer>&
   IRenderCommandEncoder::IRenderCommandEncoder(commandBuffer),
   ctx_(ctx),
   cmdBuffer_(commandBuffer ? commandBuffer->getVkCommandBuffer() : VK_NULL_HANDLE),
-  binder_(commandBuffer, ctx, VK_PIPELINE_BIND_POINT_GRAPHICS) {
+  binder_(commandBuffer.get(), ctx, VK_PIPELINE_BIND_POINT_GRAPHICS) {
   IGL_PROFILER_FUNCTION();
   IGL_ASSERT(commandBuffer);
   IGL_ASSERT(cmdBuffer_ != VK_NULL_HANDLE);
@@ -92,6 +92,11 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
                                       const Dependencies& dependencies,
                                       Result* outResult) {
   IGL_PROFILER_FUNCTION();
+
+  if (!IGL_VERIFY(cmdBuffer_)) {
+    Result::setResult(outResult, Result::Code::ArgumentNull);
+    return;
+  }
 
   processDependencies(dependencies);
 
@@ -419,10 +424,6 @@ void RenderCommandEncoder::bindDepthStencilState(
   dynamicState_.setDepthCompareOp(compareFunctionToVkCompareOp(desc.compareFunction));
 
   auto setStencilState = [this](VkStencilFaceFlagBits faceMask, const igl::StencilStateDesc& desc) {
-    if (desc == igl::StencilStateDesc()) {
-      // do not update anything if we don't have an actual state
-      return;
-    }
     dynamicState_.setStencilStateOps(faceMask == VK_STENCIL_FACE_FRONT_BIT,
                                      stencilOperationToVkStencilOp(desc.stencilFailureOperation),
                                      stencilOperationToVkStencilOp(desc.depthStencilPassOperation),

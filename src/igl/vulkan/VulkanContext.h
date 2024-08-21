@@ -17,6 +17,7 @@
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanDevice.h>
 #include <igl/vulkan/VulkanExtensions.h>
+#include <igl/vulkan/VulkanFeatures.h>
 #include <igl/vulkan/VulkanFunctions.h>
 #include <igl/vulkan/VulkanHelpers.h>
 #include <igl/vulkan/VulkanImmediateCommands.h>
@@ -77,48 +78,6 @@ struct DeviceQueues {
   VkQueue IGL_NULLABLE computeQueue = VK_NULL_HANDLE;
 
   DeviceQueues() = default;
-};
-
-struct VulkanContextConfig {
-  bool terminateOnValidationError = false; // invoke std::terminate() on any validation error
-
-  // enable/disable enhanced shader debugging capabilities (line drawing)
-  bool enhancedShaderDebugging = false;
-
-  bool enableConcurrentVkDevicesSupport = false;
-
-  bool enableValidation = true;
-  bool enableGPUAssistedValidation = true;
-  bool enableSynchronizationValidation = false;
-  bool enableBufferDeviceAddress = false;
-  bool enableExtraLogs = true;
-  bool enableDescriptorIndexing = false;
-  // @fb-only
-
-  igl::ColorSpace swapChainColorSpace = igl::ColorSpace::SRGB_NONLINEAR;
-  igl::TextureFormat requestedSwapChainTextureFormat = igl::TextureFormat::RGBA_UNorm8;
-
-  std::vector<CommandQueueType> userQueues;
-
-  uint32_t maxResourceCount = 3u;
-
-  // owned by the application - should be alive until initContext() returns
-  const void* IGL_NULLABLE pipelineCacheData = nullptr;
-  size_t pipelineCacheDataSize = 0;
-
-  // This enables fences generated at the end of submission to be exported to the client.
-  // The client can then use the SubmitHandle to wait for the completion of the GPU work.
-  bool exportableFences = false;
-
-  // Size for VulkanMemoryAllocator's default pool block size parameter.
-  // Only relevant if VMA is used for memory allocation.
-  // Passing 0 will prompt VMA to a large default value (currently 256 MB).
-  // Using a smaller heap size would increase the chance of memory deallocation and result in less
-  // memory wastage.
-  size_t vmaPreferredLargeHeapBlockSize = 0;
-
-  // Specifies a default fence timeout value.
-  uint64_t fenceTimeoutNanoseconds = UINT64_MAX;
 };
 
 class VulkanContext final {
@@ -239,6 +198,8 @@ class VulkanContext final {
 
   void freeResourcesForDescriptorSetLayout(VkDescriptorSetLayout IGL_NULLABLE dsl) const;
 
+  const VulkanFeatures& features() const noexcept;
+
 #if defined(IGL_WITH_TRACY_GPU)
   TracyVkCtx tracyCtx_ = nullptr;
   std::unique_ptr<VulkanCommandPool> profilingCommandPool_;
@@ -255,9 +216,11 @@ class VulkanContext final {
   void waitDeferredTasks();
   void growBindlessDescriptorPool(uint32_t newMaxTextures, uint32_t newMaxSamplers);
   igl::BindGroupTextureHandle createBindGroup(const BindGroupTextureDesc& desc,
-                                              const IRenderPipelineState* IGL_NULLABLE compatiblePipeline,
+                                              const IRenderPipelineState* IGL_NULLABLE
+                                                  compatiblePipeline,
                                               Result* IGL_NULLABLE outResult);
-  igl::BindGroupBufferHandle createBindGroup(const BindGroupBufferDesc& desc, Result* IGL_NULLABLE outResult);
+  igl::BindGroupBufferHandle createBindGroup(const BindGroupBufferDesc& desc,
+                                             Result* IGL_NULLABLE outResult);
   void destroy(igl::BindGroupTextureHandle handle);
   void destroy(igl::BindGroupBufferHandle handle);
   VkDescriptorSet IGL_NULLABLE getBindGroupDescriptorSet(igl::BindGroupTextureHandle handle) const;
@@ -325,6 +288,8 @@ class VulkanContext final {
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
       &vkPhysicalDeviceSamplerYcbcrConversionFeatures_};
   FOLLY_POP_WARNING
+
+  VulkanFeatures features_;
 
  public:
   const VulkanFunctionTable& vf_;
