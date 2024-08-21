@@ -204,7 +204,7 @@ VulkanSwapchain::VulkanSwapchain(const VulkanContext& ctx, uint32_t width, uint3
   }
 
   // Create semaphores and sfence used to check the status of the acquire semaphore
-  for (uint32_t i = 0; i < swapchainImageCount; ++i) {
+  for (uint32_t i = 0; i < numSwapchainImages_; ++i) {
     acquireSemaphores_.emplace_back(
         ctx_.vf_, device_, false, IGL_FORMAT("Semaphore: swapchain-acquire #{}", i).c_str());
 
