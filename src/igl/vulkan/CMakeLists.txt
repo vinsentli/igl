@@ -27,10 +27,10 @@ if(ANDROID)
   list(APPEND HEADER_FILES ${ANDROID_HEADER_FILES})
 endif()
 
-add_library(IGLVulkan ${SRC_FILES} ${HEADER_FILES})
+add_library(IGLVulkan OBJECT ${SRC_FILES} ${HEADER_FILES})
 
 #target_link_libraries(IGLVulkan PRIVATE IGLLibrary IGLGlslang)
-target_link_libraries(IGLVulkan PRIVATE IGLLibrary)
+#target_link_libraries(IGLVulkan PRIVATE IGLLibrary)
 
 igl_set_cxxstd(IGLVulkan 17)
 igl_set_folder(IGLVulkan "IGL")
@@ -42,6 +42,7 @@ target_link_libraries(IGLVulkan PUBLIC fmt)
 
 target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/fmt/include")
 target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/volk")
+target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/glm")
 target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/vma/include")
 target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/SPIRV-Headers/include")
 #target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/glslang")

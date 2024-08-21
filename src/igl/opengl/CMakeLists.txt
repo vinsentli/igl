@@ -56,9 +56,9 @@ if(IGL_WITH_WEBGL)
   list(APPEND HEADER_FILES ${WEBGL_HEADER_FILES})
 endif()
 
-add_library(IGLOpenGL ${SRC_FILES} ${HEADER_FILES})
+add_library(IGLOpenGL OBJECT ${SRC_FILES} ${HEADER_FILES})
 
-target_link_libraries(IGLOpenGL PRIVATE IGLLibrary)
+# target_link_libraries(IGLOpenGL PRIVATE IGLLibrary)
 
 if(ANDROID)
   add_definitions("-DSUPPORT_ES31_IGL_OPENGL_ANDROID")
@@ -83,7 +83,7 @@ if (IGL_WITH_WEBGL)
   set_target_properties(IGLOpenGL PROPERTIES LINK_FLAGS "-s USE_WEBGL2=1 -s GL_SUPPORT_AUTOMATIC_ENABLE_EXTENSIONS=1 -s GL_EMULATE_GLES_VERSION_STRING_FORMAT=1")
 endif()
 
-target_link_libraries(IGLOpenGL PRIVATE IGLLibrary)
+# target_link_libraries(IGLOpenGL PRIVATE IGLLibrary)
 if(NOT APPLE AND NOT ANDROID AND NOT EMSCRIPTEN)
   target_link_libraries(IGLOpenGL PUBLIC OpenGL::GL)
 endif()

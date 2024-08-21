@@ -9,6 +9,10 @@ project(IGLLibrary CXX C)
 
 add_definitions("-DIGL_CMAKE_BUILD=1")
 
+if(CMAKE_BUILD_TYPE AND (CMAKE_BUILD_TYPE STREQUAL "Release"))
+  add_definitions("-DIGL_DEBUG=0")
+endif()
+
 file(GLOB SRC_FILES LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.cpp)
 file(GLOB HEADER_FILES LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.h)
 
@@ -24,7 +28,7 @@ if(ANDROID)
   list(APPEND HEADER_FILES android/NativeHWBuffer.h)
 endif()
 
-add_library(IGLLibrary ${SRC_FILES} ${HEADER_FILES})
+add_library(IGLLibrary OBJECT ${SRC_FILES} ${HEADER_FILES})
 
 target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/src")
 target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/glm")
