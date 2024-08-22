@@ -881,4 +881,71 @@ INSTANTIATE_TEST_SUITE_P(AllCombinations,
                                             ::testing::Values(100.f, 500.f),
                                             ::testing::Values(100.f, 500.f)));
 
+// ivkGetRect2D *******************************
+class GetRect2DTest
+  : public ::testing::TestWithParam<std::tuple<uint32_t, uint32_t, uint32_t, uint32_t>> {};
+
+TEST_P(GetRect2DTest, GetRect2D) {
+  const uint32_t x = std::get<0>(GetParam());
+  const uint32_t y = std::get<1>(GetParam());
+  const uint32_t width = std::get<2>(GetParam());
+  const uint32_t height = std::get<3>(GetParam());
+
+  const VkRect2D rect = ivkGetRect2D(x, y, width, height);
+
+  EXPECT_EQ(rect.offset.x, x);
+  EXPECT_EQ(rect.offset.y, y);
+  EXPECT_EQ(rect.extent.width, width);
+  EXPECT_EQ(rect.extent.height, height);
+}
+
+INSTANTIATE_TEST_SUITE_P(AllCombinations,
+                         GetRect2DTest,
+                         ::testing::Combine(::testing::Values(0, 50),
+                                            ::testing::Values(0, 50),
+                                            ::testing::Values(100, 500),
+                                            ::testing::Values(100, 500)),
+                         [](const testing::TestParamInfo<GetRect2DTest::ParamType>& info) {
+                           const std::string name =
+                               "_x_" + std::to_string(std::get<0>(info.param)) + "__y_" +
+                               std::to_string(std::get<1>(info.param)) + "__width_" +
+                               std::to_string(std::get<2>(info.param)) + "__height_" +
+                               std::to_string(std::get<3>(info.param));
+                           return name;
+                         });
+
+// ivkGeivkGetPipelineShaderStageCreateInfotRect2D *******************************
+class GetPipelineShaderStageCreateInfoTest
+  : public ::testing::TestWithParam<std::tuple<VkShaderStageFlagBits, bool>> {};
+
+TEST_P(GetPipelineShaderStageCreateInfoTest, GetPipelineShaderStageCreateInfo) {
+  const VkShaderStageFlagBits stage = std::get<0>(GetParam());
+  const VkShaderModule shaderModule = VK_NULL_HANDLE;
+  const bool addEntryPoint = std::get<1>(GetParam());
+  const char* entryPoint = "main";
+
+  const VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfo =
+      ivkGetPipelineShaderStageCreateInfo(
+          stage, shaderModule, addEntryPoint ? entryPoint : nullptr);
+
+  EXPECT_EQ(pipelineShaderStageCreateInfo.sType,
+            VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+  EXPECT_EQ(pipelineShaderStageCreateInfo.flags, 0);
+  EXPECT_EQ(pipelineShaderStageCreateInfo.stage, stage);
+  EXPECT_EQ(pipelineShaderStageCreateInfo.module, shaderModule);
+  EXPECT_EQ(strcmp(pipelineShaderStageCreateInfo.pName, entryPoint), 0);
+  EXPECT_EQ(pipelineShaderStageCreateInfo.pSpecializationInfo, nullptr);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AllCombinations,
+    GetPipelineShaderStageCreateInfoTest,
+    ::testing::Combine(::testing::Values(VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT),
+                       ::testing::Bool()),
+    [](const testing::TestParamInfo<GetPipelineShaderStageCreateInfoTest::ParamType>& info) {
+      const std::string name = "_stage_" + std::to_string(std::get<0>(info.param)) +
+                               "__addEntryPoint_" + std::to_string(std::get<1>(info.param));
+      return name;
+    });
+
 } // namespace igl::tests

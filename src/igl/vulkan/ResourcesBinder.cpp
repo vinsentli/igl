@@ -24,7 +24,9 @@ ResourcesBinder::ResourcesBinder(const CommandBuffer* commandBuffer,
                                  VkPipelineBindPoint bindPoint) :
   ctx_(ctx),
   cmdBuffer_(commandBuffer ? commandBuffer->getVkCommandBuffer() : VK_NULL_HANDLE),
-  bindPoint_(bindPoint) {}
+  bindPoint_(bindPoint),
+  nextSubmitHandle_(commandBuffer ? commandBuffer->getNextSubmitHandle()
+                                  : VulkanImmediateCommands::SubmitHandle{}) {}
 
 void ResourcesBinder::bindBuffer(uint32_t index,
                                  igl::vulkan::Buffer* buffer,
@@ -148,13 +150,19 @@ void ResourcesBinder::updateBindings(VkPipelineLayout layout, const vulkan::Pipe
     ctx_.updateBindingsTextures(cmdBuffer_,
                                 layout,
                                 bindPoint_,
+                                nextSubmitHandle_,
                                 bindingsTextures_,
                                 *state.dslCombinedImageSamplers_,
                                 state.info_);
   }
   if (isDirtyFlags_ & DirtyFlagBits_Buffers) {
-    ctx_.updateBindingsBuffers(
-        cmdBuffer_, layout, bindPoint_, bindingsBuffers_, *state.dslBuffers_, state.info_);
+    ctx_.updateBindingsBuffers(cmdBuffer_,
+                               layout,
+                               bindPoint_,
+                               nextSubmitHandle_,
+                               bindingsBuffers_,
+                               *state.dslBuffers_,
+                               state.info_);
   }
 
   isDirtyFlags_ = 0;
