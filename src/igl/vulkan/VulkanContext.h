@@ -200,6 +200,11 @@ class VulkanContext final {
 
   const VulkanFeatures& features() const noexcept;
 
+  const VkSurfaceCapabilitiesKHR & getSurfaceCapabilities() { return deviceSurfaceCaps_; }
+
+  void createSurface(void* IGL_NULLABLE window, void* IGL_NULLABLE display);
+
+
 #if defined(IGL_WITH_TRACY_GPU)
   TracyVkCtx tracyCtx_ = nullptr;
   std::unique_ptr<VulkanCommandPool> profilingCommandPool_;
@@ -209,7 +214,6 @@ class VulkanContext final {
  private:
   void createInstance(size_t numExtraExtensions,
                       const char* IGL_NULLABLE* IGL_NULLABLE extraExtensions);
-  void createSurface(void* IGL_NULLABLE window, void* IGL_NULLABLE display);
   VkResult checkAndUpdateDescriptorSets();
   void querySurfaceCapabilities();
   void processDeferredTasks() const;
