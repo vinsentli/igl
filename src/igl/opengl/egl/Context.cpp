@@ -208,13 +208,13 @@ Context::Context(RenderingAPI api,
                  EGLNativeWindowType window,
                  std::pair<EGLint, EGLint> dimensions) {
   EGLConfig config{nullptr};
-  auto contextDisplay = newEGLContext(getDefaultEGLDisplay(), shareContext, &config);
-  IGL_ASSERT_MSG(contextDisplay.second != EGL_NO_CONTEXT, "newEGLContext failed");
+  //auto contextDisplay = newEGLContext(getDefaultEGLDisplay(), shareContext, &config);
+//  IGL_ASSERT_MSG(contextDisplay.second != EGL_NO_CONTEXT, "newEGLContext failed");
 
-  contextOwned_ = true;
+  contextOwned_ = false;
   api_ = api;
-  display_ = contextDisplay.first;
-  context_ = contextDisplay.second;
+  display_ = getDefaultEGLDisplay();// contextDisplay.first;
+  context_ = eglGetCurrentContext();//contextDisplay.second;
   IContext::registerContext((void*)context_, this);
   if (!window) {
     if (offscreen) {
@@ -279,13 +279,15 @@ void Context::updateSurface(NativeWindowType window) {
 Context::~Context() {
   willDestroy((void*)context_);
   IContext::unregisterContext((void*)context_);
-  if (contextOwned_ && context_ != EGL_NO_CONTEXT) {
+  if (context_ != EGL_NO_CONTEXT) {
     if (surface_ != nullptr) {
       eglDestroySurface(display_, surface_);
       CHECK_EGL_ERRORS();
     }
 
-    eglDestroyContext(display_, context_);
+    if (contextOwned_) {
+        eglDestroyContext(display_, context_);
+    }
     CHECK_EGL_ERRORS();
   }
 }
