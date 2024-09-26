@@ -21,6 +21,7 @@
 #include <igl/opengl/WithContext.h>
 #include <memory>
 #include <mutex>
+#include <map>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -603,6 +604,7 @@ class IContext {
   // Called to check if the last OGL call resulted in an error.
   GLenum checkForErrors(const char* callerName, size_t lineNum) const;
   Result getLastError() const;
+  void clearCacheState();
 
  public:
   mutable Pool<BindGroupBufferTag, BindGroupBufferDesc> bindGroupBuffersPool_;
@@ -727,6 +729,24 @@ class IContext {
 
   static constexpr uint64_t kNotAZombie = 0xdeadc0def3315badLL;
   uint64_t zombieGuard_ = kNotAZombie;
+    
+  // @tencent only
+  GLuint programID_ = 0;
+  std::array<bool, 32> enableVertexAttribArray_{};
+  std::array<GLuint, 32> vertexAttribDivisors_{};
+  std::map<GLenum, GLuint> bindBufferIndexs_;
+  std::map<GLint, GLint> samplerLocations_;
+  std::map<GLenum, bool> enableGLFeatures_;
+  GLenum activeTexture_ = 0;
+  GLint cullFaceMode_ = 0;
+  GLenum frontFaceMode_ = 0;
+  GLenum depthFunc_ = 0;
+  GLint depthMask_ = -1;
+  std::array<GLint, 4> colorMask_;
+  std::array<GLenum, 4>  blendFuncSeparate_;
+  GLint blendEquationSeparateRGB_ = 0;
+  GLint blendEquationSeparateAlpha_ = 0;
+  // @tencent only
 };
 
 } // namespace igl::opengl
