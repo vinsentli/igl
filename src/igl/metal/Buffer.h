@@ -22,6 +22,8 @@ class Buffer : public igl::IBuffer {
          BufferDesc::BufferAPIHint requestedApiHints,
          BufferDesc::BufferAPIHint acceptedApiHints,
          BufferDesc::BufferType bufferType);
+    
+  ~Buffer();
 
   Result upload(const void* data, const BufferRange& range) override;
 
