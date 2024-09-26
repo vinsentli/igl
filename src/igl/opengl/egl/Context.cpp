@@ -304,12 +304,17 @@ void Context::clearCurrentContext() const {
 }
 
 bool Context::isCurrentContext() const {
+#if IGL_DEBUG
   auto* curContext = eglGetCurrentContext();
   return curContext == context_;
   CHECK_EGL_ERRORS();
+#else
+  return true;
+#endif
 }
 
 bool Context::isCurrentSharegroup() const {
+#if IGL_DEBUG
   // EGL doesn't seem to provide a way to check if two contexts are in the same group.
   // For now we can at least check some trivial cases before hitting the assertion below.
   EGLContext currentContext = eglGetCurrentContext();
@@ -326,6 +331,9 @@ bool Context::isCurrentSharegroup() const {
     return it != sharegroup.end();
   }
   return false;
+#else 
+  return true;
+#endif
 }
 
 void Context::present(std::shared_ptr<ITexture> /*surface*/) const {
