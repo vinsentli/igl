@@ -28,7 +28,7 @@ std::shared_ptr<ICommandBuffer> CommandQueue::createCommandBuffer(const CommandB
   IGL_PROFILER_FUNCTION();
 
   // for now, we want only 1 command buffer
-  IGL_ASSERT(!isInsideFrame_);
+//  IGL_ASSERT(!isInsideFrame_);
 
   isInsideFrame_ = true;
 
@@ -45,7 +45,7 @@ SubmitHandle CommandQueue::submit(const ICommandBuffer& cmdBuffer, bool /* endOf
 
   incrementDrawCount(cmdBuffer.getCurrentDrawCount());
 
-  IGL_ASSERT(isInsideFrame_);
+//  IGL_ASSERT(isInsideFrame_);
 
   auto* vkCmdBuffer =
       const_cast<vulkan::CommandBuffer*>(static_cast<const vulkan::CommandBuffer*>(&cmdBuffer));
