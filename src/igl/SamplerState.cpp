@@ -7,7 +7,7 @@
 
 #include <igl/SamplerState.h>
 
-#include <igl/Assert.h>
+#include <igl/IGLAssert.h>
 #include <igl/Common.h>
 
 namespace igl {

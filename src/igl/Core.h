@@ -22,7 +22,7 @@
 #define IGL_CORE_H_COMMON_SKIP_CHECK 1 // Marker so we know to undefine at end of header
 #endif // !defined(IGL_COMMON_SKIP_CHECK)
 
-#include <igl/Assert.h>
+#include <igl/IGLAssert.h>
 #include <igl/Log.h>
 #include <igl/Macros.h>
 

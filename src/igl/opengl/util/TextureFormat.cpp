@@ -8,7 +8,7 @@
 #include <igl/opengl/util/TextureFormat.h>
 
 #define IGL_COMMON_SKIP_CHECK
-#include <igl/Assert.h>
+#include <igl/IGLAssert.h>
 
 namespace igl::opengl::util {
 

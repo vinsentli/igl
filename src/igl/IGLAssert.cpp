@@ -7,7 +7,7 @@
 
 #define IGL_COMMON_SKIP_CHECK
 #include <cstdio>
-#include <igl/Assert.h>
+#include <igl/IGLAssert.h>
 #include <igl/Log.h>
 
 // ----------------------------------------------------------------------------
