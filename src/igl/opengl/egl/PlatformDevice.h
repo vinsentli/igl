@@ -67,6 +67,7 @@ class PlatformDevice : public opengl::PlatformDevice {
 
  private:
   std::shared_ptr<ViewTextureTarget> drawableTexture_;
+  std::shared_ptr<ViewTextureTarget> depthTexture_;
 
   std::pair<EGLint, EGLint> getSurfaceDimensions(const Context& context, Result* outResult);
 };

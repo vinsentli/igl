@@ -108,6 +108,10 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(int wi
 std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(
     TextureFormat depthTextureFormat,
     Result* outResult) {
+  if (depthTexture_ && depthTexture_->getFormat() == depthTextureFormat) {
+    return depthTexture_;
+  }
+
   auto* context = static_cast<Context*>(getSharedContext().get());
   if (context == nullptr) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "No EGL context found!");
@@ -139,11 +143,13 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(
   if (!subResult.isOk()) {
     return nullptr;
   }
+
+  depthTexture_ = std::move(texture);
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    texture->initResourceTracker(resourceTracker);
+    depthTexture_->initResourceTracker(resourceTracker);
   }
 
-  return texture;
+  return depthTexture_;
 }
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
