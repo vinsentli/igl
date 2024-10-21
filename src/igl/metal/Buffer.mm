@@ -101,23 +101,24 @@ Buffer::Buffer(id<MTLBuffer> value,
   requestedApiHints_(requestedApiHints),
   acceptedApiHints_(acceptedApiHints),
   bufferType_(bufferType) {
-  mtlBuffers_.push_back(value);
+  my_buffer_ =  value;
+//  mtlBuffers_.push_back(value);
 }
 
 Buffer::~Buffer(){
-  for (auto & buf : mtlBuffers_){
-    [buf setPurgeableState:MTLPurgeableStateEmpty];
-    buf = nil;
-  }
-  mtlBuffers_.clear();
 }
 
 Result Buffer::upload(const void* data, const BufferRange& range) {
-  return ::upload(mtlBuffers_, 0, data, range, resourceOptions_, acceptedApiHints_);
+//  return ::upload(mtlBuffers_, 0, data, range, resourceOptions_, acceptedApiHints_);
+    
+    void* contents = [my_buffer_ contents];
+    memcpy((char*)contents + range.offset, data, range.size);
+    return igl::Result();
 }
 
 void* Buffer::map(const BufferRange& range, Result* outResult) {
-  return ::map(mtlBuffers_, 0, range, outResult, resourceOptions_);
+//  return ::map(mtlBuffers_, 0, range, outResult, resourceOptions_);
+    return static_cast<uint8_t*>(my_buffer_.contents) + range.offset;
 }
 
 void Buffer::unmap() {};
@@ -149,7 +150,7 @@ ResourceStorage Buffer::storage() const noexcept {
 }
 
 size_t Buffer::getSizeInBytes() const {
-  return [mtlBuffers_[0] length];
+  return [my_buffer_ length];
 }
 
 uint64_t Buffer::gpuAddress(size_t /*offset*/) const {

@@ -73,7 +73,15 @@ std::unique_ptr<IBuffer> Device::createBuffer(const BufferDesc& desc,
   const MTLStorageMode storage = toMTLStorageMode(desc.storage);
   const MTLResourceOptions options = MTLResourceOptionCPUCacheModeDefault | storage;
 
-  id<MTLBuffer> metalObject = createMetalBuffer(device_, desc, options);
+//  id<MTLBuffer> metalObject = createMetalBuffer(device_, desc, options);
+    id<MTLBuffer> metalObject = nil;
+    if (desc.data != nullptr) {
+      metalObject = [device_ newBufferWithBytes:desc.data length:desc.length options:options];
+    } else {
+      metalObject = [device_ newBufferWithLength:desc.length options:options];
+    }
+    metalObject.label = [NSString stringWithUTF8String:desc.debugName.c_str()];
+    
   std::unique_ptr<IBuffer> resource = std::make_unique<Buffer>(
       metalObject, options, desc.hint, 0 /* No accepted hints */, desc.type);
   if (getResourceTracker()) {

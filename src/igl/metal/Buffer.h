@@ -42,12 +42,14 @@ class Buffer : public igl::IBuffer {
   }
 
   IGL_INLINE virtual id<MTLBuffer> get() {
-    return mtlBuffers_[0];
+//      return mtlBuffers_[0];
+    return my_buffer_;
   }
 
  protected:
   MTLResourceOptions resourceOptions_;
   std::vector<id<MTLBuffer>> mtlBuffers_;
+  id<MTLBuffer> my_buffer_;
   BufferDesc::BufferAPIHint requestedApiHints_;
   BufferDesc::BufferAPIHint acceptedApiHints_;
   BufferDesc::BufferType bufferType_;
