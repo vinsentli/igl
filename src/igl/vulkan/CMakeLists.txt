@@ -46,6 +46,8 @@ target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/sr
 target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/vma/include")
 target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/SPIRV-Headers/include")
 #target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/glslang")
+target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/../../vendors/tracy/src")
+
 
 if(WIN32)
   add_definitions("-DVK_USE_PLATFORM_WIN32_KHR=1")

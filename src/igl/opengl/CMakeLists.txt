@@ -91,6 +91,8 @@ endif()
 igl_set_cxxstd(IGLOpenGL 17)
 igl_set_folder(IGLOpenGL "IGL")
 
+target_include_directories(IGLOpenGL PUBLIC "${IGL_ROOT_DIR}/../../vendors/tracy/src")
+
 if(WIN32)
   add_definitions("-DNOMINMAX")
   # IGLOpenGL uses GL/glew.h on Windows
