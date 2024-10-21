@@ -206,9 +206,9 @@ class VulkanContext final {
 
 
 #if defined(IGL_WITH_TRACY_GPU)
-  TracyVkCtx tracyCtx_ = nullptr;
+  TracyVkCtx IGL_NULLABLE tracyCtx_ = nullptr;
   std::unique_ptr<VulkanCommandPool> profilingCommandPool_;
-  VkCommandBuffer profilingCommandBuffer_ = VK_NULL_HANDLE;
+  VkCommandBuffer IGL_NULLABLE profilingCommandBuffer_ = VK_NULL_HANDLE;
 #endif
 
  private:
