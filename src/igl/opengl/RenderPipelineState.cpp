@@ -272,6 +272,7 @@ void RenderPipelineState::unbind() {
 // associated with the associated buffer.
 // bufferOffset is an offset in bytes to the start of the vertex attributes in the buffer.
 void RenderPipelineState::bindVertexAttributes(size_t bufferIndex, size_t bufferOffset) {
+  IGL_PROFILER_ZONE_GPU_OGL("bindVertexAttributes");
 #if IGL_DEBUG
   static GLint sMaxNumVertexAttribs = 0;
   if (0 == sMaxNumVertexAttribs) {

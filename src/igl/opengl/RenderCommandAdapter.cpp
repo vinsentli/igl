@@ -273,11 +273,7 @@ void RenderCommandAdapter::drawArraysInstanced(GLenum mode,
                                                GLsizei count,
                                                GLsizei instancecount) {
   willDraw();
-  if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DrawArraysInstanced)) {
-    getContext().drawArraysInstanced(toMockWireframeMode(mode), first, count, instancecount);
-  } else {
-    IGL_ASSERT_NOT_IMPLEMENTED();
-  }
+  getContext().drawArraysInstanced(toMockWireframeMode(mode), first, count, instancecount);
   didDraw();
 }
 
@@ -296,12 +292,8 @@ void RenderCommandAdapter::drawElementsInstanced(GLenum mode,
                                                  const GLvoid* indexOffset,
                                                  GLsizei instancecount) {
   willDraw();
-  if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DrawElementsInstanced)) {
-    getContext().drawElementsInstanced(
+  getContext().drawElementsInstanced(
         toMockWireframeMode(mode), indexCount, indexType, indexOffset, instancecount);
-  } else {
-    IGL_ASSERT_NOT_IMPLEMENTED();
-  }
   didDraw();
 }
 
@@ -402,7 +394,8 @@ void RenderCommandAdapter::willDraw() {
           IGL_LOG_INFO_ONCE(ret.message.c_str());
           continue;
         }
-
+          
+        IGL_PROFILER_ZONE_GPU_OGL("bindTexture");
         texture->bind();
 
         if (auto* samplerState = static_cast<SamplerState*>(textureState.second)) {
@@ -423,6 +416,8 @@ void RenderCommandAdapter::willDraw() {
           IGL_LOG_INFO_ONCE(ret.message.c_str());
           continue;
         }
+        
+        IGL_PROFILER_ZONE_GPU_OGL("bindTexture");
         texture->bind();
 
         if (auto* samplerState = static_cast<SamplerState*>(textureState.second)) {
