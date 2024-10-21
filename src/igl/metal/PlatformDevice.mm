@@ -66,7 +66,7 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
     Result* outResult) {
   auto iglObject = std::make_unique<Texture>(nativeDrawable, device_);
   if (auto resourceTracker = device_.getResourceTracker()) {
-    iglObject->initResourceTracker(resourceTracker);
+    iglObject->initResourceTracker(resourceTracker, "TextureFromNativeDrawable");
   }
   Result::setOk(outResult);
   return iglObject;
@@ -77,7 +77,7 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
     Result* outResult) {
   auto iglObject = std::make_unique<Texture>(nativeDrawable, device_);
   if (auto resourceTracker = device_.getResourceTracker()) {
-    iglObject->initResourceTracker(resourceTracker);
+    iglObject->initResourceTracker(resourceTracker, "TextureFromNativeDrawable");
   }
   Result::setOk(outResult);
   return iglObject;
@@ -121,7 +121,7 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(
     Result* outResult) {
   auto iglObject = std::make_unique<Texture>(depthStencilTexture, device_);
   if (auto resourceTracker = device_.getResourceTracker()) {
-    iglObject->initResourceTracker(resourceTracker);
+    iglObject->initResourceTracker(resourceTracker, "TextureFromNativeDepth");
   }
   Result::setOk(outResult);
   return iglObject;
@@ -187,7 +187,7 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativePixelBufferWith
 
     resultTexture = std::make_unique<Texture>(metalTexture, device_);
     if (auto resourceTracker = device_.getResourceTracker()) {
-      resultTexture->initResourceTracker(resourceTracker);
+      resultTexture->initResourceTracker(resourceTracker, "TextureFromNativePixelBuffer");
     }
   }
 #endif

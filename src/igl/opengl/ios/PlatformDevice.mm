@@ -138,7 +138,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
 
     renderBufferHolder->_renderBuffer = texture;
     if (auto resourceTracker = owner_.getResourceTracker()) {
-      texture->initResourceTracker(resourceTracker);
+      texture->initResourceTracker(resourceTracker, "TextureFromNativeDrawable");
     }
 
     return texture;
@@ -174,6 +174,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(
       depthTextureFormat,
   };
   desc.storage = ResourceStorage::Private;
+  desc.debugName = "TextureFromNativeDepth";
   return owner_.createTexture(desc, outResult);
 }
 
@@ -216,7 +217,7 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativePixelBufferWith
     return nullptr;
   }
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    textureBuffer->initResourceTracker(resourceTracker);
+    textureBuffer->initResourceTracker(resourceTracker, "TextureFromNativePixelBuffer");
   }
   return textureBuffer;
 }
@@ -236,7 +237,7 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativePixelBuffer(
     return nullptr;
   }
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    textureBuffer->initResourceTracker(resourceTracker);
+    textureBuffer->initResourceTracker(resourceTracker, "TextureFromNativePixelBuffer");
   }
   return textureBuffer;
 }
@@ -257,7 +258,7 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativePixelBufferWith
     return nullptr;
   }
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    textureBuffer->initResourceTracker(resourceTracker);
+    textureBuffer->initResourceTracker(resourceTracker, "TextureFromNativePixelBuffer");
   }
   return textureBuffer;
 }
@@ -276,7 +277,7 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativePixelBuffer(
     return nullptr;
   }
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    textureBuffer->initResourceTracker(resourceTracker);
+    textureBuffer->initResourceTracker(resourceTracker, "TextureFromNativePixelBuffer");
   }
   return textureBuffer;
 }

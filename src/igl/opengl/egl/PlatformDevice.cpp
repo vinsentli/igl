@@ -59,7 +59,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(Result
   }
   drawableTexture_ = std::move(texture);
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    drawableTexture_->initResourceTracker(resourceTracker);
+    drawableTexture_->initResourceTracker(resourceTracker, "TextureFromNativeDrawable");
   }
 
   return drawableTexture_;
@@ -99,7 +99,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(int wi
   }
   drawableTexture_ = std::move(texture);
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    drawableTexture_->initResourceTracker(resourceTracker);
+    drawableTexture_->initResourceTracker(resourceTracker, "TextureFromNativeDrawable");
   }
 
   return drawableTexture_;
@@ -146,7 +146,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(
 
   depthTexture_ = std::move(texture);
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    depthTexture_->initResourceTracker(resourceTracker);
+    depthTexture_->initResourceTracker(resourceTracker, "TextureFromNativeDepth");
   }
 
   return depthTexture_;

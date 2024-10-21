@@ -30,7 +30,7 @@ std::shared_ptr<Framebuffer> PlatformDevice::createFramebuffer(const Framebuffer
 std::shared_ptr<Framebuffer> PlatformDevice::createCurrentFramebuffer() const {
   auto resource = std::make_shared<CurrentFramebuffer>(getContext());
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    resource->initResourceTracker(resourceTracker);
+    resource->initResourceTracker(resourceTracker, "CurrentFramebuffer");
   }
   return resource;
 }
@@ -48,7 +48,7 @@ std::unique_ptr<TextureBufferExternal> PlatformDevice::createTextureBufferExtern
   textureBuffer->setUsage(usage);
   textureBuffer->setTextureProperties(width, height, numLayers);
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    textureBuffer->initResourceTracker(resourceTracker);
+    textureBuffer->initResourceTracker(resourceTracker, "TextureBufferExternal");
   }
   return textureBuffer;
 }
