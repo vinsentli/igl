@@ -219,13 +219,18 @@ Result RenderPipelineState::create() {
 }
 
 void RenderPipelineState::bind() {
+  IGL_PROFILER_ZONE_GPU_OGL("bindRenderPipelineState");
   if (desc_.shaderStages) {
     const auto& shaderStages = std::static_pointer_cast<ShaderStages>(desc_.shaderStages);
     shaderStages->bind();
-    for (const auto& binding : uniformBlockBindingMap_) {
-      const auto& blockIndex = binding.first;
-      const auto& bindingIndex = binding.second;
-      getContext().uniformBlockBinding(shaderStages->getProgramID(), blockIndex, bindingIndex);
+      
+    if (!hasLinkUniformBlockBindingPoint_){
+      for (const auto& binding : uniformBlockBindingMap_) {
+        const auto& blockIndex = binding.first;
+        const auto& bindingIndex = binding.second;
+        getContext().uniformBlockBinding(shaderStages->getProgramID(), blockIndex, bindingIndex);
+      }
+      hasLinkUniformBlockBindingPoint_ = true;
     }
   }
 
@@ -289,6 +294,10 @@ void RenderPipelineState::bindVertexAttributes(size_t bufferIndex, size_t buffer
     }
     IGL_ASSERT(location < sMaxNumVertexAttribs);
     activeAttributesLocations_.push_back(location);
+      
+    prePipelineStateAttributesLocations_.erase(std::remove(prePipelineStateAttributesLocations_.begin(),
+                                                           prePipelineStateAttributesLocations_.end(), location),
+                                               prePipelineStateAttributesLocations_.end());
 
     getContext().enableVertexAttribArray(location);
     const auto& attribute = attribList[i];
@@ -317,6 +326,13 @@ void RenderPipelineState::unbindVertexAttributes() {
     getContext().disableVertexAttribArray(l);
   }
   activeAttributesLocations_.clear();
+}
+
+void RenderPipelineState::unbindPrePipelineVertexAttributes() {
+  for (const auto& l : prePipelineStateAttributesLocations_) {
+    getContext().disableVertexAttribArray(l);
+  }
+  prePipelineStateAttributesLocations_.clear();
 }
 
 // Looks up the location the of the specified texture unit via its name,
