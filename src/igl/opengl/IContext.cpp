@@ -982,6 +982,7 @@ GLenum IContext::checkFramebufferStatus(GLenum target) {
 }
 
 void IContext::clear(GLbitfield mask) {
+  IGL_PROFILER_ZONE_GPU_OGL("glClear");
   GLCALL(Clear)(mask);
   APILOG("glClear(%s %s %s)\n",
          mask & GL_COLOR_BUFFER_BIT ? "GL_COLOR_BUFFER_BIT" : "",
@@ -1507,7 +1508,7 @@ void IContext::detachShader(GLuint program, GLuint shader) {
 }
 
 void IContext::disable(GLenum cap) {
-  if (!enableGLFeatures_[cap]) return;
+  if (enableGLFeatures_.count(cap) && !enableGLFeatures_[cap]) return;
   enableGLFeatures_[cap] =  false;
   GLCALL(Disable)(cap);
   APILOG("glDisable(%s)\n", GL_ENUM_TO_STRING(cap));
@@ -1631,7 +1632,7 @@ void IContext::drawElementsIndirect(GLenum mode, GLenum type, const GLvoid* indi
 }
 
 void IContext::enable(GLenum cap) {
-  if (enableGLFeatures_[cap]) return;
+  if (enableGLFeatures_.count(cap) && enableGLFeatures_[cap]) return;
   enableGLFeatures_[cap] = true;
   GLCALL(Enable)(cap);
   APILOG("glEnable(%s)\n", GL_ENUM_TO_STRING(cap));
@@ -3402,6 +3403,7 @@ void IContext::unmapBuffer(GLenum target) {
 void IContext::useProgram(GLuint program) {
   if (programID_ == program) return;
   programID_ = program;
+  IGL_PROFILER_ZONE_GPU_OGL("glUseProgram");
   GLCALL(UseProgram)(program);
   APILOG("glUseProgram(%u)\n", program);
   GLCHECK_ERRORS();
@@ -3477,6 +3479,7 @@ void IContext::vertexAttrib4fv(GLuint indx, const GLfloat* values) {
 }
 
 void IContext::viewport(GLint x, GLint y, GLsizei width, GLsizei height) {
+  IGL_PROFILER_ZONE_GPU_OGL("glViewport");
   GLCALL(Viewport)(x, y, width, height);
   APILOG("glViewport(%d, %d, %u, %u)\n", x, y, width, height);
   GLCHECK_ERRORS();
