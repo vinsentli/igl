@@ -838,7 +838,7 @@ std::shared_ptr<ITexture> CurrentFramebuffer::getStencilAttachment() const {
 }
 
 void CurrentFramebuffer::updateDrawable(std::shared_ptr<ITexture> /*texture*/) {
-  IGL_ASSERT_NOT_REACHED();
+  //IGL_ASSERT_NOT_REACHED();
 }
 
 void CurrentFramebuffer::updateDrawable(SurfaceTextures /*surfaceTextures*/) {

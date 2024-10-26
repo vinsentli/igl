@@ -18,6 +18,8 @@ class Device final : public opengl::Device {
 
   [[nodiscard]] const PlatformDevice& getPlatformDevice() const noexcept override;
 
+  std::shared_ptr<ITexture> createTexture(const TextureDesc& desc, Result* outResult) const noexcept override;
+
  private:
   PlatformDevice platformDevice_;
 };
