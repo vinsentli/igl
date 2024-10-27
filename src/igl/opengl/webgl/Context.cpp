@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// @fb-only
+
 #include <igl/opengl/Texture.h>
 #include <igl/opengl/webgl/Context.h>
 
@@ -44,7 +46,7 @@ void Context::initialize(EmscriptenWebGLContextAttributes& attributes,
     igl::Result result;
     // Initialize through base class.
     IContext::initialize(&result);
-    IGL_ASSERT(result.isOk());
+    IGL_DEBUG_ASSERT(result.isOk());
   }
 }
 
@@ -69,7 +71,7 @@ bool Context::isCurrentSharegroup() const {
 }
 
 std::unique_ptr<IContext> Context::createShareContext(Result* outResult) {
-  IGL_ASSERT_NOT_IMPLEMENTED();
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   Result::setResult(outResult, Result::Code::Unimplemented, "Implement as needed");
   return nullptr;
 }

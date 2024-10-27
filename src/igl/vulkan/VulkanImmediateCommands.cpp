@@ -76,6 +76,16 @@ void VulkanImmediateCommands::purge() {
 
 const VulkanImmediateCommands::CommandBufferWrapper& VulkanImmediateCommands::acquire() {
   IGL_PROFILER_FUNCTION();
+  // IGL_DEBUG_ASSERT(nextSubmitHandle_.empty(),
+  //                "VulkanImmediateCommands::acquire() is not reentrant. You should submit() the "
+  //                "previous buffer before calling acquire() again.");
+
+  // if (IGL_DEBUG_VERIFY_NOT(!nextSubmitHandle_.empty())) {
+  if (!nextSubmitHandle_.empty()) {
+    IGL_LOG_ERROR(
+        "VulkanImmediateCommands::acquire() is not reentrant. You should submit() the "
+        "previous buffer before calling acquire() again.");
+  }
 
   if (!numAvailableCommandBuffers_) {
     purge();
@@ -101,17 +111,23 @@ const VulkanImmediateCommands::CommandBufferWrapper& VulkanImmediateCommands::ac
   // make clang happy
   assert(current);
 
-  IGL_ASSERT_MSG(numAvailableCommandBuffers_, "No available command buffers");
-  IGL_ASSERT_MSG(current, "No available command buffers");
-  IGL_ASSERT(current->cmdBufAllocated_ != VK_NULL_HANDLE);
+  IGL_DEBUG_ASSERT(numAvailableCommandBuffers_, "No available command buffers");
+  IGL_DEBUG_ASSERT(current, "No available command buffers");
+  IGL_DEBUG_ASSERT(current->cmdBufAllocated_ != VK_NULL_HANDLE);
 
   current->handle_.submitId_ = submitCounter_;
   numAvailableCommandBuffers_--;
 
   current->cmdBuf_ = current->cmdBufAllocated_;
   current->isEncoding_ = true;
-  VK_ASSERT(ivkBeginCommandBuffer(&vf_, current->cmdBuf_));
 
+  const VkCommandBufferBeginInfo bi = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+  };
+  VK_ASSERT(vf_.vkBeginCommandBuffer(current->cmdBuf_, &bi));
+
+  nextSubmitHandle_ = current->handle_;
   return *current;
 }
 
@@ -120,7 +136,7 @@ VkResult VulkanImmediateCommands::wait(const SubmitHandle handle, uint64_t timeo
     return VK_SUCCESS;
   }
 
-  if (!IGL_VERIFY(!buffers_[handle.bufferIndex_].isEncoding_)) {
+  if (!IGL_DEBUG_VERIFY(!buffers_[handle.bufferIndex_].isEncoding_)) {
     // we are waiting for a buffer which has not been submitted - this is probably a logic error
     // somewhere in the calling code
     return (VkResult)VK_ERROR_UNKNOWN;
@@ -165,7 +181,7 @@ void VulkanImmediateCommands::waitAll() {
 }
 
 bool VulkanImmediateCommands::isRecycled(SubmitHandle handle) const {
-  IGL_ASSERT(handle.bufferIndex_ < kMaxCommandBuffers);
+  IGL_DEBUG_ASSERT(handle.bufferIndex_ < kMaxCommandBuffers);
 
   if (handle.empty()) {
     // a null handle
@@ -177,7 +193,7 @@ bool VulkanImmediateCommands::isRecycled(SubmitHandle handle) const {
 }
 
 bool VulkanImmediateCommands::isReady(const SubmitHandle handle) const {
-  IGL_ASSERT(handle.bufferIndex_ < kMaxCommandBuffers);
+  IGL_DEBUG_ASSERT(handle.bufferIndex_ < kMaxCommandBuffers);
 
   if (handle.empty()) {
     // a null handle
@@ -202,8 +218,8 @@ bool VulkanImmediateCommands::isReady(const SubmitHandle handle) const {
 VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
     const CommandBufferWrapper& wrapper) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_SUBMIT);
-  IGL_ASSERT(wrapper.isEncoding_);
-  VK_ASSERT(ivkEndCommandBuffer(&vf_, wrapper.cmdBuf_));
+  IGL_DEBUG_ASSERT(wrapper.isEncoding_);
+  VK_ASSERT(vf_.vkEndCommandBuffer(wrapper.cmdBuf_));
 
   // @lint-ignore CLANGTIDY
   const VkPipelineStageFlags waitStageMasks[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
@@ -245,11 +261,13 @@ VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
     submitCounter_++;
   }
 
+  nextSubmitHandle_ = {};
+
   return lastSubmitHandle_;
 }
 
 void VulkanImmediateCommands::waitSemaphore(VkSemaphore semaphore) {
-  IGL_ASSERT(waitSemaphore_ == VK_NULL_HANDLE);
+  IGL_DEBUG_ASSERT(waitSemaphore_ == VK_NULL_HANDLE);
 
   waitSemaphore_ = semaphore;
 }
@@ -262,8 +280,12 @@ VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::getLastSubmitHand
   return lastSubmitHandle_;
 }
 
+VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::getNextSubmitHandle() const {
+  return nextSubmitHandle_.empty() ? lastSubmitHandle_ : nextSubmitHandle_;
+}
+
 VkFence VulkanImmediateCommands::getVkFenceFromSubmitHandle(SubmitHandle handle) {
-  IGL_ASSERT(handle.bufferIndex_ < buffers_.size());
+  IGL_DEBUG_ASSERT(handle.bufferIndex_ < buffers_.size());
 
   if (isRecycled(handle)) {
     return VK_NULL_HANDLE;

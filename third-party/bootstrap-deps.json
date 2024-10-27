@@ -4,7 +4,7 @@
     "source": {
         "type": "git",
         "url": "https://github.com/zeux/meshoptimizer.git",
-        "revision": "v0.19"
+        "revision": "v0.21"
     }
 },
 {
@@ -104,7 +104,7 @@
     "source": {
         "type": "git",
         "url": "https://github.com/ocornut/imgui.git",
-        "revision": "v1.89.5"
+        "revision": "v1.90.1"
     }
 },
 {
@@ -128,7 +128,7 @@
     "source": {
         "type": "git",
         "url": "https://github.com/wolfpld/tracy.git",
-        "revision": "v0.9.1"
+        "revision": "v0.11.1"
     }
 },
 {
@@ -176,7 +176,7 @@
     "source": {
         "type": "git",
         "url": "https://github.com/KhronosGroup/OpenXR-SDK.git",
-        "sha1": "49e81bbd919af7c0cf513517a730d12253c28902"
+        "sha1": "be392bf6949adeeabad5082aa79d12aacbda781f"
     }
 },
 {
@@ -185,6 +185,14 @@
         "type": "git",
         "url": "https://github.com/KhronosGroup/SPIRV-Cross.git",
         "revision": "2ccc81fd826e4dd4a2db2f94b8e6eb738a89f5f1"
+    }
+},
+{
+    "name": "gfxreconstruct",
+    "source": {
+        "type": "git",
+        "url": "https://github.com/facebook/gfxreconstruct.git",
+        "revision": "99a2ac03e7386c9773804c7b25a3712fd867f458"
     }
 }
 ]

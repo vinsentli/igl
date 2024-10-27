@@ -22,32 +22,32 @@
 // * logs to console and/or debugger console: failing expression, function signature, file/line
 // * allows you to continue execution during debugging after a failing assert, instead of exiting
 //
-// ## IGL_ASSERT/IGL_ASSERT_MSG vs IGL_VERIFY/IGL_UNEXPECTED
+// ## IGL_DEBUG_ASSERT vs IGL_DEBUG_VERIFY/IGL_DEBUG_VERIFY_NOT
 //
-// Use IGL_ASSERT for debug-only assertions. On release builds, the expressions
-// expand to no-op's, so no perf penalty. IGL_ASSERT logs failed expression to
-// console. To customize, use IGL_ASSERT_MSG which supports printf semantics:
+// Use IGL_DEBUG_ASSERT for debug-only assertions. On release builds, the expressions
+// expand to no-op's, so no perf penalty. IGL_DEBUG_ASSERT logs failed the  expression to
+// console. To customize, provide a format argment with printf semantics:
 //
 //   int i = 42;
 //   auto p = std::make_shared<int>(i);
-//   IGL_ASSERT(p);
-//   IGL_ASSERT_MSG(*p == i, "*p is wrong value. Got %d. Expected %d.", *p, i);
+//   IGL_DEBUG_ASSERT(p);
+//   IGL_DEBUG_ASSERT(*p == i, "*p is wrong value. Got %d. Expected %d.", *p, i);
 //
-// Use IGL_VERIFY and IGL_UNEXPECTED to evaluate expressions and catch asserts on debug builds.
-// Typically, you'd wrap an expressions inside an `if` statement with IGL_VERIFY. IGL_UNEXPECTED
-// is for `if` statements that check if an error condition is true. That way, you can catch
-// assertions on debug builds. On release builds, there's no overhead; they simply expand to the
-// original expression:
+// Use IGL_DEBUG_VERIFY and IGL_DEBUG_VERIFY_NOT to evaluate expressions and catch asserts on debug
+// builds. Typically, you'd wrap an expressions inside an `if` statement with IGL_DEBUG_VERIFY.
+// IGL_DEBUG_VERIFY_NOT is for `if` statements that check if an error condition is true. That way,
+// you can catch assertions on debug builds. On release builds, there's no overhead; they simply
+// expand to the original expression:
 //
 //   FILE* fp = std::fopen("test.txt", "r");
-//   if (IGL_VERIFY(fp)) {
+//   if (IGL_DEBUG_VERIFY(fp)) {
 //     printf("Success!\n");
 //   } else {
 //     printf("Failure!\n");
 //   }
 //
 //   void Foo::initialize() {
-//     if (IGL_UNEXPECTED(initialized_)) {
+//     if (IGL_DEBUG_VERIFY_NOT(initialized_)) {
 //       // Initialize should only be called once!
 //       return;
 //     }
@@ -56,6 +56,18 @@
 
 #include <igl/Log.h>
 
+#if IGL_DEBUG || defined(IGL_FORCE_ENABLE_LOGS)
+#define IGL_VERIFY_ENABLED 1
+#else
+#define IGL_VERIFY_ENABLED 0
+#endif
+
+#if IGL_DEBUG
+#define IGL_DEBUG_BREAK_ENABLED 1
+#else
+#define IGL_DEBUG_BREAK_ENABLED 0
+#endif
+
 IGL_API void _IGLDebugBreak();
 
 namespace igl {
@@ -63,88 +75,182 @@ bool isDebugBreakEnabled();
 void setDebugBreakEnabled(bool enabled);
 
 template<typename T>
-static inline const T& _IGLVerify(const T& cond,
-                                  const char* func,
-                                  const char* file,
-                                  int line,
-                                  const char* format,
-                                  ...) {
+[[nodiscard]] static inline const T& _IGLVerify(const T& cond,
+                                                [[maybe_unused]] const char* reason,
+                                                [[maybe_unused]] const char* func,
+                                                [[maybe_unused]] const char* file,
+                                                [[maybe_unused]] int line,
+                                                [[maybe_unused]] const char* format,
+                                                ...) {
+#if IGL_VERIFY_ENABLED
   if (!cond) {
-    IGLLog(IGLLogLevel::LOG_ERROR, "[IGL] Assert failed in '%s' (%s:%d): ", func, file, line);
+    IGLLog(IGLLogError, "[IGL] %s in '%s' (%s:%d): ", reason, func, file, line);
     va_list ap;
     va_start(ap, format);
-    IGLLogV(IGLLogLevel::LOG_ERROR, format, ap);
+    IGLLogV(IGLLogError, format, ap);
     va_end(ap);
-    IGLLog(IGLLogLevel::LOG_ERROR, IGL_NEWLINE);
-    if (igl::isDebugBreakEnabled()) {
-      _IGLDebugBreak();
-    }
+    IGLLog(IGLLogError, IGL_NEWLINE);
+    _IGLDebugBreak();
   }
+#endif // IGL_VERIFY_ENABLED
   return cond;
 }
 } // namespace igl
 
-#if IGL_DEBUG
+#if IGL_VERIFY_ENABLED
 
-#define IGL_UNEXPECTED(cond) \
-  (!::igl::_IGLVerify(0 == !!(cond), IGL_FUNCTION, __FILE__, __LINE__, #cond))
-#define IGL_UNEXPECTED_MSG(cond, format, ...) \
-  (!::igl::_IGLVerify(0 == !!(cond), IGL_FUNCTION, __FILE__, __LINE__, (format), ##__VA_ARGS__))
+#define _IGL_DEBUG_ABORT(cond, format, ...) \
+  (void)::igl::_IGLVerify(                  \
+      cond, "Abort requested", IGL_FUNCTION, __FILE__, __LINE__, (format), ##__VA_ARGS__)
+#define _IGL_DEBUG_ASSERT(cond, format, ...) \
+  (void)::igl::_IGLVerify(                   \
+      cond, "Assert failed", IGL_FUNCTION, __FILE__, __LINE__, (format), ##__VA_ARGS__)
 
-#define IGL_VERIFY(cond) ::igl::_IGLVerify((cond), IGL_FUNCTION, __FILE__, __LINE__, #cond)
-#define IGL_ASSERT(cond) (void)IGL_VERIFY(cond)
-#define IGL_ASSERT_MSG(cond, format, ...) \
-  (void)::igl::_IGLVerify((cond), IGL_FUNCTION, __FILE__, __LINE__, (format), ##__VA_ARGS__)
+#define _IGL_DEBUG_VERIFY(cond, format, ...) \
+  ::igl::_IGLVerify(                         \
+      (cond), "Verify failed", IGL_FUNCTION, __FILE__, __LINE__, (format), ##__VA_ARGS__)
+#define _IGL_DEBUG_VERIFY_NOT(cond, format, ...) \
+  (!::igl::_IGLVerify(                           \
+      0 == !!(cond), "Verify failed", IGL_FUNCTION, __FILE__, __LINE__, (format), ##__VA_ARGS__))
 
 #else
 
-#define IGL_UNEXPECTED(cond) (cond)
-#define IGL_UNEXPECTED_MSG(cond, format, ...) (cond)
-#define IGL_VERIFY(cond) (cond)
-#define IGL_ASSERT(cond) static_cast<void>(0)
-#define IGL_ASSERT_MSG(cond, format, ...) static_cast<void>(0)
+#define _IGL_DEBUG_ABORT(cond, format, ...) static_cast<void>(0)
+#define _IGL_DEBUG_ASSERT(cond, format, ...) static_cast<void>(0)
+#define _IGL_DEBUG_VERIFY(cond, format, ...) (cond)
+#define _IGL_DEBUG_VERIFY_NOT(cond, format, ...) (cond)
 
-#endif // IGL_DEBUG
+#endif // IGL_VERIFY_ENABLED
 
-#define IGL_ASSERT_NOT_REACHED() IGL_ASSERT_MSG(0, "Code should NOT be reached")
-#define IGL_ASSERT_NOT_IMPLEMENTED() IGL_ASSERT_MSG(0, "Code NOT implemented")
+#define IGL_DEBUG_ABORT(format, ...) _IGL_DEBUG_ABORT(false, (format), ##__VA_ARGS__)
+
+#define _IGL_DEBUG_ASSERT_0(cond) _IGL_DEBUG_ASSERT(cond, #cond)
+#define _IGL_DEBUG_ASSERT_1(cond, format, ...) _IGL_DEBUG_ASSERT(cond, (format), ##__VA_ARGS__)
+// Supported variations:
+// IGL_DEBUG_ASSERT(cond)
+// IGL_DEBUG_ASSERT(cond, format, ...)
+#define IGL_DEBUG_ASSERT(...) \
+  _IGL_CALL(IGL_CONCAT(_IGL_DEBUG_ASSERT_, _IGL_HAS_COMMA(__VA_ARGS__)), _IGL_ECHO((__VA_ARGS__)))
+
+#define _IGL_DEBUG_VERIFY_0(cond) _IGL_DEBUG_VERIFY(cond, #cond)
+#define _IGL_DEBUG_VERIFY_1(cond, format, ...) _IGL_DEBUG_VERIFY(cond, (format), ##__VA_ARGS__)
+// Supported variations:
+// IGL_DEBUG_VERIFY(cond)
+// IGL_DEBUG_VERIFY(cond, format, ...)
+#define IGL_DEBUG_VERIFY(...) \
+  _IGL_CALL(IGL_CONCAT(_IGL_DEBUG_VERIFY_, _IGL_HAS_COMMA(__VA_ARGS__)), _IGL_ECHO((__VA_ARGS__)))
+
+#define _IGL_DEBUG_VERIFY_NOT_0(cond) _IGL_DEBUG_VERIFY_NOT(cond, "!(" #cond ")")
+#define _IGL_DEBUG_VERIFY_NOT_1(cond, format, ...) \
+  _IGL_DEBUG_VERIFY_NOT(cond, (format), ##__VA_ARGS__)
+// Supported variations:
+// IGL_DEBUG_VERIFY_NOT(cond)
+// IGL_DEBUG_VERIFY_NOT(cond, format, ...)
+#define IGL_DEBUG_VERIFY_NOT(...)                                            \
+  _IGL_CALL(IGL_CONCAT(_IGL_DEBUG_VERIFY_NOT_, _IGL_HAS_COMMA(__VA_ARGS__)), \
+            _IGL_ECHO((__VA_ARGS__)))
+
+#define IGL_DEBUG_ASSERT_NOT_REACHED() IGL_DEBUG_ABORT("Code should NOT be reached")
+#define IGL_DEBUG_ASSERT_NOT_IMPLEMENTED() IGL_DEBUG_ABORT("Code NOT implemented")
 
 ///--------------------------------------
 /// MARK: - Custom
 
-#if IGL_REPORT_ERROR_ENABLED
-
 #define IGL_ERROR_CATEGORY "IGL"
 
-using IGLReportErrorFunc = void (*)(const char* file,
-                                    const char* func,
-                                    int line,
-                                    const char* category,
-                                    const char* format,
-                                    ...);
-IGL_API void IGLReportErrorSetHandler(IGLReportErrorFunc handler);
-IGL_API IGLReportErrorFunc IGLReportErrorGetHandler(void);
+using IGLSoftErrorFunc = void (*)(const char* file,
+                                  const char* func,
+                                  int line,
+                                  const char* category,
+                                  const char* format,
+                                  ...);
+IGL_API void IGLSetSoftErrorHandler(IGLSoftErrorFunc handler);
+IGL_API IGLSoftErrorFunc IGLGetSoftErrorHandler(void);
+IGL_API void IGLSoftError(const char* file,
+                          const char* func,
+                          int line,
+                          const char* category,
+                          const char* format,
+                          ...);
+namespace igl {
+template<typename T, typename... Args>
+[[nodiscard]] static inline const T& _IGLSoftError(const T& cond,
+                                                   [[maybe_unused]] const char* reason,
+                                                   [[maybe_unused]] const char* func,
+                                                   [[maybe_unused]] const char* file,
+                                                   [[maybe_unused]] int line,
+                                                   [[maybe_unused]] const char* format,
+                                                   [[maybe_unused]] const Args&... args) {
+#if IGL_VERIFY_ENABLED
+  const auto& verifiedCond = _IGLVerify(cond, reason, func, file, line, format, args...);
+#else
+  const auto& verifiedCond = cond;
+#endif // IGL_VERIFY_ENABLED
 
-#define IGL_REPORT_ERROR(cond)                                                                 \
-  do {                                                                                         \
-    if (!IGL_VERIFY(cond)) {                                                                   \
-      IGLReportErrorGetHandler()(__FILE__, IGL_FUNCTION, __LINE__, IGL_ERROR_CATEGORY, #cond); \
-    }                                                                                          \
-  } while (0)
+#if IGL_SOFT_ERROR_ENABLED
+  if (!verifiedCond) {
+    IGLGetSoftErrorHandler()(file, func, line, IGL_ERROR_CATEGORY, format, args...);
+  }
+#endif // IGL_SOFT_ERROR_ENABLED
 
-#define IGL_REPORT_ERROR_MSG(cond, format, ...)                                           \
-  do {                                                                                    \
-    bool cachedCond = (cond);                                                             \
-    IGL_ASSERT_MSG(cachedCond, format, ##__VA_ARGS__);                                    \
-    if (!cachedCond) {                                                                    \
-      IGLReportErrorGetHandler()(                                                         \
-          __FILE__, IGL_FUNCTION, __LINE__, IGL_ERROR_CATEGORY, (format), ##__VA_ARGS__); \
-    }                                                                                     \
-  } while (0)
+  return verifiedCond;
+}
+} // namespace igl
+
+#if IGL_SOFT_ERROR_ENABLED
+
+#define _IGL_SOFT_ERROR(cond, format, ...) \
+  (void)::igl::_IGLSoftError(              \
+      cond, "Soft error", IGL_FUNCTION, __FILE__, __LINE__, (format), ##__VA_ARGS__)
+#define _IGL_SOFT_ASSERT(cond, format, ...) \
+  (void)::igl::_IGLSoftError(               \
+      cond, "Soft assert failed", IGL_FUNCTION, __FILE__, __LINE__, (format), ##__VA_ARGS__)
+
+#define _IGL_SOFT_VERIFY(cond, format, ...) \
+  ::igl::_IGLSoftError(                     \
+      (cond), "Soft verify failed", IGL_FUNCTION, __FILE__, __LINE__, (format), ##__VA_ARGS__)
+#define _IGL_SOFT_VERIFY_NOT(cond, format, ...) \
+  (!::igl::_IGLSoftError(0 == !!(cond),         \
+                         "Soft verify failed",  \
+                         IGL_FUNCTION,          \
+                         __FILE__,              \
+                         __LINE__,              \
+                         (format),              \
+                         ##__VA_ARGS__))
 
 #else
 
-#define IGL_REPORT_ERROR(condition) static_cast<void>(0)
-#define IGL_REPORT_ERROR_MSG(condition, format, ...) static_cast<void>(0)
+#define _IGL_SOFT_ERROR(cond, format, ...) static_cast<void>(0)
+#define _IGL_SOFT_ASSERT(cond, format, ...) static_cast<void>(0)
+#define _IGL_SOFT_VERIFY(cond, format, ...) (cond)
+#define _IGL_SOFT_VERIFY_NOT(cond, format, ...) (cond)
 
-#endif // IGL_REPORT_ERROR_ENABLED
+#endif // IGL_SOFT_ERROR_ENABLED
+
+#define IGL_SOFT_ERROR(format, ...) _IGL_SOFT_ERROR(false, (format), ##__VA_ARGS__)
+
+#define _IGL_SOFT_ASSERT_0(cond) _IGL_SOFT_ASSERT(cond, #cond)
+#define _IGL_SOFT_ASSERT_1(cond, format, ...) _IGL_SOFT_ASSERT(cond, (format), ##__VA_ARGS__)
+// Supported variations:
+// IGL_SOFT_ASSERT(cond)
+// IGL_SOFT_ASSERT(cond, format, ...)
+#define IGL_SOFT_ASSERT(...) \
+  _IGL_CALL(IGL_CONCAT(_IGL_SOFT_ASSERT_, _IGL_HAS_COMMA(__VA_ARGS__)), _IGL_ECHO((__VA_ARGS__)))
+
+#define _IGL_SOFT_VERIFY_0(cond) _IGL_SOFT_VERIFY(cond, #cond)
+#define _IGL_SOFT_VERIFY_1(cond, format, ...) _IGL_SOFT_VERIFY(cond, (format), ##__VA_ARGS__)
+// Supported variations:
+// IGL_SOFT_VERIFY(cond)
+// IGL_SOFT_VERIFY(cond, format, ...)
+#define IGL_SOFT_VERIFY(...) \
+  _IGL_CALL(IGL_CONCAT(_IGL_SOFT_VERIFY_, _IGL_HAS_COMMA(__VA_ARGS__)), _IGL_ECHO((__VA_ARGS__)))
+
+#define _IGL_SOFT_VERIFY_NOT_0(cond) _IGL_SOFT_VERIFY_NOT(cond, "!(" #cond ")")
+#define _IGL_SOFT_VERIFY_NOT_1(cond, format, ...) \
+  _IGL_SOFT_VERIFY_NOT(cond, (format), ##__VA_ARGS__)
+// Supported variations:
+// IGL_SOFT_VERIFY_NOT(cond)
+// IGL_SOFT_VERIFY_NOT(cond, format, ...)
+#define IGL_SOFT_VERIFY_NOT(...)                                            \
+  _IGL_CALL(IGL_CONCAT(_IGL_SOFT_VERIFY_NOT_, _IGL_HAS_COMMA(__VA_ARGS__)), \
+            _IGL_ECHO((__VA_ARGS__)))

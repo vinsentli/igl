@@ -69,7 +69,7 @@ ImageData ImageLoader::loadImageDataFromFile(
     const std::string& fileName,
     std::optional<igl::TextureFormat> preferredFormat) noexcept {
   auto [data, length] = fileLoader_.loadBinaryData(fileName);
-  if (IGL_VERIFY(data && length > 0)) {
+  if (IGL_DEBUG_VERIFY(data && length > 0)) {
     return loadImageDataFromMemory(data.get(), length, preferredFormat);
   }
 
@@ -80,7 +80,7 @@ ImageData ImageLoader::loadImageDataFromMemory(
     const uint8_t* data,
     uint32_t length,
     std::optional<igl::TextureFormat> preferredFormat) noexcept {
-  if (IGL_UNEXPECTED(data == nullptr)) {
+  if (IGL_DEBUG_VERIFY_NOT(data == nullptr)) {
     return {};
   }
 

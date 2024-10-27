@@ -16,15 +16,15 @@ ComputePipelineState::~ComputePipelineState() = default;
 
 Result ComputePipelineState::create(const ComputePipelineDesc& desc) {
   Result result;
-  if (IGL_UNEXPECTED(desc.shaderStages == nullptr)) {
+  if (IGL_DEBUG_VERIFY_NOT(desc.shaderStages == nullptr)) {
     Result::setResult(&result, Result::Code::ArgumentInvalid, "Missing shader stages");
     return result;
   }
-  if (!IGL_VERIFY(desc.shaderStages->getType() == ShaderStagesType::Compute)) {
+  if (!IGL_DEBUG_VERIFY(desc.shaderStages->getType() == ShaderStagesType::Compute)) {
     Result::setResult(&result, Result::Code::ArgumentInvalid, "Shader stages not for compute");
     return result;
   }
-  if (!IGL_VERIFY(desc.shaderStages->getComputeModule())) {
+  if (!IGL_DEBUG_VERIFY(desc.shaderStages->getComputeModule())) {
     Result::setResult(&result, Result::Code::ArgumentInvalid, "Missing compute shader");
     return result;
   }
@@ -35,12 +35,12 @@ Result ComputePipelineState::create(const ComputePipelineDesc& desc) {
     const auto textureUnit = unitSampler.first;
     const auto& imageName = unitSampler.second;
 
-    IGL_ASSERT(!imageName.toString().empty());
+    IGL_DEBUG_ASSERT(!imageName.toString().empty());
     const int loc = reflection_->getIndexByName(imageName);
-    if (IGL_VERIFY(loc >= 0)) {
+    if (IGL_DEBUG_VERIFY(loc >= 0)) {
       GLint unit = 0;
       getContext().getUniformiv(shaderStages_->getProgramID(), loc, &unit);
-      if (IGL_VERIFY(unit >= 0)) {
+      if (IGL_DEBUG_VERIFY(unit >= 0)) {
         imageUnitMap_[textureUnit] = unit;
       } else {
         IGL_LOG_ERROR("Image uniform unit (%s) not found in shader.\n", imageName.c_str());
@@ -54,14 +54,14 @@ Result ComputePipelineState::create(const ComputePipelineDesc& desc) {
     const auto bufferUnit = buffer.first;
     const auto& bufferName = buffer.second;
 
-    IGL_ASSERT(!bufferName.toString().empty());
+    IGL_DEBUG_ASSERT(!bufferName.toString().empty());
     const int loc = reflection_->getIndexByName(bufferName);
-    if (IGL_VERIFY(loc >= 0)) {
+    if (IGL_DEBUG_VERIFY(loc >= 0)) {
       if (const auto& ssboDictionary = reflection_->getShaderStorageBufferObjectDictionary();
           ssboDictionary.find(bufferName) != ssboDictionary.end()) {
         const GLint index = getContext().getProgramResourceIndex(
             shaderStages_->getProgramID(), GL_SHADER_STORAGE_BLOCK, bufferName.c_str());
-        if (IGL_VERIFY(index != GL_INVALID_INDEX)) {
+        if (IGL_DEBUG_VERIFY(index != GL_INVALID_INDEX)) {
           bufferUnitMap_[bufferUnit] = loc;
           usingShaderStorageBuffers_ = true;
         } else {
@@ -70,7 +70,7 @@ Result ComputePipelineState::create(const ComputePipelineDesc& desc) {
       } else {
         GLint unit = 0;
         getContext().getUniformiv(shaderStages_->getProgramID(), loc, &unit);
-        if (IGL_VERIFY(unit >= 0)) {
+        if (IGL_DEBUG_VERIFY(unit >= 0)) {
           bufferUnitMap_[bufferUnit] = loc;
         } else {
           IGL_LOG_ERROR("Buffer uniform unit (%s) not found in shader.\n", bufferName.c_str());

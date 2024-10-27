@@ -55,13 +55,12 @@ EGLint checkForEGLErrors(IGL_MAYBE_UNUSED const char* fileName,
       errorStr = "<unknown EGL error>";
       break;
     }
-    IGL_ASSERT_MSG(false,
-                   "[IGL] EGL error [%s:%zu] in function: %s 0x%04X: %s\n",
-                   fileName,
-                   lineNum,
-                   callerName,
-                   errorCode,
-                   errorStr);
+    IGL_DEBUG_ABORT("[IGL] EGL error [%s:%zu] in function: %s 0x%04X: %s\n",
+                    fileName,
+                    lineNum,
+                    callerName,
+                    errorCode,
+                    errorStr);
   }
   return errorCode;
 }
@@ -122,7 +121,7 @@ std::pair<EGLDisplay, EGLContext> newEGLContext(EGLDisplay display,
   }
 
   if (!config) {
-    IGL_ASSERT_MSG(0, "config is nullptr");
+    IGL_DEBUG_ABORT("config is nullptr");
     return std::make_pair(EGL_NO_DISPLAY, EGL_NO_CONTEXT);
   }
 
@@ -143,7 +142,7 @@ EGLConfig chooseConfig(EGLDisplay display) {
   const EGLBoolean status = eglChooseConfig(display, attribs, &config, 1, &numConfigs);
   CHECK_EGL_ERRORS();
   if (!status) {
-    IGL_ASSERT_MSG(status == EGL_TRUE, "eglChooseConfig failed");
+    IGL_DEBUG_ASSERT(status == EGL_TRUE, "eglChooseConfig failed");
   }
   return config;
 }
@@ -207,9 +206,14 @@ Context::Context(RenderingAPI api,
                  bool offscreen,
                  EGLNativeWindowType window,
                  std::pair<EGLint, EGLint> dimensions) {
+  IGL_DEBUG_ASSERT(
+      (shareContext == EGL_NO_CONTEXT && sharegroup == nullptr) ||
+          (shareContext != EGL_NO_CONTEXT && sharegroup != nullptr &&
+           std::find(sharegroup->begin(), sharegroup->end(), shareContext) != sharegroup->end()),
+      "shareContext and sharegroup values must be consistent");
   EGLConfig config{nullptr};
-  //auto contextDisplay = newEGLContext(getDefaultEGLDisplay(), shareContext, &config);
-//  IGL_ASSERT_MSG(contextDisplay.second != EGL_NO_CONTEXT, "newEGLContext failed");
+  // auto contextDisplay = newEGLContext(getDefaultEGLDisplay(), shareContext, &config);
+  // IGL_DEBUG_ASSERT(contextDisplay.second != EGL_NO_CONTEXT, "newEGLContext failed");
 
   contextOwned_ = false;
   api_ = api;
@@ -246,7 +250,7 @@ Context::Context(RenderingAPI api,
   } else {
     sharegroup_ = std::make_shared<std::vector<EGLContext>>();
   }
-  sharegroup_->push_back(context_);
+  sharegroup_->emplace_back(context_);
 
   initialize();
 }
@@ -440,7 +444,7 @@ EGLImageKHR Context::createImageFromAndroidHardwareBuffer(AHardwareBuffer* hwb) 
 
   this->checkForErrors(__FUNCTION__, __LINE__);
 
-  IGL_REPORT_ERROR(this->isCurrentContext() || this->isCurrentSharegroup());
+  IGL_SOFT_ASSERT(this->isCurrentContext() || this->isCurrentSharegroup());
 
   return eglImage;
 }

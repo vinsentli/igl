@@ -15,9 +15,7 @@ namespace igl::opengl {
 namespace {
 
 void logBlendFactorError(IGL_MAYBE_UNUSED const char* value) {
-  IGL_LOG_ERROR("[IGL] OpenGL does not support blend mode:  %s, setting to GL_ONE instead\n",
-                value);
-  IGL_ASSERT(0);
+  IGL_DEBUG_ABORT("OpenGL does not support blend mode:  %s, setting to GL_ONE instead\n", value);
 }
 
 } // namespace
@@ -102,10 +100,10 @@ GLenum RenderPipelineState::convertBlendFactor(BlendFactor value) {
 }
 
 Result RenderPipelineState::create() {
-  if (IGL_UNEXPECTED(desc_.shaderStages == nullptr)) {
+  if (IGL_DEBUG_VERIFY_NOT(desc_.shaderStages == nullptr)) {
     return Result(Result::Code::ArgumentInvalid, "Missing shader stages");
   }
-  if (!IGL_VERIFY(desc_.shaderStages->getType() == ShaderStagesType::Render)) {
+  if (!IGL_DEBUG_VERIFY(desc_.shaderStages->getType() == ShaderStagesType::Render)) {
     return Result(Result::Code::ArgumentInvalid, "Shader stages not for render");
   }
   const auto& shaderStages = std::static_pointer_cast<ShaderStages>(desc_.shaderStages);
@@ -135,7 +133,7 @@ Result RenderPipelineState::create() {
         if (loc < 0) {
           IGL_LOG_ERROR("Vertex attribute (%s) not found in shader.", attrib.name.c_str());
         }
-        IGL_ASSERT(index < IGL_VERTEX_BUFFER_MAX);
+        IGL_DEBUG_ASSERT(index < IGL_VERTEX_BUFFER_MAX);
         if (index < IGL_VERTEX_BUFFER_MAX) {
           bufferAttribLocations_[index].push_back(loc);
         }
@@ -223,14 +221,13 @@ void RenderPipelineState::bind() {
   if (desc_.shaderStages) {
     const auto& shaderStages = std::static_pointer_cast<ShaderStages>(desc_.shaderStages);
     shaderStages->bind();
-      
-    if (!hasLinkUniformBlockBindingPoint_){
+    if (!uniformBlockBindingPointSet_) {
       for (const auto& binding : uniformBlockBindingMap_) {
         const auto& blockIndex = binding.first;
         const auto& bindingIndex = binding.second;
         getContext().uniformBlockBinding(shaderStages->getProgramID(), blockIndex, bindingIndex);
       }
-      hasLinkUniformBlockBindingPoint_ = true;
+      uniformBlockBindingPointSet_ = true;
     }
   }
 
@@ -272,8 +269,7 @@ void RenderPipelineState::unbind() {
 // associated with the associated buffer.
 // bufferOffset is an offset in bytes to the start of the vertex attributes in the buffer.
 void RenderPipelineState::bindVertexAttributes(size_t bufferIndex, size_t bufferOffset) {
-  IGL_PROFILER_ZONE_GPU_OGL("bindVertexAttributes");
-#if IGL_DEBUG
+#if IGL_VERIFY_ENABLED
   static GLint sMaxNumVertexAttribs = 0;
   if (0 == sMaxNumVertexAttribs) {
     getContext().getIntegerv(GL_MAX_VERTEX_ATTRIBS, &sMaxNumVertexAttribs);
@@ -285,7 +281,7 @@ void RenderPipelineState::bindVertexAttributes(size_t bufferIndex, size_t buffer
   auto& locations = bufferAttribLocations_[bufferIndex];
 
   // attributeList and locations should have an 1-to-1 correspondence
-  IGL_ASSERT(attribList.size() == locations.size());
+  IGL_DEBUG_ASSERT(attribList.size() == locations.size());
 
   for (size_t i = 0, iLen = attribList.size(); i < iLen; i++) {
     auto location = locations[i];
@@ -293,7 +289,7 @@ void RenderPipelineState::bindVertexAttributes(size_t bufferIndex, size_t buffer
       // Location not found
       continue;
     }
-    IGL_ASSERT(location < sMaxNumVertexAttribs);
+    IGL_DEBUG_ASSERT(location < sMaxNumVertexAttribs);
     activeAttributesLocations_.push_back(location);
       
     prePipelineStateAttributesLocations_.erase(std::remove(prePipelineStateAttributesLocations_.begin(),
@@ -404,12 +400,8 @@ std::shared_ptr<IRenderPipelineReflection> RenderPipelineState::renderPipelineRe
 
 void RenderPipelineState::setRenderPipelineReflection(
     const IRenderPipelineReflection& renderPipelineReflection) {
-  IGL_ASSERT_NOT_IMPLEMENTED();
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   (void)renderPipelineReflection;
-}
-
-std::unordered_map<int, size_t>& RenderPipelineState::uniformBlockBindingMap() {
-  return uniformBlockBindingMap_;
 }
 
 } // namespace igl::opengl

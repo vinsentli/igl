@@ -7,6 +7,7 @@
 
 #include "VulkanSwapchain.h"
 
+#include <igl/vulkan/ColorSpace.h>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/VulkanContext.h>
@@ -47,7 +48,7 @@ bool isNativeSwapChainBGR(const std::vector<VkSurfaceFormatKHR>& formats) {
 VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats,
                                            igl::TextureFormat textureFormat,
                                            igl::ColorSpace colorSpace) {
-  IGL_ASSERT(!formats.empty());
+  IGL_DEBUG_ASSERT(!formats.empty());
 
   const bool isNativeSwapchainBGR = isNativeSwapChainBGR(formats);
   auto vulkanTextureFormat = igl::vulkan::textureFormatToVkFormat(textureFormat);
@@ -95,7 +96,7 @@ VkImageUsageFlags chooseUsageFlags(const VulkanFunctionTable& vf,
                                    VkPhysicalDevice pd,
                                    VkSurfaceKHR surface,
                                    VkFormat format,
-                                   VkSurfaceCapabilitiesKHR &caps) {
+                                   VkSurfaceCapabilitiesKHR& caps) {
   VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                                  VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
   VK_ASSERT(vf.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(pd, surface, &caps));
@@ -134,7 +135,7 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
           .name,
       colorSpaceToString(vkColorSpaceToColorSpace(surfaceFormat_.colorSpace)));
 
-  IGL_ASSERT_MSG(
+  IGL_DEBUG_ASSERT(
       ctx.vkSurface_ != VK_NULL_HANDLE,
       "You are trying to create a swapchain but your OS surface is empty. Did you want to "
       "create an offscreen rendering context? If so, set 'width' and 'height' to 0 when you "
@@ -148,35 +149,40 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
                                                       ctx.deviceQueues_.graphicsQueueFamilyIndex,
                                                       ctx.vkSurface_,
                                                       &queueFamilySupportsPresentation));
-    IGL_ASSERT_MSG(queueFamilySupportsPresentation == VK_TRUE,
-                   "The queue family used with the swapchain does not support presentation");
+    IGL_DEBUG_ASSERT(queueFamilySupportsPresentation == VK_TRUE,
+                     "The queue family used with the swapchain does not support presentation");
   }
 #endif
 
-  const VkImageUsageFlags usageFlags =
-      chooseUsageFlags(ctx.vf_, ctx.getVkPhysicalDevice(), ctx.vkSurface_, surfaceFormat_.format, ctx.deviceSurfaceCaps_);
+  const VkImageUsageFlags usageFlags = chooseUsageFlags(ctx.vf_,
+                                                        ctx.getVkPhysicalDevice(),
+                                                        ctx.vkSurface_,
+                                                        surfaceFormat_.format,
+                                                        ctx.deviceSurfaceCaps_);
 
-  const uint32_t swapchainImageCount = chooseSwapImageCount(ctx.deviceSurfaceCaps_);
+  {
+    const uint32_t requestedSwapchainImageCount = chooseSwapImageCount(ctx.deviceSurfaceCaps_);
 
-  VK_ASSERT(ivkCreateSwapchain(&ctx_.vf_,
-                               device_,
-                               ctx.vkSurface_,
-                               swapchainImageCount,
-                               surfaceFormat_,
-                               chooseSwapPresentMode(ctx.devicePresentModes_),
-                               &ctx.deviceSurfaceCaps_,
-                               usageFlags,
-                               ctx.deviceQueues_.graphicsQueueFamilyIndex,
-                               width,
-                               height,
-                               &swapchain_));
+    VK_ASSERT(ivkCreateSwapchain(&ctx_.vf_,
+                                 device_,
+                                 ctx.vkSurface_,
+                                 requestedSwapchainImageCount,
+                                 surfaceFormat_,
+                                 chooseSwapPresentMode(ctx.devicePresentModes_),
+                                 &ctx.deviceSurfaceCaps_,
+                                 usageFlags,
+                                 ctx.deviceQueues_.graphicsQueueFamilyIndex,
+                                 width,
+                                 height,
+                                 &swapchain_));
+  }
   VK_ASSERT(ctx.vf_.vkGetSwapchainImagesKHR(device_, swapchain_, &numSwapchainImages_, nullptr));
   std::vector<VkImage> swapchainImages(numSwapchainImages_);
   swapchainImages.resize(numSwapchainImages_);
   VK_ASSERT(ctx.vf_.vkGetSwapchainImagesKHR(
       device_, swapchain_, &numSwapchainImages_, swapchainImages.data()));
 
-  IGL_ASSERT(numSwapchainImages_ > 0);
+  IGL_DEBUG_ASSERT(numSwapchainImages_ > 0);
 
   // Prevent underflow when doing (frameNumber_ - numSwapchainImages_).
   // Every resource submitted in the frame (frameNumber_ - numSwapchainImages_) or earlier is
@@ -220,18 +226,18 @@ VkImage VulkanSwapchain::getDepthVkImage() const {
   if (!depthTexture_) {
     lazyAllocateDepthBuffer();
   }
-  return depthTexture_->getVulkanImage().getVkImage();
+  return depthTexture_->image_.getVkImage();
 }
 
 VkImageView VulkanSwapchain::getDepthVkImageView() const {
   if (!depthTexture_) {
     lazyAllocateDepthBuffer();
   }
-  return depthTexture_->getVulkanImageView().getVkImageView();
+  return depthTexture_->imageView_.getVkImageView();
 }
 
 void VulkanSwapchain::lazyAllocateDepthBuffer() const {
-  IGL_ASSERT(!depthTexture_);
+  IGL_DEBUG_ASSERT(!depthTexture_);
 
   const VkFormat depthFormat =
 #if IGL_PLATFORM_APPLE
@@ -289,39 +295,19 @@ Result VulkanSwapchain::acquireNextImage() {
   currentSemaphoreIndex_ = currentImageIndex_;
 
   // when timeout is set to UINT64_MAX, we wait until the next image has been acquired
-  VK_ASSERT_RETURN(
+  const auto acquireResult =
       ctx_.vf_.vkAcquireNextImageKHR(device_,
                                      swapchain_,
                                      UINT64_MAX,
                                      acquireSemaphores_[currentImageIndex_].vkSemaphore_,
                                      acquireFences_[currentImageIndex_].vkFence_,
-                                     &currentImageIndex_));
-
-  IGL_ASSERT_MSG(currentImageIndex_ <= numSwapchainImages_,
-                 "currentImageIndex_ is out of range by more than 1 image and this scenario is not "
-                 "yet supported.");
-
-  // The number of swapchain images requested is the _minimum_ number of images that the swapchain
-  // should contain. The actual number of images in the swapchain may be larger, but there isn't an
-  // easy way to query that number. Because of that, if the currentImageIndex_ is out of range
-  // we need to create new semaphores and fences to handle the new images.
-  if (currentImageIndex_ >= numSwapchainImages_) {
-    acquireSemaphores_.emplace_back(
-        ctx_.vf_,
-        device_,
-        false,
-        IGL_FORMAT("Semaphore: swapchain-acquire #{}", currentImageIndex_).c_str());
-
-    acquireFences_.emplace_back(
-        ctx_.vf_,
-        device_,
-        VK_FENCE_CREATE_SIGNALED_BIT,
-        false,
-        IGL_FORMAT("Fence: swapchain-acquire #{}", currentImageIndex_).c_str());
-
-    // The difference between the currentImageIndex_ and numSwapchainImages_ should be at most 1
-    // due to the assert above.
-    ++numSwapchainImages_;
+                                     &currentImageIndex_);
+  if (acquireResult == VK_SUBOPTIMAL_KHR) {
+    IGL_LOG_INFO_ONCE(
+        "vkAcquireNextImageKHR returned VK_SUBOPTIMAL_KHR. The Vulkan swapchain is no longer "
+        "compatible with the surface");
+  } else {
+    VK_ASSERT_RETURN(acquireResult);
   }
 
   // increase the frame number every time we acquire a new swapchain image
@@ -333,17 +319,14 @@ Result VulkanSwapchain::present(VkSemaphore waitSemaphore) {
   IGL_PROFILER_FUNCTION();
 
   IGL_PROFILER_ZONE("vkQueuePresent()", IGL_PROFILER_COLOR_PRESENT);
-  auto ret = ivkQueuePresent(&ctx_.vf_, graphicsQueue_, waitSemaphore, swapchain_, currentImageIndex_);
-  //when screen orientation changed, return VK_SUBOPTIMAL_KHR
-  //https://android-developers.googleblog.com/2020/02/handling-device-orientation-efficiently.html
-  if(VK_SUCCESS != ret && VK_SUBOPTIMAL_KHR != ret){
-      IGL_LOG_ERROR("Vulkan API call failed: %s:%i\n  %s\n  %s\n",
-                    __FILE__,
-                    __LINE__,
-                    "ivkQueuePresent",
-                    ivkGetVulkanResultString(ret));
-      IGL_ASSERT(false);
-      return getResultFromVkResult(ret);
+  const auto presentResult =
+      ivkQueuePresent(&ctx_.vf_, graphicsQueue_, waitSemaphore, swapchain_, currentImageIndex_);
+  if (presentResult == VK_SUBOPTIMAL_KHR) {
+    IGL_LOG_INFO_ONCE(
+        "vkQueuePresent returned VK_SUBOPTIMAL_KHR. The Vulkan swapchain is no longer compatible "
+        "with the surface");
+  } else {
+    VK_ASSERT_RETURN(presentResult);
   }
   IGL_PROFILER_ZONE_END();
 

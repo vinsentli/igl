@@ -60,7 +60,7 @@ void UniformAdapter::setUniform(const UniformDesc& uniformDesc,
                                 const void* data,
                                 Result* outResult) {
   auto location = uniformDesc.location;
-  IGL_ASSERT_MSG(location >= 0, "Invalid uniformDesc->location passed to setUniform");
+  IGL_DEBUG_ASSERT(location >= 0, "Invalid uniformDesc->location passed to setUniform");
 
   // Early out if any of the parameters are invalid.
   if (location < 0 || location >= maxUniforms_ || !data) {
@@ -77,7 +77,7 @@ void UniformAdapter::setUniform(const UniformDesc& uniformDesc,
   length *= uniformDesc.numElements;
 
   // Make sure typeSize is not 0 and is a power of 2
-  if (!IGL_VERIFY((typeSize != 0) && ((typeSize - 1) & typeSize) == 0)) {
+  if (!IGL_DEBUG_VERIFY((typeSize != 0) && ((typeSize - 1) & typeSize) == 0)) {
     Result::setResult(
         outResult, Result::Code::InvalidOperation, "typeSize is 0 or not a power of 2");
     IGL_LOG_INFO_ONCE("IGL WARNING: Invalid typeSize (%zu) is used. Found 0 or not power of 2\n",
@@ -92,7 +92,7 @@ void UniformAdapter::setUniform(const UniformDesc& uniformDesc,
   const std::ptrdiff_t dataOffset = (usedUniformDataBytes_ + (typeSize - 1)) & ~(typeSize - 1);
 
   // Make sure dataOffset is typeSize aligned
-  if (!IGL_VERIFY((dataOffset & (typeSize - 1)) == 0)) {
+  if (!IGL_DEBUG_VERIFY((dataOffset & (typeSize - 1)) == 0)) {
     Result::setResult(
         outResult, Result::Code::InvalidOperation, "dataOffset is not typeSize aligned");
     IGL_LOG_INFO_ONCE(
@@ -121,7 +121,7 @@ void UniformAdapter::setUniform(const UniformDesc& uniformDesc,
   uniformsDirty_[location] = true;
 #endif // IGL_DEBUG
 
-  IGL_ASSERT(uniforms_.size() < maxUniforms_);
+  IGL_DEBUG_ASSERT(uniforms_.size() < maxUniforms_);
   uniforms_.emplace_back(uniformDesc, dataOffset);
   Result::setOk(outResult);
 }
@@ -131,11 +131,11 @@ void UniformAdapter::setUniformBuffer(IBuffer* buffer,
                                       size_t size,
                                       uint32_t bindingIndex,
                                       Result* outResult) {
-  IGL_ASSERT_MSG(bindingIndex <= IGL_UNIFORM_BLOCKS_BINDING_MAX,
-                 "Uniform buffer index %u is beyond max %u",
-                 bindingIndex,
-                 IGL_UNIFORM_BLOCKS_BINDING_MAX);
-  IGL_ASSERT_MSG(buffer, "invalid buffer passed to setUniformBuffer");
+  IGL_DEBUG_ASSERT(bindingIndex <= IGL_UNIFORM_BLOCKS_BINDING_MAX,
+                   "Uniform buffer index %u is beyond max %u",
+                   bindingIndex,
+                   IGL_UNIFORM_BLOCKS_BINDING_MAX);
+  IGL_DEBUG_ASSERT(buffer, "invalid buffer passed to setUniformBuffer");
   if (bindingIndex < IGL_UNIFORM_BLOCKS_BINDING_MAX && buffer) {
     uniformBufferBindingMap_[bindingIndex] = {buffer, offset, size};
     uniformBuffersDirtyMask_ |= 1 << bindingIndex;
@@ -149,13 +149,13 @@ void UniformAdapter::bindToPipeline(IContext& context) {
   // bind uniforms
   for (const auto& uniform : uniforms_) {
     const auto& uniformDesc = uniform.desc;
-    IGL_ASSERT(uniformDesc.location >= 0);
-    IGL_ASSERT_MSG(uniformData_.data(), "Uniform data must be non-null");
+    IGL_DEBUG_ASSERT(uniformDesc.location >= 0);
+    IGL_DEBUG_ASSERT(uniformData_.data(), "Uniform data must be non-null");
     auto* start = uniformData_.data() + uniform.dataOffset;
     if (uniformDesc.numElements > 1 || uniformDesc.type == UniformType::Mat3x3) {
-      IGL_ASSERT_MSG(uniformDesc.elementStride > 0,
-                     "stride has to be larger than 0 for uniform at offset %zu",
-                     uniformDesc.offset);
+      IGL_DEBUG_ASSERT(uniformDesc.elementStride > 0,
+                       "stride has to be larger than 0 for uniform at offset %zu",
+                       uniformDesc.offset);
       UniformBuffer::bindUniformArray(context,
                                       uniformDesc.location,
                                       uniformDesc.type,
@@ -175,12 +175,10 @@ void UniformAdapter::bindToPipeline(IContext& context) {
   for (size_t bindingIndex = 0; bindingIndex < IGL_UNIFORM_BLOCKS_BINDING_MAX; ++bindingIndex) {
     if (uniformBuffersDirtyMask_ & (1 << bindingIndex)) {
       auto uniformBinding = uniformBufferBindingMap_.at(bindingIndex);
-      auto* bufferState = static_cast<UniformBlockBuffer*>(std::get<0>(uniformBinding));
-      auto offset = std::get<1>(uniformBinding);
-      auto size = std::get<2>(uniformBinding);
-      IGL_ASSERT(bufferState);
-      if (offset) {
-        bufferState->bindRange(bindingIndex, offset, size, nullptr);
+      auto* bufferState = static_cast<UniformBlockBuffer*>(uniformBinding.buffer);
+      IGL_DEBUG_ASSERT(bufferState);
+      if (uniformBinding.offset) {
+        bufferState->bindRange(bindingIndex, uniformBinding.offset, uniformBinding.size, nullptr);
       } else {
         bufferState->bindBase(bindingIndex, nullptr);
       }

@@ -33,7 +33,7 @@ if (IGL_WITH_OPENGLES OR IGL_WITH_VULKAN OR IGL_WITH_IGLU OR IGL_WITH_SAMPLES)
   target_link_libraries(IGLLibrary PUBLIC fmt)
 endif()
 
-igl_set_cxxstd(IGLLibrary 17)
+igl_set_cxxstd(IGLLibrary 20)
 igl_set_folder(IGLLibrary "IGL")
 
 #add_subdirectory(glslang)

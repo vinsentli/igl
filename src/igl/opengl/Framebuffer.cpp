@@ -95,9 +95,9 @@ Texture::AttachmentParams defaultWriteAttachmentParams(FramebufferMode mode) {
 
 Texture::AttachmentParams toReadAttachmentParams(const TextureRangeDesc& range,
                                                  FramebufferMode mode) {
-  IGL_ASSERT_MSG(range.numLayers == 1, "range.numLayers must be 1.");
-  IGL_ASSERT_MSG(range.numMipLevels == 1, "range.numMipLevels must be 1.");
-  IGL_ASSERT_MSG(range.numFaces == 1, "range.numFaces must be 1.");
+  IGL_DEBUG_ASSERT(range.numLayers == 1, "range.numLayers must be 1.");
+  IGL_DEBUG_ASSERT(range.numMipLevels == 1, "range.numMipLevels must be 1.");
+  IGL_DEBUG_ASSERT(range.numFaces == 1, "range.numFaces must be 1.");
 
   Texture::AttachmentParams params{};
   params.face = static_cast<uint32_t>(range.face);
@@ -158,7 +158,7 @@ void Framebuffer::attachAsColor(igl::ITexture& texture,
                                 uint32_t index,
                                 const Texture::AttachmentParams& params) const {
   static_cast<Texture&>(texture).attachAsColor(index, params);
-  IGL_ASSERT(index >= 0 && index < kNumCachedStates);
+  IGL_DEBUG_ASSERT(index >= 0 && index < kNumCachedStates);
   colorCachedState_[index].updateCache(params.stereo ? FramebufferMode::Stereo
                                                      : FramebufferMode::Mono,
                                        params.layer,
@@ -204,16 +204,16 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* unused */,
                                            size_t bytesPerRow) const {
   // Only support attachment 0 because that's what glReadPixels supports
   if (index != 0) {
-    IGL_ASSERT_MSG(0, "Invalid index: %d", index);
+    IGL_DEBUG_ABORT("Invalid index: %d", index);
     return;
   }
-  IGL_ASSERT_MSG(range.numFaces == 1, "range.numFaces MUST be 1");
-  IGL_ASSERT_MSG(range.numLayers == 1, "range.numLayers MUST be 1");
-  IGL_ASSERT_MSG(range.numMipLevels == 1, "range.numMipLevels MUST be 1");
+  IGL_DEBUG_ASSERT(range.numFaces == 1, "range.numFaces MUST be 1");
+  IGL_DEBUG_ASSERT(range.numLayers == 1, "range.numLayers MUST be 1");
+  IGL_DEBUG_ASSERT(range.numMipLevels == 1, "range.numMipLevels MUST be 1");
 
   auto itexture = getColorAttachment(index);
   if (itexture == nullptr) {
-    IGL_ASSERT_MSG(0, "The framebuffer does not have any color attachment at index %d", index);
+    IGL_DEBUG_ABORT("The framebuffer does not have any color attachment at index %d", index);
     return;
   }
 
@@ -227,7 +227,7 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* unused */,
   FramebufferDesc desc;
   desc.colorAttachments[0].texture = itexture;
   extraFramebuffer.initialize(desc, &ret);
-  IGL_ASSERT_MSG(ret.isOk(), ret.message.c_str());
+  IGL_DEBUG_ASSERT(ret.isOk(), ret.message.c_str());
 
   extraFramebuffer.bindBufferForRead();
   attachAsColor(*itexture, 0, toReadAttachmentParams(range, FramebufferMode::Mono));
@@ -252,7 +252,7 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* unused */,
       getContext().pixelStorei(GL_PACK_ROW_LENGTH, 0);
     }
     getContext().pixelStorei(GL_PACK_ALIGNMENT,
-                             texture.getAlignment(finalBytesPerRow, range.mipLevel));
+                             texture.getAlignment(finalBytesPerRow, range.mipLevel, range.width));
   }
 
   // Note read out format is based on
@@ -274,61 +274,71 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* unused */,
                                     ? GL_HALF_FLOAT_OES
                                     : GL_HALF_FLOAT;
   if (textureFormat == TextureFormat::RGBA_UInt32) {
-    if (IGL_VERIFY(
+    if (IGL_DEBUG_VERIFY(
             getContext().deviceFeatures().hasTextureFeature(TextureFeatures::TextureInteger))) {
       getContext().readPixels(
           rangeX, rangeY, rangeWidth, rangeHeight, GL_RGBA_INTEGER, GL_UNSIGNED_INT, pixelBytes);
     }
   } else if (textureFormat == TextureFormat::R_UNorm8) {
-    if (IGL_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
+    if (IGL_DEBUG_VERIFY(
+            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
       getContext().readPixels(
           rangeX, rangeY, rangeWidth, rangeHeight, GL_RED, GL_UNSIGNED_BYTE, pixelBytes);
     }
   } else if (textureFormat == TextureFormat::RG_UNorm8) {
-    if (IGL_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
+    if (IGL_DEBUG_VERIFY(
+            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
       getContext().readPixels(
           rangeX, rangeY, rangeWidth, rangeHeight, GL_RG, GL_UNSIGNED_BYTE, pixelBytes);
     }
   } else if (textureFormat == TextureFormat::RGBA_F16) {
-    if (IGL_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat))) {
+    if (IGL_DEBUG_VERIFY(
+            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat))) {
       getContext().readPixels(
           rangeX, rangeY, rangeWidth, rangeHeight, GL_RGBA, kHalfFloatFormat, pixelBytes);
     }
   } else if (textureFormat == TextureFormat::RGB_F16) {
-    if (IGL_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat))) {
+    if (IGL_DEBUG_VERIFY(
+            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat))) {
       getContext().readPixels(
           rangeX, rangeY, rangeWidth, rangeHeight, GL_RGB, kHalfFloatFormat, pixelBytes);
     }
   } else if (textureFormat == TextureFormat::RG_F16) {
-    if (IGL_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat)) &&
-        IGL_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
+    if (IGL_DEBUG_VERIFY(
+            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat)) &&
+        IGL_DEBUG_VERIFY(
+            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
       getContext().readPixels(
           rangeX, rangeY, rangeWidth, rangeHeight, GL_RG, kHalfFloatFormat, pixelBytes);
     }
   } else if (textureFormat == TextureFormat::R_F16) {
-    if (IGL_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat)) &&
-        IGL_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
+    if (IGL_DEBUG_VERIFY(
+            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat)) &&
+        IGL_DEBUG_VERIFY(
+            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
       getContext().readPixels(
           rangeX, rangeY, rangeWidth, rangeHeight, GL_RED, kHalfFloatFormat, pixelBytes);
     }
   } else if (textureFormat == TextureFormat::RGBA_F32) {
-    if (IGL_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFloat))) {
+    if (IGL_DEBUG_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFloat))) {
       getContext().readPixels(
           rangeX, rangeY, rangeWidth, rangeHeight, GL_RGBA, GL_FLOAT, pixelBytes);
     }
   } else if (textureFormat == TextureFormat::RGB_F32) {
-    if (IGL_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFloat))) {
+    if (IGL_DEBUG_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFloat))) {
       getContext().readPixels(
           rangeX, rangeY, rangeWidth, rangeHeight, GL_RGB, GL_FLOAT, pixelBytes);
     }
   } else if (textureFormat == TextureFormat::RG_F32) {
-    if (IGL_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFloat)) &&
-        IGL_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
+    if (IGL_DEBUG_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFloat)) &&
+        IGL_DEBUG_VERIFY(
+            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
       getContext().readPixels(rangeX, rangeY, rangeWidth, rangeHeight, GL_RG, GL_FLOAT, pixelBytes);
     }
   } else if (textureFormat == TextureFormat::R_F32) {
-    if (IGL_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFloat)) &&
-        IGL_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
+    if (IGL_DEBUG_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFloat)) &&
+        IGL_DEBUG_VERIFY(
+            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
       getContext().readPixels(
           rangeX, rangeY, rangeWidth, rangeHeight, GL_RED, GL_FLOAT, pixelBytes);
     }
@@ -346,21 +356,21 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* unused */,
 
   getContext().checkForErrors(nullptr, 0);
   auto error = getContext().getLastError();
-  IGL_ASSERT_MSG(error.isOk(), error.message.c_str());
+  IGL_DEBUG_ASSERT(error.isOk(), error.message.c_str());
 }
 
 void Framebuffer::copyBytesDepthAttachment(ICommandQueue& /* unused */,
                                            void* /*pixelBytes*/,
                                            const TextureRangeDesc& /*range*/,
                                            size_t /*bytesPerRow*/) const {
-  IGL_ASSERT_NOT_IMPLEMENTED();
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
 }
 
 void Framebuffer::copyBytesStencilAttachment(ICommandQueue& /* unused */,
                                              void* /*pixelBytes*/,
                                              const TextureRangeDesc& /*range*/,
                                              size_t /*bytesPerRow*/) const {
-  IGL_ASSERT_NOT_IMPLEMENTED();
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
 }
 
 void Framebuffer::copyTextureColorAttachment(ICommandQueue& /*cmdQueue*/,
@@ -369,7 +379,7 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& /*cmdQueue*/,
                                              const TextureRangeDesc& range) const {
   // Only support attachment 0 because that's what glCopyTexImage2D supports
   if (index != 0 || getColorAttachment(index) == nullptr) {
-    IGL_ASSERT_MSG(0, "Invalid index: %d", index);
+    IGL_DEBUG_ABORT("Invalid index: %d", index);
     return;
   }
 
@@ -431,12 +441,12 @@ std::vector<size_t> CustomFramebuffer::getColorAttachmentIndices() const {
 }
 
 std::shared_ptr<ITexture> CustomFramebuffer::getColorAttachment(size_t index) const {
-  IGL_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
+  IGL_DEBUG_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
   return renderTarget_.colorAttachments[index].texture;
 }
 
 std::shared_ptr<ITexture> CustomFramebuffer::getResolveColorAttachment(size_t index) const {
-  IGL_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
+  IGL_DEBUG_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
   return renderTarget_.colorAttachments[index].resolveTexture;
 }
 
@@ -538,7 +548,7 @@ bool CustomFramebuffer::hasImplicitColorAttachment() const {
 }
 
 void CustomFramebuffer::initialize(const FramebufferDesc& desc, Result* outResult) {
-  if (IGL_UNEXPECTED(isInitialized())) {
+  if (IGL_DEBUG_VERIFY_NOT(isInitialized())) {
     Result::setResult(outResult, Result::Code::RuntimeError, "Framebuffer already initialized.");
     return;
   }
@@ -548,28 +558,28 @@ void CustomFramebuffer::initialize(const FramebufferDesc& desc, Result* outResul
 
   // Restore framebuffer binding
   const FramebufferBindingGuard guard(getContext());
-  if (!desc.debugName.empty() &&
-      getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DebugLabel)) {
-    getContext().objectLabel(
-        GL_FRAMEBUFFER, frameBufferID_, desc.debugName.size(), desc.debugName.c_str());
-  }
   if (hasImplicitColorAttachment()) {
     // Don't generate framebuffer id. Use implicit framebuffer supplied by containing view
     Result::setOk(outResult);
   } else {
-    prepareResource(outResult);
+    prepareResource(desc.debugName, outResult);
   }
 }
 
-void CustomFramebuffer::prepareResource(Result* outResult) {
+void CustomFramebuffer::prepareResource(const std::string& debugName, Result* outResult) {
   // create a new frame buffer if we don't already have one
   getContext().genFramebuffers(1, &frameBufferID_);
-  if (IGL_UNEXPECTED(frameBufferID_ == 0)) {
+  if (IGL_DEBUG_VERIFY_NOT(frameBufferID_ == 0)) {
     Result::setResult(outResult, Result::Code::RuntimeError, "Failed to create framebuffer ID.");
     return;
   }
 
   bindBuffer();
+
+  if (!debugName.empty() &&
+      getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DebugLabel)) {
+    getContext().objectLabel(GL_FRAMEBUFFER, frameBufferID_, debugName.size(), debugName.c_str());
+  }
 
   std::vector<GLenum> drawBuffers;
 
@@ -598,7 +608,7 @@ void CustomFramebuffer::prepareResource(Result* outResult) {
   }
 
   Result result = checkFramebufferStatus(getContext(), false);
-  IGL_ASSERT_MSG(result.isOk(), result.message.c_str());
+  IGL_DEBUG_ASSERT(result.isOk(), result.message.c_str());
   if (outResult) {
     *outResult = result;
   }
@@ -625,7 +635,7 @@ void CustomFramebuffer::prepareResource(Result* outResult) {
     }
   }
   if (createResolveFramebuffer && maskColorResolveAttachments != maskColorAttachments) {
-    IGL_ASSERT_NOT_REACHED();
+    IGL_DEBUG_ASSERT_NOT_REACHED();
     if (outResult) {
       *outResult = igl::Result(igl::Result::Code::ArgumentInvalid,
                                "If resolve texture is specified on a color attachment it must be "
@@ -661,7 +671,7 @@ Viewport CustomFramebuffer::getViewport() const {
   }
 
   if (texture == nullptr) {
-    IGL_ASSERT_MSG(0, "No color/depth attachments in CustomFrameBuffer at index 0");
+    IGL_DEBUG_ABORT("No color/depth attachments in CustomFrameBuffer at index 0");
     return {0, 0, 0, 0};
   }
 
@@ -673,8 +683,8 @@ Viewport CustomFramebuffer::getViewport() const {
 void CustomFramebuffer::bind(const RenderPassDesc& renderPass) const {
   // Cache renderPass for unbind
   renderPass_ = renderPass;
-  IGL_ASSERT_MSG(renderTarget_.mode != FramebufferMode::Multiview,
-                 "FramebufferMode::Multiview not supported");
+  IGL_DEBUG_ASSERT(renderTarget_.mode != FramebufferMode::Multiview,
+                   "FramebufferMode::Multiview not supported");
 
   bindBuffer();
 
@@ -694,12 +704,12 @@ void CustomFramebuffer::bind(const RenderPassDesc& renderPass) const {
     }
 #endif
     const size_t index = i;
-    IGL_ASSERT(index >= 0 && index < renderPass.colorAttachments.size());
+    IGL_DEBUG_ASSERT(index >= 0 && index < renderPass.colorAttachments.size());
     const auto& renderPassAttachment = renderPass.colorAttachments[index];
     // When setting up a framebuffer, we attach textures as though they were a non-array
     // texture with and set layer, mip-level and face equal to 0.
     // If any of these assumptions are not true, we need to reattach with proper values.
-    IGL_ASSERT(index >= 0 && index < kNumCachedStates);
+    IGL_DEBUG_ASSERT(index >= 0 && index < kNumCachedStates);
     if (colorCachedState_[index].needsUpdate(renderTarget_.mode,
                                              renderPassAttachment.layer,
                                              renderPassAttachment.face,
@@ -813,14 +823,14 @@ std::vector<size_t> CurrentFramebuffer::getColorAttachmentIndices() const {
 
 std::shared_ptr<ITexture> CurrentFramebuffer::getColorAttachment(size_t index) const {
   if (index != 0) {
-    IGL_ASSERT_NOT_REACHED();
+    IGL_DEBUG_ASSERT_NOT_REACHED();
   }
   return colorAttachment_;
 }
 
 std::shared_ptr<ITexture> CurrentFramebuffer::getResolveColorAttachment(size_t index) const {
   if (index != 0) {
-    IGL_ASSERT_NOT_REACHED();
+    IGL_DEBUG_ASSERT_NOT_REACHED();
   }
   return colorAttachment_;
 }
@@ -838,15 +848,15 @@ std::shared_ptr<ITexture> CurrentFramebuffer::getStencilAttachment() const {
 }
 
 void CurrentFramebuffer::updateDrawable(std::shared_ptr<ITexture> /*texture*/) {
-  //IGL_ASSERT_NOT_REACHED();
+  //IGL_DEBUG_ASSERT_NOT_REACHED();
 }
 
 void CurrentFramebuffer::updateDrawable(SurfaceTextures /*surfaceTextures*/) {
-  IGL_ASSERT_NOT_REACHED();
+  IGL_DEBUG_ASSERT_NOT_REACHED();
 }
 
 void CurrentFramebuffer::updateResolveAttachment(std::shared_ptr<ITexture> /*texture*/) {
-  IGL_ASSERT_NOT_REACHED();
+  IGL_DEBUG_ASSERT_NOT_REACHED();
 }
 
 Viewport CurrentFramebuffer::getViewport() const {

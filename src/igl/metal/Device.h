@@ -34,6 +34,7 @@ class Device : public IDevice {
                                                                        outResult) override;
   void destroy(igl::BindGroupTextureHandle handle) override;
   void destroy(igl::BindGroupBufferHandle handle) override;
+  void destroy(igl::SamplerHandle handle) override;
 
   // Command Queue
   std::shared_ptr<ICommandQueue> createCommandQueue(const CommandQueueDesc& desc,
@@ -89,6 +90,7 @@ class Device : public IDevice {
   [[nodiscard]] TextureFormatCapabilities getTextureFormatCapabilities(
       TextureFormat format) const override;
   [[nodiscard]] ShaderVersion getShaderVersion() const override;
+  [[nodiscard]] BackendVersion getBackendVersion() const override;
 
   // Device Statistics
   [[nodiscard]] size_t getCurrentDrawCount() const override;

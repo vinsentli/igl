@@ -67,9 +67,10 @@ class PlatformDevice : public IPlatformDevice {
   [[nodiscard]] int getFenceFdFromSubmitHandle(SubmitHandle handle) const;
 #endif
 
-  void clear(){
-      nativeDrawableTextures_.clear();
-      nativeDepthTexture_ = nullptr;
+  /// Clear the cached textures
+  void clear() {
+    nativeDrawableTextures_.clear();
+    nativeDepthTexture_ = nullptr;
   }
 
  protected:

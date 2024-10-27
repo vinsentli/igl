@@ -118,6 +118,51 @@ ShaderVersion DeviceFeatureSet::getShaderVersion() const {
   return ::igl::opengl::getShaderVersion(version_);
 }
 
+BackendVersion DeviceFeatureSet::getBackendVersion() const {
+  switch (version_) {
+  case GLVersion::v1_1:
+    return {BackendFlavor::OpenGL, 1, 1};
+  case GLVersion::v2_0:
+    return {BackendFlavor::OpenGL, 2, 0};
+  case GLVersion::v2_1:
+    return {BackendFlavor::OpenGL, 2, 1};
+  case GLVersion::v3_0:
+    return {BackendFlavor::OpenGL, 3, 0};
+  case GLVersion::v3_1:
+    return {BackendFlavor::OpenGL, 3, 1};
+  case GLVersion::v3_2:
+    return {BackendFlavor::OpenGL, 3, 2};
+  case GLVersion::v3_3:
+    return {BackendFlavor::OpenGL, 3, 3};
+  case GLVersion::v4_0:
+    return {BackendFlavor::OpenGL, 4, 0};
+  case GLVersion::v4_1:
+    return {BackendFlavor::OpenGL, 4, 1};
+  case GLVersion::v4_2:
+    return {BackendFlavor::OpenGL, 4, 2};
+  case GLVersion::v4_3:
+    return {BackendFlavor::OpenGL, 4, 3};
+  case GLVersion::v4_4:
+    return {BackendFlavor::OpenGL, 4, 4};
+  case GLVersion::v4_5:
+    return {BackendFlavor::OpenGL, 4, 5};
+  case GLVersion::v4_6:
+    return {BackendFlavor::OpenGL, 4, 6};
+  case GLVersion::v2_0_ES:
+    return {BackendFlavor::OpenGL_ES, 2, 0};
+  case GLVersion::v3_0_ES:
+    return {BackendFlavor::OpenGL_ES, 3, 0};
+  case GLVersion::v3_1_ES:
+    return {BackendFlavor::OpenGL_ES, 3, 1};
+  case GLVersion::v3_2_ES:
+    return {BackendFlavor::OpenGL_ES, 3, 2};
+  case GLVersion::NotAvailable:
+    IGL_DEBUG_ASSERT_NOT_REACHED();
+    return {usesOpenGLES() ? BackendFlavor::OpenGL_ES : BackendFlavor::OpenGL, 2, 0};
+  }
+  IGL_UNREACHABLE_RETURN({});
+}
+
 bool DeviceFeatureSet::isSupported(const std::string& extensionName) const {
   if (!extensions_.empty()) {
     return extensions_.find(extensionName) != std::string::npos;
@@ -799,7 +844,7 @@ bool DeviceFeatureSet::isTextureFeatureSupported(TextureFeatures feature) const 
 
 bool DeviceFeatureSet::hasExtension(Extensions extension) const {
   const uint64_t extensionIndex = static_cast<uint64_t>(extension);
-  IGL_ASSERT(extensionIndex < 64);
+  IGL_DEBUG_ASSERT(extensionIndex < 64);
   const uint64_t extensionBit = 1ull << extensionIndex;
   if ((extensionCacheInitialized_ & extensionBit) == 0) {
     if (isExtensionSupported(extension)) {
@@ -813,7 +858,7 @@ bool DeviceFeatureSet::hasExtension(Extensions extension) const {
 
 bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
   const uint64_t featureIndex = static_cast<uint64_t>(feature);
-  IGL_ASSERT(featureIndex < 64);
+  IGL_DEBUG_ASSERT(featureIndex < 64);
   const uint64_t featureBit = 1ull << featureIndex;
   if ((featureCacheInitialized_ & featureBit) == 0) {
     if (isFeatureSupported(feature)) {
@@ -827,7 +872,7 @@ bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
 
 bool DeviceFeatureSet::hasInternalFeature(InternalFeatures feature) const {
   const uint32_t featureIndex = static_cast<uint32_t>(feature);
-  IGL_ASSERT(featureIndex < 32);
+  IGL_DEBUG_ASSERT(featureIndex < 32);
   const uint32_t featureBit = 1u << featureIndex;
   if ((internalFeatureCacheInitialized_ & featureBit) == 0) {
     if (isInternalFeatureSupported(feature)) {
@@ -841,7 +886,7 @@ bool DeviceFeatureSet::hasInternalFeature(InternalFeatures feature) const {
 
 bool DeviceFeatureSet::hasTextureFeature(TextureFeatures feature) const {
   const uint64_t featureIndex = static_cast<uint64_t>(feature);
-  IGL_ASSERT(featureIndex < 64);
+  IGL_DEBUG_ASSERT(featureIndex < 64);
   const uint64_t featureBit = 1ull << featureIndex;
   if ((textureFeatureCacheInitialized_ & featureBit) == 0) {
     if (isTextureFeatureSupported(feature)) {
@@ -1075,9 +1120,9 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
     result = 0;
     return true;
   default:
-    IGL_ASSERT_MSG(0,
-                   "invalid feature limit query: feature limit query is not implemented or does "
-                   "not exist\n");
+    IGL_DEBUG_ABORT(
+        "invalid feature limit query: feature limit query is not implemented or does "
+        "not exist\n");
     return false;
   }
 }

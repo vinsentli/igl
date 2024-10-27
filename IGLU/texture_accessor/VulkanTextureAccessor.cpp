@@ -17,7 +17,8 @@
 #if defined(IGL_CMAKE_BUILD)
 #include <igl/IGLSafeC.h>
 #else
-#include <secure_lib/secure_string.h>
+
+#include <cstddef>
 #endif
 
 namespace iglu::textureaccessor {
@@ -33,13 +34,14 @@ void VulkanTextureAccessor::assignTexture(std::shared_ptr<igl::ITexture> texture
   }
 #if IGL_BACKEND_VULKAN
   auto* vkTexture = static_cast<igl::vulkan::Texture*>(texture.get());
-  const auto& vkImage = vkTexture->getVulkanTexture().getVulkanImage();
+  const igl::vulkan::VulkanImage& vkImage = vkTexture->getVulkanTexture().image_;
   vkImage_ = vkImage.getVkImage();
   ctx_ = vkImage.ctx_;
   const auto textureFormatProperties =
       igl::TextureFormatProperties::fromTextureFormat(texture->getFormat());
-  numBytesRequired_ = textureFormatProperties.getBytesPerRow(texture->getSize().width) *
-                      textureFormatProperties.getRows(texture->getFullRange());
+  numBytesRequired_ =
+      static_cast<size_t>(textureFormatProperties.getBytesPerRow(texture->getSize().width) *
+                          textureFormatProperties.getRows(texture->getFullRange()));
 
   textureWidth_ = texture->getSize().width;
   textureHeight_ = texture->getSize().height;
@@ -62,7 +64,7 @@ void VulkanTextureAccessor::requestBytes(igl::ICommandQueue& /*commandQueue*/,
     latestBytesRead_.resize(numBytesRequired_);
   }
 
-  IGL_ASSERT_MSG(texture_ != nullptr, "texture_ is nullptr");
+  IGL_DEBUG_ASSERT(texture_ != nullptr, "texture_ is nullptr");
 
   status_ = RequestStatus::Ready;
 }
@@ -89,7 +91,7 @@ size_t VulkanTextureAccessor::copyBytes(unsigned char* ptr, size_t length) {
 
 RequestStatus VulkanTextureAccessor::getRequestStatus() {
   return status_;
-};
+}
 
 std::vector<unsigned char>& VulkanTextureAccessor::getBytes() {
   copyBytes(latestBytesRead_.data(), latestBytesRead_.size());

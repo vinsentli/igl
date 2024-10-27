@@ -62,7 +62,7 @@ static std::string getPrecisionProlog(ShaderPrecision precision) {
 #else
   return std::string();
 #endif
-};
+}
 
 static std::string getVersionProlog() {
 #if IGL_OPENGL_ES
@@ -70,7 +70,7 @@ static std::string getVersionProlog() {
 #else
   return std::string("#version 410\n");
 #endif
-};
+}
 
 static std::string getMetalShaderSource(int metalShaderIdx) {
   switch (metalShaderIdx) {
@@ -240,7 +240,7 @@ static std::unique_ptr<IShaderStages> createShaderStagesForBackend(const IDevice
                                                                    int programIndex) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
-    IGL_ASSERT_NOT_REACHED();
+    IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
   case igl::BackendType::Vulkan:
     return igl::ShaderStagesCreator::fromModuleStringInput(
@@ -329,16 +329,15 @@ void MRTSession::initialize() noexcept {
   renderPassMRT_.colorAttachments.resize(2);
   renderPassMRT_.colorAttachments[0].loadAction = LoadAction::Clear;
   renderPassMRT_.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPassMRT_.colorAttachments[0].clearColor = getPlatform().getDevice().backendDebugColor();
+  renderPassMRT_.colorAttachments[0].clearColor = getPreferredClearColor();
   renderPassMRT_.colorAttachments[1].loadAction = LoadAction::Clear;
   renderPassMRT_.colorAttachments[1].storeAction = StoreAction::Store;
-  renderPassMRT_.colorAttachments[1].clearColor = getPlatform().getDevice().backendDebugColor();
+  renderPassMRT_.colorAttachments[1].clearColor = getPreferredClearColor();
 
   renderPassDisplayLast_.colorAttachments.resize(1);
   renderPassDisplayLast_.colorAttachments[0].loadAction = LoadAction::Clear;
   renderPassDisplayLast_.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPassDisplayLast_.colorAttachments[0].clearColor =
-      getPlatform().getDevice().backendDebugColor();
+  renderPassDisplayLast_.colorAttachments[0].clearColor = getPreferredClearColor();
 }
 
 void MRTSession::update(const igl::SurfaceTextures surfaceTextures) noexcept {

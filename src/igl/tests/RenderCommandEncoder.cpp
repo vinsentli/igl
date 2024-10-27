@@ -196,8 +196,8 @@ class RenderCommandEncoderTest : public ::testing::Test {
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
     ASSERT_TRUE(depthStencilState_ != nullptr);
 
-    bindGroupTexture_ =
-        iglDev_->createBindGroup(igl::BindGroupTextureDesc{{texture_}, {samp_}}, nullptr, &ret);
+    bindGroupTexture_ = iglDev_->createBindGroup(
+        igl::BindGroupTextureDesc{{texture_}, {samp_}, "Offscreen texture test"}, nullptr, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   }
 
@@ -585,6 +585,7 @@ TEST_F(RenderCommandEncoderTest, shouldDrawTriangleStrip) {
   );
 
   encodeAndSubmit([this](const std::unique_ptr<igl::IRenderCommandEncoder>& encoder) {
+    encoder->insertDebugEventLabel("Rendering a triangle strip...");
     encoder->bindRenderPipelineState(renderPipelineState_TriangleStrip_);
     encoder->draw(4);
   });
@@ -638,6 +639,14 @@ TEST_F(RenderCommandEncoderTest, shouldNotDraw) {
 }
 
 TEST_F(RenderCommandEncoderTest, shouldDrawATriangleBindGroup) {
+#if IGL_PLATFORM_APPLE
+  if (iglDev_->getBackendType() == igl::BackendType::Vulkan) {
+    // @fb-only
+    GTEST_SKIP() << "Broken on macOS arm64";
+    return;
+  }
+#endif
+
   initializeBuffers(
       // clang-format off
       {
@@ -654,6 +663,7 @@ TEST_F(RenderCommandEncoderTest, shouldDrawATriangleBindGroup) {
 
   encodeAndSubmit(
       [this](const std::unique_ptr<igl::IRenderCommandEncoder>& encoder) {
+        encoder->insertDebugEventLabel("Rendering a triangle...");
         encoder->bindRenderPipelineState(renderPipelineState_Triangle_);
         encoder->draw(3);
       },

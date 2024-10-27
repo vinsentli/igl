@@ -65,7 +65,7 @@ bool XrSwapchainProvider::initialize() noexcept {
                      ? std::vector<int64_t>{swapchainImageInfo_.colorFormat}
                      : impl_->preferredColorFormats());
   if (swapchainImageInfo_.colorFormat == impl::kSwapchainImageInvalidFormat) {
-    IGL_ASSERT_MSG(false, "No supported color format found");
+    IGL_DEBUG_ABORT("No supported color format found");
     return false;
   }
 
@@ -78,7 +78,7 @@ bool XrSwapchainProvider::initialize() noexcept {
                      ? std::vector<int64_t>{swapchainImageInfo_.depthFormat}
                      : impl_->preferredDepthFormats());
   if (swapchainImageInfo_.depthFormat == impl::kSwapchainImageInvalidFormat) {
-    IGL_ASSERT_MSG(false, "No supported depth format found");
+    IGL_DEBUG_ABORT("No supported depth format found");
     return false;
   }
 
@@ -105,7 +105,7 @@ XrSwapchain XrSwapchainProvider::createXrSwapchain(XrSwapchainUsageFlags extraUs
                                                      .arraySize = numViews_,
                                                      .mipCount = 1};
 
-  XrSwapchain swapchain;
+  XrSwapchain swapchain = nullptr;
   XR_CHECK(xrCreateSwapchain(session_, &swapChainCreateInfo, &swapchain));
   IGL_LOG_INFO("XrSwapchain created\n");
   IGL_LOG_INFO("XrSwapchain image width: %d\n", swapchainImageInfo_.imageWidth);

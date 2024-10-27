@@ -17,10 +17,10 @@ igl::Result upload(const std::vector<id<MTLBuffer>>& buffers,
                    const igl::BufferRange& range,
                    MTLResourceOptions resourceOptions,
                    igl::BufferDesc::BufferAPIHint acceptedApiHints) {
-  IGL_ASSERT(bufferIdx < buffers.size());
+  IGL_DEBUG_ASSERT(bufferIdx < buffers.size());
   const auto& buffer = buffers[bufferIdx];
   auto length = [buffer length];
-  if (!IGL_VERIFY(range.offset + range.size <= length)) {
+  if (!IGL_DEBUG_VERIFY(range.offset + range.size <= length)) {
     return igl::Result(igl::Result::Code::ArgumentOutOfRange);
   }
 
@@ -55,7 +55,7 @@ void* map(const std::vector<id<MTLBuffer>>& buffers,
     return nullptr;
   }
 
-  IGL_ASSERT(bufferIdx < buffers.size());
+  IGL_DEBUG_ASSERT(bufferIdx < buffers.size());
   const auto& buffer = buffers[bufferIdx];
   if ([buffer length] < (range.size + range.offset)) {
     igl::Result::setResult(outResult,
@@ -77,7 +77,7 @@ igl::Result copyFromPreviousBufferInstance(std::vector<id<MTLBuffer>>& buffers,
   }
 
   const size_t prevIdx = bufferIdx == 0 ? buffers.size() - 1 : bufferIdx - 1;
-  IGL_ASSERT([buffers[bufferIdx] length] == [buffers[prevIdx] length]);
+  IGL_DEBUG_ASSERT([buffers[bufferIdx] length] == [buffers[prevIdx] length]);
 
   auto length = [buffers[bufferIdx] length];
   auto* srcContents = [buffers[prevIdx] contents];
@@ -155,7 +155,7 @@ size_t Buffer::getSizeInBytes() const {
 
 uint64_t Buffer::gpuAddress(size_t /*offset*/) const {
   // TODO: implement via gpuResourceID
-  IGL_ASSERT_NOT_IMPLEMENTED();
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   return 0;
 }
 
@@ -195,23 +195,23 @@ Result RingBuffer::upload(const void* data, const BufferRange& range) {
 }
 
 void* RingBuffer::map(const BufferRange& /* unused */, Result* /* unused */) {
-  IGL_ASSERT_MSG(0, "map() operation not supported for RingBuffer");
+  IGL_DEBUG_ABORT("map() operation not supported for RingBuffer");
   return nullptr;
 }
 
 void RingBuffer::unmap() {
-  IGL_ASSERT_MSG(0, "unmap() operation not supported for RingBuffer");
+  IGL_DEBUG_ABORT("unmap() operation not supported for RingBuffer");
 }
 
 id<MTLBuffer> RingBuffer::get() {
   auto bufferIdx = syncManager_->getCurrentInFlightBufferIndex();
-  IGL_ASSERT(bufferIdx < mtlBuffers_.size());
+  IGL_DEBUG_ASSERT(bufferIdx < mtlBuffers_.size());
   if (bufferIdx != lastUpdatedBufferIdx_) {
     // client hasn't updated the buffer at this idx; Update from the previous buffer instance
     auto result =
         copyFromPreviousBufferInstance(mtlBuffers_, bufferIdx, resourceOptions_, acceptedApiHints_);
     if (!result.isOk()) {
-      IGL_ASSERT_MSG(0, "Failed to copy buffer");
+      IGL_DEBUG_ABORT("Failed to copy buffer");
       return nullptr;
     }
 

@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// @MARK:COVERAGE_EXCLUDE_FILE
+
 #include <IGLU/sentinel/Device.h>
 
 #include <IGLU/sentinel/Assert.h>
@@ -38,6 +40,11 @@ bool Device::getFeatureLimits(igl::DeviceFeatureLimits /*featureLimits*/,
 }
 
 igl::ShaderVersion Device::getShaderVersion() const {
+  IGLU_SENTINEL_ASSERT_IF_NOT(shouldAssert_);
+  return {};
+}
+
+igl::BackendVersion Device::getBackendVersion() const {
   IGLU_SENTINEL_ASSERT_IF_NOT(shouldAssert_);
   return {};
 }
@@ -173,6 +180,10 @@ void Device::destroy(igl::BindGroupTextureHandle /*handle*/) {
 }
 
 void Device::destroy(igl::BindGroupBufferHandle /*handle*/) {
+  IGLU_SENTINEL_ASSERT_IF_NOT(shouldAssert_);
+}
+
+void Device::destroy(igl::SamplerHandle /*handle*/) {
   IGLU_SENTINEL_ASSERT_IF_NOT(shouldAssert_);
 }
 

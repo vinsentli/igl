@@ -64,7 +64,11 @@ class RenderCommandAdapter final : public WithContext {
   void setIndexBuffer(Buffer& buffer);
 
   void clearUniformBuffers();
-  void setUniformBuffer(Buffer* buffer, size_t offset, size_t size, uint32_t index, Result* outResult = nullptr);
+  void setUniformBuffer(Buffer* buffer,
+                        size_t offset,
+                        size_t size,
+                        uint32_t index,
+                        Result* outResult = nullptr);
   void setUniform(const UniformDesc& uniformDesc, const void* data, Result* outResult = nullptr);
 
   void clearVertexTexture();
@@ -103,7 +107,7 @@ class RenderCommandAdapter final : public WithContext {
                   Result* outResult);
 
   [[nodiscard]] const igl::IRenderPipelineState& pipelineState() const {
-    IGL_ASSERT_MSG(pipelineState_, "No rendering pipeline is bound");
+    IGL_DEBUG_ASSERT(pipelineState_, "No rendering pipeline is bound");
     return *pipelineState_;
   }
 
@@ -115,7 +119,6 @@ class RenderCommandAdapter final : public WithContext {
   void willDraw();
   void didDraw();
   void unbindVertexAttributes();
-  void unbindResources();
 
   void bindBufferWithShaderStorageBufferOverride(Buffer& buffer,
                                                  GLenum overrideTargetForShaderStorageBuffer);

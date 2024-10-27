@@ -11,6 +11,7 @@
 
 #include <igl/CommandBuffer.h>
 #include <igl/RenderPass.h>
+#include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/ShellParams.h>
 
 namespace igl::shell {
@@ -42,7 +43,7 @@ void ImguiSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
   renderPassDesc.colorAttachments.resize(1);
   renderPassDesc.colorAttachments[0].loadAction = igl::LoadAction::Clear;
   renderPassDesc.colorAttachments[0].storeAction = igl::StoreAction::Store;
-  renderPassDesc.colorAttachments[0].clearColor = getPlatform().getDevice().backendDebugColor();
+  renderPassDesc.colorAttachments[0].clearColor = getPreferredClearColor();
   auto encoder = cmdBuffer->createRenderCommandEncoder(renderPassDesc, _outputFramebuffer);
 
   { // Draw using ImGui every frame

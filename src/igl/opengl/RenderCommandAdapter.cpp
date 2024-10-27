@@ -55,7 +55,7 @@ void RenderCommandAdapter::initialize(const RenderPassDesc& renderPass,
                                       Result* outResult) {
   cachedUnbindPolicy_ = getContext().getUnbindPolicy();
 
-  if (!IGL_VERIFY(framebuffer)) {
+  if (!IGL_DEBUG_VERIFY(framebuffer)) {
     Result::setResult(outResult, Result::Code::ArgumentNull, "framebuffer is null");
     return;
   }
@@ -66,7 +66,7 @@ void RenderCommandAdapter::initialize(const RenderPassDesc& renderPass,
   openglFramebuffer.bind(renderPass);
 
   auto viewport = openglFramebuffer.getViewport();
-  IGL_ASSERT(!(viewport.width < 0.f) && !(viewport.height < 0.f));
+  IGL_DEBUG_ASSERT(!(viewport.width < 0.f) && !(viewport.height < 0.f));
   setViewport(viewport);
   Result::setOk(outResult);
 }
@@ -114,8 +114,8 @@ void RenderCommandAdapter::setVertexBuffer(Buffer& buffer,
                                            size_t offset,
                                            size_t index,
                                            Result* outResult) {
-  IGL_ASSERT_MSG(index < IGL_VERTEX_BUFFER_MAX,
-                 "Buffer index is beyond max, may want to increase limit");
+  IGL_DEBUG_ASSERT(index < IGL_VERTEX_BUFFER_MAX,
+                   "Buffer index is beyond max, may want to increase limit");
   if (index < IGL_VERTEX_BUFFER_MAX) {
     vertexBuffers_[index] = {&buffer, offset};
     SET_DIRTY(vertexBuffersDirty_, index);
@@ -153,11 +153,11 @@ void RenderCommandAdapter::clearVertexTexture() {
 }
 
 void RenderCommandAdapter::setVertexTexture(ITexture* texture, size_t index, Result* outResult) {
-  if (!IGL_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
+  if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid);
     return;
   }
-  if (vertexTextureStates_[index].first != texture){
+  if (vertexTextureStates_[index].first != texture) {
     vertexTextureStates_[index].first = texture;
     SET_DIRTY(vertexTextureStatesDirty_, index);
   }
@@ -167,7 +167,7 @@ void RenderCommandAdapter::setVertexTexture(ITexture* texture, size_t index, Res
 void RenderCommandAdapter::setVertexSamplerState(ISamplerState* samplerState,
                                                  size_t index,
                                                  Result* outResult) {
-  if (!IGL_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
+  if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid);
     return;
   }
@@ -184,11 +184,11 @@ void RenderCommandAdapter::clearFragmentTexture() {
 }
 
 void RenderCommandAdapter::setFragmentTexture(ITexture* texture, size_t index, Result* outResult) {
-  if (!IGL_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
+  if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid);
     return;
   }
-  if (fragmentTextureStates_[index].first != texture){
+  if (fragmentTextureStates_[index].first != texture) {
     fragmentTextureStates_[index].first = texture;
     SET_DIRTY(fragmentTextureStatesDirty_, index);
   }
@@ -198,11 +198,11 @@ void RenderCommandAdapter::setFragmentTexture(ITexture* texture, size_t index, R
 void RenderCommandAdapter::setFragmentSamplerState(ISamplerState* samplerState,
                                                    size_t index,
                                                    Result* outResult) {
-  if (!IGL_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
+  if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid);
     return;
   }
-  if (fragmentTextureStates_[index].second != samplerState){
+  if (fragmentTextureStates_[index].second != samplerState) {
     fragmentTextureStates_[index].second = samplerState;
     SET_DIRTY(fragmentTextureStatesDirty_, index);
   }
@@ -214,7 +214,7 @@ void RenderCommandAdapter::clearDependentResources(
     const std::shared_ptr<IRenderPipelineState>& newValue,
     Result* outResult) {
   auto* curStateOpenGL = static_cast<opengl::RenderPipelineState*>(pipelineState_.get());
-  if (!IGL_VERIFY(curStateOpenGL)) {
+  if (!IGL_DEBUG_VERIFY(curStateOpenGL)) {
     Result::setResult(outResult, Result::Code::RuntimeError, "pipeline state is null");
     return;
   }
@@ -263,7 +263,7 @@ void RenderCommandAdapter::drawArraysIndirect(GLenum mode,
     bindBufferWithShaderStorageBufferOverride(indirectBuffer, GL_DRAW_INDIRECT_BUFFER);
     getContext().drawArraysIndirect(toMockWireframeMode(mode), indirectBufferOffset);
   } else {
-    IGL_ASSERT_NOT_IMPLEMENTED();
+    IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   }
   didDraw();
 }
@@ -273,7 +273,11 @@ void RenderCommandAdapter::drawArraysInstanced(GLenum mode,
                                                GLsizei count,
                                                GLsizei instancecount) {
   willDraw();
-  getContext().drawArraysInstanced(toMockWireframeMode(mode), first, count, instancecount);
+  if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DrawArraysInstanced)) {
+    getContext().drawArraysInstanced(toMockWireframeMode(mode), first, count, instancecount);
+  } else {
+    IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
+  }
   didDraw();
 }
 
@@ -306,7 +310,7 @@ void RenderCommandAdapter::drawElementsIndirect(GLenum mode,
     bindBufferWithShaderStorageBufferOverride(indirectBuffer, GL_DRAW_INDIRECT_BUFFER);
     getContext().drawElementsIndirect(toMockWireframeMode(mode), indexType, indirectBufferOffset);
   } else {
-    IGL_ASSERT_NOT_IMPLEMENTED();
+    IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   }
   didDraw();
 }
@@ -431,7 +435,7 @@ void RenderCommandAdapter::willDraw() {
       const auto* stages = pipelineState->getShaderStages();
       if (stages) {
         const auto result = stages->validate();
-        IGL_ASSERT_MSG(result.isOk(), result.message.c_str());
+        IGL_DEBUG_ASSERT(result.isOk(), result.message.c_str());
       }
     }
   }
@@ -475,29 +479,6 @@ void RenderCommandAdapter::unbindVertexAttributes() {
   auto* pipelineState = static_cast<RenderPipelineState*>(pipelineState_.get());
   if (pipelineState) {
     pipelineState->unbindVertexAttributes();
-  }
-}
-
-void RenderCommandAdapter::unbindResources() {
-  unbindTextures(getContext(), fragmentTextureStates_, fragmentTextureStatesDirty_);
-  unbindTextures(getContext(), vertexTextureStates_, vertexTextureStatesDirty_);
-
-  // Restore to default active texture
-  getContext().activeTexture(GL_TEXTURE0);
-
-  // TODO: unbind uniform blocks when we add support?
-
-  auto* depthStencilState = static_cast<DepthStencilState*>(depthStencilState_.get());
-  if (depthStencilState) {
-    depthStencilState->unbind();
-    setDirty(StateMask::DEPTH_STENCIL);
-  }
-
-  auto* pipelineState = static_cast<RenderPipelineState*>(pipelineState_.get());
-  if (pipelineState) {
-    unbindVertexAttributes();
-    pipelineState->unbind();
-    setDirty(StateMask::PIPELINE);
   }
 }
 

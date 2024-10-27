@@ -33,8 +33,9 @@ class ITrackedResource {
    * @brief initResourceTracker() sets up tracking with the tracker
    * When the resource is destroyed, it will automatically deregister itself with the tracker
    */
-  void initResourceTracker(std::shared_ptr<IResourceTracker> tracker, const std::string & name = "") {
-    if (IGL_VERIFY(!resourceTracker_)) {
+  void initResourceTracker(std::shared_ptr<IResourceTracker> tracker,
+                           const std::string& name = "") {
+    if (IGL_DEBUG_VERIFY(!resourceTracker_)) {
       resourceTracker_ = std::move(tracker);
       resourceName_ = name;
       if (resourceTracker_) {
@@ -45,14 +46,18 @@ class ITrackedResource {
     
   virtual const std::string & getResourceName() const { return resourceName_;}
 
+  [[nodiscard]] virtual const std::string& getResourceName() const {
+    return resourceName_;
+  }
+
  private:
   // ITrackedResource destructor is called after the `T` object is partially destructed
   // and ubsan complaints about vptr mismatch on this line :
   //  return static_cast<T*>(this);
   // So we prevent UBSan by turning off vptr sanitizer on this function
   //
-  // So we prevent UBSan from analyzing pointers that are never dereferenced anyway, by //@fb-only
-  // We are not seeing actual undefined behavior  //@fb-only
+  // @fb-only
+  // @fb-only
   // @fb-only
   // @fb-only
 #if defined(__clang__)

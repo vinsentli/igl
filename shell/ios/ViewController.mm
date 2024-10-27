@@ -9,16 +9,19 @@
 
 #import "ViewController.h"
 
+#import "BackendVersion.h"
 #import "IglShellPlatformAdapterInternal.hpp"
 #import "IglSurfaceTexturesAdapterInternal.hpp"
 #import "RenderSessionController.h"
 #import "View.h"
 
 #import <igl/IGL.h>
+#import <shell/shared/input/InputDispatcher.h>
 
 #if IGL_BACKEND_METAL
 #import <Metal/Metal.h>
 #import <igl/metal/HWDevice.h>
+#include <igl/metal/Texture.h>
 #endif
 
 #if IGL_BACKEND_OPENGL
@@ -33,20 +36,17 @@
 // @fb-only
 // @fb-only
 
+#include <igl/DeviceFeatures.h>
 #include <memory>
 #include <shell/shared/platform/ios/PlatformIos.h>
-#include <shell/shared/renderSession/DefaultSession.h>
 #include <shell/shared/renderSession/RenderSession.h>
 
 // @fb-only
 // @fb-only
 // @fb-only
 
-@interface ViewController () <TouchDelegate, IglSurfaceTexturesProvider> {
-  igl::BackendType backendType_;
-#if IGL_BACKEND_OPENGL
-  igl::opengl::RenderingAPI openglRenderingAPI_;
-#endif
+@interface ViewController () <TouchDelegate, ViewSizeChangeDelegate, IglSurfaceTexturesProvider> {
+  igl::shell::RenderSessionConfig config_;
   CALayer* layer_;
   CGRect frame_;
   id<CAMetalDrawable> currentDrawable_;
@@ -55,6 +55,7 @@
   RenderSessionController* renderSessionController_;
   IglSurfaceTexturesAdapter surfaceTexturesAdapter_;
 }
+- (BackendVersion*)toBackendVersion:(igl::BackendVersion)iglBackendVersion;
 @end
 
 @implementation ViewController
@@ -63,41 +64,34 @@
   currentDrawable_ = view.currentDrawable;
   depthStencilTexture_ = view.depthStencilTexture;
 
-  IGL_ASSERT(renderSessionController_);
+  IGL_DEBUG_ASSERT(renderSessionController_);
   [renderSessionController_ tick];
 }
 
 - (void)mtkView:(nonnull MTKView*)view drawableSizeWillChange:(CGSize)size {
+  [renderSessionController_ releaseSessionFrameBuffer];
 }
 
-- (instancetype)initForMetal:(CGRect)frame {
-  if (self = [super initWithNibName:nil bundle:nil]) {
-    backendType_ = igl::BackendType::Metal;
-    frame_ = frame;
-    renderSessionController_ =
-        [[RenderSessionController alloc] initWithIglBackend:(IglBackendType)backendType_
-                                            surfaceProvider:self];
-  }
-  return self;
+- (void)onViewSizeChange {
+  [renderSessionController_ releaseSessionFrameBuffer];
 }
 
-#if IGL_BACKEND_OPENGL
-- (instancetype)initForOpenGL:(igl::opengl::RenderingAPI)renderingAPI frame:(CGRect)frame {
+- (instancetype)init:(igl::shell::RenderSessionConfig)config
+     factoryProvider:(RenderSessionFactoryProvider*)factoryProvider
+               frame:(CGRect)frame {
   if (self = [super initWithNibName:nil bundle:nil]) {
-    backendType_ = igl::BackendType::OpenGL;
-    openglRenderingAPI_ = renderingAPI;
+    config_ = config;
     frame_ = frame;
-
     renderSessionController_ = [[RenderSessionController alloc]
-        initWithOpenGLRenderingAPI:(IglOpenglRenderingAPI)openglRenderingAPI_
-                   surfaceProvider:self];
+        initWithBackendVersion:[self toBackendVersion:config.backendVersion]
+               factoryProvider:factoryProvider
+               surfaceProvider:self];
   }
   return self;
 }
-#endif
 
 - (void)initRenderSessionController {
-  IGL_ASSERT(renderSessionController_);
+  IGL_DEBUG_ASSERT(renderSessionController_);
 
 // @fb-only
   // @fb-only
@@ -111,19 +105,18 @@
 
 - (igl::shell::Platform*)platform {
   IglShellPlatformAdapter* adapter = [renderSessionController_ adapter];
-  IGL_ASSERT(adapter);
+  IGL_DEBUG_ASSERT(adapter);
   return adapter->platform;
 }
 
 // clang-format off
 - (igl::SurfaceTextures)createSurfaceTexturesInternal {
   [[maybe_unused]] auto& device = [self platform]->getDevice();
-  switch (backendType_) {
+  switch (config_.backendVersion.flavor) {
 #if IGL_BACKEND_METAL
-  case igl::BackendType::Metal: {
-    IGL_ASSERT(backendType_ == igl::BackendType::Metal);
+  case igl::BackendFlavor::Metal: {
     auto *platformDevice = device.getPlatformDevice<igl::metal::PlatformDevice>();
-    IGL_ASSERT(platformDevice);
+    IGL_DEBUG_ASSERT(platformDevice);
     return igl::SurfaceTextures{
         .color = platformDevice->createTextureFromNativeDrawable(currentDrawable_, nullptr),
         .depth = platformDevice->createTextureFromNativeDepth(depthStencilTexture_, nullptr),
@@ -132,10 +125,9 @@
 #endif
 
 #if IGL_BACKEND_OPENGL
-  case igl::BackendType::OpenGL: {
-    IGL_ASSERT(backendType_ == igl::BackendType::OpenGL);
+  case igl::BackendFlavor::OpenGL_ES: {
     auto *platformDevice = device.getPlatformDevice<igl::opengl::ios::PlatformDevice>();
-    IGL_ASSERT(platformDevice);
+    IGL_DEBUG_ASSERT(platformDevice);
     return igl::SurfaceTextures{
         .color = platformDevice->createTextureFromNativeDrawable((CAEAGLLayer*)layer_, nullptr),
         .depth = platformDevice->createTextureFromNativeDepth((CAEAGLLayer*)layer_, igl::TextureFormat::Z_UNorm16, nullptr),
@@ -155,7 +147,7 @@
 // @fb-only
 
   default: {
-    IGL_ASSERT_NOT_REACHED();
+    IGL_DEBUG_ASSERT_NOT_REACHED();
     return igl::SurfaceTextures{};
   }
   }
@@ -169,16 +161,18 @@
 }
 
 - (void)loadView {
-  switch (backendType_) {
-  case igl::BackendType::Invalid:
-    IGL_ASSERT_NOT_REACHED();
+  switch (config_.backendVersion.flavor) {
+  case igl::BackendFlavor::Invalid:
+    IGL_DEBUG_ASSERT_NOT_REACHED();
     break;
-  case igl::BackendType::Metal: {
+  case igl::BackendFlavor::Metal: {
 #if IGL_BACKEND_METAL
     [self initRenderSessionController];
     auto d = static_cast<igl::metal::Device&>([self platform]->getDevice()).get();
 
     auto metalView = [[MetalView alloc] initWithFrame:frame_ device:d];
+    metalView.colorPixelFormat =
+        igl::metal::Texture::textureFormatToMTLPixelFormat(config_.swapchainColorTextureFormat);
     metalView.depthStencilPixelFormat = MTLPixelFormatDepth32Float_Stencil8;
 
     metalView.delegate = self;
@@ -188,13 +182,39 @@
 #endif
     break;
   }
-  case igl::BackendType::OpenGL:
+  case igl::BackendFlavor::OpenGL_ES: {
 #if IGL_BACKEND_OPENGL
-    self.view = [[OpenGLView alloc] initWithTouchDelegate:self];
+    auto openGLView = [[OpenGLView alloc] initWithTouchDelegate:self];
+    openGLView.viewSizeChangeDelegate = self;
+
+    NSString* drawablePropertyColorFormat = kEAGLColorFormatRGBA8;
+
+    switch (config_.swapchainColorTextureFormat) {
+    case igl::TextureFormat::BGRA_UNorm8:
+      drawablePropertyColorFormat = kEAGLColorFormatRGBA8;
+      break;
+
+    case igl::TextureFormat::BGRA_SRGB:
+      drawablePropertyColorFormat = kEAGLColorFormatSRGBA8;
+      break;
+
+    default:
+      break;
+    }
+
+    ((CAEAGLLayer*)openGLView.layer).drawableProperties =
+        [NSDictionary dictionaryWithObjectsAndKeys:drawablePropertyColorFormat,
+                                                   kEAGLDrawablePropertyColorFormat,
+                                                   nil];
+    self.view = openGLView;
 #endif
     break;
-  case igl::BackendType::Vulkan:
-    IGL_ASSERT_MSG(0, "IGL Samples not set up for Vulkan backend");
+  }
+  case igl::BackendFlavor::OpenGL:
+    IGL_DEBUG_ABORT("IGL Samples not set up for Desktop OpenGL backend");
+    break;
+  case igl::BackendFlavor::Vulkan:
+    IGL_DEBUG_ABORT("IGL Samples not set up for Vulkan backend");
     break;
   // @fb-only
     // @fb-only
@@ -205,7 +225,7 @@
 - (void)viewDidLoad {
   [super viewDidLoad];
 
-  if (backendType_ != igl::BackendType::Metal) {
+  if (config_.backendVersion.flavor != igl::BackendFlavor::Metal) {
     layer_ = self.view.layer;
     [self initRenderSessionController];
   }
@@ -216,8 +236,8 @@
 // @fb-only
   // @fb-only
 // @fb-only
-  if (backendType_ != igl::BackendType::Metal) {
-    IGL_ASSERT(renderSessionController_);
+  if (config_.backendVersion.flavor != igl::BackendFlavor::Metal) {
+    IGL_DEBUG_ASSERT(renderSessionController_);
     [renderSessionController_ start];
   }
 }
@@ -228,8 +248,8 @@
   // @fb-only
 // @fb-only
 
-  if (backendType_ != igl::BackendType::Metal) {
-    IGL_ASSERT(renderSessionController_);
+  if (config_.backendVersion.flavor != igl::BackendFlavor::Metal) {
+    IGL_DEBUG_ASSERT(renderSessionController_);
     [renderSessionController_ stop];
   }
 }
@@ -253,6 +273,12 @@
   CGPoint lastPoint = [touch previousLocationInView:self.view];
   [self platform]->getInputDispatcher().queueEvent(igl::shell::TouchEvent(
       true, curPoint.x, curPoint.y, curPoint.x - lastPoint.x, curPoint.y - lastPoint.y));
+}
+
+- (BackendVersion*)toBackendVersion:(igl::BackendVersion)iglBackendVersion {
+  return [[BackendVersion alloc] init:static_cast<BackendFlavor>(iglBackendVersion.flavor)
+                         majorVersion:iglBackendVersion.majorVersion
+                         minorVersion:iglBackendVersion.minorVersion];
 }
 
 @end

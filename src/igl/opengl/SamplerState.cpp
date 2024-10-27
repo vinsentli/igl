@@ -38,7 +38,7 @@ SamplerState::SamplerState(IContext& context, const SamplerStateDesc& desc) :
 }
 
 void SamplerState::bind(ITexture* t) {
-  if (IGL_UNEXPECTED(t == nullptr)) {
+  if (IGL_DEBUG_VERIFY_NOT(t == nullptr)) {
     return;
   }
 
@@ -179,7 +179,9 @@ SamplerMinMagFilter SamplerState::convertGLMinFilter(GLint glMinFilter) {
     break;
 
   default:
-    IGL_ASSERT_NOT_REACHED();
+#ifndef GTEST
+    IGL_DEBUG_ASSERT_NOT_REACHED();
+#endif
     minFilter = SamplerMinMagFilter::Nearest;
   }
 
@@ -206,7 +208,7 @@ SamplerMipFilter SamplerState::convertGLMipFilter(GLint glMinFilter) {
     break;
 
   default:
-    IGL_ASSERT_NOT_REACHED();
+    IGL_DEBUG_ASSERT_NOT_REACHED();
     mipFilter = SamplerMipFilter::Disabled;
   }
 

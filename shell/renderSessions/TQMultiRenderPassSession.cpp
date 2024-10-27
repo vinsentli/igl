@@ -108,10 +108,10 @@ static std::string getOpenGLFragmentShaderSource() {
 static std::unique_ptr<IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
-    IGL_ASSERT_NOT_REACHED();
+    IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
   case igl::BackendType::Vulkan:
-    IGL_ASSERT_MSG(0, "IGLSamples not set up for Vulkan");
+    IGL_DEBUG_ABORT("IGLSamples not set up for Vulkan");
     return nullptr;
   // @fb-only
     // @fb-only
@@ -207,14 +207,14 @@ void TQMultiRenderPassSession::initialize() noexcept {
   renderPass0_.colorAttachments.resize(1);
   renderPass0_.colorAttachments[0].loadAction = LoadAction::Clear;
   renderPass0_.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPass0_.colorAttachments[0].clearColor = getPlatform().getDevice().backendDebugColor();
+  renderPass0_.colorAttachments[0].clearColor = getPreferredClearColor();
   renderPass0_.depthAttachment.loadAction = LoadAction::Clear;
   renderPass0_.depthAttachment.clearDepth = 1.0;
 
   renderPass1_.colorAttachments.resize(1);
   renderPass1_.colorAttachments[0].loadAction = LoadAction::Clear;
   renderPass1_.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPass1_.colorAttachments[0].clearColor = getPlatform().getDevice().backendDebugColor();
+  renderPass1_.colorAttachments[0].clearColor = getPreferredClearColor();
   renderPass1_.depthAttachment.loadAction = LoadAction::Clear;
   renderPass1_.depthAttachment.clearDepth = 1.0;
 
@@ -253,8 +253,8 @@ void TQMultiRenderPassSession::update(igl::SurfaceTextures surfaceTextures) noex
     framebufferDesc.depthAttachment.texture = getPlatform().getDevice().createTexture(desc, &ret);
 
     framebuffer0_ = getPlatform().getDevice().createFramebuffer(framebufferDesc, &ret);
-    IGL_ASSERT(ret.isOk());
-    IGL_ASSERT(framebuffer0_ != nullptr);
+    IGL_DEBUG_ASSERT(ret.isOk());
+    IGL_DEBUG_ASSERT(framebuffer0_ != nullptr);
   }
 
   if (framebuffer1_ == nullptr) {
@@ -263,8 +263,8 @@ void TQMultiRenderPassSession::update(igl::SurfaceTextures surfaceTextures) noex
     framebufferDesc.depthAttachment.texture = surfaceTextures.depth;
 
     framebuffer1_ = getPlatform().getDevice().createFramebuffer(framebufferDesc, &ret);
-    IGL_ASSERT(ret.isOk());
-    IGL_ASSERT(framebuffer1_ != nullptr);
+    IGL_DEBUG_ASSERT(ret.isOk());
+    IGL_DEBUG_ASSERT(framebuffer1_ != nullptr);
   }
   const size_t _textureUnit = 0;
 

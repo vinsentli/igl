@@ -9,7 +9,6 @@
 #include <igl/vulkan/Buffer.h>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/Device.h>
-#include <igl/vulkan/SyncManager.h>
 #include <igl/vulkan/VulkanBuffer.h>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanDevice.h>
@@ -70,7 +69,7 @@ Result Buffer::create(const BufferDesc& desc) {
   // Store the flag that determines if this buffer contains sub-allocations (i.e. is a ring-buffer)
   isRingBuffer_ = ((desc_.hint & BufferDesc::BufferAPIHintBits::Ring) != 0);
 
-  bufferCount_ = isRingBuffer_ ? device_.getVulkanContext().syncManager_->maxResourceCount() : 1u;
+  bufferCount_ = isRingBuffer_ ? device_.getVulkanContext().config_.maxResourceCount : 1u;
 
   buffers_ = std::make_unique<std::unique_ptr<VulkanBuffer>[]>(bufferCount_);
   bufferPatches_ = std::make_unique<BufferRange[]>(bufferCount_);
@@ -79,7 +78,7 @@ Result Buffer::create(const BufferDesc& desc) {
     const std::string bufferName = desc_.debugName + " - sub-buffer " + std::to_string(bufferIndex);
     buffers_[bufferIndex] =
         ctx.createBuffer(desc_.length, usageFlags, memFlags, &result, bufferName.c_str());
-    IGL_ASSERT(result.isOk());
+    IGL_DEBUG_ASSERT(result.isOk());
   }
 
   // allocate local data for ring-buffer only if Vulkan Buffers are not mapped to the CPU
@@ -92,8 +91,8 @@ Result Buffer::create(const BufferDesc& desc) {
 }
 
 const std::unique_ptr<VulkanBuffer>& Buffer::currentVulkanBuffer() const {
-  IGL_ASSERT_MSG(buffers_, "There are no sub-allocations available for this buffer");
-  return buffers_[isRingBuffer_ ? device_.getVulkanContext().syncManager_->currentIndex() : 0u];
+  IGL_DEBUG_ASSERT(buffers_, "There are no sub-allocations available for this buffer");
+  return buffers_[isRingBuffer_ ? device_.getVulkanContext().currentSyncIndex() : 0u];
 }
 
 BufferRange Buffer::getUpdateRange() const {
@@ -134,11 +133,11 @@ void Buffer::resetUpdateRange(uint32_t ringBufferIndex, const BufferRange& range
 igl::Result Buffer::upload(const void* data, const BufferRange& range) {
   IGL_PROFILER_FUNCTION();
 
-  if (!IGL_VERIFY(data)) {
+  if (!IGL_DEBUG_VERIFY(data)) {
     return igl::Result();
   }
 
-  if (!IGL_VERIFY(range.offset + range.size <= desc_.length)) {
+  if (!IGL_DEBUG_VERIFY(range.offset + range.size <= desc_.length)) {
     return igl::Result(Result::Code::ArgumentOutOfRange, "Out of range");
   }
 
@@ -147,7 +146,7 @@ igl::Result Buffer::upload(const void* data, const BufferRange& range) {
   const VulkanContext& ctx = device_.getVulkanContext();
   if (isRingBuffer_) {
     // get the current ring buffer index
-    const auto currentBufferIndex = device_.getVulkanContext().syncManager_->currentIndex();
+    const uint32_t currentBufferIndex = device_.getVulkanContext().currentSyncIndex();
     uint8_t* prevDataPtr = nullptr; // pointer to the previous local copy of the data
     BufferRange currentUpdateRange = range;
     if (currentBufferIndex != previousBufferIndex_) {
@@ -181,7 +180,7 @@ igl::Result Buffer::upload(const void* data, const BufferRange& range) {
         // data changes outside the input range will be copied from the previous buffer.
 
         // this should never happen, but check just in case
-        IGL_ASSERT(currentUpdateRange.offset <= range.offset);
+        IGL_DEBUG_ASSERT(currentUpdateRange.offset <= range.offset);
 
         // copy data from starting of current update range to range offset
         const auto frontCopySize = range.offset - currentUpdateRange.offset;
@@ -197,7 +196,7 @@ igl::Result Buffer::upload(const void* data, const BufferRange& range) {
         const auto currentUpdateRangeEnd = currentUpdateRange.offset + currentUpdateRange.size;
 
         // this should never happen, but check just in case
-        IGL_ASSERT(currentUpdateRangeEnd >= rangeEnd);
+        IGL_DEBUG_ASSERT(currentUpdateRangeEnd >= rangeEnd);
 
         const auto backCopySize = currentUpdateRangeEnd - rangeEnd;
         if (backCopySize > 0) {
@@ -229,8 +228,8 @@ size_t Buffer::getSizeInBytes() const {
 }
 
 uint64_t Buffer::gpuAddress(size_t offset) const {
-  IGL_ASSERT_MSG((offset & 7) == 0,
-                 "Buffer offset must be 8 bytes aligned as per GLSL_EXT_buffer_reference spec.");
+  IGL_DEBUG_ASSERT((offset & 7) == 0,
+                   "Buffer offset must be 8 bytes aligned as per GLSL_EXT_buffer_reference spec.");
 
   return (uint64_t)currentVulkanBuffer()->getVkDeviceAddress() + offset;
 }
@@ -244,7 +243,7 @@ VkBufferUsageFlags Buffer::getBufferUsageFlags() const {
 }
 
 void* Buffer::map(const BufferRange& range, igl::Result* outResult) {
-  IGL_ASSERT_MSG(!isRingBuffer_, "Buffer::map() operation not supported for ring buffer");
+  IGL_DEBUG_ASSERT(!isRingBuffer_, "Buffer::map() operation not supported for ring buffer");
 
   // Sanity check
   if ((range.size > desc_.length) || (range.offset > desc_.length - range.size)) {
@@ -257,7 +256,7 @@ void* Buffer::map(const BufferRange& range, igl::Result* outResult) {
   // If the buffer is currently mapped, then unmap it first
   if (mappedRange_.size &&
       (mappedRange_.size != range.size || mappedRange_.offset != range.offset)) {
-    IGL_ASSERT_MSG(false, "Buffer::map() is called more than once without Buffer::unmap()");
+    IGL_DEBUG_ABORT("Buffer::map() is called more than once without Buffer::unmap()");
     unmap();
   }
 
@@ -278,8 +277,8 @@ void* Buffer::map(const BufferRange& range, igl::Result* outResult) {
 }
 
 void Buffer::unmap() {
-  IGL_ASSERT_MSG(!isRingBuffer_, "Buffer::unmap() operation not supported for ring buffer");
-  IGL_ASSERT_MSG(mappedRange_.size, "Called Buffer::unmap() without Buffer::map()");
+  IGL_DEBUG_ASSERT(!isRingBuffer_, "Buffer::unmap() operation not supported for ring buffer");
+  IGL_DEBUG_ASSERT(mappedRange_.size, "Called Buffer::unmap() without Buffer::map()");
 
   const auto& buffer = currentVulkanBuffer();
   const BufferRange range(tmpBuffer_.size(), mappedRange_.offset);

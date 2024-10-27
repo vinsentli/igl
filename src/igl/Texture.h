@@ -239,6 +239,7 @@ struct TextureFormatProperties {
     Compressed = 1 << 2,
     sRGB = 1 << 3,
     Integer = 1 << 4,
+    HDR = 1 << 5, // Color format with more than 8 bits per component
   };
 
   const char* IGL_NONNULL name = "Invalid";
@@ -277,6 +278,12 @@ struct TextureFormatProperties {
    */
   [[nodiscard]] bool isSRGB() const noexcept {
     return (flags & Flags::sRGB) != 0;
+  }
+  /**
+   * @brief true for high precision color texture formats.
+   */
+  [[nodiscard]] bool isHDR() const noexcept {
+    return (flags & Flags::HDR) != 0;
   }
 
   [[nodiscard]] bool hasDepth() const noexcept {
@@ -970,7 +977,7 @@ class ITexture : public ITrackedResource<ITexture> {
                                               IGL_MAYBE_UNUSED const TextureRangeDesc& range,
                                               IGL_MAYBE_UNUSED const void* IGL_NULLABLE data,
                                               IGL_MAYBE_UNUSED size_t bytesPerRow = 0) const {
-    IGL_ASSERT_NOT_IMPLEMENTED();
+    IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
     return Result{Result::Code::Unimplemented, "Upload not implemented."};
   }
 

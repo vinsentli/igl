@@ -32,9 +32,10 @@
 #include <shell/shared/platform/win/PlatformWin.h>
 #endif
 
+#include <shell/shared/input/InputDispatcher.h>
 #include <shell/shared/input/IntentListener.h>
 #include <shell/shared/renderSession/AppParams.h>
-#include <shell/shared/renderSession/DefaultSession.h>
+#include <shell/shared/renderSession/DefaultRenderSessionFactory.h>
 #include <shell/shared/renderSession/ShellParams.h>
 
 #include <shell/openxr/XrCompositionProjection.h>
@@ -42,7 +43,6 @@
 #include <shell/openxr/XrHands.h>
 #include <shell/openxr/XrLog.h>
 #include <shell/openxr/XrPassthrough.h>
-#include <shell/openxr/XrSwapchainProvider.h>
 #include <shell/openxr/impl/XrAppImpl.h>
 #include <shell/openxr/impl/XrSwapchainProviderImpl.h>
 
@@ -102,7 +102,7 @@ XrSession XrApp::session() const {
 
 bool XrApp::checkExtensions() {
   XrResult result;
-  PFN_xrEnumerateInstanceExtensionProperties xrEnumerateInstanceExtensionProperties;
+  PFN_xrEnumerateInstanceExtensionProperties xrEnumerateInstanceExtensionProperties = nullptr;
   XR_CHECK(result =
                xrGetInstanceProcAddr(XR_NULL_HANDLE,
                                      "xrEnumerateInstanceExtensionProperties",
@@ -264,6 +264,8 @@ bool XrApp::createSystem() {
   IGL_LOG_INFO("System Tracking Properties: OrientationTracking=%s PositionTracking=%s\n",
                systemProps_.trackingProperties.orientationTracking ? "True" : "False",
                systemProps_.trackingProperties.positionTracking ? "True" : "False");
+  IGL_LOG_INFO("System Hand Tracking Properties: Supported=%s\n",
+               handTrackingSystemProps_.supportsHandTracking ? "True" : "False");
   return true;
 }
 
@@ -299,7 +301,7 @@ bool XrApp::enumerateViewConfigurations() {
     XR_CHECK(xrEnumerateViewConfigurationViews(
         instance_, systemId_, viewConfigType, 0, &numViewports, nullptr));
 
-    if (!IGL_VERIFY(numViewports == XrComposition::kNumViews)) {
+    if (!IGL_DEBUG_VERIFY(numViewports == XrComposition::kNumViews)) {
       IGL_LOG_ERROR(
           "numViewports must be %d. Make sure XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO is used.\n",
           XrComposition::kNumViews);
@@ -331,7 +333,7 @@ bool XrApp::enumerateViewConfigurations() {
     break;
   }
 
-  IGL_ASSERT_MSG(
+  IGL_DEBUG_ASSERT(
       foundViewConfig, "XrViewConfigurationType %d not found.", kSupportedViewConfigType);
 
   return true;
@@ -381,7 +383,7 @@ bool XrApp::initialize(const struct android_app* app, const InitParams& params) 
   }
 
 #if IGL_PLATFORM_ANDROID
-  PFN_xrInitializeLoaderKHR xrInitializeLoaderKHR;
+  PFN_xrInitializeLoaderKHR xrInitializeLoaderKHR = nullptr;
   XR_CHECK(xrGetInstanceProcAddr(
       XR_NULL_HANDLE, "xrInitializeLoaderKHR", (PFN_xrVoidFunction*)&xrInitializeLoaderKHR));
   if (xrInitializeLoaderKHR) {
@@ -435,7 +437,7 @@ bool XrApp::initialize(const struct android_app* app, const InitParams& params) 
   createShellSession(std::move(device), nullptr);
 #endif
 
-  session_ = impl_->initXrSession(instance_, systemId_, platform_->getDevice());
+  session_ = impl_->initXrSession(instance_, systemId_, platform_->getDevice(), sessionConfig_);
   if (session_ == XR_NULL_HANDLE) {
     IGL_LOG_ERROR("Failed to initialize graphics system\n");
     return false;
@@ -451,8 +453,8 @@ bool XrApp::initialize(const struct android_app* app, const InitParams& params) 
       return false;
     }
   }
-  if (handsTrackingSupported()) {
-    hands_ = std::make_unique<XrHands>(instance_, session_, handsTrackingMeshSupported());
+  if (handTrackingSupported()) {
+    hands_ = std::make_unique<XrHands>(instance_, session_, handTrackingMeshSupported());
     if (!hands_->initialize()) {
       return false;
     }
@@ -468,7 +470,7 @@ bool XrApp::initialize(const struct android_app* app, const InitParams& params) 
     hands_->updateMeshes(shellParams_->handMeshes);
   }
 
-  IGL_ASSERT(renderSession_ != nullptr);
+  IGL_DEBUG_ASSERT(renderSession_ != nullptr);
   renderSession_->initialize();
 
   if (useQuadLayerComposition_) {
@@ -549,7 +551,7 @@ void XrApp::updateQuadComposition() noexcept {
 void XrApp::createShellSession(std::unique_ptr<igl::IDevice> device, AAssetManager* assetMgr) {
 #if IGL_PLATFORM_ANDROID
   platform_ = std::make_shared<igl::shell::PlatformAndroid>(std::move(device));
-  IGL_ASSERT(platform_ != nullptr);
+  IGL_DEBUG_ASSERT(platform_ != nullptr);
   static_cast<igl::shell::ImageLoaderAndroid&>(platform_->getImageLoader())
       .setAssetManager(assetMgr);
   static_cast<igl::shell::FileLoaderAndroid&>(platform_->getFileLoader()).setAssetManager(assetMgr);
@@ -559,7 +561,15 @@ void XrApp::createShellSession(std::unique_ptr<igl::IDevice> device, AAssetManag
   platform_ = std::make_shared<igl::shell::PlatformWin>(std::move(device));
 #endif
 
-  renderSession_ = igl::shell::createDefaultRenderSession(platform_);
+  auto factory = igl::shell::createDefaultRenderSessionFactory();
+  const auto requestedSessionConfigs =
+      factory->requestedSessionConfigs(shell::ShellType::OpenXR, {impl_->suggestedSessionConfig()});
+  if (IGL_DEBUG_VERIFY_NOT(requestedSessionConfigs.size() != 1)) {
+    return;
+  }
+  sessionConfig_ = requestedSessionConfigs[0];
+
+  renderSession_ = factory->createRenderSession(platform_);
   shellParams_->shellControlsViewParams = true;
   shellParams_->rightHandedCoordinateSystem = true;
   shellParams_->renderMode = useSinglePassStereo_ ? RenderMode::SinglePassStereo
@@ -835,14 +845,15 @@ bool XrApp::passthroughEnabled() const noexcept {
   return appParams.passthroughGetter ? appParams.passthroughGetter() : useQuadLayerComposition_;
 }
 
-bool XrApp::handsTrackingSupported() const noexcept {
+bool XrApp::handTrackingSupported() const noexcept {
 #if IGL_PLATFORM_ANDROID
-  return supportedOptionalXrExtensions_.count(XR_EXT_HAND_TRACKING_EXTENSION_NAME) != 0;
+  return supportedOptionalXrExtensions_.count(XR_EXT_HAND_TRACKING_EXTENSION_NAME) != 0 &&
+         handTrackingSystemProps_.supportsHandTracking != 0u;
 #endif // IGL_PLATFORM_ANDROID
   return false;
 }
 
-bool XrApp::handsTrackingMeshSupported() const noexcept {
+bool XrApp::handTrackingMeshSupported() const noexcept {
 #if IGL_PLATFORM_ANDROID
   return supportedOptionalXrExtensions_.count(XR_FB_HAND_TRACKING_MESH_EXTENSION_NAME) != 0;
 #endif // IGL_PLATFORM_ANDROID

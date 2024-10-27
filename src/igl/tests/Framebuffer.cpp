@@ -270,17 +270,19 @@ TEST_F(FramebufferTest, Clear) {
   framebuffer_->copyBytesColorAttachment(*cmdQueue_, 0, pixels.data(), rangeDesc);
   ASSERT_EQ(pixels[0], 0x80808080);
 
-  // TODO: copyBytesDepthAttachment is not functioning property under Metal
+#if IGL_BACKEND_OPENGL
+  // TODO: copyBytesDepthAttachment is not functioning property under Metal/Vulkan
   // due to unimplemented blitting
   // Refer to igl/metal/Framebuffer.mm
   framebuffer_->copyBytesDepthAttachment(*cmdQueue_, pixels_depth.data(), rangeDesc);
   // ASSERT_EQ(pixels_depth[0], 0x80808080);
 
-  // TODO: copyBytesStencilAttachment is not functioning property under Metal
+  // TODO: copyBytesStencilAttachment is not functioning property under Metal/Vulkan
   // due to unimplemented blitting
   // Refer to igl/metal/Framebuffer.mm
   framebuffer_->copyBytesStencilAttachment(*cmdQueue_, pixels_stencil.data(), rangeDesc);
   // ASSERT_EQ(pixels_stencil[0], 0x80808080);
+#endif
 
   //-------------------------------------------------------------------------
   // Clear FB to {0, 0, 0, 0}, but this time bind a pipelineState, disable
@@ -321,17 +323,19 @@ TEST_F(FramebufferTest, Clear) {
   framebuffer_->copyBytesColorAttachment(*cmdQueue_, 0, pixels.data(), rangeDesc);
   ASSERT_EQ(pixels[0], 0);
 
-  // TODO: copyBytesDepthAttachment is not functioning property under Metal
+#if IGL_BACKEND_OPENGL
+  // TODO: copyBytesDepthAttachment is not functioning property under Metal/Vulkan
   // due to unimplemented blitting
   // Refer to igl/metal/Framebuffer.mm
   framebuffer_->copyBytesDepthAttachment(*cmdQueue_, pixels_depth.data(), rangeDesc);
   // ASSERT_EQ(pixels_depth[0], 0);
 
-  // TODO: copyBytesStencilAttachment is not functioning property under Metal
+  // TODO: copyBytesStencilAttachment is not functioning property under Metal/Vulkan
   // due to unimplemented blitting
   // Refer to igl/metal/Framebuffer.mm
   framebuffer_->copyBytesStencilAttachment(*cmdQueue_, pixels_stencil.data(), rangeDesc);
   // ASSERT_EQ(pixels_stencil[0], 0);
+#endif
 
   //-------------------------------------------------------------------------
   // Clear FB to {0.5, 0.5, 0.5, 0.5} again. We should not be impacted by the

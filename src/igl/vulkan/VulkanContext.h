@@ -18,7 +18,6 @@
 #include <igl/vulkan/VulkanDevice.h>
 #include <igl/vulkan/VulkanExtensions.h>
 #include <igl/vulkan/VulkanFeatures.h>
-#include <igl/vulkan/VulkanFunctions.h>
 #include <igl/vulkan/VulkanHelpers.h>
 #include <igl/vulkan/VulkanImmediateCommands.h>
 #include <igl/vulkan/VulkanQueuePool.h>
@@ -39,14 +38,12 @@ class EnhancedShaderDebuggingStore;
 class CommandQueue;
 class ComputeCommandEncoder;
 class RenderCommandEncoder;
-class SyncManager;
 class VulkanBuffer;
 class VulkanDevice;
 class VulkanDescriptorSetLayout;
 class VulkanImage;
 class VulkanImageView;
 class VulkanPipelineLayout;
-class VulkanSampler;
 class VulkanSemaphore;
 class VulkanSwapchain;
 class VulkanTexture;
@@ -56,6 +53,7 @@ struct BindingsTextures;
 struct VulkanContextImpl;
 struct VulkanImageCreateInfo;
 struct VulkanImageViewCreateInfo;
+struct VulkanSampler;
 
 /*
  * Descriptor sets:
@@ -92,7 +90,8 @@ class VulkanContext final {
   igl::Result queryDevices(const HWDeviceQueryDesc& desc, std::vector<HWDeviceDesc>& outDevices);
   igl::Result initContext(const HWDeviceDesc& desc,
                           size_t numExtraDeviceExtensions = 0,
-                          const char* IGL_NULLABLE* IGL_NULLABLE extraDeviceExtensions = nullptr);
+                          const char* IGL_NULLABLE* IGL_NULLABLE extraDeviceExtensions = nullptr,
+                          const VulkanFeatures* IGL_NULLABLE requestedFeatures = nullptr);
 
   igl::Result initSwapchain(uint32_t width, uint32_t height);
   VkExtent2D getSwapchainExtent() const;
@@ -137,10 +136,13 @@ class VulkanContext final {
       VulkanImageViewCreateInfo imageViewCreateInfo,
       const char* IGL_NULLABLE debugName) const;
 
-  std::shared_ptr<VulkanSampler> createSampler(const VkSamplerCreateInfo& ci,
-                                               VkFormat yuvVkFormat,
-                                               igl::Result* IGL_NULLABLE outResult,
-                                               const char* IGL_NULLABLE debugName = nullptr) const;
+  SamplerHandle createSampler(const VkSamplerCreateInfo& ci,
+                              VkFormat yuvVkFormat,
+                              igl::Result* IGL_NULLABLE outResult,
+                              const char* IGL_NULLABLE debugName = nullptr) const;
+
+  void createSurface(void* IGL_NULLABLE window, void* IGL_NULLABLE display);
+  void createHeadlessSurface();
 
   bool hasSwapchain() const noexcept {
     return swapchain_ != nullptr;
@@ -149,12 +151,16 @@ class VulkanContext final {
   Result waitIdle() const;
   Result present() const;
 
+  /// @brief Returns the index of the current resource being used.
+  ///        Its range is [0, config.maxResourceCount).
+  [[nodiscard]] uint32_t currentSyncIndex() const noexcept {
+    return syncCurrentIndex_;
+  }
+  void syncAcquireNext() noexcept;
+  void syncMarkSubmitted(VulkanImmediateCommands::SubmitHandle handle) noexcept;
+
   const VkPhysicalDeviceProperties& getVkPhysicalDeviceProperties() const {
     return vkPhysicalDeviceProperties2_.properties;
-  }
-
-  const VkPhysicalDeviceFeatures2& getVkPhysicalDeviceFeatures2() const {
-    return vkPhysicalDeviceFeatures2_;
   }
 
   VkFormat getClosestDepthStencilFormat(igl::TextureFormat desiredFormat) const;
@@ -200,10 +206,12 @@ class VulkanContext final {
 
   const VulkanFeatures& features() const noexcept;
 
-  const VkSurfaceCapabilitiesKHR & getSurfaceCapabilities() { return deviceSurfaceCaps_; }
+  [[nodiscard]] const VkSurfaceCapabilitiesKHR& getSurfaceCapabilities() const noexcept {
+    return deviceSurfaceCaps_;
+  }
 
-  void createSurface(void* IGL_NULLABLE window, void* IGL_NULLABLE display);
-
+  void ensureCurrentContextThread() const;
+  void setCurrentContextThread();
 
 #if defined(IGL_WITH_TRACY_GPU)
   TracyVkCtx IGL_NULLABLE tracyCtx_ = nullptr;
@@ -227,6 +235,8 @@ class VulkanContext final {
                                              Result* IGL_NULLABLE outResult);
   void destroy(igl::BindGroupTextureHandle handle);
   void destroy(igl::BindGroupBufferHandle handle);
+  void destroy(igl::SamplerHandle handle);
+  void destroy(igl::TextureHandle handle);
   VkDescriptorSet IGL_NULLABLE getBindGroupDescriptorSet(igl::BindGroupTextureHandle handle) const;
   VkDescriptorSet IGL_NULLABLE getBindGroupDescriptorSet(igl::BindGroupBufferHandle handle) const;
   uint32_t getBindGroupUsageMask(igl::BindGroupTextureHandle handle) const;
@@ -247,51 +257,27 @@ class VulkanContext final {
   VkDebugUtilsMessengerEXT IGL_NULLABLE vkDebugUtilsMessenger_ = VK_NULL_HANDLE;
   VkSurfaceKHR IGL_NULLABLE vkSurface_ = VK_NULL_HANDLE;
   VkPhysicalDevice IGL_NULLABLE vkPhysicalDevice_ = VK_NULL_HANDLE;
-  FOLLY_PUSH_WARNING
-  FOLLY_GNU_DISABLE_WARNING("-Wmissing-field-initializers")
   VkPhysicalDeviceDescriptorIndexingPropertiesEXT vkPhysicalDeviceDescriptorIndexingProperties_ = {
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES_EXT,
-      // Ignore clang-diagnostic-missing-field-initializers
-      // @lint-ignore CLANGTIDY
-      nullptr};
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES_EXT,
+      .pNext = nullptr,
+  };
 
   // Provided by VK_KHR_driver_properties
   VkPhysicalDeviceDriverPropertiesKHR vkPhysicalDeviceDriverProperties_ = {
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES_KHR,
-      // Ignore clang-diagnostic-missing-field-initializers
-      // @lint-ignore CLANGTIDY
-      &vkPhysicalDeviceDescriptorIndexingProperties_};
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES_KHR,
+      .pNext = &vkPhysicalDeviceDescriptorIndexingProperties_,
+  };
 
   std::vector<VkFormat> deviceDepthFormats_;
   std::vector<VkSurfaceFormatKHR> deviceSurfaceFormats_;
   VkSurfaceCapabilitiesKHR deviceSurfaceCaps_{};
   std::vector<VkPresentModeKHR> devicePresentModes_;
 
-  // Provided by VK_VERSION_1_2
-  VkPhysicalDeviceShaderFloat16Int8Features vkPhysicalDeviceShaderFloat16Int8Features_ = {
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR,
-      nullptr};
-
   // Provided by VK_VERSION_1_1
   VkPhysicalDeviceProperties2 vkPhysicalDeviceProperties2_ = {
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-      &vkPhysicalDeviceDriverProperties_,
-      VkPhysicalDeviceProperties{}};
-  VkPhysicalDeviceMultiviewFeatures vkPhysicalDeviceMultiviewFeatures_ = {
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES,
-      &vkPhysicalDeviceShaderFloat16Int8Features_};
-  VkPhysicalDeviceShaderDrawParametersFeatures vkPhysicalDeviceShaderDrawParametersFeatures_ = {
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES,
-      &vkPhysicalDeviceMultiviewFeatures_,
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+      .pNext = &vkPhysicalDeviceDriverProperties_,
   };
-  VkPhysicalDeviceSamplerYcbcrConversionFeatures vkPhysicalDeviceSamplerYcbcrConversionFeatures_ = {
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES,
-      &vkPhysicalDeviceShaderDrawParametersFeatures_,
-  };
-  VkPhysicalDeviceFeatures2 vkPhysicalDeviceFeatures2_ = {
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-      &vkPhysicalDeviceSamplerYcbcrConversionFeatures_};
-  FOLLY_POP_WARNING
 
   VulkanFeatures features_;
 
@@ -321,7 +307,7 @@ class VulkanContext final {
   // deallocated. The context deallocates textures in a deferred way when it is safe to do so.
   // 2. Descriptor sets can be updated when they are not in use.
   mutable Pool<TextureTag, std::shared_ptr<VulkanTexture>> textures_;
-  mutable Pool<SamplerTag, std::shared_ptr<VulkanSampler>> samplers_;
+  mutable Pool<SamplerTag, VulkanSampler> samplers_;
   // a texture/sampler was created since the last descriptor set update
   mutable bool awaitingCreation_ = false;
 
@@ -353,7 +339,6 @@ class VulkanContext final {
                              BindingsBuffers& data,
                              const VulkanDescriptorSetLayout& dsl,
                              const util::SpvModuleInfo& info) const;
-  void markSubmitted(const SubmitHandle& handle) const;
 
   struct DeferredTask {
     DeferredTask(std::packaged_task<void()>&& task, SubmitHandle handle) :
@@ -364,10 +349,11 @@ class VulkanContext final {
   };
 
   mutable std::deque<DeferredTask> deferredTasks_;
-
   mutable std::mutex deferredTasksMutex_;
 
-  std::unique_ptr<SyncManager> syncManager_;
+  // sync resources
+  uint32_t syncCurrentIndex_ = 0u;
+  std::vector<SubmitHandle> syncSubmitHandles_;
 };
 
 } // namespace igl::vulkan

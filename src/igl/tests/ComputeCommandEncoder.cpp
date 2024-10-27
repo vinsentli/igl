@@ -24,17 +24,6 @@ namespace igl::tests {
 
 static std::vector<float> dataIn = {1.0, 2.0, 3.0, 4.0, 5.0f, 6.0f};
 
-static bool isDeviceCompatible(IDevice& device) noexcept {
-  const auto backendtype = device.getBackendType();
-  if (backendtype == BackendType::OpenGL) {
-    return device.hasFeature(DeviceFeatures::Compute);
-  } else if (backendtype == BackendType::Vulkan) {
-    return false;
-  }
-
-  return true;
-}
-
 /**
  * @brief ComputeCommandEncoderTest is a test fixture for all the tests in this file.
  * It takes care of common initialization and allocating of common resources.
@@ -55,7 +44,7 @@ class ComputeCommandEncoderTest : public ::testing::Test {
     ASSERT_TRUE(iglDev_ != nullptr);
     ASSERT_TRUE(cmdQueue_ != nullptr);
 
-    if (!isDeviceCompatible(*iglDev_)) {
+    if (!iglDev_->hasFeature(DeviceFeatures::Compute)) {
       return;
     }
 
@@ -73,18 +62,24 @@ class ComputeCommandEncoderTest : public ::testing::Test {
     ASSERT_TRUE(bufferOut2_ != nullptr);
 
     { // Compile CS
+      const char* entryName = nullptr;
       const char* source = nullptr;
       if (iglDev_->getBackendType() == igl::BackendType::OpenGL) {
         source = igl::tests::data::shader::OGL_SIMPLE_COMPUTE_SHADER;
+        entryName = igl::tests::data::shader::simpleComputeFunc;
+      } else if (iglDev_->getBackendType() == igl::BackendType::Vulkan) {
+        source = igl::tests::data::shader::VULKAN_SIMPLE_COMPUTE_SHADER;
+        entryName = "main"; // entry point is not pipelined. Hardcoding to main for now.
       } else if (iglDev_->getBackendType() == igl::BackendType::Metal) {
         source = igl::tests::data::shader::MTL_SIMPLE_COMPUTE_SHADER;
+        entryName = igl::tests::data::shader::simpleComputeFunc;
       } else {
-        IGL_ASSERT_NOT_REACHED();
+        IGL_DEBUG_ASSERT_NOT_REACHED();
       }
 
       igl::Result ret;
-      computeStages_ = ShaderStagesCreator::fromModuleStringInput(
-          *iglDev_, source, igl::tests::data::shader::simpleComputeFunc, "", &ret);
+      computeStages_ =
+          ShaderStagesCreator::fromModuleStringInput(*iglDev_, source, entryName, "", &ret);
       ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
       ASSERT_TRUE(computeStages_ != nullptr);
     }
@@ -96,7 +91,8 @@ class ComputeCommandEncoderTest : public ::testing::Test {
    */
   void encodeCompute(const std::shared_ptr<igl::ICommandBuffer>& cmdBuffer,
                      const std::shared_ptr<igl::IBuffer>& bufferIn,
-                     const std::shared_ptr<igl::IBuffer>& bufferOut) {
+                     const std::shared_ptr<igl::IBuffer>& bufferOut,
+                     std::shared_ptr<IComputePipelineState>& ret) {
     ASSERT_TRUE(computeStages_ != nullptr);
     ComputePipelineDesc computeDesc;
     computeDesc.shaderStages = computeStages_;
@@ -110,14 +106,18 @@ class ComputeCommandEncoderTest : public ::testing::Test {
     auto computeEncoder = cmdBuffer->createComputeCommandEncoder();
     ASSERT_TRUE(computeEncoder != nullptr);
 
+    computeEncoder->insertDebugEventLabel("Running ComputeCommandEncoderTest...");
+
     computeEncoder->bindComputePipelineState(computePipelineState);
     computeEncoder->bindBuffer(igl::tests::data::shader::simpleComputeInputIndex, bufferIn.get());
     computeEncoder->bindBuffer(igl::tests::data::shader::simpleComputeOutputIndex, bufferOut.get());
 
     const Dimensions threadgroupSize(dataIn.size(), 1, 1);
     const Dimensions threadgroupCount(1, 1, 1);
-    computeEncoder->dispatchThreadGroups(threadgroupCount, threadgroupSize);
+    computeEncoder->dispatchThreadGroups(
+        threadgroupCount, threadgroupSize, {.buffers = {bufferIn.get()}});
     computeEncoder->endEncoding();
+    ret = computePipelineState;
   }
 
   void TearDown() override {}
@@ -129,13 +129,14 @@ class ComputeCommandEncoderTest : public ::testing::Test {
   std::shared_ptr<IShaderStages> computeStages_;
 
   std::shared_ptr<IBuffer> bufferIn_, bufferOut0_, bufferOut1_, bufferOut2_;
+  std::shared_ptr<IComputePipelineState> cps1_, cps2_, cps3_;
 };
 
 TEST_F(ComputeCommandEncoderTest, canEncodeBasicBufferOperation) {
 #if IGL_PLATFORM_LINUX && !IGL_PLATFORM_LINUX_USE_EGL
   GTEST_SKIP() << "Fix this test on Linux";
 #endif
-  if (!isDeviceCompatible(*iglDev_)) {
+  if (!iglDev_->hasFeature(DeviceFeatures::Compute)) {
     return;
   }
 
@@ -145,7 +146,7 @@ TEST_F(ComputeCommandEncoderTest, canEncodeBasicBufferOperation) {
   auto cmdBuffer = cmdQueue_->createCommandBuffer(cbDesc, nullptr);
   ASSERT_TRUE(cmdBuffer != nullptr);
 
-  encodeCompute(cmdBuffer, bufferIn_, bufferOut0_);
+  encodeCompute(cmdBuffer, bufferIn_, bufferOut0_, cps1_);
 
   ASSERT_TRUE(cmdQueue_ != nullptr);
   cmdQueue_->submit(*cmdBuffer);
@@ -170,22 +171,40 @@ TEST_F(ComputeCommandEncoderTest, canUseOutputBufferFromOnePassAsInputToNext) {
 #if IGL_PLATFORM_LINUX && !IGL_PLATFORM_LINUX_USE_EGL
   GTEST_SKIP() << "Fix this test on Linux";
 #endif
-  if (!isDeviceCompatible(*iglDev_)) {
+  if (!iglDev_->hasFeature(DeviceFeatures::Compute)) {
     return;
   }
 
   ASSERT_TRUE(cmdQueue_ != nullptr);
 
-  const CommandBufferDesc cbDesc;
-  auto cmdBuffer = cmdQueue_->createCommandBuffer(cbDesc, nullptr);
-  ASSERT_TRUE(cmdBuffer != nullptr);
+  {
+    const CommandBufferDesc cbDesc;
+    auto cmdBuffer = cmdQueue_->createCommandBuffer(cbDesc, nullptr);
+    ASSERT_TRUE(cmdBuffer != nullptr);
 
-  encodeCompute(cmdBuffer, bufferIn_, bufferOut0_);
-  encodeCompute(cmdBuffer, bufferOut0_, bufferOut1_);
-  encodeCompute(cmdBuffer, bufferOut1_, bufferOut2_);
+    encodeCompute(cmdBuffer, bufferIn_, bufferOut0_, cps1_);
 
-  cmdQueue_->submit(*cmdBuffer);
-  cmdBuffer->waitUntilCompleted();
+    cmdQueue_->submit(*cmdBuffer);
+    cmdBuffer->waitUntilCompleted();
+  }
+  {
+    const CommandBufferDesc cbDesc;
+    auto cmdBuffer = cmdQueue_->createCommandBuffer(cbDesc, nullptr);
+    ASSERT_TRUE(cmdBuffer != nullptr);
+
+    encodeCompute(cmdBuffer, bufferOut0_, bufferOut1_, cps2_);
+    cmdQueue_->submit(*cmdBuffer);
+    cmdBuffer->waitUntilCompleted();
+  }
+  {
+    const CommandBufferDesc cbDesc;
+    auto cmdBuffer = cmdQueue_->createCommandBuffer(cbDesc, nullptr);
+    ASSERT_TRUE(cmdBuffer != nullptr);
+
+    encodeCompute(cmdBuffer, bufferOut1_, bufferOut2_, cps3_);
+    cmdQueue_->submit(*cmdBuffer);
+    cmdBuffer->waitUntilCompleted();
+  }
 
   std::vector<float> bytes(dataIn.size());
   auto range = BufferRange(sizeof(float) * dataIn.size(), 0);

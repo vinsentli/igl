@@ -23,8 +23,229 @@ namespace igl::tests {
 // Unit tests for functions in VulkanHelpers.{h|c}.
 //
 
-// ivkGetDescriptorSetLayoutBinding **************************************************************
+// ivkGetVulkanResultString **********************************************************************
+class GetVulkanResultString : public ::testing::Test {};
+TEST_F(GetVulkanResultString, VulkanHelpersTest) {
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_SUCCESS), "VK_SUCCESS") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_NOT_READY), "VK_NOT_READY") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_TIMEOUT), "VK_TIMEOUT") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_EVENT_SET), "VK_EVENT_SET") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_EVENT_RESET), "VK_EVENT_RESET") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_INCOMPLETE), "VK_INCOMPLETE") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_OUT_OF_HOST_MEMORY),
+                     "VK_ERROR_OUT_OF_HOST_MEMORY") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_OUT_OF_DEVICE_MEMORY),
+                     "VK_ERROR_OUT_OF_DEVICE_MEMORY") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_INITIALIZATION_FAILED),
+                     "VK_ERROR_INITIALIZATION_FAILED") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_DEVICE_LOST), "VK_ERROR_DEVICE_LOST") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_MEMORY_MAP_FAILED),
+                     "VK_ERROR_MEMORY_MAP_FAILED") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_LAYER_NOT_PRESENT),
+                     "VK_ERROR_LAYER_NOT_PRESENT") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_EXTENSION_NOT_PRESENT),
+                     "VK_ERROR_EXTENSION_NOT_PRESENT") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_FEATURE_NOT_PRESENT),
+                     "VK_ERROR_FEATURE_NOT_PRESENT") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_INCOMPATIBLE_DRIVER),
+                     "VK_ERROR_INCOMPATIBLE_DRIVER") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_TOO_MANY_OBJECTS),
+                     "VK_ERROR_TOO_MANY_OBJECTS") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_FORMAT_NOT_SUPPORTED),
+                     "VK_ERROR_FORMAT_NOT_SUPPORTED") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_SURFACE_LOST_KHR),
+                     "VK_ERROR_SURFACE_LOST_KHR") == 0);
+  EXPECT_TRUE(
+      strcmp(ivkGetVulkanResultString(VK_ERROR_OUT_OF_DATE_KHR), "VK_ERROR_OUT_OF_DATE_KHR") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_INCOMPATIBLE_DISPLAY_KHR),
+                     "VK_ERROR_INCOMPATIBLE_DISPLAY_KHR") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_NATIVE_WINDOW_IN_USE_KHR),
+                     "VK_ERROR_NATIVE_WINDOW_IN_USE_KHR") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_VALIDATION_FAILED_EXT),
+                     "VK_ERROR_VALIDATION_FAILED_EXT") == 0);
+  EXPECT_TRUE(
+      strcmp(ivkGetVulkanResultString(VK_ERROR_FRAGMENTED_POOL), "VK_ERROR_FRAGMENTED_POOL") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_UNKNOWN), "VK_ERROR_UNKNOWN") == 0);
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_OUT_OF_POOL_MEMORY),
+                     "VK_ERROR_OUT_OF_POOL_MEMORY") == 0); // 1.1
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_INVALID_EXTERNAL_HANDLE),
+                     "VK_ERROR_INVALID_EXTERNAL_HANDLE") == 0); // 1.1
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_FRAGMENTATION), "VK_ERROR_FRAGMENTATION") ==
+              0); // 1.2
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS),
+                     "VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS") == 0); // 1.2
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_SUBOPTIMAL_KHR), "VK_SUBOPTIMAL_KHR") ==
+              0); // VK_KHR_swapchain
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_INVALID_SHADER_NV),
+                     "VK_ERROR_INVALID_SHADER_NV") == 0); // VK_NV_glsl_shader
+#ifdef VK_ENABLE_BETA_EXTENSIONS
+                                                          // Provided by VK_KHR_video_queue
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR),
+                     "VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR") == 0);
+#endif
+#ifdef VK_ENABLE_BETA_EXTENSIONS
+  // Provided by VK_KHR_video_queue
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR),
+                     "VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR") == 0);
+#endif
+#ifdef VK_ENABLE_BETA_EXTENSIONS
+  // Provided by VK_KHR_video_queue
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR),
+                     "VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR") == 0);
+#endif
+#ifdef VK_ENABLE_BETA_EXTENSIONS
+  // Provided by VK_KHR_video_queue
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR),
+                     "VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR") == 0);
+#endif
+#ifdef VK_ENABLE_BETA_EXTENSIONS
+  // Provided by VK_KHR_video_queue
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR),
+                     "VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR") == 0);
+#endif
+#ifdef VK_ENABLE_BETA_EXTENSIONS
+  // Provided by VK_KHR_video_queue
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR),
+                     "VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR") == 0);
+#endif
+  EXPECT_TRUE(
+      strcmp(ivkGetVulkanResultString(VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT),
+             "VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT") ==
+      0); // VK_EXT_image_drm_format_modifier
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_NOT_PERMITTED_KHR),
+                     "VK_ERROR_NOT_PERMITTED_KHR") == 0); // VK_KHR_global_priority
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT),
+                     "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT") ==
+              0); // VK_EXT_full_screen_exclusive
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_THREAD_IDLE_KHR), "VK_THREAD_IDLE_KHR") ==
+              0); // VK_KHR_deferred_host_operations
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_THREAD_DONE_KHR), "VK_THREAD_DONE_KHR") ==
+              0); // VK_KHR_deferred_host_operations
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_OPERATION_DEFERRED_KHR),
+                     "VK_OPERATION_DEFERRED_KHR") == 0); // VK_KHR_deferred_host_operations
+  EXPECT_TRUE(strcmp(ivkGetVulkanResultString(VK_OPERATION_NOT_DEFERRED_KHR),
+                     "VK_OPERATION_NOT_DEFERRED_KHR") == 0); // VK_KHR_deferred_host_operations
+}
 
+// ivkGetImageViewCreateInfo *********************************************************************
+class GetImageViewCreateInfoTest : public ::testing::TestWithParam<std::tuple<VkImageViewType,
+                                                                              VkFormat,
+                                                                              VkImageAspectFlags,
+                                                                              uint32_t,
+                                                                              uint32_t,
+                                                                              uint32_t,
+                                                                              uint32_t>> {};
+
+TEST_P(GetImageViewCreateInfoTest, GetImageViewCreateInfo) {
+  const VkImage image = VK_NULL_HANDLE;
+  const VkImageViewType imageViewType = std::get<0>(GetParam());
+  const VkFormat format = std::get<1>(GetParam());
+  const VkImageAspectFlags aspectMask = std::get<2>(GetParam());
+  const uint32_t baseMipLevel = std::get<3>(GetParam());
+  const uint32_t levelCount = std::get<4>(GetParam());
+  const uint32_t baseArrayLayer = std::get<5>(GetParam());
+  const uint32_t layerCount = std::get<6>(GetParam());
+
+  const VkImageViewCreateInfo imageviewCreateInfo =
+      ivkGetImageViewCreateInfo(image,
+                                imageViewType,
+                                format,
+                                {aspectMask, baseMipLevel, levelCount, baseArrayLayer, layerCount});
+
+  EXPECT_EQ(imageviewCreateInfo.sType, VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO);
+  EXPECT_EQ(imageviewCreateInfo.pNext, nullptr);
+  EXPECT_EQ(imageviewCreateInfo.flags, 0);
+  EXPECT_EQ(imageviewCreateInfo.image, image);
+  EXPECT_EQ(imageviewCreateInfo.viewType, imageViewType);
+  EXPECT_EQ(imageviewCreateInfo.format, format);
+  EXPECT_EQ(imageviewCreateInfo.components.r, VK_COMPONENT_SWIZZLE_IDENTITY);
+  EXPECT_EQ(imageviewCreateInfo.components.g, VK_COMPONENT_SWIZZLE_IDENTITY);
+  EXPECT_EQ(imageviewCreateInfo.components.b, VK_COMPONENT_SWIZZLE_IDENTITY);
+  EXPECT_EQ(imageviewCreateInfo.components.a, VK_COMPONENT_SWIZZLE_IDENTITY);
+  EXPECT_EQ(imageviewCreateInfo.subresourceRange.aspectMask, aspectMask);
+  EXPECT_EQ(imageviewCreateInfo.subresourceRange.baseMipLevel, baseMipLevel);
+  EXPECT_EQ(imageviewCreateInfo.subresourceRange.levelCount, levelCount);
+  EXPECT_EQ(imageviewCreateInfo.subresourceRange.baseArrayLayer, baseArrayLayer);
+  EXPECT_EQ(imageviewCreateInfo.subresourceRange.layerCount, layerCount);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AllCombinations,
+    GetImageViewCreateInfoTest,
+    ::testing::Combine(::testing::Values(VK_IMAGE_VIEW_TYPE_1D, VK_IMAGE_VIEW_TYPE_2D),
+                       ::testing::Values(VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_SRGB),
+                       ::testing::Values(VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_ASPECT_DEPTH_BIT),
+                       ::testing::Values(0, 1),
+                       ::testing::Values(1, 2),
+                       ::testing::Values(0, 1),
+                       ::testing::Values(1, 2)),
+    [](const testing::TestParamInfo<GetImageViewCreateInfoTest::ParamType>& info) {
+      const std::string name =
+          std::to_string(std::get<0>(info.param)) + "_" + std::to_string(std::get<1>(info.param)) +
+          "_" + std::to_string(std::get<2>(info.param)) + "_" +
+          std::to_string(std::get<3>(info.param)) + "_" + std::to_string(std::get<4>(info.param)) +
+          "_" + std::to_string(std::get<5>(info.param)) + "_" +
+          std::to_string(std::get<6>(info.param));
+      return name;
+    });
+
+// ivkGetAttachmentDescriptionColor **************************************************************
+class AttachmentDescriptionColorTest
+  : public ::testing::TestWithParam<
+        std::tuple<VkFormat, VkAttachmentLoadOp, VkAttachmentStoreOp, VkImageLayout>> {};
+
+TEST_P(AttachmentDescriptionColorTest, GetAttachmentDescriptionColor) {
+  const VkFormat format = std::get<0>(GetParam());
+  const VkAttachmentLoadOp loadOp = std::get<1>(GetParam());
+  const VkAttachmentStoreOp storeOp = std::get<2>(GetParam());
+  const VkImageLayout initialLayout = std::get<3>(GetParam());
+  const auto finalLayout = static_cast<VkImageLayout>(initialLayout + 1);
+
+  const auto attachmentDescriptionColor =
+      ivkGetAttachmentDescriptionColor(format, loadOp, storeOp, initialLayout, finalLayout);
+
+  EXPECT_EQ(attachmentDescriptionColor.sType, VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2);
+  EXPECT_EQ(attachmentDescriptionColor.format, format);
+  EXPECT_EQ(attachmentDescriptionColor.samples, VK_SAMPLE_COUNT_1_BIT);
+  EXPECT_EQ(attachmentDescriptionColor.loadOp, loadOp);
+  EXPECT_EQ(attachmentDescriptionColor.storeOp, storeOp);
+  EXPECT_EQ(attachmentDescriptionColor.stencilLoadOp, VK_ATTACHMENT_LOAD_OP_DONT_CARE);
+  EXPECT_EQ(attachmentDescriptionColor.stencilStoreOp, VK_ATTACHMENT_STORE_OP_DONT_CARE);
+  EXPECT_EQ(attachmentDescriptionColor.initialLayout, initialLayout);
+  EXPECT_EQ(attachmentDescriptionColor.finalLayout, finalLayout);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AllCombinations,
+    AttachmentDescriptionColorTest,
+    ::testing::Combine(
+        ::testing::Values(VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_SRGB),
+        ::testing::Values(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_LOAD),
+        ::testing::Values(VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE),
+        ::testing::Values(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)),
+    [](const testing::TestParamInfo<AttachmentDescriptionColorTest::ParamType>& info) {
+      const std::string name = std::to_string(std::get<0>(info.param)) + "_" +
+                               std::to_string(std::get<1>(info.param)) + "_" +
+                               std::to_string(std::get<2>(info.param)) + "_" +
+                               std::to_string(std::get<3>(info.param));
+      return name;
+    });
+
+// ivkGetAttachmentReferenceColor **************************************************************
+class AttachmentReferenceColorTest : public ::testing::Test {};
+
+TEST_F(AttachmentReferenceColorTest, GetAttachmentReferenceColor) {
+  for (uint32_t i = 0; i < 2; ++i) {
+    const auto attachmentRef = ivkGetAttachmentReferenceColor(i);
+    EXPECT_EQ(attachmentRef.sType, VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2);
+    EXPECT_EQ(attachmentRef.pNext, nullptr);
+    EXPECT_EQ(attachmentRef.attachment, i);
+    EXPECT_EQ(attachmentRef.layout, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    EXPECT_EQ(attachmentRef.aspectMask, VK_IMAGE_ASPECT_COLOR_BIT);
+  }
+}
+
+// ivkGetDescriptorSetLayoutBinding **************************************************************
 class DescriptorSetLayoutTest
   : public ::testing::TestWithParam<std::tuple<uint32_t, VkDescriptorType, uint32_t>> {};
 
@@ -56,9 +277,9 @@ INSTANTIATE_TEST_SUITE_P(
                                          VK_DESCRIPTOR_TYPE_STORAGE_BUFFER),
                        ::testing::Values(0, 1, 2)),
     [](const testing::TestParamInfo<DescriptorSetLayoutTest::ParamType>& info) {
-      const std::string name = "binding_" + std::to_string(std::get<0>(info.param)) +
-                               "__descriptorType_" + std::to_string(std::get<1>(info.param)) +
-                               "__count_" + std::to_string(std::get<2>(info.param));
+      const std::string name = std::to_string(std::get<0>(info.param)) + "_" +
+                               std::to_string(std::get<1>(info.param)) + "_" +
+                               std::to_string(std::get<2>(info.param));
       return name;
     });
 
@@ -104,12 +325,11 @@ INSTANTIATE_TEST_SUITE_P(
         ::testing::Values(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
         ::testing::Values(VK_SAMPLE_COUNT_1_BIT, VK_SAMPLE_COUNT_4_BIT)),
     [](const testing::TestParamInfo<AttachmentDescriptionTest::ParamType>& info) {
-      const std::string name = "format_" + std::to_string(std::get<0>(info.param)) + "__loadOp_" +
-                               std::to_string(std::get<1>(info.param)) + "__storeOp_" +
-                               std::to_string(std::get<2>(info.param)) + "__initialLayout_" +
-                               std::to_string(std::get<3>(info.param)) + "__finalLayout_" +
-                               std::to_string(std::get<4>(info.param)) + "__samples_" +
-                               std::to_string(std::get<5>(info.param));
+      const std::string name =
+          std::to_string(std::get<0>(info.param)) + "_" + std::to_string(std::get<1>(info.param)) +
+          "_" + std::to_string(std::get<2>(info.param)) + "_" +
+          std::to_string(std::get<3>(info.param)) + "_" + std::to_string(std::get<4>(info.param)) +
+          "_" + std::to_string(std::get<5>(info.param));
       return name;
     });
 
@@ -134,8 +354,8 @@ INSTANTIATE_TEST_SUITE_P(
                        ::testing::Values(VK_IMAGE_LAYOUT_UNDEFINED,
                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)),
     [](const testing::TestParamInfo<AttachmentReferenceTest::ParamType>& info) {
-      const std::string name = "attachment_" + std::to_string(std::get<0>(info.param)) +
-                               "__layout_" + std::to_string(std::get<1>(info.param));
+      const std::string name =
+          std::to_string(std::get<0>(info.param)) + "_" + std::to_string(std::get<1>(info.param));
       return name;
     });
 
@@ -185,17 +405,17 @@ TEST_P(SubpassDescriptionTest, GetSubpassDescription) {
   EXPECT_EQ(subpassDescription.pPreserveAttachments, nullptr);
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    AllCombinations,
-    SubpassDescriptionTest,
-    ::testing::Combine(::testing::Values(1, 2), ::testing::Bool(), ::testing::Bool()),
-    [](const testing::TestParamInfo<SubpassDescriptionTest::ParamType>& info) {
-      const std::string name = "numberOfAttachments_" + std::to_string(std::get<0>(info.param)) +
-                               "__withResolveAttachment_" +
-                               std::to_string(std::get<1>(info.param)) + "__withDepthAttachment_" +
-                               std::to_string(std::get<2>(info.param));
-      return name;
-    });
+INSTANTIATE_TEST_SUITE_P(AllCombinations,
+                         SubpassDescriptionTest,
+                         ::testing::Combine(::testing::Values(1, 2),
+                                            ::testing::Bool(),
+                                            ::testing::Bool()),
+                         [](const testing::TestParamInfo<SubpassDescriptionTest::ParamType>& info) {
+                           const std::string name = std::to_string(std::get<0>(info.param)) + "_" +
+                                                    std::to_string(std::get<1>(info.param)) + "_" +
+                                                    std::to_string(std::get<2>(info.param));
+                           return name;
+                         });
 
 // ivkGetSubpassDependency **************************************************************
 
@@ -300,9 +520,8 @@ INSTANTIATE_TEST_SUITE_P(AllCombinations,
                                             ::testing::Values(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                                               VK_BUFFER_USAGE_TRANSFER_DST_BIT)),
                          [](const testing::TestParamInfo<BufferCreateInfoTest::ParamType>& info) {
-                           const std::string name =
-                               "size_" + std::to_string(std::get<0>(info.param)) + "__usageFlags_" +
-                               std::to_string(std::get<1>(info.param));
+                           const std::string name = std::to_string(std::get<0>(info.param)) + "_" +
+                                                    std::to_string(std::get<1>(info.param));
                            return name;
                          });
 
@@ -362,17 +581,16 @@ INSTANTIATE_TEST_SUITE_P(
                        ::testing::Values(0, VK_IMAGE_CREATE_SPARSE_BINDING_BIT),
                        ::testing::Values(VK_SAMPLE_COUNT_1_BIT, VK_SAMPLE_COUNT_4_BIT)),
     [](const testing::TestParamInfo<ImageCreateInfoTest::ParamType>& info) {
-      const std::string name = "imageType_" + std::to_string(std::get<0>(info.param)) +
-                               "__format_" + std::to_string(std::get<1>(info.param)) + "__tiling_" +
-                               std::to_string(std::get<2>(info.param)) + "__usage_" +
-                               std::to_string(std::get<3>(info.param)) + "__extent_" +
-                               std::to_string(std::get<4>(info.param).width) + "_" +
-                               std::to_string(std::get<4>(info.param).height) + "_" +
-                               std::to_string(std::get<4>(info.param).depth) + "__mipLevels_" +
-                               std::to_string(std::get<5>(info.param)) + "__arrayLayers_" +
-                               std::to_string(std::get<6>(info.param)) + "__flags_" +
-                               std::to_string(std::get<7>(info.param)) + "__sampleCount_" +
-                               std::to_string(std::get<8>(info.param));
+      const std::string name =
+          std::to_string(std::get<0>(info.param)) + "_" + std::to_string(std::get<1>(info.param)) +
+          "_" + std::to_string(std::get<2>(info.param)) + "_" +
+          std::to_string(std::get<3>(info.param)) + "_" +
+          std::to_string(std::get<4>(info.param).width) + "_" +
+          std::to_string(std::get<4>(info.param).height) + "_" +
+          std::to_string(std::get<4>(info.param).depth) + "_" +
+          std::to_string(std::get<5>(info.param)) + "_" + std::to_string(std::get<6>(info.param)) +
+          "_" + std::to_string(std::get<7>(info.param)) + "_" +
+          std::to_string(std::get<8>(info.param));
       return name;
     });
 
@@ -420,8 +638,8 @@ INSTANTIATE_TEST_SUITE_P(
                                          VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST),
                        ::testing::Values(VK_TRUE, VK_FALSE)),
     [](const testing::TestParamInfo<PipelineInputAssemblyStateCreateInfoTest::ParamType>& info) {
-      const std::string name = "topology_" + std::to_string(std::get<0>(info.param)) +
-                               "__primitiveType_" + std::to_string(std::get<1>(info.param));
+      const std::string name =
+          std::to_string(std::get<0>(info.param)) + "_" + std::to_string(std::get<1>(info.param));
       return name;
     });
 
@@ -486,8 +704,8 @@ INSTANTIATE_TEST_SUITE_P(
     ::testing::Combine(::testing::Values(VK_POLYGON_MODE_FILL, VK_POLYGON_MODE_LINE),
                        ::testing::Values(VK_CULL_MODE_FRONT_BIT, VK_CULL_MODE_BACK_BIT)),
     [](const testing::TestParamInfo<PipelineRasterizationStateCreateInfoTest::ParamType>& info) {
-      const std::string name = "polygonMode_" + std::to_string(std::get<0>(info.param)) +
-                               "__cullMode_" + std::to_string(std::get<1>(info.param));
+      const std::string name =
+          std::to_string(std::get<0>(info.param)) + "_" + std::to_string(std::get<1>(info.param));
       return name;
     });
 
@@ -622,14 +840,13 @@ INSTANTIATE_TEST_SUITE_P(
                        ::testing::Values(VK_BLEND_OP_ADD, VK_BLEND_OP_SUBTRACT),
                        ::testing::Values(VK_COLOR_COMPONENT_R_BIT, VK_COLOR_COMPONENT_A_BIT)),
     [](const testing::TestParamInfo<PipelineColorBlendAttachmentStateTest::ParamType>& info) {
-      const std::string name = "_blendEnable_" + std::to_string(std::get<0>(info.param)) +
-                               "__srcColorBlendFactor_" + std::to_string(std::get<1>(info.param)) +
-                               "__dstColorBlendFactor_" + std::to_string(std::get<2>(info.param)) +
-                               "__colorBlendOp_" + std::to_string(std::get<3>(info.param)) +
-                               "__srcAlphaBlendFactor_" + std::to_string(std::get<4>(info.param)) +
-                               "__dstAlphaBlendFactor_" + std::to_string(std::get<5>(info.param)) +
-                               "__alphaBlendOp_" + std::to_string(std::get<6>(info.param)) +
-                               "__colorWriteMask_" + std::to_string(std::get<7>(info.param));
+      const std::string name =
+          "_" + std::to_string(std::get<0>(info.param)) + "_" +
+          std::to_string(std::get<1>(info.param)) + "_" + std::to_string(std::get<2>(info.param)) +
+          "_" + std::to_string(std::get<3>(info.param)) + "_" +
+          std::to_string(std::get<4>(info.param)) + "_" + std::to_string(std::get<5>(info.param)) +
+          "_" + std::to_string(std::get<6>(info.param)) + "_" +
+          std::to_string(std::get<7>(info.param));
       return name;
     });
 
@@ -665,8 +882,8 @@ INSTANTIATE_TEST_SUITE_P(
     GetPipelineViewportStateCreateInfoTest,
     ::testing::Combine(::testing::Bool(), ::testing::Bool()),
     [](const testing::TestParamInfo<GetPipelineViewportStateCreateInfoTest::ParamType>& info) {
-      const std::string name = "_useViewportPtr_" + std::to_string(std::get<0>(info.param)) +
-                               "__useScissorPtr_" + std::to_string(std::get<1>(info.param));
+      const std::string name =
+          std::to_string(std::get<0>(info.param)) + "_" + std::to_string(std::get<1>(info.param));
       return name;
     });
 
@@ -695,7 +912,7 @@ INSTANTIATE_TEST_SUITE_P(
     GetImageSubresourceRangeTest,
     ::testing::Combine(::testing::Values(VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_ASPECT_DEPTH_BIT)),
     [](const testing::TestParamInfo<GetImageSubresourceRangeTest::ParamType>& info) {
-      const std::string name = "_aspectFlag_" + std::to_string(std::get<0>(info.param));
+      const std::string name = std::to_string(std::get<0>(info.param));
       return name;
     });
 
@@ -736,9 +953,9 @@ INSTANTIATE_TEST_SUITE_P(
                                          VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE),
                        ::testing::Values(1, 2)),
     [](const testing::TestParamInfo<GetWriteDescriptorSet_ImageInfoTest::ParamType>& info) {
-      const std::string name = "_dstBinding_" + std::to_string(std::get<0>(info.param)) +
-                               "__descriptorType_" + std::to_string(std::get<1>(info.param)) +
-                               "__numberDescriptors_" + std::to_string(std::get<2>(info.param));
+      const std::string name = std::to_string(std::get<0>(info.param)) + "_" +
+                               std::to_string(std::get<1>(info.param)) + "_" +
+                               std::to_string(std::get<2>(info.param));
       return name;
     });
 
@@ -779,9 +996,9 @@ INSTANTIATE_TEST_SUITE_P(
                                          VK_DESCRIPTOR_TYPE_STORAGE_BUFFER),
                        ::testing::Values(1, 2)),
     [](const testing::TestParamInfo<GetWriteDescriptorSet_BufferInfoTest::ParamType>& info) {
-      const std::string name = "_dstBinding_" + std::to_string(std::get<0>(info.param)) +
-                               "__descriptorType_" + std::to_string(std::get<1>(info.param)) +
-                               "__numberDescriptors_" + std::to_string(std::get<2>(info.param));
+      const std::string name = std::to_string(std::get<0>(info.param)) + "_" +
+                               std::to_string(std::get<1>(info.param)) + "_" +
+                               std::to_string(std::get<2>(info.param));
       return name;
     });
 
@@ -819,9 +1036,9 @@ INSTANTIATE_TEST_SUITE_P(
                        ::testing::Values(VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT),
                        ::testing::Bool()),
     [](const testing::TestParamInfo<GetPipelineLayoutCreateInfoTest::ParamType>& info) {
-      const std::string name = "_numLayouts_" + std::to_string(std::get<0>(info.param)) +
-                               "__shaderFlagBits_" + std::to_string(std::get<1>(info.param)) +
-                               "__addPushConstantRange_" + std::to_string(std::get<2>(info.param));
+      const std::string name = std::to_string(std::get<0>(info.param)) + "_" +
+                               std::to_string(std::get<1>(info.param)) + "_" +
+                               std::to_string(std::get<2>(info.param));
       return name;
     });
 
@@ -849,8 +1066,8 @@ INSTANTIATE_TEST_SUITE_P(
                        ::testing::Values(0, 100),
                        ::testing::Values(1000, 2000)),
     [](const testing::TestParamInfo<GetPushConstantRangeTest::ParamType>& info) {
-      const std::string name = "_shaderStageFlags_" + std::to_string(std::get<0>(info.param)) +
-                               "__offset_" + std::to_string(std::get<1>(info.param)) + "__size_" +
+      const std::string name = std::to_string(std::get<0>(info.param)) + "_" +
+                               std::to_string(std::get<1>(info.param)) + "_" +
                                std::to_string(std::get<2>(info.param));
       return name;
     });
@@ -906,15 +1123,14 @@ INSTANTIATE_TEST_SUITE_P(AllCombinations,
                                             ::testing::Values(100, 500),
                                             ::testing::Values(100, 500)),
                          [](const testing::TestParamInfo<GetRect2DTest::ParamType>& info) {
-                           const std::string name =
-                               "_x_" + std::to_string(std::get<0>(info.param)) + "__y_" +
-                               std::to_string(std::get<1>(info.param)) + "__width_" +
-                               std::to_string(std::get<2>(info.param)) + "__height_" +
-                               std::to_string(std::get<3>(info.param));
+                           const std::string name = std::to_string(std::get<0>(info.param)) + "_" +
+                                                    std::to_string(std::get<1>(info.param)) + "_" +
+                                                    std::to_string(std::get<2>(info.param)) + "_" +
+                                                    std::to_string(std::get<3>(info.param));
                            return name;
                          });
 
-// ivkGeivkGetPipelineShaderStageCreateInfotRect2D *******************************
+// ivkGetPipelineShaderStageCreateInfo *******************************
 class GetPipelineShaderStageCreateInfoTest
   : public ::testing::TestWithParam<std::tuple<VkShaderStageFlagBits, bool>> {};
 
@@ -943,8 +1159,272 @@ INSTANTIATE_TEST_SUITE_P(
     ::testing::Combine(::testing::Values(VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT),
                        ::testing::Bool()),
     [](const testing::TestParamInfo<GetPipelineShaderStageCreateInfoTest::ParamType>& info) {
-      const std::string name = "_stage_" + std::to_string(std::get<0>(info.param)) +
-                               "__addEntryPoint_" + std::to_string(std::get<1>(info.param));
+      const std::string name =
+          std::to_string(std::get<0>(info.param)) + "_" + std::to_string(std::get<1>(info.param));
+      return name;
+    });
+
+// ivkGetImageCopy2D *******************************
+class GetImageCopy2DTest : public ::testing::TestWithParam<std::tuple<uint32_t,
+                                                                      uint32_t,
+                                                                      VkImageAspectFlags,
+                                                                      uint32_t,
+                                                                      uint32_t,
+                                                                      uint32_t,
+                                                                      uint32_t,
+                                                                      uint32_t>> {};
+
+TEST_P(GetImageCopy2DTest, GetImageCopy2D) {
+  const auto x = std::get<0>(GetParam());
+  const auto y = std::get<1>(GetParam());
+  const auto aspectMask = std::get<2>(GetParam());
+  const auto mipLevel = std::get<3>(GetParam());
+  const auto baseArrayLayer = std::get<4>(GetParam());
+  const auto layerCount = std::get<5>(GetParam());
+  const auto width = std::get<6>(GetParam());
+  const auto height = std::get<7>(GetParam());
+
+  const VkOffset2D srcDstOffset = {static_cast<int32_t>(x), static_cast<int32_t>(y)};
+  const VkExtent2D imageRegion = {width, height};
+  const VkImageSubresourceLayers srcDstImageSubresource = {
+      aspectMask, mipLevel, baseArrayLayer, layerCount};
+
+  const VkImageCopy imageCopy =
+      ivkGetImageCopy2D(srcDstOffset, srcDstImageSubresource, imageRegion);
+
+  EXPECT_EQ(imageCopy.srcSubresource.aspectMask, aspectMask);
+  EXPECT_EQ(imageCopy.srcSubresource.mipLevel, mipLevel);
+  EXPECT_EQ(imageCopy.srcSubresource.baseArrayLayer, baseArrayLayer);
+  EXPECT_EQ(imageCopy.srcSubresource.layerCount, layerCount);
+  EXPECT_EQ(imageCopy.dstSubresource.aspectMask, aspectMask);
+  EXPECT_EQ(imageCopy.dstSubresource.mipLevel, mipLevel);
+  EXPECT_EQ(imageCopy.dstSubresource.baseArrayLayer, baseArrayLayer);
+  EXPECT_EQ(imageCopy.dstSubresource.layerCount, layerCount);
+  EXPECT_EQ(imageCopy.srcOffset.x, x);
+  EXPECT_EQ(imageCopy.srcOffset.y, y);
+  EXPECT_EQ(imageCopy.srcOffset.z, 0);
+  EXPECT_EQ(imageCopy.dstOffset.x, x);
+  EXPECT_EQ(imageCopy.dstOffset.y, y);
+  EXPECT_EQ(imageCopy.dstOffset.z, 0);
+  EXPECT_EQ(imageCopy.extent.width, width);
+  EXPECT_EQ(imageCopy.extent.height, height);
+  EXPECT_EQ(imageCopy.extent.depth, 1);
+}
+
+INSTANTIATE_TEST_SUITE_P(AllCombinations,
+                         GetImageCopy2DTest,
+                         ::testing::Combine(::testing::Values(0, 50),
+                                            ::testing::Values(0, 50),
+                                            ::testing::Values(VK_IMAGE_ASPECT_COLOR_BIT,
+                                                              VK_IMAGE_ASPECT_DEPTH_BIT),
+                                            ::testing::Values(0, 5),
+                                            ::testing::Values(0, 3),
+                                            ::testing::Values(1, 5),
+                                            ::testing::Values(100, 500),
+                                            ::testing::Values(100, 500)),
+                         [](const testing::TestParamInfo<GetImageCopy2DTest::ParamType>& info) {
+                           const std::string name = std::to_string(std::get<0>(info.param)) + "_" +
+                                                    std::to_string(std::get<1>(info.param)) + "_" +
+                                                    std::to_string(std::get<2>(info.param)) + "_" +
+                                                    std::to_string(std::get<3>(info.param)) + "_" +
+                                                    std::to_string(std::get<4>(info.param)) + "_" +
+                                                    std::to_string(std::get<5>(info.param)) + "_" +
+                                                    std::to_string(std::get<6>(info.param)) + "_" +
+                                                    std::to_string(std::get<7>(info.param));
+                           return name;
+                         });
+
+// ivkGetBufferImageCopy2D *******************************
+class GetBufferImageCopy2DTest : public ::testing::TestWithParam<std::tuple<uint32_t,
+                                                                            uint32_t,
+                                                                            VkImageAspectFlags,
+                                                                            uint32_t,
+                                                                            uint32_t,
+                                                                            uint32_t,
+                                                                            uint32_t,
+                                                                            uint32_t>> {};
+
+TEST_P(GetBufferImageCopy2DTest, GetBufferImageCopy2D) {
+  const auto x = 0;
+  const auto y = 0;
+  const auto aspectMask = std::get<0>(GetParam());
+  const auto mipLevel = std::get<1>(GetParam());
+  const auto baseArrayLayer = std::get<2>(GetParam());
+  const auto layerCount = std::get<3>(GetParam());
+  const auto width = std::get<4>(GetParam());
+  const auto height = std::get<5>(GetParam());
+  const auto bufferOffset = std::get<6>(GetParam());
+  const auto bufferRowLength = std::get<7>(GetParam());
+
+  const VkOffset2D srcDstOffset = {static_cast<int32_t>(x), static_cast<int32_t>(y)};
+  const VkExtent2D imageRegion = {width, height};
+  const VkRect2D bufferImageCopyRegion = {srcDstOffset, imageRegion};
+  const VkImageSubresourceLayers imageSubresource = {
+      aspectMask, mipLevel, baseArrayLayer, layerCount};
+
+  const VkBufferImageCopy bufferCopy = ivkGetBufferImageCopy2D(
+      bufferOffset, bufferRowLength, bufferImageCopyRegion, imageSubresource);
+
+  EXPECT_EQ(bufferCopy.imageSubresource.aspectMask, aspectMask);
+  EXPECT_EQ(bufferCopy.imageSubresource.mipLevel, mipLevel);
+  EXPECT_EQ(bufferCopy.imageSubresource.baseArrayLayer, baseArrayLayer);
+  EXPECT_EQ(bufferCopy.imageSubresource.layerCount, layerCount);
+  EXPECT_EQ(bufferCopy.imageOffset.x, x);
+  EXPECT_EQ(bufferCopy.imageOffset.y, y);
+  EXPECT_EQ(bufferCopy.imageOffset.z, 0);
+  EXPECT_EQ(bufferCopy.imageExtent.width, width);
+  EXPECT_EQ(bufferCopy.imageExtent.height, height);
+  EXPECT_EQ(bufferCopy.imageExtent.depth, 1);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AllCombinations,
+    GetBufferImageCopy2DTest,
+    ::testing::Combine(::testing::Values(VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_ASPECT_DEPTH_BIT),
+                       ::testing::Values(0, 5),
+                       ::testing::Values(0, 3),
+                       ::testing::Values(1, 5),
+                       ::testing::Values(100, 500),
+                       ::testing::Values(100, 500),
+                       ::testing::Values(0, 50),
+                       ::testing::Values(1000, 2000)),
+    [](const testing::TestParamInfo<GetBufferImageCopy2DTest::ParamType>& info) {
+      const std::string name =
+          std::to_string(std::get<0>(info.param)) + "_" + std::to_string(std::get<1>(info.param)) +
+          "_" + std::to_string(std::get<2>(info.param)) + "_" +
+          std::to_string(std::get<3>(info.param)) + "_" + std::to_string(std::get<4>(info.param)) +
+          "_" + std::to_string(std::get<5>(info.param)) + "_" +
+          std::to_string(std::get<6>(info.param)) + "_" + std::to_string(std::get<7>(info.param));
+      return name;
+    });
+
+// ivkGetBufferImageCopy3D *******************************
+class GetBufferImageCopy3DTest : public ::testing::TestWithParam<std::tuple<uint32_t,
+                                                                            uint32_t,
+                                                                            VkImageAspectFlags,
+                                                                            uint32_t,
+                                                                            uint32_t,
+                                                                            uint32_t,
+                                                                            uint32_t,
+                                                                            uint32_t>> {};
+
+TEST_P(GetBufferImageCopy3DTest, GetBufferImageCopy3D) {
+  const auto x = 0u;
+  const auto y = 0u;
+  const auto z = 0u;
+  const auto aspectMask = std::get<0>(GetParam());
+  const auto mipLevel = std::get<1>(GetParam());
+  const auto baseArrayLayer = std::get<2>(GetParam());
+  const auto layerCount = std::get<3>(GetParam());
+  const auto width = std::get<4>(GetParam());
+  const auto height = std::get<5>(GetParam());
+  const auto depth = std::get<5>(GetParam()); // duplicate height as depth
+  const auto bufferOffset = std::get<6>(GetParam());
+  const auto bufferRowLength = std::get<7>(GetParam());
+
+  const VkOffset3D offset = {static_cast<int32_t>(x), static_cast<int32_t>(y), z};
+  const VkExtent3D extent = {width, height, depth};
+  const VkImageSubresourceLayers imageSubresource = {
+      aspectMask, mipLevel, baseArrayLayer, layerCount};
+
+  const VkBufferImageCopy bufferCopy =
+      ivkGetBufferImageCopy3D(bufferOffset, bufferRowLength, offset, extent, imageSubresource);
+
+  EXPECT_EQ(bufferCopy.imageSubresource.aspectMask, aspectMask);
+  EXPECT_EQ(bufferCopy.imageSubresource.mipLevel, mipLevel);
+  EXPECT_EQ(bufferCopy.imageSubresource.baseArrayLayer, baseArrayLayer);
+  EXPECT_EQ(bufferCopy.imageSubresource.layerCount, layerCount);
+  EXPECT_EQ(bufferCopy.imageOffset.x, x);
+  EXPECT_EQ(bufferCopy.imageOffset.y, y);
+  EXPECT_EQ(bufferCopy.imageOffset.z, z);
+  EXPECT_EQ(bufferCopy.imageExtent.width, width);
+  EXPECT_EQ(bufferCopy.imageExtent.height, height);
+  EXPECT_EQ(bufferCopy.imageExtent.depth, depth);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AllCombinations,
+    GetBufferImageCopy3DTest,
+    ::testing::Combine(::testing::Values(VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_ASPECT_DEPTH_BIT),
+                       ::testing::Values(0, 5),
+                       ::testing::Values(0, 3),
+                       ::testing::Values(1, 5),
+                       ::testing::Values(100, 500),
+                       ::testing::Values(100, 500),
+                       ::testing::Values(0, 50),
+                       ::testing::Values(1000, 2000)),
+    [](const testing::TestParamInfo<GetBufferImageCopy3DTest::ParamType>& info) {
+      const std::string name =
+          std::to_string(std::get<0>(info.param)) + "_" + std::to_string(std::get<1>(info.param)) +
+          "_" + std::to_string(std::get<2>(info.param)) + "_" +
+          std::to_string(std::get<3>(info.param)) + "_" + std::to_string(std::get<4>(info.param)) +
+          "_" + std::to_string(std::get<5>(info.param)) + "_" +
+          std::to_string(std::get<6>(info.param)) + "_" + std::to_string(std::get<7>(info.param));
+      return name;
+    });
+
+// ivkGetVertexInputBindingDescription *******************************
+class GetVertexInputBindingDescriptionTest
+  : public ::testing::TestWithParam<std::tuple<uint32_t, uint32_t, VkVertexInputRate>> {};
+
+TEST_P(GetVertexInputBindingDescriptionTest, GetVertexInputBindingDescription) {
+  const auto binding = std::get<0>(GetParam());
+  const auto stride = std::get<1>(GetParam());
+  const auto inputRate = std::get<2>(GetParam());
+
+  const VkVertexInputBindingDescription vtxInputBindingDesc =
+      ivkGetVertexInputBindingDescription(binding, stride, inputRate);
+
+  EXPECT_EQ(vtxInputBindingDesc.binding, binding);
+  EXPECT_EQ(vtxInputBindingDesc.stride, stride);
+  EXPECT_EQ(vtxInputBindingDesc.inputRate, inputRate);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AllCombinations,
+    GetVertexInputBindingDescriptionTest,
+    ::testing::Combine(::testing::Values(0, 1),
+                       ::testing::Values(0, 16),
+                       ::testing::Values(VK_VERTEX_INPUT_RATE_VERTEX,
+                                         VK_VERTEX_INPUT_RATE_INSTANCE)),
+    [](const testing::TestParamInfo<GetVertexInputBindingDescriptionTest::ParamType>& info) {
+      const std::string name = std::to_string(std::get<0>(info.param)) + "_" +
+                               std::to_string(std::get<1>(info.param)) + "_" +
+                               std::to_string(std::get<2>(info.param));
+      return name;
+    });
+
+// ivkGetVertexInputAttributeDescription *******************************
+class GetVertexInputAttributeDescriptionTest
+  : public ::testing::TestWithParam<std::tuple<uint32_t, uint32_t, VkFormat, uint32_t>> {};
+
+TEST_P(GetVertexInputAttributeDescriptionTest, GetVertexInputAttributeDescription) {
+  const auto location = std::get<0>(GetParam());
+  const auto binding = std::get<1>(GetParam());
+  const auto format = std::get<2>(GetParam());
+  const auto offset = std::get<3>(GetParam());
+
+  const VkVertexInputAttributeDescription vtxInputAttrDesc =
+      ivkGetVertexInputAttributeDescription(location, binding, format, offset);
+
+  EXPECT_EQ(vtxInputAttrDesc.location, location);
+  EXPECT_EQ(vtxInputAttrDesc.binding, binding);
+  EXPECT_EQ(vtxInputAttrDesc.format, format);
+  EXPECT_EQ(vtxInputAttrDesc.offset, offset);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AllCombinations,
+    GetVertexInputAttributeDescriptionTest,
+    ::testing::Combine(::testing::Values(0, 1),
+                       ::testing::Values(0, 1),
+                       ::testing::Values(VK_FORMAT_R8G8B8_UNORM, VK_FORMAT_R8G8B8_SNORM),
+                       ::testing::Values(0, 16)),
+    [](const testing::TestParamInfo<GetVertexInputAttributeDescriptionTest::ParamType>& info) {
+      const std::string name = std::to_string(std::get<0>(info.param)) + "_" +
+                               std::to_string(std::get<1>(info.param)) + "_" +
+                               std::to_string(std::get<2>(info.param)) + "_" +
+                               std::to_string(std::get<3>(info.param));
       return name;
     });
 

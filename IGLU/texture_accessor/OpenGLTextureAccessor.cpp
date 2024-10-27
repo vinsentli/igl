@@ -51,14 +51,14 @@ OpenGLTextureAccessor::OpenGLTextureAccessor(std::shared_ptr<igl::ITexture> text
     context.bufferData(GL_PIXEL_PACK_BUFFER, textureBytesPerImage_, nullptr, GL_DYNAMIC_READ);
     context.bindBuffer(GL_PIXEL_PACK_BUFFER, 0);
   }
-};
+}
 
 void OpenGLTextureAccessor::requestBytes(igl::ICommandQueue& commandQueue,
                                          std::shared_ptr<igl::ITexture> texture) {
   dataCopied_ = false;
   if (texture) {
-    IGL_ASSERT(textureWidth_ == texture->getDimensions().width &&
-               textureHeight_ == texture->getDimensions().height);
+    IGL_DEBUG_ASSERT(textureWidth_ == texture->getDimensions().width &&
+                     textureHeight_ == texture->getDimensions().height);
     texture_ = std::move(texture);
     frameBuffer_->updateDrawable(texture_);
     textureAttached_ = false;
@@ -84,7 +84,7 @@ void OpenGLTextureAccessor::requestBytes(igl::ICommandQueue& commandQueue,
     }
     const auto& properties = glTexture.getProperties();
     context.pixelStorei(GL_PACK_ALIGNMENT,
-                        glTexture.getAlignment(properties.getBytesPerRow(textureWidth_), 0));
+                        glTexture.getAlignment(properties.getBytesPerRow(textureWidth_)));
 
     // Start transferring from framebuffer -> PBO
     context.bindBuffer(GL_PIXEL_PACK_BUFFER, pboId_);
@@ -110,10 +110,10 @@ RequestStatus OpenGLTextureAccessor::getRequestStatus() {
     auto& texture = static_cast<igl::opengl::Texture&>(*texture_);
     auto& context = texture.getContext();
     // If a read is in progress, check whether it has completed
-    int result;
-    int valuesLength;
+    int result = 0;
+    int valuesLength = 0;
     context.getSynciv(sync_, GL_SYNC_STATUS, 1, &valuesLength, &result);
-    IGL_ASSERT(valuesLength == 1);
+    IGL_DEBUG_ASSERT(valuesLength == 1);
     status_ = result == GL_SIGNALED ? RequestStatus::Ready : RequestStatus::InProgress;
     if (status_ == RequestStatus::Ready) {
       context.deleteSync(sync_);
@@ -121,7 +121,7 @@ RequestStatus OpenGLTextureAccessor::getRequestStatus() {
     }
   }
   return status_;
-};
+}
 
 std::vector<unsigned char>& OpenGLTextureAccessor::getBytes() {
   copyBytes(latestBytesRead_.data(), latestBytesRead_.size());
@@ -140,7 +140,7 @@ size_t OpenGLTextureAccessor::copyBytes(unsigned char* ptr, size_t length) {
     context.bindBuffer(GL_PIXEL_PACK_BUFFER, pboId_);
     auto* bytes =
         context.mapBufferRange(GL_PIXEL_PACK_BUFFER, 0, textureBytesPerImage_, GL_MAP_READ_BIT);
-    if (IGL_VERIFY(bytes)) {
+    if (IGL_DEBUG_VERIFY(bytes)) {
       checked_memcpy_robust(ptr, length, bytes, textureBytesPerImage_, textureBytesPerImage_);
       length = textureBytesPerImage_;
       dataCopied_ = true;

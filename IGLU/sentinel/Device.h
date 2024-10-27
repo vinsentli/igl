@@ -31,6 +31,7 @@ class Device final : public igl::IDevice {
       igl::Result* IGL_NULLABLE outResult) final;
   void destroy(igl::BindGroupTextureHandle handle) final;
   void destroy(igl::BindGroupBufferHandle handle) final;
+  void destroy(igl::SamplerHandle handle) final;
 
   [[nodiscard]] bool hasFeature(igl::DeviceFeatures feature) const final;
   [[nodiscard]] bool hasRequirement(igl::DeviceRequirement requirement) const final;
@@ -39,6 +40,8 @@ class Device final : public igl::IDevice {
   [[nodiscard]] bool getFeatureLimits(igl::DeviceFeatureLimits featureLimits,
                                       size_t& result) const final;
   [[nodiscard]] igl::ShaderVersion getShaderVersion() const final;
+  [[nodiscard]] igl::BackendVersion getBackendVersion() const final;
+
   [[nodiscard]] std::shared_ptr<igl::ICommandQueue> createCommandQueue(
       const igl::CommandQueueDesc& desc,
       igl::Result* IGL_NULLABLE outResult) final;

@@ -29,8 +29,11 @@ public class VulkanView extends SurfaceView
   private float lastTouchY = 0.0f;
   Context mContext;
   RenderThread mRenderThread;
+  private final SampleLib.BackendVersion mBackendVersion;
+  private final int mSwapchainColorTextureFormat;
 
-  public VulkanView(Context context) {
+  public VulkanView(
+      Context context, SampleLib.BackendVersion backendVersion, int swapchainColorTextureFormat) {
 
     super(context);
 
@@ -39,6 +42,8 @@ public class VulkanView extends SurfaceView
     this.getHolder().addCallback(this);
 
     mContext = context;
+    mBackendVersion = backendVersion;
+    mSwapchainColorTextureFormat = swapchainColorTextureFormat;
   }
 
   @Override
@@ -74,7 +79,8 @@ public class VulkanView extends SurfaceView
   @Override
   public void surfaceCreated(SurfaceHolder surfaceHolder) {
     // Start rendering on the RenderThread
-    mRenderThread = new RenderThread(mContext, surfaceHolder);
+    mRenderThread =
+        new RenderThread(mContext, surfaceHolder, mBackendVersion, mSwapchainColorTextureFormat);
     mRenderThread.setName("Vulkan Render Thread");
     mRenderThread.start();
     mRenderThread.waitUntilReady();
@@ -137,10 +143,18 @@ public class VulkanView extends SurfaceView
 
     private Object mStartLock = new Object();
     private boolean mReady = false;
+    private final SampleLib.BackendVersion mBackendVersion;
+    private final int mSwapchainColorTextureFormat;
 
-    public RenderThread(Context context, SurfaceHolder surfaceHolder) {
+    public RenderThread(
+        Context context,
+        SurfaceHolder surfaceHolder,
+        SampleLib.BackendVersion backendVersion,
+        int swapchainColorTextureformat) {
       mContext = context;
       mSurfaceHolder = surfaceHolder;
+      mBackendVersion = backendVersion;
+      mSwapchainColorTextureFormat = swapchainColorTextureformat;
     }
 
     public RenderHandler getHandler() {
@@ -181,7 +195,7 @@ public class VulkanView extends SurfaceView
     public void surfaceCreated() {
       Log.d(TAG, "SurfaceCreated");
       Surface surface = mSurfaceHolder.getSurface();
-      SampleLib.init(mContext.getAssets(), surface);
+      SampleLib.init(mBackendVersion, mSwapchainColorTextureFormat, mContext.getAssets(), surface);
     }
 
     public void surfaceChanged(int width, int height) {

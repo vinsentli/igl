@@ -47,7 +47,7 @@ std::unique_ptr<Buffer> allocateBuffer(BufferDesc::BufferType bufferType,
     }
 
   } else {
-    IGL_ASSERT_NOT_REACHED(); // desc.type is corrupt or new enum type was introduced
+    IGL_DEBUG_ASSERT_NOT_REACHED(); // desc.type is corrupt or new enum type was introduced
   }
 
   return resource;
@@ -58,7 +58,7 @@ Ptr verifyResult(Ptr resource, Result inResult, Result* outResult) {
   if (inResult.isOk()) {
     Result::setOk(outResult);
   } else {
-    IGL_ASSERT_MSG(0, inResult.message.c_str());
+    IGL_DEBUG_ABORT(inResult.message.c_str());
     resource = {};
     Result::setResult(outResult, std::move(inResult));
   }
@@ -171,11 +171,11 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
   if (sanitized.type == TextureType::TwoD || sanitized.type == TextureType::TwoDArray) {
     size_t textureSizeLimit;
     getFeatureLimits(DeviceFeatureLimits::MaxTextureDimension1D2D, textureSizeLimit);
-    IGL_ASSERT_MSG(sanitized.width <= textureSizeLimit && sanitized.height <= textureSizeLimit,
-                   "Texture limit size %zu is smaller than texture size %zux%zu",
-                   textureSizeLimit,
-                   sanitized.width,
-                   sanitized.height);
+    IGL_DEBUG_ASSERT(sanitized.width <= textureSizeLimit && sanitized.height <= textureSizeLimit,
+                     "Texture limit size %zu is smaller than texture size %zux%zu",
+                     textureSizeLimit,
+                     sanitized.width,
+                     sanitized.height);
   }
 #endif
 
@@ -209,7 +209,7 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
 
   // sanity check to ensure that the Result value and the returned object are in sync
   // i.e. we never have a valid Result with a nullptr return value, or vice versa
-  IGL_ASSERT(outResult == nullptr || (outResult->isOk() == (texture != nullptr)));
+  IGL_DEBUG_ASSERT(outResult == nullptr || (outResult->isOk() == (texture != nullptr)));
 
   return texture;
 }
@@ -238,7 +238,7 @@ std::shared_ptr<IComputePipelineState> Device::createComputePipeline(
 std::unique_ptr<igl::IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryDesc& /*desc*/,
                                                                  Result* outResult) const {
   Result::setResult(outResult, Result::Code::Unsupported);
-  IGL_ASSERT_NOT_IMPLEMENTED();
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   return nullptr;
 }
 
@@ -265,7 +265,7 @@ std::unique_ptr<IShaderStages> Device::createShaderStages(const ShaderStagesDesc
 
 std::shared_ptr<IFramebuffer> Device::createFramebuffer(const FramebufferDesc& desc,
                                                         Result* outResult) {
-  IGL_ASSERT(deviceFeatureSet_.hasInternalFeature(InternalFeatures::FramebufferObject));
+  IGL_DEBUG_ASSERT(deviceFeatureSet_.hasInternalFeature(InternalFeatures::FramebufferObject));
   return getPlatformDevice().createFramebuffer(desc, outResult);
 }
 
@@ -287,14 +287,19 @@ ICapabilities::TextureFormatCapabilities Device::getTextureFormatCapabilities(
 }
 
 ShaderVersion Device::getShaderVersion() const {
-  IGL_ASSERT(context_);
+  IGL_DEBUG_ASSERT(context_);
   return deviceFeatureSet_.getShaderVersion();
+}
+
+BackendVersion Device::getBackendVersion() const {
+  IGL_DEBUG_ASSERT(context_);
+  return deviceFeatureSet_.getBackendVersion();
 }
 
 void Device::beginScope() {
   IDevice::beginScope();
 
-  IGL_ASSERT(context_);
+  IGL_DEBUG_ASSERT(context_);
   context_->setCurrent();
 
   // UnbindPolicy is fixed for duration of this scope
@@ -323,7 +328,7 @@ void Device::endScope() {
 void Device::updateSurface(void* nativeWindowType) {}
 
 bool Device::verifyScope() {
-  IGL_ASSERT(context_);
+  IGL_DEBUG_ASSERT(context_);
   return IDevice::verifyScope() && context_->isCurrentContext();
 }
 
@@ -335,8 +340,8 @@ Holder<igl::BindGroupTextureHandle> Device::createBindGroup(
     const BindGroupTextureDesc& desc,
     const IRenderPipelineState* IGL_NULLABLE /*compatiblePipeline*/,
     Result* IGL_NULLABLE outResult) {
-  IGL_ASSERT(context_);
-  IGL_ASSERT_MSG(!desc.debugName.empty(), "Each bind group should have a debug name");
+  IGL_DEBUG_ASSERT(context_);
+  IGL_DEBUG_ASSERT(!desc.debugName.empty(), "Each bind group should have a debug name");
 
   BindGroupTextureDesc description(desc);
 
@@ -351,8 +356,8 @@ Holder<igl::BindGroupTextureHandle> Device::createBindGroup(
 
 Holder<igl::BindGroupBufferHandle> Device::createBindGroup(const BindGroupBufferDesc& desc,
                                                            Result* IGL_NULLABLE outResult) {
-  IGL_ASSERT(context_);
-  IGL_ASSERT_MSG(!desc.debugName.empty(), "Each bind group should have a debug name");
+  IGL_DEBUG_ASSERT(context_);
+  IGL_DEBUG_ASSERT(!desc.debugName.empty(), "Each bind group should have a debug name");
 
   BindGroupBufferDesc description(desc);
 
@@ -370,7 +375,7 @@ void Device::destroy(igl::BindGroupTextureHandle handle) {
     return;
   }
 
-  IGL_ASSERT(context_);
+  IGL_DEBUG_ASSERT(context_);
 
   context_->bindGroupTexturesPool_.destroy(handle);
 }
@@ -380,9 +385,18 @@ void Device::destroy(igl::BindGroupBufferHandle handle) {
     return;
   }
 
-  IGL_ASSERT(context_);
+  IGL_DEBUG_ASSERT(context_);
 
   context_->bindGroupBuffersPool_.destroy(handle);
+}
+
+void Device::destroy(igl::SamplerHandle handle) {
+  (void)handle;
+  // IGL/OpenGL is not using sampler handles
+}
+
+void Device::setCurrentThread() {
+  getContext().setCurrent();
 }
 
 } // namespace igl::opengl

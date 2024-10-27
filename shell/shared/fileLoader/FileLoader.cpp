@@ -21,17 +21,17 @@ namespace fs = boost::filesystem;
 namespace igl::shell {
 
 FileLoader::FileData FileLoader::loadBinaryDataInternal(const std::string& filePath) {
-  if (IGL_UNEXPECTED_MSG(!fs::exists(filePath), "Couldn't find file: %s", filePath.c_str())) {
+  if (IGL_DEBUG_VERIFY_NOT(!fs::exists(filePath), "Couldn't find file: %s", filePath.c_str())) {
     return {};
   }
   const uintmax_t length = fs::file_size(filePath);
 
-  if (IGL_UNEXPECTED(length > std::numeric_limits<uint32_t>::max())) {
+  if (IGL_DEBUG_VERIFY_NOT(length > std::numeric_limits<uint32_t>::max())) {
     return {};
   }
 
   std::FILE* file = std::fopen(filePath.c_str(), "rb");
-  if (IGL_UNEXPECTED(file == nullptr)) {
+  if (IGL_DEBUG_VERIFY_NOT(file == nullptr)) {
     return {};
   }
 

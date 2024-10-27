@@ -8,6 +8,8 @@
 #import <Cocoa/Cocoa.h>
 #import <MetalKit/MetalKit.h>
 #import <igl/Common.h>
+#import <igl/DeviceFeatures.h>
+#import <shell/shared/renderSession/IRenderSessionFactory.h>
 
 NS_ASSUME_NONNULL_BEGIN
 @interface ViewController : NSViewController <MTKViewDelegate>
@@ -15,14 +17,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic) NSView* iglView;
 
 - (instancetype)initWithFrame:(CGRect)frame
-                  backendType:(igl::BackendType)backendType
-          preferLatestVersion:(bool)preferLatestVersion NS_DESIGNATED_INITIALIZER;
-
-// For openGL only
-- (instancetype)initWithFrame:(CGRect)frame
-                  backendType:(igl::BackendType)backendType
-                 majorVersion:(int)majorVersion
-                 minorVersion:(int)minorVersion;
+                      factory:(igl::shell::IRenderSessionFactory&)factory
+                       config:(igl::shell::RenderSessionConfig)config;
 
 // Explicitly disable superclass' designated initializers
 - (instancetype)initWithNibName:(nullable NSNibName)nibNameOrNil
@@ -33,5 +29,6 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)render;
 - (void)teardown;
 - (CGRect)frame;
+- (igl::ColorSpace)colorSpace;
 @end
 NS_ASSUME_NONNULL_END

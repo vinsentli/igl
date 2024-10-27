@@ -8,14 +8,13 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <shell/shared/platform/Platform.h>
-#include <shell/shared/renderSession/AppParams.h>
 
-namespace igl {
-class ITexture;
-} // namespace igl
+namespace igl {} // namespace igl
 
 namespace igl::shell {
+struct AppParams;
 struct ShellParams;
 
 class RenderSession {
@@ -54,6 +53,13 @@ class RenderSession {
 
   static double getSeconds() noexcept;
 
+  void releaseFramebuffer() {
+    framebuffer_ = nullptr;
+  }
+
+  void setPreferredClearColor(const igl::Color& color) noexcept;
+  igl::Color getPreferredClearColor() noexcept;
+
  protected:
   Platform& getPlatform() noexcept;
   [[nodiscard]] const Platform& getPlatform() const noexcept;
@@ -69,7 +75,8 @@ class RenderSession {
 
  private:
   std::shared_ptr<Platform> platform_;
-  std::unique_ptr<AppParams> appParams_;
+  std::shared_ptr<AppParams> appParams_;
+  std::optional<igl::Color> preferredClearColor_;
   const ShellParams* shellParams_ = nullptr;
 };
 

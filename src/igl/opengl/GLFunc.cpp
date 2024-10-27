@@ -4,6 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
+// @fb-only
 
 #include <igl/opengl/GLFunc.h>
 
@@ -20,19 +21,28 @@
 #define IGL_GET_PROC_ADDRESS(funcName) nullptr
 #endif // IGL_EGL
 
+// When using OpenGL, Tracy needs glQueryCounterEXT to be defined, but it's not available in all
+// platforms or OpenGL versions. The following is a workaround to make Tracy work in all platforms.
+// Note: OpenGL has not been tested with Tracy yet, and that's why the workaround works with OpenGL
+#if defined(IGL_WITH_TRACY)
+#if !defined GL_TIMESTAMP && defined GL_TIMESTAMP_EXT
+extern "C" void glQueryCounterEXT(GLuint, GLenum) {}
+#endif
+#endif
+
 #define GLEXTENSION_DIRECT_CALL(funcName, funcType, ...) funcName(__VA_ARGS__);
 #define GLEXTENSION_DIRECT_CALL_WITH_RETURN(funcName, funcType, returnOnError, ...) \
   return funcName(__VA_ARGS__);
 
-#define GLEXTENSION_LOAD_AND_CALL(funcName, funcType, ...)           \
-  static funcType funcAddr = nullptr;                                \
-  if (funcAddr == nullptr) {                                         \
-    funcAddr = (funcType)IGL_GET_PROC_ADDRESS(#funcName);            \
-  }                                                                  \
-  if (funcAddr != nullptr) {                                         \
-    funcAddr(__VA_ARGS__);                                           \
-  } else {                                                           \
-    IGL_ASSERT_MSG(0, "Extension function " #funcName " not found"); \
+#define GLEXTENSION_LOAD_AND_CALL(funcName, funcType, ...)         \
+  static funcType funcAddr = nullptr;                              \
+  if (funcAddr == nullptr) {                                       \
+    funcAddr = (funcType)IGL_GET_PROC_ADDRESS(#funcName);          \
+  }                                                                \
+  if (funcAddr != nullptr) {                                       \
+    funcAddr(__VA_ARGS__);                                         \
+  } else {                                                         \
+    IGL_DEBUG_ABORT("Extension function " #funcName " not found"); \
   }
 #define GLEXTENSION_LOAD_AND_CALL_WITH_RETURN(funcName, funcType, returnOnError, ...) \
   static funcType funcAddr = nullptr;                                                 \
@@ -42,14 +52,14 @@
   if (funcAddr != nullptr) {                                                          \
     return funcAddr(__VA_ARGS__);                                                     \
   } else {                                                                            \
-    IGL_ASSERT_MSG(0, "Extension function " #funcName " not found");                  \
+    IGL_DEBUG_ABORT("Extension function " #funcName " not found");                    \
     return returnOnError;                                                             \
   }
 
 #define GLEXTENSION_UNAVAILABLE(funcName, funcType, ...) \
-  IGL_ASSERT_MSG(0, "Extension function " #funcName " not found");
+  IGL_DEBUG_ABORT("Extension function " #funcName " not found");
 #define GLEXTENSION_UNAVAILABLE_WITH_RETURN(funcName, funcType, returnOnError, ...) \
-  IGL_ASSERT_MSG(0, "Extension function " #funcName " not found");                  \
+  IGL_DEBUG_ABORT("Extension function " #funcName " not found");                    \
   return returnOnError;
 
 #if IGL_EGL || IGL_WGL

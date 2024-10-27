@@ -14,6 +14,7 @@
     IGL_PLATFORM_LINUX
 #include <igl/vulkan/HWDevice.h>
 #include <igl/vulkan/VulkanContext.h>
+#include <igl/vulkan/VulkanFeatures.h>
 #endif
 
 #if IGL_PLATFORM_MACOS
@@ -27,14 +28,8 @@ namespace igl::tests::util::device::vulkan {
 //
 // Used by clients to get an IGL device.
 //
-std::shared_ptr<::igl::IDevice> createTestDevice(bool enableValidation) {
-#if IGL_PLATFORM_MACOS
-  ::igl::vulkan::setupMoltenVKEnvironment();
-#endif
 
-  std::shared_ptr<igl::IDevice> iglDev = nullptr;
-  Result ret;
-
+igl::vulkan::VulkanContextConfig getContextConfig(bool enableValidation) {
   igl::vulkan::VulkanContextConfig config;
   config.enhancedShaderDebugging = false; // This causes issues for MoltenVK
   config.enableValidation = enableValidation;
@@ -52,9 +47,19 @@ std::shared_ptr<::igl::IDevice> createTestDevice(bool enableValidation) {
   config.enableValidation = false;
   config.terminateOnValidationError = false;
 #endif
-  // Disables OS Level Color Management to achieve parity with OpenGL
-  config.swapChainColorSpace = igl::ColorSpace::PASS_THROUGH;
+  config.swapChainColorSpace = igl::ColorSpace::SRGB_NONLINEAR;
   config.enableExtraLogs = enableValidation;
+
+  return config;
+}
+
+std::shared_ptr<::igl::IDevice> createTestDevice(const igl::vulkan::VulkanContextConfig& config) {
+#if IGL_PLATFORM_MACOS
+  ::igl::vulkan::setupMoltenVKEnvironment();
+#endif
+
+  std::shared_ptr<igl::IDevice> iglDev = nullptr;
+  Result ret;
 
   auto ctx = igl::vulkan::HWDevice::createContext(config, nullptr);
 
@@ -65,12 +70,16 @@ std::shared_ptr<::igl::IDevice> createTestDevice(bool enableValidation) {
     std::vector<const char*> extraDeviceExtensions;
     extraDeviceExtensions.emplace_back(VK_KHR_MULTIVIEW_EXTENSION_NAME);
 
+    igl::vulkan::VulkanFeatures features(VK_API_VERSION_1_1, config);
+    features.populateWithAvailablePhysicalDeviceFeatures(*ctx, (VkPhysicalDevice)devices[0].guid);
+
     iglDev = igl::vulkan::HWDevice::create(std::move(ctx),
                                            devices[0],
                                            0, // width
                                            0, // height,
                                            extraDeviceExtensions.size(),
                                            extraDeviceExtensions.data(),
+                                           &features,
                                            &ret);
 
     if (!ret.isOk()) {
@@ -79,6 +88,10 @@ std::shared_ptr<::igl::IDevice> createTestDevice(bool enableValidation) {
   }
 
   return iglDev;
+}
+
+std::shared_ptr<::igl::IDevice> createTestDevice(bool enableValidation) {
+  return createTestDevice(getContextConfig(enableValidation));
 }
 
 } // namespace igl::tests::util::device::vulkan

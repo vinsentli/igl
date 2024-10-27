@@ -32,14 +32,14 @@ ShaderStages::~ShaderStages() {
 }
 
 void ShaderStages::createRenderProgram(Result* result) {
-  if (!IGL_VERIFY(getVertexModule())) {
+  if (!IGL_DEBUG_VERIFY(getVertexModule())) {
     // we need a vertex shader and a fragment shader in order to link the program
     Result::setResult(
         result, Result::Code::ArgumentInvalid, "Missing required vertex shader stage");
     return;
   }
 
-  if (!IGL_VERIFY(getFragmentModule())) {
+  if (!IGL_DEBUG_VERIFY(getFragmentModule())) {
     // we need a vertex shader and a fragment shader in order to link the program
     Result::setResult(
         result, Result::Code::ArgumentInvalid, "Missing required fragment shader stage");
@@ -106,7 +106,7 @@ void ShaderStages::createRenderProgram(Result* result) {
 }
 
 void ShaderStages::createComputeProgram(Result* result) {
-  if (!IGL_VERIFY(getComputeModule())) {
+  if (!IGL_DEBUG_VERIFY(getComputeModule())) {
     // we need a vertex shader and a fragment shader in order to link the program
     Result::setResult(result, Result::Code::ArgumentInvalid, "Missing required compute shader");
     return;
@@ -167,7 +167,7 @@ Result ShaderStages::create(const ShaderStagesDesc& /*desc*/) {
   } else if (getType() == ShaderStagesType::Compute) {
     createComputeProgram(&result);
   } else {
-    IGL_ASSERT_NOT_REACHED();
+    IGL_DEBUG_ASSERT_NOT_REACHED();
   }
 
   return result;
@@ -207,7 +207,7 @@ ShaderModule::~ShaderModule() {
 // compile the shader from the given src shader code
 Result ShaderModule::create(const ShaderModuleDesc& desc) {
   if (desc.input.type == ShaderInputType::Binary) {
-    IGL_ASSERT_NOT_IMPLEMENTED();
+    IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
     return Result(Result::Code::Unimplemented);
   }
 

@@ -53,7 +53,7 @@ TextureBuffer::~TextureBuffer() {
 uint64_t TextureBuffer::getTextureId() const {
   if (textureHandle_ == 0) {
     textureHandle_ = getContext().getTextureHandle(getId());
-    IGL_ASSERT(textureHandle_);
+    IGL_DEBUG_ASSERT(textureHandle_);
     getContext().makeTextureHandleResident(textureHandle_);
   }
   return textureHandle_;
@@ -80,7 +80,8 @@ void TextureBuffer::bindImage(size_t unit) {
   // Here we used to have this condition:
   //    getUsage() & TextureUsage::kShaderWrite ? GL_WRITE_ONLY : GL_READ_ONLY,
   // So it is safe to replace it with GL_READ_WRITE
-  IGL_ASSERT_MSG(getUsage() & TextureDesc::TextureUsageBits::Storage, "Should be a storage image");
+  IGL_DEBUG_ASSERT(getUsage() & TextureDesc::TextureUsageBits::Storage,
+                   "Should be a storage image");
   getContext().bindImageTexture((GLuint)unit,
                                 getId(),
                                 0,
@@ -203,7 +204,7 @@ Result TextureBuffer::initializeWithTexStorage() const {
         target, range.numMipLevels, glInternalFormat_, (GLsizei)range.width, (GLsizei)range.height);
     break;
   default:
-    IGL_ASSERT_MSG(false, "Unknown texture type");
+    IGL_DEBUG_ABORT("Unknown texture type");
     return Result{Result::Code::InvalidOperation, "Unknown texture type"};
   }
   return getContext().getLastError();
@@ -237,7 +238,7 @@ Result TextureBuffer::upload2D(GLenum target,
     }
   } else {
     const auto numCompressedBytes = getProperties().getBytesPerRange(range);
-    IGL_ASSERT(numCompressedBytes > 0);
+    IGL_DEBUG_ASSERT(numCompressedBytes > 0);
     if (texImage) {
       getContext().compressedTexImage2D(target,
                                         (GLint)range.mipLevel,
@@ -296,7 +297,7 @@ Result TextureBuffer::upload2DArray(GLenum target,
     }
   } else {
     const auto numCompressedBytes = getProperties().getBytesPerRange(range);
-    IGL_ASSERT(numCompressedBytes > 0);
+    IGL_DEBUG_ASSERT(numCompressedBytes > 0);
     if (texImage) {
       getContext().compressedTexImage3D(target,
                                         (GLint)range.mipLevel,
@@ -357,7 +358,7 @@ Result TextureBuffer::upload3D(GLenum target,
     }
   } else {
     const auto numCompressedBytes = getProperties().getBytesPerRange(range);
-    IGL_ASSERT(numCompressedBytes > 0);
+    IGL_DEBUG_ASSERT(numCompressedBytes > 0);
     if (texImage) {
       getContext().compressedTexImage3D(target,
                                         (GLint)range.mipLevel,
@@ -460,7 +461,8 @@ Result TextureBuffer::uploadInternal(GLenum target,
     if (unpackRowLengthSupported) {
       getContext().pixelStorei(GL_UNPACK_ROW_LENGTH, 0);
     }
-    getContext().pixelStorei(GL_UNPACK_ALIGNMENT, this->getAlignment(bytesPerRow, range.mipLevel));
+    getContext().pixelStorei(GL_UNPACK_ALIGNMENT,
+                             this->getAlignment(bytesPerRow, range.mipLevel, range.width));
   }
 
   Result result;

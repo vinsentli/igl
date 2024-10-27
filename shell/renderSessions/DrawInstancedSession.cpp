@@ -118,7 +118,7 @@ void main() {
 std::unique_ptr<IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
-    IGL_ASSERT_NOT_REACHED();
+    IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
   case igl::BackendType::Vulkan:
     return igl::ShaderStagesCreator::fromModuleStringInput(device,
@@ -159,7 +159,7 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
       return igl::ShaderStagesCreator::fromModuleStringInput(
           device, codeVS.c_str(), "main", "", codeFS.c_str(), "main", "", nullptr);
     } else {
-      IGL_ASSERT_MSG(0, "This sample is incompatible with OpenGL 2.1");
+      IGL_DEBUG_ABORT("This sample is incompatible with OpenGL 2.1");
       return nullptr;
     }
 #else
@@ -181,7 +181,7 @@ void DrawInstancedSession::initialize() noexcept {
   renderPass_.colorAttachments[0] = igl::RenderPassDesc::ColorAttachmentDesc{};
   renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
   renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPass_.colorAttachments[0].clearColor = getPlatform().getDevice().backendDebugColor();
+  renderPass_.colorAttachments[0].clearColor = getPreferredClearColor();
   renderPass_.depthAttachment.loadAction = LoadAction::DontCare;
 
   // Create Index Buffer
@@ -192,7 +192,7 @@ void DrawInstancedSession::initialize() noexcept {
   buffer_desc.length = sizeof(indexes);
   buffer_desc.data = &indexes;
   index_buffer_ = getPlatform().getDevice().createBuffer(buffer_desc, nullptr);
-  IGL_ASSERT(index_buffer_);
+  IGL_DEBUG_ASSERT(index_buffer_);
 }
 
 void DrawInstancedSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
@@ -201,7 +201,7 @@ void DrawInstancedSession::update(igl::SurfaceTextures surfaceTextures) noexcept
 
   const auto dimensions = surfaceTextures.color->getDimensions();
   framebuffer_ = getPlatform().getDevice().createFramebuffer(framebufferDesc, nullptr);
-  IGL_ASSERT(framebuffer_);
+  IGL_DEBUG_ASSERT(framebuffer_);
 
   if (!renderPipelineState_Triangle_) {
     VertexInputStateDesc inputDesc;
@@ -211,7 +211,7 @@ void DrawInstancedSession::update(igl::SurfaceTextures surfaceTextures) noexcept
     inputDesc.inputBindings[1].stride = sizeof(float) * 2;
     inputDesc.inputBindings[1].sampleFunction = igl::VertexSampleFunction::Instance;
     auto vertexInput0_ = getPlatform().getDevice().createVertexInputState(inputDesc, nullptr);
-    IGL_ASSERT(vertexInput0_ != nullptr);
+    IGL_DEBUG_ASSERT(vertexInput0_ != nullptr);
 
     RenderPipelineDesc desc;
     desc.vertexInputState = vertexInput0_;
@@ -230,7 +230,7 @@ void DrawInstancedSession::update(igl::SurfaceTextures surfaceTextures) noexcept
 
     desc.shaderStages = getShaderStagesForBackend(getPlatform().getDevice());
     renderPipelineState_Triangle_ = getPlatform().getDevice().createRenderPipeline(desc, nullptr);
-    IGL_ASSERT(renderPipelineState_Triangle_);
+    IGL_DEBUG_ASSERT(renderPipelineState_Triangle_);
   }
 
   if (!vertex_buffer_) {
@@ -251,7 +251,7 @@ void DrawInstancedSession::update(igl::SurfaceTextures surfaceTextures) noexcept
     desc.length = sizeof(glm::vec2) * 100;
     desc.data = translations;
     vertex_buffer_ = getPlatform().getDevice().createBuffer(desc, nullptr);
-    IGL_ASSERT(vertex_buffer_);
+    IGL_DEBUG_ASSERT(vertex_buffer_);
   }
 
   framebuffer_->updateDrawable(surfaceTextures.color);

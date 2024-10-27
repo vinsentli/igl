@@ -24,16 +24,16 @@ class PipelineState;
 class SamplerState;
 class Texture;
 class VulkanBuffer;
-class VulkanSampler;
 class VulkanTexture;
+struct VulkanSampler;
 
 struct BindingsBuffers {
   VkDescriptorBufferInfo buffers[IGL_UNIFORM_BLOCKS_BINDING_MAX] = {};
 };
 
 struct BindingsTextures {
-  igl::vulkan::VulkanTexture* textures[IGL_TEXTURE_SAMPLERS_MAX] = {};
-  igl::vulkan::VulkanSampler* samplers[IGL_TEXTURE_SAMPLERS_MAX] = {};
+  VkImageView textures[IGL_TEXTURE_SAMPLERS_MAX] = {};
+  VkSampler samplers[IGL_TEXTURE_SAMPLERS_MAX] = {};
 };
 
 /** @brief Stores uniform and storage buffer bindings, as well as bindings for textures and sampler
@@ -51,7 +51,7 @@ struct BindingsTextures {
 class ResourcesBinder final {
  public:
   ResourcesBinder(const CommandBuffer* commandBuffer,
-                  const VulkanContext& ctx,
+                  VulkanContext& ctx,
                   VkPipelineBindPoint bindPoint);
 
   /// @brief Binds a uniform buffer with an offset to index equal to `index`
@@ -91,7 +91,7 @@ class ResourcesBinder final {
   };
 
  private:
-  const VulkanContext& ctx_;
+  VulkanContext& ctx_;
   VkCommandBuffer cmdBuffer_ = VK_NULL_HANDLE;
   VkPipeline lastPipelineBound_ = VK_NULL_HANDLE;
   uint32_t isDirtyFlags_ = DirtyFlagBits_Textures | DirtyFlagBits_Buffers;

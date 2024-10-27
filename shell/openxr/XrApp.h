@@ -9,22 +9,19 @@
 
 #pragma once
 
-#include <igl/Macros.h>
-
 #include <array>
-#include <string>
-#include <unordered_set>
-#include <vector>
-
+#include <glm/glm.hpp>
+#include <igl/IGL.h>
+#include <igl/Macros.h>
 #include <shell/openxr/XrComposition.h>
 #include <shell/openxr/XrPlatform.h>
 #include <shell/openxr/XrRefreshRate.h>
-
-#include <glm/glm.hpp>
-
-#include <igl/IGL.h>
 #include <shell/shared/platform/Platform.h>
 #include <shell/shared/renderSession/RenderSession.h>
+#include <shell/shared/renderSession/RenderSessionConfig.h>
+#include <string>
+#include <unordered_set>
+#include <vector>
 
 struct android_app;
 struct AAssetManager;
@@ -102,8 +99,8 @@ class XrApp {
   [[nodiscard]] inline bool passthroughSupported() const noexcept;
   [[nodiscard]] inline bool passthroughEnabled() const noexcept;
 
-  [[nodiscard]] inline bool handsTrackingSupported() const noexcept;
-  [[nodiscard]] inline bool handsTrackingMeshSupported() const noexcept;
+  [[nodiscard]] inline bool handTrackingSupported() const noexcept;
+  [[nodiscard]] inline bool handTrackingMeshSupported() const noexcept;
   [[nodiscard]] inline bool refreshRateExtensionSupported() const noexcept;
   [[nodiscard]] inline bool instanceCreateInfoAndroidSupported() const noexcept;
   [[nodiscard]] inline bool alphaBlendCompositionSupported() const noexcept;
@@ -120,9 +117,13 @@ class XrApp {
       .next = nullptr,
   };
 
+  XrSystemHandTrackingPropertiesEXT handTrackingSystemProps_ = {
+      .type = XR_TYPE_SYSTEM_HAND_TRACKING_PROPERTIES_EXT,
+      .next = nullptr,
+  };
   XrSystemProperties systemProps_ = {
       .type = XR_TYPE_SYSTEM_PROPERTIES,
-      .next = nullptr,
+      .next = &handTrackingSystemProps_,
   };
 
 #if IGL_PLATFORM_ANDROID
@@ -165,6 +166,7 @@ class XrApp {
   std::shared_ptr<igl::shell::Platform> platform_;
   std::unique_ptr<igl::shell::RenderSession> renderSession_;
 
+  igl::shell::RenderSessionConfig sessionConfig_;
   std::unique_ptr<igl::shell::ShellParams> shellParams_;
 };
 } // namespace igl::shell::openxr

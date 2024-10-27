@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// @fb-only
+
 #import <MetalKit/MetalKit.h>
 #import <UIKit/UIKit.h>
 
@@ -12,6 +14,10 @@
 - (void)touchBegan:(UITouch*)touch;
 - (void)touchEnded:(UITouch*)touch;
 - (void)touchMoved:(UITouch*)touch;
+@end
+
+@protocol ViewSizeChangeDelegate <NSObject>
+- (void)onViewSizeChange;
 @end
 
 @interface BaseView : UIView
@@ -23,4 +29,5 @@
 @end
 
 @interface OpenGLView : BaseView
+@property (nonatomic, weak, nullable) id<ViewSizeChangeDelegate> viewSizeChangeDelegate;
 @end

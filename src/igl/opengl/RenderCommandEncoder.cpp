@@ -117,7 +117,7 @@ void RenderCommandEncoder::beginEncoding(const RenderPassDesc& renderPass,
 }
 
 void RenderCommandEncoder::endEncoding() {
-  if (IGL_VERIFY(adapter_)) {
+  if (IGL_DEBUG_VERIFY(adapter_)) {
     // Restore caller state
     getContext().setEnabled(scissorEnabled_, GL_SCISSOR_TEST);
 
@@ -164,7 +164,7 @@ void RenderCommandEncoder::endEncoding() {
         width = static_cast<int>(stencilDimensions.width);
         height = static_cast<int>(stencilDimensions.height);
       }
-      IGL_ASSERT(mask != 0);
+      IGL_DEBUG_ASSERT(mask != 0);
 
       if (sizeMatch) {
         igl::opengl::PlatformDevice::blitFramebuffer(framebuffer_,
@@ -181,7 +181,7 @@ void RenderCommandEncoder::endEncoding() {
                                                      getContext(),
                                                      &outResult);
       } else {
-        IGL_ASSERT_NOT_REACHED();
+        IGL_DEBUG_ASSERT_NOT_REACHED();
       }
     }
   }
@@ -189,8 +189,8 @@ void RenderCommandEncoder::endEncoding() {
 
 void RenderCommandEncoder::pushDebugGroupLabel(const char* label,
                                                const igl::Color& /*color*/) const {
-  IGL_ASSERT(adapter_);
-  IGL_ASSERT(label != nullptr && *label);
+  IGL_DEBUG_ASSERT(adapter_);
+  IGL_DEBUG_ASSERT(label != nullptr && *label);
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DebugMessage)) {
     getContext().pushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, label);
   } else {
@@ -201,8 +201,8 @@ void RenderCommandEncoder::pushDebugGroupLabel(const char* label,
 
 void RenderCommandEncoder::insertDebugEventLabel(const char* label,
                                                  const igl::Color& /*color*/) const {
-  IGL_ASSERT(adapter_);
-  IGL_ASSERT(label != nullptr && *label);
+  IGL_DEBUG_ASSERT(adapter_);
+  IGL_DEBUG_ASSERT(label != nullptr && *label);
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DebugMessage)) {
     getContext().debugMessageInsert(
         GL_DEBUG_SOURCE_APPLICATION, GL_DEBUG_TYPE_MARKER, 0, GL_DEBUG_SEVERITY_LOW, -1, label);
@@ -213,7 +213,7 @@ void RenderCommandEncoder::insertDebugEventLabel(const char* label,
 }
 
 void RenderCommandEncoder::popDebugGroupLabel() const {
-  IGL_ASSERT(adapter_);
+  IGL_DEBUG_ASSERT(adapter_);
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DebugMessage)) {
     getContext().popDebugGroup();
   } else {
@@ -222,37 +222,37 @@ void RenderCommandEncoder::popDebugGroupLabel() const {
 }
 
 void RenderCommandEncoder::bindViewport(const Viewport& viewport) {
-  if (IGL_VERIFY(adapter_)) {
+  if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setViewport(viewport);
   }
 }
 
 void RenderCommandEncoder::bindScissorRect(const ScissorRect& rect) {
-  if (IGL_VERIFY(adapter_)) {
+  if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setScissorRect(rect);
   }
 }
 
 void RenderCommandEncoder::bindRenderPipelineState(
     const std::shared_ptr<IRenderPipelineState>& pipelineState) {
-  if (IGL_VERIFY(adapter_)) {
+  if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setPipelineState(pipelineState);
   }
 }
 
 void RenderCommandEncoder::bindDepthStencilState(
     const std::shared_ptr<IDepthStencilState>& depthStencilState) {
-  if (IGL_VERIFY(adapter_)) {
+  if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setDepthStencilState(depthStencilState);
   }
 }
 
 void RenderCommandEncoder::bindUniform(const UniformDesc& uniformDesc, const void* data) {
-  IGL_ASSERT_MSG(uniformDesc.location >= 0,
-                 "Invalid location passed to bindUniformBuffer: %d",
-                 uniformDesc.location);
-  IGL_ASSERT_MSG(data != nullptr, "Data cannot be null");
-  if (IGL_VERIFY(adapter_) && data) {
+  IGL_DEBUG_ASSERT(uniformDesc.location >= 0,
+                   "Invalid location passed to bindUniformBuffer: %d",
+                   uniformDesc.location);
+  IGL_DEBUG_ASSERT(data != nullptr, "Data cannot be null");
+  if (IGL_DEBUG_VERIFY(adapter_) && data) {
     adapter_->setUniform(uniformDesc, data);
   }
 }
@@ -261,12 +261,12 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
                                       IBuffer* buffer,
                                       size_t offset,
                                       size_t bufferSize) {
-  if (IGL_VERIFY(adapter_) && buffer) {
+  if (IGL_DEBUG_VERIFY(adapter_) && buffer) {
     auto* glBuffer = static_cast<Buffer*>(buffer);
     auto bufferType = glBuffer->getType();
 
     if (bufferType == Buffer::Type::Uniform) {
-      IGL_ASSERT_NOT_IMPLEMENTED();
+      IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
     } else if (bufferType == Buffer::Type::UniformBlock) {
       adapter_->setUniformBuffer(glBuffer, offset, bufferSize, index);
     }
@@ -274,10 +274,10 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
 }
 
 void RenderCommandEncoder::bindVertexBuffer(uint32_t index, IBuffer& buffer, size_t bufferOffset) {
-  if (IGL_VERIFY(adapter_)) {
+  if (IGL_DEBUG_VERIFY(adapter_)) {
     Buffer& glBuffer = static_cast<Buffer&>(buffer);
 
-    IGL_ASSERT(glBuffer.getType() == Buffer::Type::Attribute);
+    IGL_DEBUG_ASSERT(glBuffer.getType() == Buffer::Type::Attribute);
 
     adapter_->setVertexBuffer(glBuffer, bufferOffset, static_cast<int>(index));
   }
@@ -286,7 +286,7 @@ void RenderCommandEncoder::bindVertexBuffer(uint32_t index, IBuffer& buffer, siz
 void RenderCommandEncoder::bindIndexBuffer(IBuffer& buffer,
                                            IndexFormat format,
                                            size_t bufferOffset) {
-  if (IGL_VERIFY(adapter_)) {
+  if (IGL_DEBUG_VERIFY(adapter_)) {
     indexType_ = toGlType(format);
     indexBufferOffset_ = reinterpret_cast<void*>(bufferOffset);
     adapter_->setIndexBuffer((Buffer&)buffer);
@@ -297,19 +297,19 @@ void RenderCommandEncoder::bindBytes(size_t /*index*/,
                                      uint8_t /*target*/,
                                      const void* /*data*/,
                                      size_t /*length*/) {
-  IGL_ASSERT_NOT_IMPLEMENTED();
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
 }
 
 void RenderCommandEncoder::bindPushConstants(const void* /*data*/,
                                              size_t /*length*/,
                                              size_t /*offset*/) {
-  IGL_ASSERT_NOT_IMPLEMENTED();
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
 }
 
 void RenderCommandEncoder::bindSamplerState(size_t index,
                                             uint8_t bindTarget,
                                             ISamplerState* samplerState) {
-  if (IGL_VERIFY(adapter_)) {
+  if (IGL_DEBUG_VERIFY(adapter_)) {
     if ((bindTarget & BindTarget::kVertex) != 0) {
       adapter_->setVertexSamplerState(samplerState, index);
     }
@@ -320,7 +320,7 @@ void RenderCommandEncoder::bindSamplerState(size_t index,
 }
 
 void RenderCommandEncoder::bindTexture(size_t index, uint8_t bindTarget, ITexture* texture) {
-  if (IGL_VERIFY(adapter_)) {
+  if (IGL_DEBUG_VERIFY(adapter_)) {
     if ((bindTarget & BindTarget::kVertex) != 0) {
       adapter_->setVertexTexture(texture, index);
     }
@@ -336,9 +336,9 @@ void RenderCommandEncoder::draw(size_t vertexCount,
                                 uint32_t baseInstance) {
   (void)baseInstance;
 
-  IGL_ASSERT_MSG(baseInstance == 0, "Instancing is not implemented");
+  IGL_DEBUG_ASSERT(baseInstance == 0, "Instancing is not implemented");
 
-  if (IGL_VERIFY(adapter_)) {
+  if (IGL_DEBUG_VERIFY(adapter_)) {
     getCommandBuffer().incrementCurrentDrawCount();
     auto mode = toGlPrimitive(adapter_->pipelineState().getRenderPipelineDesc().topology);
     if (instanceCount > 1) {
@@ -358,14 +358,14 @@ void RenderCommandEncoder::drawIndexed(size_t indexCount,
   (void)vertexOffset;
   (void)baseInstance;
 
-  IGL_ASSERT_MSG(vertexOffset == 0, "vertexOffset is not implemented");
-  IGL_ASSERT_MSG(baseInstance == 0, "Instancing is not implemented");
-  IGL_ASSERT_MSG(indexType_, "No index buffer bound");
+  IGL_DEBUG_ASSERT(vertexOffset == 0, "vertexOffset is not implemented");
+  IGL_DEBUG_ASSERT(baseInstance == 0, "Instancing is not implemented");
+  IGL_DEBUG_ASSERT(indexType_, "No index buffer bound");
 
   const size_t indexOffsetBytes =
       static_cast<size_t>(firstIndex) * (indexType_ == GL_UNSIGNED_INT ? 4u : 2u);
 
-  if (IGL_VERIFY(adapter_ && indexType_)) {
+  if (IGL_DEBUG_VERIFY(adapter_ && indexType_)) {
     getCommandBuffer().incrementCurrentDrawCount();
     auto mode = toGlPrimitive(adapter_->pipelineState().getRenderPipelineDesc().topology);
     if (instanceCount > 1) {
@@ -385,7 +385,7 @@ void RenderCommandEncoder::multiDrawIndirect(IBuffer& indirectBuffer,
                                              size_t indirectBufferOffset,
                                              uint32_t drawCount,
                                              uint32_t stride) {
-  if (IGL_VERIFY(adapter_)) {
+  if (IGL_DEBUG_VERIFY(adapter_)) {
     getCommandBuffer().incrementCurrentDrawCount();
     const auto mode = toGlPrimitive(adapter_->pipelineState().getRenderPipelineDesc().topology);
     const auto* indirectBufferOffsetPtr = reinterpret_cast<uint8_t*>(indirectBufferOffset);
@@ -400,11 +400,11 @@ void RenderCommandEncoder::multiDrawIndexedIndirect(IBuffer& indirectBuffer,
                                                     size_t indirectBufferOffset,
                                                     uint32_t drawCount,
                                                     uint32_t stride) {
-  IGL_ASSERT_MSG(indexType_, "No index buffer bound");
+  IGL_DEBUG_ASSERT(indexType_, "No index buffer bound");
 
   // TODO: use glMultiDrawElementsIndirect() when available
 
-  if (IGL_VERIFY(adapter_ && indexType_)) {
+  if (IGL_DEBUG_VERIFY(adapter_ && indexType_)) {
     getCommandBuffer().incrementCurrentDrawCount();
     const auto mode = toGlPrimitive(adapter_->pipelineState().getRenderPipelineDesc().topology);
     const auto* indirectBufferOffsetPtr = reinterpret_cast<uint8_t*>(indirectBufferOffset);
@@ -417,19 +417,19 @@ void RenderCommandEncoder::multiDrawIndexedIndirect(IBuffer& indirectBuffer,
 }
 
 void RenderCommandEncoder::setStencilReferenceValue(uint32_t value) {
-  if (IGL_VERIFY(adapter_)) {
+  if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setStencilReferenceValue(value);
   }
 }
 
 void RenderCommandEncoder::setBlendColor(Color color) {
-  if (IGL_VERIFY(adapter_)) {
+  if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setBlendColor(color);
   }
 }
 
 void RenderCommandEncoder::setDepthBias(float depthBias, float slopeScale, float /*clamp*/) {
-  if (IGL_VERIFY(adapter_)) {
+  if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setDepthBias(depthBias, slopeScale);
   }
 }
@@ -443,7 +443,7 @@ void RenderCommandEncoder::bindBindGroup(BindGroupTextureHandle handle) {
 
   for (uint32_t i = 0; i != IGL_TEXTURE_SAMPLERS_MAX; i++) {
     if (desc->textures[i]) {
-      IGL_ASSERT(desc->samplers[i]);
+      IGL_DEBUG_ASSERT(desc->samplers[i]);
       bindTexture(i, BindTarget::kAllGraphics, desc->textures[i].get());
       bindSamplerState(i, BindTarget::kAllGraphics, desc->samplers[i].get());
     }
@@ -464,8 +464,8 @@ void RenderCommandEncoder::bindBindGroup(BindGroupBufferHandle handle,
   for (uint32_t i = 0; i != IGL_UNIFORM_BLOCKS_BINDING_MAX; i++) {
     if (desc->buffers[i]) {
       if (desc->isDynamicBufferMask & (1 << i)) {
-        IGL_ASSERT_MSG(dynamicOffsets, "No dynamic offsets provided");
-        IGL_ASSERT_MSG(dynamicOffset < numDynamicOffsets, "Not enough dynamic offsets provided");
+        IGL_DEBUG_ASSERT(dynamicOffsets, "No dynamic offsets provided");
+        IGL_DEBUG_ASSERT(dynamicOffset < numDynamicOffsets, "Not enough dynamic offsets provided");
         bindBuffer(i,
                    desc->buffers[i].get(),
                    desc->offset[i] + dynamicOffsets[dynamicOffset++],
@@ -476,7 +476,7 @@ void RenderCommandEncoder::bindBindGroup(BindGroupBufferHandle handle,
     }
   }
 
-  IGL_ASSERT_MSG(dynamicOffset == numDynamicOffsets, "Not all dynamic offsets were consumed");
+  IGL_DEBUG_ASSERT(dynamicOffset == numDynamicOffsets, "Not all dynamic offsets were consumed");
 }
 
 } // namespace igl::opengl

@@ -30,6 +30,11 @@ class PipelineState {
                 const char* debugName);
   virtual ~PipelineState() = default;
 
+  PipelineState(const PipelineState&) = delete;
+  PipelineState(PipelineState&&) = delete;
+  PipelineState& operator=(const PipelineState&) = delete;
+  PipelineState& operator=(PipelineState&&) = delete;
+
   VkPipelineLayout getVkPipelineLayout() const;
 
   const util::SpvModuleInfo& getSpvModuleInfo() const {
@@ -45,7 +50,7 @@ class PipelineState {
   VkPushConstantRange pushConstantRange_ = {};
   VkShaderStageFlags stageFlags_ = 0;
 
-  mutable std::unique_ptr<igl::vulkan::VulkanPipelineLayout> pipelineLayout_;
+  mutable VkPipelineLayout pipelineLayout_ = VK_NULL_HANDLE;
 
   // the last seen VkDescriptorSetLayout from VulkanContext::dslBindless_
   mutable VkDescriptorSetLayout lastBindlessVkDescriptorSetLayout_ = VK_NULL_HANDLE;

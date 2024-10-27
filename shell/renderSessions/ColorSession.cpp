@@ -7,11 +7,14 @@
 
 // @fb-only
 
+#include <cstring>
+
 #include <IGLU/simdtypes/SimdTypes.h>
 #include <igl/NameHandle.h>
 #include <igl/ShaderCreator.h>
 #include <igl/opengl/GLIncludes.h>
 #include <shell/renderSessions/ColorSession.h>
+#include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/RenderSession.h>
 #include <shell/shared/renderSession/ShellParams.h>
 
@@ -44,7 +47,10 @@ static std::string getMetalShaderSource() {
   return R"(
               using namespace metal;
 
-              typedef struct { float3 color; } UniformBlock;
+              typedef struct {
+                 float3 color;
+                 float4x4 mvp;
+               } UniformBlock;
 
               typedef struct {
                 float3 position [[attribute(0)]];
@@ -113,10 +119,11 @@ static std::string getVulkanVertexShaderSource() {
 
             layout (set = 1, binding = 0, std140) uniform UniformsPerObject {
               vec3 color;
+              mat4 mvp;
             } perObject;
 
             void main() {
-              gl_Position = vec4(position, 1.0);
+              gl_Position = perObject.mvp * vec4(position, 1.0);
               uv = uv_in;
               color = perObject.color;
             }
@@ -142,7 +149,7 @@ static std::string getVulkanFragmentShaderSource() {
 static std::unique_ptr<IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
-    IGL_ASSERT_NOT_REACHED();
+    IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
   case igl::BackendType::Vulkan: {
     auto vertexSource = getVulkanVertexShaderSource();
@@ -187,9 +194,6 @@ static std::unique_ptr<IShaderStages> getShaderStagesForBackend(igl::IDevice& de
   IGL_UNREACHABLE_RETURN(nullptr)
 }
 
-ColorSession::ColorSession(std::shared_ptr<Platform> platform) :
-  RenderSession(std::move(platform)) {}
-
 // clang-tidy off
 void ColorSession::initialize() noexcept {
   // clang-tidy on
@@ -199,11 +203,11 @@ void ColorSession::initialize() noexcept {
   const BufferDesc vbDesc =
       BufferDesc(BufferDesc::BufferTypeBits::Vertex, vertexData, sizeof(vertexData));
   vb0_ = device.createBuffer(vbDesc, nullptr);
-  IGL_ASSERT(vb0_ != nullptr);
+  IGL_DEBUG_ASSERT(vb0_ != nullptr);
   const BufferDesc ibDesc =
       BufferDesc(BufferDesc::BufferTypeBits::Index, indexData, sizeof(indexData));
   ib0_ = device.createBuffer(ibDesc, nullptr);
-  IGL_ASSERT(ib0_ != nullptr);
+  IGL_DEBUG_ASSERT(ib0_ != nullptr);
 
   VertexInputStateDesc inputDesc;
   inputDesc.numAttributes = 2;
@@ -214,34 +218,40 @@ void ColorSession::initialize() noexcept {
   inputDesc.numInputBindings = 1;
   inputDesc.inputBindings[1].stride = sizeof(VertexPosUv);
   vertexInput0_ = device.createVertexInputState(inputDesc, nullptr);
-  IGL_ASSERT(vertexInput0_ != nullptr);
+  IGL_DEBUG_ASSERT(vertexInput0_ != nullptr);
 
   // Sampler & Texture
   SamplerStateDesc samplerDesc;
   samplerDesc.minFilter = samplerDesc.magFilter = SamplerMinMagFilter::Linear;
   samplerDesc.debugName = "Sampler: linear";
   samp0_ = device.createSamplerState(samplerDesc, nullptr);
-  IGL_ASSERT(samp0_ != nullptr);
+  IGL_DEBUG_ASSERT(samp0_ != nullptr);
 
-  tex0_ = getPlatform().loadTexture("macbeth.png", false /* calculateMipmapLevels */);
+  if (colorTestModes_ == ColorTestModes::eMacbethTexture) {
+    tex0_ = getPlatform().loadTexture("macbeth.png");
+  } else if (colorTestModes_ == ColorTestModes::eOrangeTexture) {
+    tex0_ = getPlatform().loadTexture("orange.png");
+  }
 
   shaderStages_ = getShaderStagesForBackend(device);
-  IGL_ASSERT(shaderStages_ != nullptr);
+  IGL_DEBUG_ASSERT(shaderStages_ != nullptr);
 
   // Command queue
   const CommandQueueDesc desc{igl::CommandQueueType::Graphics};
   commandQueue_ = device.createCommandQueue(desc, nullptr);
-  IGL_ASSERT(commandQueue_ != nullptr);
+  IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
 
   renderPass_.colorAttachments.resize(1);
   renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
   renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPass_.colorAttachments[0].clearColor = getPlatform().getDevice().backendDebugColor();
+  renderPass_.colorAttachments[0].clearColor = getPreferredClearColor();
   renderPass_.depthAttachment.loadAction = LoadAction::Clear;
   renderPass_.depthAttachment.clearDepth = 1.0;
 
   // init uniforms
-  fragmentParameters_ = FragmentFormat{{1.0f, 1.0f, 1.0f}};
+  glm::mat4x4 mvp(1.0f);
+  memcpy(&fragmentParameters_.mvp, &mvp, sizeof(mvp));
+  fragmentParameters_.color = iglu::simdtypes::float3{1.0f, 1.0f, 1.0f};
 
   BufferDesc fpDesc;
   fpDesc.type = BufferDesc::BufferTypeBits::Uniform;
@@ -250,7 +260,7 @@ void ColorSession::initialize() noexcept {
   fpDesc.storage = ResourceStorage::Shared;
 
   fragmentParamBuffer_ = device.createBuffer(fpDesc, nullptr);
-  IGL_ASSERT(fragmentParamBuffer_ != nullptr);
+  IGL_DEBUG_ASSERT(fragmentParamBuffer_ != nullptr);
 }
 
 void ColorSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
@@ -261,15 +271,15 @@ void ColorSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
     framebufferDesc.depthAttachment.texture = surfaceTextures.depth;
     framebufferDesc.mode = surfaceTextures.color->getNumLayers() > 1 ? FramebufferMode::Stereo
                                                                      : FramebufferMode::Mono;
-    IGL_ASSERT(ret.isOk());
+    IGL_DEBUG_ASSERT(ret.isOk());
     framebuffer_ = getPlatform().getDevice().createFramebuffer(framebufferDesc, &ret);
-    IGL_ASSERT(ret.isOk());
-    IGL_ASSERT(framebuffer_ != nullptr);
+    IGL_DEBUG_ASSERT(ret.isOk());
+    IGL_DEBUG_ASSERT(framebuffer_ != nullptr);
   } else {
     framebuffer_->updateDrawable(surfaceTextures.color);
   }
 
-  const size_t _textureUnit = 0;
+  const size_t textureUnit = 0;
 
   // Graphics pipeline
   if (pipelineState_ == nullptr) {
@@ -281,7 +291,7 @@ void ColorSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
         framebuffer_->getColorAttachment(0)->getProperties().format;
     graphicsDesc.targetDesc.depthAttachmentFormat =
         framebuffer_->getDepthAttachment()->getProperties().format;
-    graphicsDesc.fragmentUnitSamplerMap[_textureUnit] = IGL_NAMEHANDLE("inputImage");
+    graphicsDesc.fragmentUnitSamplerMap[textureUnit] = IGL_NAMEHANDLE("inputImage");
     graphicsDesc.cullMode = igl::CullMode::Back;
     graphicsDesc.frontFaceWinding = igl::WindingMode::Clockwise;
     graphicsDesc.targetDesc.colorAttachments[0].blendEnabled = true;
@@ -293,7 +303,7 @@ void ColorSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
     graphicsDesc.targetDesc.colorAttachments[0].dstAlphaBlendFactor = BlendFactor::OneMinusSrcAlpha;
 
     pipelineState_ = getPlatform().getDevice().createRenderPipeline(graphicsDesc, nullptr);
-    IGL_ASSERT(pipelineState_ != nullptr);
+    IGL_DEBUG_ASSERT(pipelineState_ != nullptr);
 
     // Set up uniformdescriptors
     fragmentUniformDescriptors_.emplace_back();
@@ -302,7 +312,7 @@ void ColorSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
   // Command Buffers
   const CommandBufferDesc cbDesc;
   auto buffer = commandQueue_->createCommandBuffer(cbDesc, nullptr);
-  IGL_ASSERT(buffer != nullptr);
+  IGL_DEBUG_ASSERT(buffer != nullptr);
   auto drawableSurface = framebuffer_->getColorAttachment(0);
 
   framebuffer_->updateDrawable(drawableSurface);
@@ -322,10 +332,14 @@ void ColorSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
     fragmentUniformDescriptors_.back().offset = offsetof(FragmentFormat, color);
   }
 
+  const auto& mvp = getPlatform().getDisplayContext().preRotationMatrix;
+  memcpy(&fragmentParameters_.mvp, &mvp, sizeof(mvp));
+  fragmentParamBuffer_->upload(&fragmentParameters_, {sizeof(fragmentParameters_)});
+
   // Submit commands
   const std::shared_ptr<igl::IRenderCommandEncoder> commands =
       buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
-  IGL_ASSERT(commands != nullptr);
+  IGL_DEBUG_ASSERT(commands != nullptr);
   if (commands) {
     commands->bindVertexBuffer(1, *vb0_);
     commands->bindRenderPipelineState(pipelineState_);
@@ -337,24 +351,23 @@ void ColorSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
     } else if (getPlatform().getDevice().hasFeature(DeviceFeatures::UniformBlocks)) {
       commands->bindBuffer(0, fragmentParamBuffer_.get());
     } else {
-      IGL_ASSERT_NOT_REACHED();
+      IGL_DEBUG_ASSERT_NOT_REACHED();
     }
 
-    commands->bindTexture(_textureUnit, BindTarget::kFragment, tex0_.get());
-    commands->bindSamplerState(_textureUnit, BindTarget::kFragment, samp0_.get());
+    commands->bindTexture(textureUnit, BindTarget::kFragment, tex0_.get());
+    commands->bindSamplerState(textureUnit, BindTarget::kFragment, samp0_.get());
     commands->bindIndexBuffer(*ib0_, IndexFormat::UInt16);
     commands->drawIndexed(6);
 
     commands->endEncoding();
   }
 
-  IGL_ASSERT(buffer != nullptr);
-
+  IGL_DEBUG_ASSERT(buffer != nullptr);
   if (shellParams().shouldPresent) {
     buffer->present(drawableSurface);
   }
 
-  IGL_ASSERT(commandQueue_ != nullptr);
+  IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
   commandQueue_->submit(*buffer);
   RenderSession::update(surfaceTextures);
 }

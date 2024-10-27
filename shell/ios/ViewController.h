@@ -5,18 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// @fb-only
+
+#import "RenderSessionFactoryProvider.h"
 #import <MetalKit/MetalKit.h>
 #import <UIKit/UIKit.h>
-#import <igl/IGL.h>
-#if IGL_BACKEND_OPENGL
-#import <igl/opengl/IContext.h>
-#endif
+#import <shell/shared/renderSession/RenderSessionConfig.h>
 
 @interface ViewController : UIViewController <MTKViewDelegate>
 
-- (instancetype)initForMetal:(CGRect)frame;
-#if IGL_BACKEND_OPENGL
-- (instancetype)initForOpenGL:(igl::opengl::RenderingAPI)renderingAPI frame:(CGRect)frame;
-#endif
+- (instancetype)init:(igl::shell::RenderSessionConfig)config
+     factoryProvider:(RenderSessionFactoryProvider*)factoryProvider
+               frame:(CGRect)frame;
 
 @end

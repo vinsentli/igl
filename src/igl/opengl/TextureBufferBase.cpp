@@ -36,7 +36,7 @@ TextureType TextureBufferBase::getType() const {
     }
     break;
   }
-  IGL_ASSERT_MSG(0, "Unsupported OGL Texture Target: 0x%x", target_);
+  IGL_DEBUG_ABORT("Unsupported OGL Texture Target: 0x%x", target_);
   return TextureType::Invalid;
 }
 
@@ -46,18 +46,18 @@ TextureDesc::TextureUsage TextureBufferBase::getUsage() const {
 
 // bind this as a source texture for rendering from
 void TextureBufferBase::bind() {
-  IGL_ASSERT(getUsage() & TextureDesc::TextureUsageBits::Sampled);
+  IGL_DEBUG_ASSERT(getUsage() & TextureDesc::TextureUsageBits::Sampled);
   getContext().bindTexture(target_, textureID_);
 }
 
 void TextureBufferBase::unbind() {
-  IGL_ASSERT(getUsage() & TextureDesc::TextureUsageBits::Sampled);
+  IGL_DEBUG_ASSERT(getUsage() & TextureDesc::TextureUsageBits::Sampled);
   getContext().bindTexture(target_, 0);
 }
 
 void TextureBufferBase::attachAsColor(uint32_t index, const AttachmentParams& params) {
-  IGL_ASSERT(getUsage() & TextureDesc::TextureUsageBits::Attachment);
-  if (IGL_VERIFY(textureID_)) {
+  IGL_DEBUG_ASSERT(getUsage() & TextureDesc::TextureUsageBits::Attachment);
+  if (IGL_DEBUG_VERIFY(textureID_)) {
     attach(GL_COLOR_ATTACHMENT0 + index, params, textureID_);
   }
 }
@@ -76,10 +76,11 @@ void TextureBufferBase::attach(GLenum attachment,
   const auto numLayers = getNumLayers();
 
   if (numSamples > 1) {
-    IGL_ASSERT_MSG(attachment == GL_COLOR_ATTACHMENT0 || attachment == GL_DEPTH_ATTACHMENT ||
-                       attachment == GL_STENCIL_ATTACHMENT,
-                   "Multisample framebuffer can only use GL_COLOR_ATTACHMENT0, GL_DEPTH_ATTACHMENT "
-                   "or GL_STENCIL_ATTACHMENT");
+    IGL_DEBUG_ASSERT(
+        attachment == GL_COLOR_ATTACHMENT0 || attachment == GL_DEPTH_ATTACHMENT ||
+            attachment == GL_STENCIL_ATTACHMENT,
+        "Multisample framebuffer can only use GL_COLOR_ATTACHMENT0, GL_DEPTH_ATTACHMENT "
+        "or GL_STENCIL_ATTACHMENT");
     if (params.stereo) {
       getContext().framebufferTextureMultisampleMultiview(framebufferTarget,
                                                           attachment,
@@ -120,7 +121,7 @@ void TextureBufferBase::detachAsColor(uint32_t index, bool read) {
 }
 
 void TextureBufferBase::attachAsDepth(const AttachmentParams& params) {
-  if (IGL_VERIFY(textureID_)) {
+  if (IGL_DEBUG_VERIFY(textureID_)) {
     attach(GL_DEPTH_ATTACHMENT, params, textureID_);
   }
 }
@@ -132,7 +133,7 @@ void TextureBufferBase::detachAsDepth(bool read) {
 }
 
 void TextureBufferBase::attachAsStencil(const AttachmentParams& params) {
-  if (IGL_VERIFY(textureID_)) {
+  if (IGL_DEBUG_VERIFY(textureID_)) {
     attach(GL_STENCIL_ATTACHMENT, params, textureID_);
   }
 }

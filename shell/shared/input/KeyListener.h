@@ -7,19 +7,43 @@
 
 #pragma once
 
+#include <cstdint>
+#include <string>
+
 namespace igl::shell {
+
+enum {
+  KeyEventModifierNone = 0,
+  KeyEventModifierShift = 1 << 0,
+  KeyEventModifierControl = 1 << 1,
+  KeyEventModifierOption = 1 << 2,
+  KeyEventModifierCapsLock = 1 << 3,
+  KeyEventModifierNumLock = 1 << 4,
+  KeyEventModifierCommand = 1 << 5,
+};
 
 struct KeyEvent {
   int key;
   bool isDown;
+  uint32_t modifiers;
 
   KeyEvent() = default;
-  KeyEvent(bool isDown, int key) : key(key), isDown(isDown) {}
+  KeyEvent(bool isDown, int key, uint32_t modifiers = KeyEventModifierNone) :
+    key(key), isDown(isDown), modifiers(modifiers) {}
+};
+
+struct CharEvent {
+  int character;
 };
 
 class IKeyListener {
  public:
-  virtual bool process(const KeyEvent& event) = 0;
+  virtual bool process(const KeyEvent& /*event*/) {
+    return false;
+  }
+  virtual bool process(const CharEvent& /*event*/) {
+    return false;
+  }
 
   virtual ~IKeyListener() = default;
 };

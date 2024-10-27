@@ -5,15 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <igl/vulkan/Common.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/RenderPipelineState.h>
 #include <igl/vulkan/ShaderModule.h>
-#include <igl/vulkan/VertexInputState.h>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanDescriptorSetLayout.h>
 #include <igl/vulkan/VulkanDevice.h>
 #include <igl/vulkan/VulkanPipelineBuilder.h>
-#include <igl/vulkan/VulkanPipelineLayout.h>
 
 namespace {
 
@@ -30,7 +29,7 @@ VkPrimitiveTopology primitiveTypeToVkPrimitiveTopology(igl::PrimitiveType t) {
   case igl::PrimitiveType::TriangleStrip:
     return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
   }
-  IGL_ASSERT_MSG(false, "Implement PrimitiveType = %u", (uint32_t)t);
+  IGL_DEBUG_ABORT("Implement PrimitiveType = %u", (uint32_t)t);
   return VK_PRIMITIVE_TOPOLOGY_MAX_ENUM;
 }
 
@@ -41,7 +40,7 @@ VkPolygonMode polygonFillModeToVkPolygonMode(igl::PolygonFillMode mode) {
   case igl::PolygonFillMode::Line:
     return VK_POLYGON_MODE_LINE;
   }
-  IGL_ASSERT_MSG(false, "Implement a missing polygon fill mode");
+  IGL_DEBUG_ABORT("Implement a missing polygon fill mode");
   return VK_POLYGON_MODE_FILL;
 }
 
@@ -54,7 +53,7 @@ VkCullModeFlags cullModeToVkCullMode(igl::CullMode mode) {
   case igl::CullMode::Back:
     return VK_CULL_MODE_BACK_BIT;
   }
-  IGL_ASSERT_MSG(false, "Implement a missing cull mode");
+  IGL_DEBUG_ABORT("Implement a missing cull mode");
   return VK_CULL_MODE_NONE;
 }
 
@@ -65,7 +64,7 @@ VkFrontFace windingModeToVkFrontFace(igl::WindingMode mode) {
   case igl::WindingMode::CounterClockwise:
     return VK_FRONT_FACE_COUNTER_CLOCKWISE;
   }
-  IGL_ASSERT_MSG(false, "Wrong winding order (cannot be more than 2)");
+  IGL_DEBUG_ABORT("Wrong winding order (cannot be more than 2)");
   return VK_FRONT_FACE_CLOCKWISE;
 }
 
@@ -174,7 +173,7 @@ VkFormat vertexAttributeFormatToVkFormat(igl::VertexAttributeFormat fmt) {
   case VertexAttributeFormat::Int_2_10_10_10_REV:
     return VK_FORMAT_A2B10G10R10_SNORM_PACK32;
   }
-  IGL_ASSERT(false);
+  IGL_DEBUG_ASSERT_NOT_REACHED();
   return VK_FORMAT_UNDEFINED;
 }
 
@@ -193,7 +192,7 @@ VkBlendOp blendOpToVkBlendOp(igl::BlendOp value) {
     return VK_BLEND_OP_MAX;
   }
 
-  IGL_ASSERT(false);
+  IGL_DEBUG_ASSERT_NOT_REACHED();
   return VK_BLEND_OP_ADD;
 }
 
@@ -204,7 +203,7 @@ VkBool32 checkDualSrcBlendFactor(igl::BlendFactor value, VkBool32 dualSrcBlendSu
     case igl::BlendFactor::OneMinusSrc1Color:
     case igl::BlendFactor::Src1Alpha:
     case igl::BlendFactor::OneMinusSrc1Alpha:
-      IGL_ASSERT(false);
+      IGL_DEBUG_ASSERT_NOT_REACHED();
       return VK_FALSE;
     default:
       return VK_TRUE;
@@ -255,7 +254,7 @@ VkBlendFactor blendFactorToVkBlendFactor(igl::BlendFactor value) {
   case BlendFactor::OneMinusSrc1Alpha:
     return VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA;
   default:
-    IGL_ASSERT(false);
+    IGL_DEBUG_ASSERT_NOT_REACHED();
     return VK_BLEND_FACTOR_ONE; // default for unsupported values
   }
 }
@@ -291,6 +290,8 @@ RenderPipelineState::RenderPipelineState(const igl::vulkan::Device& device,
                 desc.debugName.c_str()),
   device_(device),
   reflection_(std::make_shared<RenderPipelineReflection>()) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+
   // Iterate and cache vertex input bindings and attributes
   const igl::vulkan::VertexInputState* vstate =
       static_cast<igl::vulkan::VertexInputState*>(desc_.vertexInputState.get());
@@ -331,6 +332,8 @@ RenderPipelineState::RenderPipelineState(const igl::vulkan::Device& device,
 }
 
 RenderPipelineState::~RenderPipelineState() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
+
   const VulkanContext& ctx = device_.getVulkanContext();
   VkDevice device = ctx.device_->getVkDevice();
 
@@ -341,6 +344,12 @@ RenderPipelineState::~RenderPipelineState() {
             vf->vkDestroyPipeline(device, pipeline, nullptr);
           }));
     }
+  }
+  if (pipelineLayout_) {
+    ctx.deferredTask(std::packaged_task<void()>(
+        [vf = &ctx.vf_, device = ctx.getVkDevice(), layout = pipelineLayout_]() {
+          vf->vkDestroyPipelineLayout(device, layout, nullptr);
+        }));
   }
 }
 
@@ -362,7 +371,14 @@ VkPipeline RenderPipelineState::getVkPipeline(
               }));
         }
       }
+      if (pipelineLayout_) {
+        ctx.deferredTask(std::packaged_task<void()>(
+            [vf = &ctx.vf_, device = ctx.getVkDevice(), layout = pipelineLayout_]() {
+              vf->vkDestroyPipelineLayout(device, layout, nullptr);
+            }));
+      }
       pipelines_.clear();
+      pipelineLayout_ = VK_NULL_HANDLE;
       lastBindlessVkDescriptorSetLayout_ = ctx.getBindlessVkDescriptorSetLayout();
     }
   }
@@ -373,6 +389,8 @@ VkPipeline RenderPipelineState::getVkPipeline(
     return it->second;
   }
 
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+
   // @fb-only
   const VkDescriptorSetLayout DSLs[] = {
       dslCombinedImageSamplers_->getVkDescriptorSetLayout(),
@@ -380,18 +398,25 @@ VkPipeline RenderPipelineState::getVkPipeline(
       ctx.getBindlessVkDescriptorSetLayout(),
   };
 
-  pipelineLayout_ = std::make_unique<VulkanPipelineLayout>(
-      ctx,
-      ctx.getVkDevice(),
-      DSLs,
-      static_cast<uint32_t>(ctx.config_.enableDescriptorIndexing
-                                ? IGL_ARRAY_NUM_ELEMENTS(DSLs)
-                                : IGL_ARRAY_NUM_ELEMENTS(DSLs) - 1u),
-      info_.hasPushConstants ? &pushConstantRange_ : nullptr,
-      IGL_FORMAT("Pipeline Layout: {}", desc_.debugName.c_str()).c_str());
+  const VkPipelineLayoutCreateInfo ci =
+      ivkGetPipelineLayoutCreateInfo(static_cast<uint32_t>(ctx.config_.enableDescriptorIndexing
+                                                               ? IGL_ARRAY_NUM_ELEMENTS(DSLs)
+                                                               : IGL_ARRAY_NUM_ELEMENTS(DSLs) - 1u),
+                                     DSLs,
+                                     info_.hasPushConstants ? &pushConstantRange_ : nullptr);
 
-  const VkPhysicalDeviceFeatures2& deviceFeatures = ctx.getVkPhysicalDeviceFeatures2();
-  VkBool32 dualSrcBlendSupported = deviceFeatures.features.dualSrcBlend;
+  VkDevice device = ctx.device_->getVkDevice();
+  VK_ASSERT(ctx.vf_.vkCreatePipelineLayout(device, &ci, nullptr, &pipelineLayout_));
+  VK_ASSERT(
+      ivkSetDebugObjectName(&ctx.vf_,
+                            device,
+                            VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+                            (uint64_t)pipelineLayout_,
+                            IGL_FORMAT("Pipeline Layout: {}", desc_.debugName.c_str()).c_str()));
+
+  const auto& deviceFeatures = ctx.features();
+  const VkBool32 dualSrcBlendSupported =
+      deviceFeatures.VkPhysicalDeviceFeatures2_.features.dualSrcBlend;
 
   // build a new Vulkan pipeline
   VkRenderPass renderPass = ctx.getRenderPass(dynamicState.renderPassIndex_).pass;
@@ -477,12 +502,12 @@ VkPipeline RenderPipelineState::getVkPipeline(
           .build(ctx.vf_,
                  ctx.device_->getVkDevice(),
                  ctx.pipelineCache_,
-                 pipelineLayout_->getVkPipelineLayout(),
+                 pipelineLayout_,
                  renderPass,
                  &pipeline,
                  desc_.debugName.c_str()));
 
-  IGL_ASSERT(pipeline != VK_NULL_HANDLE);
+  IGL_DEBUG_ASSERT(pipeline != VK_NULL_HANDLE);
 
   pipelines_[dynamicState] = pipeline;
 
@@ -492,14 +517,14 @@ VkPipeline RenderPipelineState::getVkPipeline(
 }
 
 int RenderPipelineState::getIndexByName(const igl::NameHandle& name, ShaderStage stage) const {
-  IGL_ASSERT_NOT_IMPLEMENTED();
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   (void)name;
   (void)stage;
   return 0;
 }
 
 int RenderPipelineState::getIndexByName(const std::string& name, ShaderStage stage) const {
-  IGL_ASSERT_NOT_IMPLEMENTED();
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   (void)name;
   (void)stage;
   return 0;

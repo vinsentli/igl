@@ -11,8 +11,6 @@
 #include <igl/vulkan/ShaderModule.h>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanDescriptorSetLayout.h>
-#include <igl/vulkan/VulkanPipelineLayout.h>
-#include <igl/vulkan/VulkanSampler.h>
 #include <igl/vulkan/VulkanShaderModule.h>
 
 namespace igl::vulkan {
@@ -62,7 +60,7 @@ void PipelineState::initializeSpvModuleInfoFromShaderStages(const VulkanContext&
 
     constexpr uint32_t kPushConstantsSize = 128;
 
-    if (!IGL_VERIFY(kPushConstantsSize <= limits.maxPushConstantsSize)) {
+    if (!IGL_DEBUG_VERIFY(kPushConstantsSize <= limits.maxPushConstantsSize)) {
       IGL_LOG_ERROR("Push constants size exceeded %u (max %u bytes)",
                     kPushConstantsSize,
                     limits.maxPushConstantsSize);
@@ -78,7 +76,7 @@ PipelineState::PipelineState(
     std::shared_ptr<ISamplerState> immutableSamplers[IGL_TEXTURE_SAMPLERS_MAX],
     uint32_t isDynamicBufferMask,
     const char* debugName) {
-  IGL_ASSERT(stages);
+  IGL_DEBUG_ASSERT(stages);
 
   initializeSpvModuleInfoFromShaderStages(ctx, stages);
 
@@ -94,7 +92,7 @@ PipelineState::PipelineState(
           loc, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, stageFlags_));
       if (loc < IGL_TEXTURE_SAMPLERS_MAX && immutableSamplers && immutableSamplers[loc]) {
         auto* sampler = static_cast<igl::vulkan::SamplerState*>(immutableSamplers[loc].get());
-        bindings.back().pImmutableSamplers = &sampler->sampler_->vkSampler_;
+        bindings.back().pImmutableSamplers = &ctx.samplers_.get(sampler->sampler_)->vkSampler;
       }
     }
     std::vector<VkDescriptorBindingFlags> bindingFlags(bindings.size());
@@ -132,9 +130,9 @@ PipelineState::PipelineState(
 }
 
 VkPipelineLayout PipelineState::getVkPipelineLayout() const {
-  IGL_ASSERT(pipelineLayout_);
+  IGL_DEBUG_ASSERT(pipelineLayout_);
 
-  return pipelineLayout_->getVkPipelineLayout();
+  return pipelineLayout_;
 }
 
 } // namespace igl::vulkan

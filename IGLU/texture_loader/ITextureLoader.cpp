@@ -16,7 +16,7 @@ namespace iglu::textureloader {
 /// Interface for getting CPU access to GPU texture data
 ITextureLoader::ITextureLoader(DataReader reader, igl::TextureDesc::TextureUsage usage) noexcept :
   reader_(reader) {
-  IGL_ASSERT(reader.data() != nullptr && reader.length() > 0);
+  IGL_DEBUG_ASSERT(reader.data() != nullptr && reader.length() > 0);
   desc_.usage = usage;
 }
 
@@ -37,7 +37,7 @@ const igl::TextureDesc& ITextureLoader::descriptor() const noexcept {
   range.numFaces = desc_.type == igl::TextureType::Cube ? static_cast<size_t>(6)
                                                         : static_cast<size_t>(1);
   range.numLayers = desc_.numLayers;
-  range.numMipLevels = desc_.numMipLevels;
+  range.numMipLevels = shouldGenerateMipmaps() ? 1 : desc_.numMipLevels;
 
   return static_cast<uint32_t>(properties.getBytesPerRange(range));
 }
@@ -99,7 +99,7 @@ std::shared_ptr<igl::ITexture> ITextureLoader::create(const igl::IDevice& device
   igl::TextureDesc desc = desc_;
   desc.format = preferredFormat == igl::TextureFormat::Invalid ? desc_.format : preferredFormat;
   desc.usage = usage;
-  IGL_ASSERT(isSupported(device, usage));
+  IGL_DEBUG_ASSERT(isSupported(device, usage));
   return device.createTexture(desc, outResult);
 }
 

@@ -13,7 +13,12 @@
 #if IGL_PLATFORM_WIN || IGL_PLATFORM_ANDROID || IGL_PLATFORM_MACOS || IGL_PLATFORM_LINUX
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/HWDevice.h>
+#include <igl/vulkan/PlatformDevice.h>
+#include <igl/vulkan/SamplerState.h>
+#include <igl/vulkan/Texture.h>
 #include <igl/vulkan/VulkanContext.h>
+#include <igl/vulkan/VulkanFeatures.h>
+#include <igl/vulkan/VulkanTexture.h>
 #endif
 
 namespace igl::tests {
@@ -51,6 +56,63 @@ TEST_F(DeviceVulkanTest, CreateCommandQueue) {
   auto cmdQueue = iglDev_->createCommandQueue(desc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(cmdQueue, nullptr);
+}
+
+TEST_F(DeviceVulkanTest, PlatformDevice) {
+  auto& platformDevice = iglDev_->getPlatformDevice();
+  auto& vulkanPlatformDevice = static_cast<vulkan::PlatformDevice&>(platformDevice);
+  Result ret;
+  auto depthTexture = vulkanPlatformDevice.createTextureFromNativeDepth(2, 2, &ret);
+  ASSERT_TRUE(ret.isOk());
+  // ASSERT_TRUE(depthTexture != nullptr); // no swapchain so null
+  auto texture = vulkanPlatformDevice.createTextureFromNativeDrawable(&ret);
+  ASSERT_TRUE(ret.isOk());
+  // ASSERT_TRUE(texture != nullptr); // no swapchain so null
+
+  CommandQueueDesc desc{};
+
+  desc.type = CommandQueueType::Graphics;
+
+  auto cmdQueue = iglDev_->createCommandQueue(desc, &ret);
+  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+  ASSERT_NE(cmdQueue, nullptr);
+  auto cmdBuf = cmdQueue->createCommandBuffer(CommandBufferDesc(), &ret);
+  auto submitHandle = cmdQueue->submit(*cmdBuf);
+
+  auto fence1 = vulkanPlatformDevice.getVkFenceFromSubmitHandle(submitHandle);
+  ASSERT_NE(fence1, VK_NULL_HANDLE);
+
+  vulkanPlatformDevice.waitOnSubmitHandle(submitHandle);
+}
+
+TEST_F(DeviceVulkanTest, PlatformDeviceSampler) {
+  Result ret;
+  TextureDesc textureDesc = TextureDesc::new2D(
+      igl::TextureFormat::RGBA_UNorm8, 2, 2, TextureDesc::TextureUsageBits::Sampled);
+  auto texture = iglDev_->createTexture(textureDesc, &ret);
+  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+  ASSERT_TRUE(texture != nullptr);
+  auto* vulkanTexture = static_cast<vulkan::Texture*>(texture.get());
+  auto& innerVulkanTexture = vulkanTexture->getVulkanTexture();
+  (void)innerVulkanTexture.imageView_;
+  ASSERT_TRUE(innerVulkanTexture.textureId_ != 0);
+  SamplerStateDesc samplerDesc;
+  auto samplerState = iglDev_->createSamplerState(samplerDesc, &ret);
+  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+  auto* vulkanSamplerState = static_cast<vulkan::SamplerState*>(samplerState.get());
+  auto samplerId = vulkanSamplerState->getSamplerId();
+  ASSERT_EQ(samplerId, 1);
+  ASSERT_FALSE(vulkanSamplerState->isYUV());
+
+  CommandQueueDesc cmdQueueDesc{};
+
+  cmdQueueDesc.type = CommandQueueType::Graphics;
+
+  auto cmdQueue = iglDev_->createCommandQueue(cmdQueueDesc, &ret);
+  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+  ASSERT_NE(cmdQueue, nullptr);
+  auto cmdBuf = cmdQueue->createCommandBuffer(CommandBufferDesc(), &ret);
+  cmdQueue->submit(*cmdBuf);
 }
 
 #if IGL_PLATFORM_WIN || IGL_PLATFORM_ANDROID || IGL_PLATFORM_MACOS || IGL_PLATFORM_LINUX
@@ -117,6 +179,61 @@ TEST_F(DeviceVulkanTest, StagingDeviceLargeBufferTest) {
   }
 }
 
+TEST_F(DeviceVulkanTest, DestroyEmptyHandles) {
+  igl::destroy(iglDev_.get(), igl::BindGroupTextureHandle{});
+  igl::destroy(iglDev_.get(), igl::BindGroupBufferHandle{});
+  igl::destroy(iglDev_.get(), igl::TextureHandle{});
+  igl::destroy(iglDev_.get(), igl::SamplerHandle{});
+  igl::destroy(iglDev_.get(), igl::DepthStencilStateHandle{});
+}
+
+TEST_F(DeviceVulkanTest, CurrentThreadIdTest) {
+  igl::vulkan::VulkanContext& ctx =
+      static_cast<igl::vulkan::Device*>(iglDev_.get())->getVulkanContext();
+
+  ctx.ensureCurrentContextThread();
+}
+
+TEST_F(DeviceVulkanTest, UpdateGlslangResource) {
+  const igl::vulkan::VulkanContext& ctx =
+      static_cast<const igl::vulkan::Device*>(iglDev_.get())->getVulkanContext();
+
+  ivkUpdateGlslangResource(nullptr, nullptr);
+
+  glslang_resource_t res = {};
+  const VkPhysicalDeviceProperties& props = ctx.getVkPhysicalDeviceProperties();
+
+  ivkUpdateGlslangResource(&res, &props);
+
+  ASSERT_EQ(res.max_vertex_attribs, (int)props.limits.maxVertexInputAttributes);
+  ASSERT_EQ(res.max_clip_distances, (int)props.limits.maxClipDistances);
+  ASSERT_EQ(res.max_compute_work_group_count_x, (int)props.limits.maxComputeWorkGroupCount[0]);
+  ASSERT_EQ(res.max_compute_work_group_count_y, (int)props.limits.maxComputeWorkGroupCount[1]);
+  ASSERT_EQ(res.max_compute_work_group_count_z, (int)props.limits.maxComputeWorkGroupCount[2]);
+  ASSERT_EQ(res.max_compute_work_group_size_x, (int)props.limits.maxComputeWorkGroupSize[0]);
+  ASSERT_EQ(res.max_compute_work_group_size_y, (int)props.limits.maxComputeWorkGroupSize[1]);
+  ASSERT_EQ(res.max_compute_work_group_size_z, (int)props.limits.maxComputeWorkGroupSize[2]);
+  ASSERT_EQ(res.max_vertex_output_components, (int)props.limits.maxVertexOutputComponents);
+  ASSERT_EQ(res.max_geometry_input_components, (int)props.limits.maxGeometryInputComponents);
+  ASSERT_EQ(res.max_geometry_output_components, (int)props.limits.maxGeometryOutputComponents);
+  ASSERT_EQ(res.max_fragment_input_components, (int)props.limits.maxFragmentInputComponents);
+  ASSERT_EQ(res.max_geometry_output_vertices, (int)props.limits.maxGeometryOutputVertices);
+  ASSERT_EQ(res.max_geometry_total_output_components,
+            (int)props.limits.maxGeometryTotalOutputComponents);
+  ASSERT_EQ(res.max_tess_control_input_components,
+            (int)props.limits.maxTessellationControlPerVertexInputComponents);
+  ASSERT_EQ(res.max_tess_control_output_components,
+            (int)props.limits.maxTessellationControlPerVertexOutputComponents);
+  ASSERT_EQ(res.max_tess_evaluation_input_components,
+            (int)props.limits.maxTessellationEvaluationInputComponents);
+  ASSERT_EQ(res.max_tess_evaluation_output_components,
+            (int)props.limits.maxTessellationEvaluationOutputComponents);
+  ASSERT_EQ(res.max_viewports, (int)props.limits.maxViewports);
+  ASSERT_EQ(res.max_cull_distances, (int)props.limits.maxCullDistances);
+  ASSERT_EQ(res.max_combined_clip_and_cull_distances,
+            (int)props.limits.maxCombinedClipAndCullDistances);
+}
+
 GTEST_TEST(VulkanContext, BufferDeviceAddress) {
   std::shared_ptr<igl::IDevice> iglDev = nullptr;
 
@@ -147,6 +264,15 @@ GTEST_TEST(VulkanContext, BufferDeviceAddress) {
   ASSERT_TRUE(!devices.empty());
 
   if (ret.isOk()) {
+    igl::vulkan::VulkanFeatures features(VK_API_VERSION_1_1, config);
+    features.populateWithAvailablePhysicalDeviceFeatures(*ctx, (VkPhysicalDevice)devices[0].guid);
+
+    const VkPhysicalDeviceBufferDeviceAddressFeaturesKHR& bdaFeatures =
+        features.VkPhysicalDeviceBufferDeviceAddressFeaturesKHR_;
+    if (!bdaFeatures.bufferDeviceAddress) {
+      return;
+    }
+
     const std::vector<const char*> extraDeviceExtensions;
     iglDev = igl::vulkan::HWDevice::create(std::move(ctx),
                                            devices[0],
@@ -154,6 +280,7 @@ GTEST_TEST(VulkanContext, BufferDeviceAddress) {
                                            0, // height,
                                            0,
                                            nullptr,
+                                           &features,
                                            &ret);
 
     if (!ret.isOk()) {
@@ -161,7 +288,14 @@ GTEST_TEST(VulkanContext, BufferDeviceAddress) {
     }
   }
 
-  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+  const bool deviceSupportsBufferDeviceAddress =
+      ret.message.empty() ||
+      ret.message.find("VK_KHR_buffer_device_address is not supported") == std::string::npos;
+  if (!deviceSupportsBufferDeviceAddress) {
+    return;
+  }
+
+  EXPECT_TRUE(ret.isOk());
   ASSERT_NE(iglDev, nullptr);
 
   if (!iglDev) {
@@ -211,6 +345,21 @@ GTEST_TEST(VulkanContext, DescriptorIndexing) {
   ASSERT_TRUE(!devices.empty());
 
   if (ret.isOk()) {
+    igl::vulkan::VulkanFeatures features(VK_API_VERSION_1_1, config);
+    features.populateWithAvailablePhysicalDeviceFeatures(*ctx, (VkPhysicalDevice)devices[0].guid);
+
+    const VkPhysicalDeviceDescriptorIndexingFeaturesEXT& diFeatures =
+        features.VkPhysicalDeviceDescriptorIndexingFeaturesEXT_;
+    if (!diFeatures.shaderSampledImageArrayNonUniformIndexing ||
+        !diFeatures.descriptorBindingUniformBufferUpdateAfterBind ||
+        !diFeatures.descriptorBindingSampledImageUpdateAfterBind ||
+        !diFeatures.descriptorBindingStorageImageUpdateAfterBind ||
+        !diFeatures.descriptorBindingStorageBufferUpdateAfterBind ||
+        !diFeatures.descriptorBindingUpdateUnusedWhilePending ||
+        !diFeatures.descriptorBindingPartiallyBound || !diFeatures.runtimeDescriptorArray) {
+      return;
+    }
+
     const std::vector<const char*> extraDeviceExtensions;
     iglDev = igl::vulkan::HWDevice::create(std::move(ctx),
                                            devices[0],
@@ -218,6 +367,7 @@ GTEST_TEST(VulkanContext, DescriptorIndexing) {
                                            0, // height,
                                            0,
                                            nullptr,
+                                           &features,
                                            &ret);
 
     if (!ret.isOk()) {

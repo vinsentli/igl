@@ -39,12 +39,13 @@ void setDebugBreakEnabled(bool enabled) {
 #endif
 
 void _IGLDebugBreak() {
+#if IGL_DEBUG_BREAK_ENABLED
   if (igl::isDebugBreakEnabled()) {
 #ifdef IGL_DEBUGGER_SIGTRAP
     raise(SIGTRAP);
 #elif IGL_PLATFORM_WIN
     if (!IsDebuggerPresent()) {
-      IGLLog(IGLLogLevel::LOG_ERROR, "[IGL] Skipping debug break - debugger not present");
+      IGLLog(IGLLogError, "[IGL] Skipping debug break - debugger not present");
       return;
     }
     __debugbreak();
@@ -52,35 +53,35 @@ void _IGLDebugBreak() {
 #warning "IGLDebugBreak() not implemented on this platform"
 #endif
   }
+#endif // IGL_DEBUG_BREAK_ENABLED
 }
 
 // ----------------------------------------------------------------------------
 
-#if IGL_REPORT_ERROR_ENABLED
-
+namespace {
 // Default handler is no-op.
-// If there's an error, IGL_VERIFY will trap in dev builds
-static void _IGLReportErrorDefault(const char* file,
-                                   const char* func,
-                                   int line,
-                                   const char* category,
-                                   const char* format,
-                                   ...) {}
+// If there's an error, IGL_DEBUG_VERIFY will trap in dev builds
+void _IGLReportErrorDefault(const char* /* file */,
+                            const char* /* func */,
+                            int /* line */,
+                            const char* /* category */,
+                            const char* /* format */,
+                            ...) {}
 
-static IGLReportErrorFunc& GetErrorHandler() {
-  static IGLReportErrorFunc sHandler = _IGLReportErrorDefault;
+IGLSoftErrorFunc& GetErrorHandler() {
+  static IGLSoftErrorFunc sHandler = _IGLReportErrorDefault;
   return sHandler;
 }
 
-IGL_API void IGLReportErrorSetHandler(IGLReportErrorFunc handler) {
+} // namespace
+
+IGL_API void IGLSetSoftErrorHandler(IGLSoftErrorFunc handler) {
   if (!handler) {
     handler = _IGLReportErrorDefault; // prevent null handler
   }
   GetErrorHandler() = handler;
 }
 
-IGL_API IGLReportErrorFunc IGLReportErrorGetHandler(void) {
+IGL_API IGLSoftErrorFunc IGLGetSoftErrorHandler(void) {
   return GetErrorHandler();
 }
-
-#endif // IGL_REPORT_ERROR_ENABLED

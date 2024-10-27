@@ -13,6 +13,7 @@
 #include <igl/opengl/GLIncludes.h>
 #include <shell/renderSessions/YUVColorSession.h>
 #include <shell/shared/fileLoader/FileLoader.h>
+#include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/RenderSession.h>
 #include <shell/shared/renderSession/ShellParams.h>
 
@@ -94,7 +95,7 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
   // @fb-only
   case igl::BackendType::Invalid:
   case igl::BackendType::Metal:
-    IGL_ASSERT_NOT_REACHED();
+    IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
   case igl::BackendType::Vulkan:
     return igl::ShaderStagesCreator::fromModuleStringInput(device,
@@ -137,10 +138,10 @@ void YUVColorSession::initialize() noexcept {
   // Vertex & Index buffer
   vb0_ = device.createBuffer(
       BufferDesc(BufferDesc::BufferTypeBits::Vertex, vertexData, sizeof(vertexData)), nullptr);
-  IGL_ASSERT(vb0_ != nullptr);
+  IGL_DEBUG_ASSERT(vb0_ != nullptr);
   ib0_ = device.createBuffer(
       BufferDesc(BufferDesc::BufferTypeBits::Index, indexData, sizeof(indexData)), nullptr);
-  IGL_ASSERT(ib0_ != nullptr);
+  IGL_DEBUG_ASSERT(ib0_ != nullptr);
 
   VertexInputStateDesc inputDesc;
   inputDesc.numAttributes = 2;
@@ -151,7 +152,7 @@ void YUVColorSession::initialize() noexcept {
   inputDesc.numInputBindings = 1;
   inputDesc.inputBindings[1].stride = sizeof(VertexPosUv);
   vertexInput0_ = device.createVertexInputState(inputDesc, nullptr);
-  IGL_ASSERT(vertexInput0_ != nullptr);
+  IGL_DEBUG_ASSERT(vertexInput0_ != nullptr);
 
   // Samplers & Textures
 
@@ -164,17 +165,17 @@ void YUVColorSession::initialize() noexcept {
 
     auto sampler =
         device.createSamplerState(SamplerStateDesc::newYUV(yuvFormat, "YUVSampler"), nullptr);
-    IGL_ASSERT(sampler != nullptr);
+    IGL_DEBUG_ASSERT(sampler != nullptr);
 
     auto& fileLoader = getPlatform().getFileLoader();
     const auto fileData = fileLoader.loadBinaryData(fileName);
-    IGL_ASSERT_MSG(fileData.data && fileData.length, "Cannot load texture file");
+    IGL_DEBUG_ASSERT(fileData.data && fileData.length, "Cannot load texture file");
 
     const igl::TextureDesc textureDesc = igl::TextureDesc::new2D(
         yuvFormat, width, height, TextureDesc::TextureUsageBits::Sampled, "YUV texture");
-    IGL_ASSERT(width * height + width * height / 2 == fileData.length);
+    IGL_DEBUG_ASSERT(width * height + width * height / 2 == fileData.length);
     auto texture = device.createTexture(textureDesc, nullptr);
-    IGL_ASSERT(texture);
+    IGL_DEBUG_ASSERT(texture);
     texture->upload(TextureRangeDesc{0, 0, 0, width, height}, fileData.data.get());
 
     this->yuvFormatDemos_.push_back(YUVFormatDemo{demoName, sampler, texture, nullptr});
@@ -184,17 +185,17 @@ void YUVColorSession::initialize() noexcept {
   createYUVDemo(device, "YUV NV12", igl::TextureFormat::YUV_NV12, "output_frame_900.nv12.yuv");
 
   shaderStages_ = getShaderStagesForBackend(device);
-  IGL_ASSERT(shaderStages_ != nullptr);
+  IGL_DEBUG_ASSERT(shaderStages_ != nullptr);
 
   // Command queue
   const CommandQueueDesc desc{igl::CommandQueueType::Graphics};
   commandQueue_ = device.createCommandQueue(desc, nullptr);
-  IGL_ASSERT(commandQueue_ != nullptr);
+  IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
 
   renderPass_.colorAttachments.resize(1);
   renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
   renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPass_.colorAttachments[0].clearColor = getPlatform().getDevice().backendDebugColor();
+  renderPass_.colorAttachments[0].clearColor = getPreferredClearColor();
   renderPass_.depthAttachment.loadAction = LoadAction::Clear;
   renderPass_.depthAttachment.clearDepth = 1.0;
 }
@@ -203,11 +204,11 @@ void YUVColorSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
   igl::Result ret;
   framebufferDesc_.colorAttachments[0].texture = surfaceTextures.color;
   if (framebuffer_ == nullptr) {
-    IGL_ASSERT(ret.isOk());
+    IGL_DEBUG_ASSERT(ret.isOk());
     framebufferDesc_.depthAttachment.texture = surfaceTextures.depth;
     framebuffer_ = getPlatform().getDevice().createFramebuffer(framebufferDesc_, &ret);
-    IGL_ASSERT(ret.isOk());
-    IGL_ASSERT(framebuffer_ != nullptr);
+    IGL_DEBUG_ASSERT(ret.isOk());
+    IGL_DEBUG_ASSERT(framebuffer_ != nullptr);
   } else {
     framebuffer_->updateDrawable(surfaceTextures.color);
   }
@@ -231,12 +232,12 @@ void YUVColorSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
     desc.immutableSamplers[_textureUnit] = demo.sampler; // Ycbcr sampler
 
     demo.pipelineState = getPlatform().getDevice().createRenderPipeline(desc, nullptr);
-    IGL_ASSERT(demo.pipelineState != nullptr);
+    IGL_DEBUG_ASSERT(demo.pipelineState != nullptr);
   }
 
   // Command Buffers
   auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
-  IGL_ASSERT(buffer != nullptr);
+  IGL_DEBUG_ASSERT(buffer != nullptr);
   auto drawableSurface = framebuffer_->getColorAttachment(0);
 
   framebuffer_->updateDrawable(drawableSurface);
@@ -244,7 +245,7 @@ void YUVColorSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
   // Submit commands
   const std::shared_ptr<igl::IRenderCommandEncoder> commands =
       buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
-  IGL_ASSERT(commands != nullptr);
+  IGL_DEBUG_ASSERT(commands != nullptr);
   if (commands) {
     commands->bindVertexBuffer(0, *vb0_);
     commands->bindVertexBuffer(1, *vb0_);
@@ -256,8 +257,7 @@ void YUVColorSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
 
     // draw the YUV format name using ImGui
     {
-      imguiSession_->beginFrame(framebufferDesc_,
-                                getPlatform().getDisplayContext().pixelsPerPoint * 2);
+      imguiSession_->beginFrame(framebufferDesc_, getPlatform().getDisplayContext().pixelsPerPoint);
       const ImGuiWindowFlags flags =
           ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
           ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
@@ -274,12 +274,12 @@ void YUVColorSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
     commands->endEncoding();
   }
 
-  IGL_ASSERT(buffer != nullptr);
+  IGL_DEBUG_ASSERT(buffer != nullptr);
   if (shellParams().shouldPresent) {
     buffer->present(drawableSurface);
   }
 
-  IGL_ASSERT(commandQueue_ != nullptr);
+  IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
   commandQueue_->submit(*buffer);
   RenderSession::update(surfaceTextures);
 }

@@ -19,17 +19,16 @@
 
 namespace igl::vulkan::android {
 
-NativeHWTextureBuffer::NativeHWTextureBuffer(const igl::vulkan::Device& device,
-                                             TextureFormat format) :
+NativeHWTextureBuffer::NativeHWTextureBuffer(igl::vulkan::Device& device, TextureFormat format) :
   Super(device, format) {}
 
 NativeHWTextureBuffer::~NativeHWTextureBuffer() {}
 
 Result NativeHWTextureBuffer::createTextureInternal(const TextureDesc& desc,
                                                     AHardwareBuffer* buffer) {
-  const VkImageUsageFlags usageFlags =
-      VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
-      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  const VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_SAMPLED_BIT |
+                                       VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                                       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
   const VkFormat format = igl::vulkan::textureFormatToVkFormat(desc.format);
   const uint32_t mipLevels = igl::TextureDesc::calcNumMipLevels(desc.width, desc.height);
 

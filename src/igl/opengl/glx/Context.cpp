@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// @fb-only
+
 #include <igl/opengl/glx/Context.h>
 
 #include <igl/opengl/Texture.h>
@@ -69,7 +71,7 @@ struct GLXSharedModule {
       }
     }
 
-    IGL_ASSERT_MSG(module_ != nullptr, "[IGL] Failed to initialize GLX");
+    IGL_DEBUG_ASSERT(module_ != nullptr, "[IGL] Failed to initialize GLX");
 
     XOpenDisplay = loadFunction<PFNXOPENDISPLAY>("XOpenDisplay");
     XCloseDisplay = loadFunction<PFNXCLOSEDISPLAY>("XCloseDisplay");
@@ -99,7 +101,7 @@ struct GLXSharedModule {
   template<typename T>
   T loadFunction(const char* func) {
     auto f = reinterpret_cast<T>(dlsym(module_, func));
-    IGL_ASSERT_MSG(f != nullptr, "[IGL] Failed to initialize GLX, %s is not found", func);
+    IGL_DEBUG_ASSERT(f != nullptr, "[IGL] Failed to initialize GLX, %s is not found", func);
     return f;
   }
 
@@ -158,7 +160,7 @@ Context::Context(std::shared_ptr<GLXSharedModule> module,
           contextHandle_ != nullptr) {
         IContext::registerContext((void*)contextHandle_, this);
       } else {
-        IGL_ASSERT_MSG(false, "[IGL] Failed to create GLX context");
+        IGL_DEBUG_ABORT("[IGL] Failed to create GLX context");
       }
 
       if (offscreen_) {
@@ -179,12 +181,12 @@ Context::Context(std::shared_ptr<GLXSharedModule> module,
       // Initialize through base class.
       igl::Result result;
       initialize(&result);
-      IGL_ASSERT_MSG(result.isOk(), result.message.c_str());
+      IGL_DEBUG_ASSERT(result.isOk(), result.message.c_str());
     } else {
-      IGL_ASSERT_MSG(false, "[IGL] Failed to get GLX framebuffer configs");
+      IGL_DEBUG_ABORT("[IGL] Failed to get GLX framebuffer configs");
     }
   } else {
-    IGL_ASSERT_MSG(false, "[IGL] Failed to open display");
+    IGL_DEBUG_ABORT("[IGL] Failed to open display");
   }
 }
 
@@ -209,7 +211,7 @@ Context::Context(std::shared_ptr<GLXSharedModule> module,
   // Initialize through base class.
   igl::Result result;
   initialize(&result);
-  IGL_ASSERT_MSG(result.isOk(), result.message.c_str());
+  IGL_DEBUG_ASSERT(result.isOk(), result.message.c_str());
 }
 
 Context::~Context() {
@@ -238,16 +240,15 @@ Context::~Context() {
 
 void Context::setCurrent() {
   if (!module_->glXMakeCurrent(display_, windowHandle_, contextHandle_)) {
-    IGL_ASSERT_MSG(false,
-                   "[IGL] Failed to activate OpenGL render context. GLX error 0x%08X:\n",
-                   GetLastError());
+    IGL_DEBUG_ABORT("[IGL] Failed to activate OpenGL render context. GLX error 0x%08X:\n",
+                    GetLastError());
   }
   flushDeletionQueue();
 }
 
 void Context::clearCurrentContext() const {
   if (!module_->glXMakeCurrent(display_, None, nullptr)) {
-    IGL_ASSERT_MSG(
+    IGL_DEBUG_ASSERT(
         false, "[IGL] Failed to clear OpenGL render context. GLX error 0x%08X:\n", GetLastError());
   }
 }
@@ -266,7 +267,7 @@ void Context::present(std::shared_ptr<ITexture> surface) const {
 }
 
 std::unique_ptr<IContext> Context::createShareContext(Result* outResult) {
-  IGL_ASSERT_NOT_IMPLEMENTED();
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   Result::setResult(outResult, Result::Code::Unimplemented, "Implement as needed");
   return nullptr;
 }

@@ -10,7 +10,6 @@
 #include <spirv/unified1/spirv.h>
 
 #define IGL_COMMON_SKIP_CHECK
-#include <igl/IGLAssert.h>
 #include <igl/Macros.h>
 
 namespace igl::vulkan::util {
@@ -59,7 +58,7 @@ TextureType getIGLTextureType(uint32_t dim, bool isArrayed) {
 } // namespace
 
 SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
-  if (!IGL_VERIFY(spirv)) {
+  if (!IGL_DEBUG_VERIFY(spirv)) {
     return {};
   }
 
@@ -76,7 +75,7 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
     }
 
     if (spirv[0] != SpvMagicNumber) {
-      IGL_ASSERT_MSG(false, "Invalid SPIR-V magic word");
+      IGL_DEBUG_ABORT("Invalid SPIR-V magic word");
       return {};
     }
   }
@@ -86,7 +85,7 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
 
   // some reasonable upper bound so that we don't try to allocate a lot of memory in case the SPIR-V
   // header is broken
-  if (!IGL_VERIFY(kBound < 1024 * 1024)) {
+  if (!IGL_DEBUG_VERIFY(kBound < 1024 * 1024)) {
     return {};
   }
 
@@ -106,20 +105,20 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
       constexpr uint32_t kOpDecorateDecoration = 2;
       constexpr uint32_t kOpDecorateOperandIds = 3;
 
-      IGL_ASSERT_MSG(words + kOpDecorateDecoration <= spirv + size, "OpDecorate out of bounds");
+      IGL_DEBUG_ASSERT(words + kOpDecorateDecoration <= spirv + size, "OpDecorate out of bounds");
 
       const uint32_t decoration = words[kOpDecorateDecoration];
       const uint32_t targetId = words[kOpDecorateTargetId];
-      IGL_ASSERT(targetId < kBound);
+      IGL_DEBUG_ASSERT(targetId < kBound);
 
       switch (decoration) {
       case SpvDecorationBinding: {
-        IGL_ASSERT_MSG(words + kOpDecorateOperandIds <= spirv + size, "OpDecorate out of bounds");
+        IGL_DEBUG_ASSERT(words + kOpDecorateOperandIds <= spirv + size, "OpDecorate out of bounds");
         ids[targetId].binding = words[kOpDecorateOperandIds];
         break;
       }
       case SpvDecorationDescriptorSet: {
-        IGL_ASSERT_MSG(words + kOpDecorateOperandIds <= spirv + size, "OpDecorate out of bounds");
+        IGL_DEBUG_ASSERT(words + kOpDecorateOperandIds <= spirv + size, "OpDecorate out of bounds");
         ids[targetId].dset = words[kOpDecorateOperandIds];
         break;
       }
@@ -133,10 +132,10 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
     case SpvOpTypeSampler:
     case SpvOpTypeSampledImage: {
       constexpr uint32_t kOpTypeResultId = 1;
-      IGL_ASSERT_MSG(words + kOpTypeResultId <= spirv + size, "OpTypeImage out of bounds");
+      IGL_DEBUG_ASSERT(words + kOpTypeResultId <= spirv + size, "OpTypeImage out of bounds");
       const uint32_t targetId = words[kOpTypeResultId];
-      IGL_ASSERT(targetId < kBound);
-      IGL_ASSERT(ids[targetId].opCode == 0);
+      IGL_DEBUG_ASSERT(targetId < kBound);
+      IGL_DEBUG_ASSERT(ids[targetId].opCode == 0);
       ids[targetId].opCode = opCode;
       if (opCode == SpvOpTypeSampledImage) {
         constexpr uint32_t kOpTypeSampledImageImageTypeId = 2;
@@ -145,7 +144,7 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
         constexpr uint32_t kOpTypeImageTypeId = 1;
         constexpr uint32_t kOpTypeImageDim = 3;
         constexpr uint32_t kOpTypeImageArrayed = 5;
-        IGL_ASSERT_MSG(words + kOpTypeImageArrayed <= spirv + size, "OpTypeImage out of bounds");
+        IGL_DEBUG_ASSERT(words + kOpTypeImageArrayed <= spirv + size, "OpTypeImage out of bounds");
         const uint32_t imageTypeId = words[kOpTypeImageTypeId];
         const uint32_t dim = words[kOpTypeImageDim];
         const bool isArray = words[kOpTypeImageArrayed] == 1u;
@@ -158,11 +157,11 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
       constexpr uint32_t kOpTypePointerTargetId = 1;
       constexpr uint32_t kOpTypePointerStorageClassId = 2;
       constexpr uint32_t kOpTypePointerObjectTypeId = 3;
-      IGL_ASSERT_MSG(words + kOpTypePointerObjectTypeId <= spirv + size,
-                     "OpTypePointer out of bounds");
+      IGL_DEBUG_ASSERT(words + kOpTypePointerObjectTypeId <= spirv + size,
+                       "OpTypePointer out of bounds");
       const uint32_t targetId = words[kOpTypePointerTargetId];
-      IGL_ASSERT(targetId < kBound);
-      IGL_ASSERT(ids[targetId].opCode == 0);
+      IGL_DEBUG_ASSERT(targetId < kBound);
+      IGL_DEBUG_ASSERT(ids[targetId].opCode == 0);
       ids[targetId].opCode = opCode;
       ids[targetId].typeId = words[kOpTypePointerObjectTypeId];
       ids[targetId].storageClass = words[kOpTypePointerStorageClassId];
@@ -171,10 +170,10 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
     case SpvOpConstant: {
       constexpr uint32_t kOpConstantTypeId = 1;
       constexpr uint32_t kOpConstantTargetId = 2;
-      IGL_ASSERT_MSG(words + kOpConstantTargetId <= spirv + size, "OpTypePointer out of bounds");
+      IGL_DEBUG_ASSERT(words + kOpConstantTargetId <= spirv + size, "OpTypePointer out of bounds");
       const uint32_t targetId = words[kOpConstantTargetId];
-      IGL_ASSERT(targetId < kBound);
-      IGL_ASSERT(ids[targetId].opCode == 0);
+      IGL_DEBUG_ASSERT(targetId < kBound);
+      IGL_DEBUG_ASSERT(ids[targetId].opCode == 0);
       ids[targetId].opCode = opCode;
       ids[targetId].typeId = words[kOpConstantTypeId];
       break;
@@ -183,10 +182,10 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
       constexpr uint32_t kOpVariableTypeId = 1;
       constexpr uint32_t kOpVariableTargetId = 2;
       constexpr uint32_t kOpVariableStorageClass = 3;
-      IGL_ASSERT_MSG(words + kOpVariableStorageClass <= spirv + size, "OpVariable out of bounds");
+      IGL_DEBUG_ASSERT(words + kOpVariableStorageClass <= spirv + size, "OpVariable out of bounds");
       const uint32_t targetId = words[kOpVariableTargetId];
-      IGL_ASSERT(targetId < kBound);
-      IGL_ASSERT(ids[targetId].opCode == 0);
+      IGL_DEBUG_ASSERT(targetId < kBound);
+      IGL_DEBUG_ASSERT(ids[targetId].opCode == 0);
       ids[targetId].opCode = opCode;
       ids[targetId].typeId = words[kOpVariableTypeId];
       ids[targetId].storageClass = words[kOpVariableStorageClass];
@@ -196,7 +195,7 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
       break;
     }
 
-    IGL_ASSERT(words + instructionSize <= spirv + size);
+    IGL_DEBUG_ASSERT(words + instructionSize <= spirv + size);
     words += instructionSize;
   }
 
@@ -205,8 +204,8 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
     const bool isUniform = id.storageClass == SpvStorageClassUniform ||
                            id.storageClass == SpvStorageClassUniformConstant;
     if (id.opCode == SpvOpVariable && (isStorage || isUniform)) {
-      IGL_ASSERT(ids[id.typeId].opCode == SpvOpTypePointer);
-      IGL_ASSERT(ids[id.typeId].typeId < kBound);
+      IGL_DEBUG_ASSERT(ids[id.typeId].opCode == SpvOpTypePointer);
+      IGL_DEBUG_ASSERT(ids[id.typeId].typeId < kBound);
 
       const uint32_t opCode = ids[ids[id.typeId].typeId].opCode;
 
@@ -219,10 +218,10 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
       case SpvOpTypeSampler:
         break;
       case SpvOpTypeSampledImage: {
-        IGL_ASSERT(ids[ids[id.typeId].typeId].typeId < kBound);
-        IGL_ASSERT(ids[ids[ids[id.typeId].typeId].typeId].opCode == SpvOpTypeImage);
+        IGL_DEBUG_ASSERT(ids[ids[id.typeId].typeId].typeId < kBound);
+        IGL_DEBUG_ASSERT(ids[ids[ids[id.typeId].typeId].typeId].opCode == SpvOpTypeImage);
         const TextureType tt = ids[ids[ids[id.typeId].typeId].typeId].type;
-        IGL_ASSERT(tt != TextureType::Invalid);
+        IGL_DEBUG_ASSERT(tt != TextureType::Invalid);
         info.textures.push_back({id.binding, id.dset, tt});
         break;
       }
@@ -236,10 +235,14 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
   }
 
   for (const auto& desc : info.buffers) {
-    info.usageMaskBuffers |= 1ul << desc.bindingLocation;
+    if (desc.bindingLocation != kNoBindingLocation) {
+      info.usageMaskBuffers |= 1ul << desc.bindingLocation;
+    }
   }
   for (const auto& desc : info.textures) {
-    info.usageMaskTextures |= 1ul << desc.bindingLocation;
+    if (desc.bindingLocation != kNoBindingLocation) {
+      info.usageMaskTextures |= 1ul << desc.bindingLocation;
+    }
   }
 
   return info;
@@ -258,7 +261,7 @@ void combineDescriptions(std::vector<T>& out, const std::vector<T>& c1, const st
     if (it == out.end()) {
       out.emplace_back(desc);
     } else {
-      IGL_ASSERT(desc.descriptorSet == it->descriptorSet);
+      IGL_DEBUG_ASSERT(desc.descriptorSet == it->descriptorSet);
     }
   }
 }

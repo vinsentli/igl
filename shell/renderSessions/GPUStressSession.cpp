@@ -23,17 +23,18 @@
 #include <igl/ShaderCreator.h>
 #include <igl/opengl/Device.h>
 #include <igl/opengl/GLIncludes.h>
-
 #include <memory>
 #include <random>
+#include <shell/shared/platform/DisplayContext.h>
+#include <shell/shared/renderSession/AppParams.h>
 #include <shell/shared/renderSession/QuadLayerParams.h>
 #include <shell/shared/renderSession/ShellParams.h>
 
-#if defined(_MSC_VER) || (defined(__clang__) && IGL_PLATFORM_LINUX)
+#if defined(_MSC_VER) || IGL_PLATFORM_LINUX
 static uint32_t arc4random(void) {
-  return static_cast<uint32_t>(rand());
+  return static_cast<uint32_t>(rand()) * (0xffffffff / RAND_MAX);
 }
-#endif // _MSC_VER
+#endif // _MSC_VER || IGL_PLATFORM_LINUX
 
 #if ANDROID
 
@@ -233,7 +234,7 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(igl::IDevice& device) n
         "",
         nullptr);
   default:
-    IGL_ASSERT_NOT_REACHED();
+    IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
   }
 }
@@ -760,8 +761,8 @@ void GPUStressSession::initState(const igl::SurfaceTextures& surfaceTextures) {
 
     framebuffer_ = getPlatform().getDevice().createFramebuffer(framebufferDesc, &ret);
 
-    IGL_ASSERT(ret.isOk());
-    IGL_ASSERT(framebuffer_ != nullptr);
+    IGL_DEBUG_ASSERT(ret.isOk());
+    IGL_DEBUG_ASSERT(framebuffer_ != nullptr);
   }
 
   if (kUseMSAA) {
@@ -881,7 +882,7 @@ void GPUStressSession::drawCubes(const igl::SurfaceTextures& surfaceTextures,
                   "scaleZ", -1, igl::UniformType::Float, 1, offsetof(VertexFormat, scaleZ), 0}};
 
           vertUniformBuffer = std::make_shared<iglu::ManagedUniformBuffer>(device, info);
-          IGL_ASSERT(vertUniformBuffer->result.isOk());
+          IGL_DEBUG_ASSERT(vertUniformBuffer->result.isOk());
         }
         *static_cast<VertexFormat*>(vertUniformBuffer->getData()) = vertexParameters_;
         vertUniformBuffer->bind(device, *pipelineState_, *commands);

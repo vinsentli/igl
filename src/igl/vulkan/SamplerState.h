@@ -16,7 +16,6 @@ namespace igl::vulkan {
 class Device;
 class PipelineState;
 class VulkanContext;
-class VulkanSampler;
 
 /**
  * @brief Encapsulates a VulkanSampler class and its descriptor, along with a vulkan::Device for
@@ -32,8 +31,11 @@ class SamplerState final : public ISamplerState {
    * After instantiation, the object contains a reference to the device for creating the resource,
    * which can be done by calling the create() method with the desired configuration
    */
-  explicit SamplerState(const igl::vulkan::Device& device);
+  explicit SamplerState(igl::vulkan::Device& device);
   ~SamplerState() override = default;
+
+  SamplerState(const SamplerState&) = delete;
+  SamplerState& operator=(const SamplerState&) = delete;
 
   /**
    * @brief Returns the ID of the sampler. Its ID is the index of the sampler into the vector of
@@ -61,11 +63,11 @@ class SamplerState final : public ISamplerState {
   friend class VulkanContext;
 
   /** @brief The device used to create the resource */
-  const igl::vulkan::Device& device_;
+  igl::vulkan::Device& device_;
   /** @brief The texture sampling configuration for accessing a texture */
   SamplerStateDesc desc_;
   /** @brief The VulkanSampler instance associated with this sampler */
-  std::shared_ptr<VulkanSampler> sampler_;
+  Holder<SamplerHandle> sampler_;
 };
 
 } // namespace igl::vulkan

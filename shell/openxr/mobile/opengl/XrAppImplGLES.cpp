@@ -23,6 +23,14 @@
 #include <shell/openxr/mobile/opengl/XrSwapchainProviderImplGLES.h>
 
 namespace igl::shell::openxr::mobile {
+RenderSessionConfig XrAppImplGLES::suggestedSessionConfig() const {
+  return {.displayName = "OpenGL ES 3.2",
+          .backendVersion = {.flavor = igl::BackendFlavor::OpenGL_ES,
+                             .majorVersion = 3,
+                             .minorVersion = 2},
+          .swapchainColorTextureFormat = igl::TextureFormat::RGBA_SRGB};
+}
+
 std::vector<const char*> XrAppImplGLES::getXrRequiredExtensions() const {
   return {
 #if IGL_WGL
@@ -65,13 +73,17 @@ std::unique_ptr<igl::IDevice> XrAppImplGLES::initIGL(XrInstance instance, XrSyst
   Result result;
   const igl::HWDeviceQueryDesc queryDesc(HWDeviceType::Unknown);
   auto hwDevices = hwDevice.queryDevices(queryDesc, &result);
-  IGL_ASSERT(result.isOk());
+  IGL_DEBUG_ASSERT(result.isOk());
   return hwDevice.create(hwDevices[0], kRenderingApi, nullptr, &result);
 }
 
 XrSession XrAppImplGLES::initXrSession(XrInstance instance,
                                        XrSystemId systemId,
-                                       igl::IDevice& device) {
+                                       igl::IDevice& device,
+                                       const RenderSessionConfig& sessionConfig) {
+  IGL_DEBUG_ASSERT(sessionConfig.backendVersion.flavor == igl::BackendFlavor::OpenGL_ES);
+  sessionConfig_ = sessionConfig;
+  device_ = &device;
   const auto& glDevice = static_cast<igl::opengl::Device&>(device); // Downcast is safe here
 
 #if IGL_WGL
@@ -102,7 +114,7 @@ XrSession XrAppImplGLES::initXrSession(XrInstance instance,
   };
 
   XrResult xrResult;
-  XrSession session;
+  XrSession session = nullptr;
   XR_CHECK(xrResult = xrCreateSession(instance, &sessionCreateInfo, &session));
   if (xrResult != XR_SUCCESS) {
     IGL_LOG_ERROR("Failed to create XR session: %d.\n", xrResult);
@@ -114,6 +126,11 @@ XrSession XrAppImplGLES::initXrSession(XrInstance instance,
 }
 
 std::unique_ptr<impl::XrSwapchainProviderImpl> XrAppImplGLES::createSwapchainProviderImpl() const {
-  return std::make_unique<XrSwapchainProviderImplGLES>();
+  if (IGL_DEBUG_VERIFY(device_)) {
+    return std::make_unique<XrSwapchainProviderImplGLES>(
+        *device_, sessionConfig_.swapchainColorTextureFormat);
+  }
+
+  return nullptr;
 }
 } // namespace igl::shell::openxr::mobile

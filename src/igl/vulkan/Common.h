@@ -24,6 +24,7 @@
 #include <igl/Common.h>
 #include <igl/DepthStencilState.h>
 #include <igl/Texture.h>
+#include <igl/VertexInputState.h>
 #include <igl/vulkan/VulkanHelpers.h>
 
 // libc++'s implementation of std::format has a large binary size impact
@@ -47,12 +48,9 @@
   {                                                                \
     const VkResult vk_assert_result = func;                        \
     if (vk_assert_result != VK_SUCCESS) {                          \
-      IGL_LOG_ERROR("Vulkan API call failed: %s:%i\n  %s\n  %s\n", \
-                    __FILE__,                                      \
-                    __LINE__,                                      \
-                    #func,                                         \
-                    ivkGetVulkanResultString(vk_assert_result));   \
-      IGL_ASSERT(false);                                           \
+      IGL_DEBUG_ABORT("Vulkan API call failed: %s\n  %s\n",        \
+                      #func,                                       \
+                      ivkGetVulkanResultString(vk_assert_result)); \
     }                                                              \
   }
 
@@ -60,19 +58,26 @@
 // location of failure when the result is not VK_SUCCESS, along with a stringified version of the
 // result value. Asserts at the end of the code block. The check remains even in build modes other
 // than DEBUG
+#if IGL_VERIFY_ENABLED
+// When IGL_VERIFY_ENABLED is 1, VK_ASSERT may assert but will always log so use the existing
+// macro.
+#define VK_ASSERT_FORCE_LOG(func) VK_ASSERT(func)
+#else
+// When IGL_VERIFY_ENABLED is 0, VK_ASSERT will neither log nor assert so need a separate definition
+// that will explicitly log the result
 #define VK_ASSERT_FORCE_LOG(func)                           \
   {                                                         \
     const VkResult vk_assert_result = func;                 \
     if (vk_assert_result != VK_SUCCESS) {                   \
-      IGLLog(IGLLogLevel::LOG_ERROR,                        \
+      IGLLog(IGLLogError,                                   \
              "Vulkan API call failed: %s:%i\n  %s\n  %s\n", \
              __FILE__,                                      \
              __LINE__,                                      \
              #func,                                         \
              ivkGetVulkanResultString(vk_assert_result));   \
-      IGL_ASSERT(false);                                    \
     }                                                       \
   }
+#endif // IGL_VERIFY_ENABLED
 
 // Macro that encapsulates a function call and check its return value against VK_SUCCESS. Prints
 // location of failure when the result is not VK_SUCCESS, along with a stringified version of the
@@ -82,12 +87,9 @@
   {                                                                \
     const VkResult vk_assert_result = func;                        \
     if (vk_assert_result != VK_SUCCESS) {                          \
-      IGL_LOG_ERROR("Vulkan API call failed: %s:%i\n  %s\n  %s\n", \
-                    __FILE__,                                      \
-                    __LINE__,                                      \
-                    #func,                                         \
-                    ivkGetVulkanResultString(vk_assert_result));   \
-      IGL_ASSERT(false);                                           \
+      IGL_DEBUG_ABORT("Vulkan API call failed: %s\n  %s\n",        \
+                      #func,                                       \
+                      ivkGetVulkanResultString(vk_assert_result)); \
       return value;                                                \
     }                                                              \
   }
@@ -99,6 +101,8 @@
 // Calls the function provided as `func`, checks the return value from the function call against
 // VK_SUCCESS and returns VK_NULL_HANDLE
 #define VK_ASSERT_RETURN_NULL_HANDLE(func) VK_ASSERT_RETURN_VALUE(func, VK_NULL_HANDLE)
+
+#define IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx) (ctx)->ensureCurrentContextThread()
 
 namespace igl::vulkan {
 
@@ -131,6 +135,7 @@ struct VulkanContextConfig {
 
   std::vector<CommandQueueType> userQueues;
 
+  // the number of resources to support BufferAPIHintBits::Ring
   uint32_t maxResourceCount = 3u;
 
   // owned by the application - should be alive until initContext() returns
@@ -140,6 +145,9 @@ struct VulkanContextConfig {
   // This enables fences generated at the end of submission to be exported to the client.
   // The client can then use the SubmitHandle to wait for the completion of the GPU work.
   bool exportableFences = false;
+
+  // Use VK_EXT_headless_surface to create a headless swapchain
+  bool headless = false;
 
   // Size for VulkanMemoryAllocator's default pool block size parameter.
   // Only relevant if VMA is used for memory allocation.
@@ -152,6 +160,20 @@ struct VulkanContextConfig {
   uint64_t fenceTimeoutNanoseconds = UINT64_MAX;
 };
 
+/**
+ * @brief Encapsulates a handle to a VkSampler. The struct also stores the sampler id, which is used
+ * for bindless rendering (see the ResourcesBinder and VulkanContext classes for more information)
+ */
+struct VulkanSampler final {
+  VkSampler vkSampler = VK_NULL_HANDLE;
+  /**
+   * @brief The index into VulkanContext::samplers_. This index is intended to be used with bindless
+   * rendering. Its value is set by the context when the resource is created and added to the vector
+   * of samplers maintained by the VulkanContext.
+   */
+  uint32_t samplerId = 0;
+};
+
 // The functions below are convenience functions used to convert to and from Vulkan values to IGL
 // values
 
@@ -159,12 +181,10 @@ Result getResultFromVkResult(VkResult result);
 void setResultFrom(Result* outResult, VkResult result);
 VkFormat textureFormatToVkFormat(igl::TextureFormat format);
 igl::TextureFormat vkFormatToTextureFormat(VkFormat format);
-igl::ColorSpace vkColorSpaceToColorSpace(VkColorSpaceKHR colorSpace);
 VkFormat invertRedAndBlue(VkFormat format);
 bool isTextureFormatRGB(VkFormat format);
 bool isTextureFormatBGR(VkFormat format);
 uint32_t getNumImagePlanes(VkFormat format);
-VkColorSpaceKHR colorSpaceToVkColorSpace(igl::ColorSpace colorSpace);
 VkMemoryPropertyFlags resourceStorageToVkMemoryPropertyFlags(igl::ResourceStorage resourceStorage);
 VkCompareOp compareFunctionToVkCompareOp(igl::CompareFunction func);
 VkStencilOp stencilOperationToVkStencilOp(igl::StencilOperation op);
@@ -194,6 +214,27 @@ void overrideImageLayout(ITexture* texture, VkImageLayout layout);
 /// function doesn't assert at some point, the shader bindings are correct. Only for debugging.
 void ensureShaderModule(IShaderModule* sm);
 
+/// @brief Implements the igl::IDepthStencilState interface
+struct DepthStencilState final : public IDepthStencilState {
+  explicit DepthStencilState(const DepthStencilStateDesc& desc) : desc_(desc) {}
+  const DepthStencilStateDesc desc_;
+};
+
+/// @brief Implements the igl::IVertexInputState interface
+struct VertexInputState final : public IVertexInputState {
+ public:
+  explicit VertexInputState(const VertexInputStateDesc& desc) : desc_(desc) {}
+  const VertexInputStateDesc desc_;
+};
+
 } // namespace igl::vulkan
+
+namespace igl::vulkan::functions {
+
+void initialize(VulkanFunctionTable& table);
+void loadInstanceFunctions(VulkanFunctionTable& table, VkInstance instance);
+void loadDeviceFunctions(VulkanFunctionTable& table, VkDevice device);
+
+} // namespace igl::vulkan::functions
 
 #endif // IGL_VULKAN_COMMON_H

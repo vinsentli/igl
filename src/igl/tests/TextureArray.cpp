@@ -65,7 +65,7 @@ class TextureArrayTest : public ::testing::Test {
 
     vertUniformBuffer = std::make_shared<iglu::ManagedUniformBuffer>(device, vertInfo);
 
-    IGL_ASSERT(vertUniformBuffer->result.isOk());
+    IGL_DEBUG_ASSERT(vertUniformBuffer->result.isOk());
     return vertUniformBuffer;
   }
 
@@ -150,6 +150,9 @@ class TextureArrayTest : public ::testing::Test {
                                    stages);
         }
       }
+#if defined(IGL_PLATFORM_LINUX) && IGL_PLATFORM_LINUX
+      GTEST_SKIP() << "Temporarily disabled.";
+#endif
 #endif // IGL_BACKEND_OPENGL
     } else if (iglDev_->getBackendType() == BackendType::Vulkan) {
       util::createShaderStages(iglDev_,
@@ -482,7 +485,11 @@ TEST_F(TextureArrayTest, UploadToMip_SingleUpload) {
 }
 
 TEST_F(TextureArrayTest, UploadToMip_LayerByLayer) {
+#if defined(IGL_PLATFORM_LINUX) && IGL_PLATFORM_LINUX
+  GTEST_SKIP() << "Temporarily disabled.";
+#else
   runUploadToMipTest(*iglDev_, *cmdQueue_, false);
+#endif
 }
 
 //

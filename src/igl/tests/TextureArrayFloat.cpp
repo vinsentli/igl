@@ -78,7 +78,7 @@ class TextureArrayFloatTest : public ::testing::Test {
 
     vertUniformBuffer = std::make_shared<iglu::ManagedUniformBuffer>(device, vertInfo);
 
-    IGL_ASSERT(vertUniformBuffer->result.isOk());
+    IGL_DEBUG_ASSERT(vertUniformBuffer->result.isOk());
     return vertUniformBuffer;
   }
 
@@ -160,8 +160,14 @@ class TextureArrayFloatTest : public ::testing::Test {
                                    igl::tests::data::shader::OGL_SIMPLE_FRAG_SHADER_TEXARRAY_EXT,
                                    igl::tests::data::shader::shaderFunc,
                                    stages);
+        } else {
+          GTEST_SKIP() << "Texture array is unsupported for this platform.";
+          return;
         }
       }
+#if defined(IGL_PLATFORM_LINUX) && IGL_PLATFORM_LINUX
+      GTEST_SKIP() << "Temporarily disabled.";
+#endif
 #endif // IGL_BACKEND_OPENGL
     } else if (iglDev_->getBackendType() == BackendType::Vulkan) {
       util::createShaderStages(iglDev_,

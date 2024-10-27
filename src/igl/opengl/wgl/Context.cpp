@@ -46,7 +46,7 @@ Context::Context(RenderingAPI api) : contextOwned_(true) {
   if (!RegisterClassA(&window_class)) {
     auto lastError = GetLastError();
     if (lastError != ERROR_CLASS_ALREADY_EXISTS) {
-      IGL_ASSERT_MSG(0, "[IGL] WGL error 0x%08X:\n", GetLastError());
+      IGL_DEBUG_ABORT("[IGL] WGL error 0x%08X:\n", GetLastError());
     }
   }
 
@@ -63,9 +63,9 @@ Context::Context(RenderingAPI api) : contextOwned_(true) {
                                  window_class.hInstance,
                                  nullptr);
 
-  IGL_ASSERT_MSG(dummyWindow_ != nullptr,
-                 "[IGL] Failed to create dummy OpenGL window. WGL error 0x%08X:\n",
-                 GetLastError());
+  IGL_DEBUG_ASSERT(dummyWindow_ != nullptr,
+                   "[IGL] Failed to create dummy OpenGL window. WGL error 0x%08X:\n",
+                   GetLastError());
 
   deviceContext_ = GetDC(dummyWindow_);
 
@@ -81,19 +81,18 @@ Context::Context(RenderingAPI api) : contextOwned_(true) {
   pfd.iLayerType = PFD_MAIN_PLANE;
 
   int pixel_format = ChoosePixelFormat(deviceContext_, &pfd);
-  IGL_ASSERT_MSG(pixel_format != 0,
-                 "[IGL] Failed to find a suitable pixel format. WGL error 0x%08X:\n",
-                 GetLastError());
+  IGL_DEBUG_ASSERT(pixel_format != 0,
+                   "[IGL] Failed to find a suitable pixel format. WGL error 0x%08X:\n",
+                   GetLastError());
 
   if (!SetPixelFormat(deviceContext_, pixel_format, &pfd)) {
-    IGL_ASSERT_MSG(0, "[IGL] Failed to set the pixel format. WGL error 0x%08X:\n", GetLastError());
+    IGL_DEBUG_ABORT("[IGL] Failed to set the pixel format. WGL error 0x%08X:\n", GetLastError());
   }
 
   renderContext_ = wglCreateContext(deviceContext_);
   if (!renderContext_) {
-    IGL_ASSERT_MSG(0,
-                   "[IGL] Failed to create a dummy OpenGL rendering context. WGL error 0x%08X:\n",
-                   GetLastError());
+    IGL_DEBUG_ABORT("[IGL] Failed to create a dummy OpenGL rendering context. WGL error 0x%08X:\n",
+                    GetLastError());
   }
 
   IContext::registerContext((void*)renderContext_, this);
@@ -107,7 +106,7 @@ Context::Context(RenderingAPI api) : contextOwned_(true) {
   igl::Result result;
   // Initialize through base class.
   initialize(&result);
-  IGL_ASSERT(result.isOk());
+  IGL_DEBUG_ASSERT(result.isOk());
 }
 
 Context::Context(HDC deviceContext, HGLRC renderContext) :
@@ -123,7 +122,7 @@ Context::Context(HDC deviceContext, HGLRC renderContext) :
   igl::Result result;
   // Initialize through base class.
   initialize(&result);
-  IGL_ASSERT(result.isOk());
+  IGL_DEBUG_ASSERT(result.isOk());
 }
 
 Context::Context(HDC deviceContext, HGLRC renderContext, std::vector<HGLRC> shareContexts) :
@@ -142,7 +141,7 @@ Context::Context(HDC deviceContext, HGLRC renderContext, std::vector<HGLRC> shar
   igl::Result result;
   // Initialize through base class.
   initialize(&result);
-  IGL_ASSERT(result.isOk());
+  IGL_DEBUG_ASSERT(result.isOk());
 }
 
 Context::~Context() {
@@ -163,15 +162,15 @@ Context::~Context() {
 
 void Context::setCurrent() {
   if (!wglMakeCurrent(deviceContext_, renderContext_)) {
-    IGL_ASSERT_MSG(
-        0, "[IGL] Failed to activate OpenGL render context. WGL error 0x%08X:\n", GetLastError());
+    IGL_DEBUG_ABORT("[IGL] Failed to activate OpenGL render context. WGL error 0x%08X:\n",
+                    GetLastError());
   }
   flushDeletionQueue();
 
 #ifdef DISABLE_WGL_VSYNC
   static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT =
       (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
-  if (IGL_VERIFY(wglSwapIntervalEXT)) {
+  if (IGL_DEBUG_VERIFY(wglSwapIntervalEXT)) {
     wglSwapIntervalEXT(0);
   }
 #endif
@@ -179,8 +178,8 @@ void Context::setCurrent() {
 
 void Context::clearCurrentContext() const {
   if (!wglMakeCurrent(nullptr, nullptr)) {
-    IGL_ASSERT_MSG(
-        0, "[IGL] Failed to clear OpenGL render context. WGL error 0x%08X:\n", GetLastError());
+    IGL_DEBUG_ABORT("[IGL] Failed to clear OpenGL render context. WGL error 0x%08X:\n",
+                    GetLastError());
   }
 }
 
@@ -203,7 +202,7 @@ void Context::present(std::shared_ptr<ITexture> surface) const {
 }
 
 std::unique_ptr<IContext> Context::createShareContext(Result* outResult) {
-  IGL_ASSERT_NOT_IMPLEMENTED();
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   Result::setResult(outResult, Result::Code::Unimplemented, "Implement as needed");
   return nullptr;
 }

@@ -93,7 +93,7 @@ if(NOT APPLE AND NOT ANDROID AND NOT EMSCRIPTEN)
   target_link_libraries(IGLOpenGL PUBLIC OpenGL::GL)
 endif()
 
-igl_set_cxxstd(IGLOpenGL 17)
+igl_set_cxxstd(IGLOpenGL 20)
 igl_set_folder(IGLOpenGL "IGL")
 
 target_include_directories(IGLOpenGL PUBLIC "${IGL_ROOT_DIR}/../../vendors/tracy/src")

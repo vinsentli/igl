@@ -85,7 +85,13 @@ void destroy(igl::IDevice* IGL_NULLABLE device, igl::TextureHandle handle) {
 
 void destroy(igl::IDevice* IGL_NULLABLE device, igl::SamplerHandle handle) {
   if (device) {
-    // do nothing until we transition all samplers to handles
+    device->destroy(handle);
+  }
+}
+
+void destroy(igl::IDevice* IGL_NULLABLE device, igl::DepthStencilStateHandle handle) {
+  if (device) {
+    // do nothing until we transition depth-stencil states to handles
     (void)handle;
   }
 }

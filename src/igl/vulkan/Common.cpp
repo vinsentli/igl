@@ -12,9 +12,16 @@
 #include <cstdio>
 #include <cstdlib>
 
+// clang-format off
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
-#include <windows.h>
+  #ifndef WIN32_LEAN_AND_MEAN
+    #define WIN32_LEAN_AND_MEAN
+  #endif
+  #include <windows.h>
+#else
+  #include <dlfcn.h>
 #endif
+// clang-format on
 
 #include <igl/vulkan/ShaderModule.h>
 #include <igl/vulkan/Texture.h>
@@ -104,7 +111,7 @@ VkStencilOp stencilOperationToVkStencilOp(igl::StencilOperation op) {
   case igl::StencilOperation::DecrementWrap:
     return VK_STENCIL_OP_DECREMENT_AND_WRAP;
   }
-  IGL_ASSERT_NOT_REACHED();
+  IGL_DEBUG_ASSERT_NOT_REACHED();
   return VK_STENCIL_OP_KEEP;
 }
 
@@ -288,46 +295,6 @@ VkFormat textureFormatToVkFormat(igl::TextureFormat format) {
   IGL_UNREACHABLE_RETURN(VK_FORMAT_UNDEFINED)
 }
 
-igl::ColorSpace vkColorSpaceToColorSpace(VkColorSpaceKHR colorSpace) {
-  switch (colorSpace) {
-  case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR:
-    return ColorSpace::SRGB_NONLINEAR;
-  case VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT:
-    return ColorSpace::DISPLAY_P3_NONLINEAR;
-  case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT:
-    return ColorSpace::EXTENDED_SRGB_LINEAR;
-  case VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT:
-    return ColorSpace::DISPLAY_P3_LINEAR;
-  case VK_COLOR_SPACE_DCI_P3_NONLINEAR_EXT:
-    return ColorSpace::DCI_P3_NONLINEAR;
-  case VK_COLOR_SPACE_BT709_LINEAR_EXT:
-    return ColorSpace::BT709_LINEAR;
-  case VK_COLOR_SPACE_BT709_NONLINEAR_EXT:
-    return ColorSpace::BT709_NONLINEAR;
-  case VK_COLOR_SPACE_BT2020_LINEAR_EXT:
-    return ColorSpace::BT2020_LINEAR;
-  case VK_COLOR_SPACE_HDR10_ST2084_EXT:
-    return ColorSpace::HDR10_ST2084;
-  case VK_COLOR_SPACE_DOLBYVISION_EXT:
-    return ColorSpace::DOLBYVISION;
-  case VK_COLOR_SPACE_HDR10_HLG_EXT:
-    return ColorSpace::HDR10_HLG;
-  case VK_COLOR_SPACE_ADOBERGB_LINEAR_EXT:
-    return ColorSpace::ADOBERGB_LINEAR;
-  case VK_COLOR_SPACE_ADOBERGB_NONLINEAR_EXT:
-    return ColorSpace::ADOBERGB_NONLINEAR;
-  case VK_COLOR_SPACE_PASS_THROUGH_EXT:
-    return ColorSpace::PASS_THROUGH;
-  case VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT:
-    return ColorSpace::EXTENDED_SRGB_NONLINEAR;
-  case VK_COLOR_SPACE_DISPLAY_NATIVE_AMD:
-    return ColorSpace::DISPLAY_NATIVE_AMD;
-  default:
-    IGL_ASSERT_NOT_REACHED();
-    return ColorSpace::SRGB_NONLINEAR;
-  }
-}
-
 bool isTextureFormatRGB(VkFormat format) {
   return format == VK_FORMAT_R8G8B8A8_UNORM || format == VK_FORMAT_R8G8B8A8_SRGB ||
          format == VK_FORMAT_A2R10G10B10_UNORM_PACK32;
@@ -347,7 +314,7 @@ VkMemoryPropertyFlags resourceStorageToVkMemoryPropertyFlags(igl::ResourceStorag
 
   switch (resourceStorage) {
   case ResourceStorage::Invalid:
-    IGL_ASSERT_MSG(false, "Invalid storage type");
+    IGL_DEBUG_ABORT("Invalid storage type");
     break;
   case ResourceStorage::Private:
     memFlags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -385,7 +352,7 @@ VkCompareOp compareFunctionToVkCompareOp(igl::CompareFunction func) {
   case igl::CompareFunction::AlwaysPass:
     return VK_COMPARE_OP_ALWAYS;
   }
-  IGL_ASSERT_MSG(false, "CompareFunction value not handled: %d", (int)func);
+  IGL_DEBUG_ABORT("CompareFunction value not handled: %d", (int)func);
   return VK_COMPARE_OP_ALWAYS;
 }
 
@@ -411,52 +378,6 @@ VkSampleCountFlagBits getVulkanSampleCountFlags(size_t numSamples) {
   return VK_SAMPLE_COUNT_64_BIT;
 }
 
-VkColorSpaceKHR colorSpaceToVkColorSpace(igl::ColorSpace colorSpace) {
-  switch (colorSpace) {
-  case ColorSpace::SRGB_LINEAR:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_BT709_LINEAR_EXT; // closest thing to linear srgb
-  case ColorSpace::SRGB_NONLINEAR:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-  case ColorSpace::DISPLAY_P3_NONLINEAR:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT;
-  case ColorSpace::DISPLAY_P3_LINEAR:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT;
-  case ColorSpace::EXTENDED_SRGB_LINEAR:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;
-  case ColorSpace::DCI_P3_NONLINEAR:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_DCI_P3_NONLINEAR_EXT;
-  case ColorSpace::BT709_LINEAR:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_BT709_LINEAR_EXT;
-  case ColorSpace::BT709_NONLINEAR:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_BT709_NONLINEAR_EXT;
-  case ColorSpace::BT2020_LINEAR:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_BT2020_LINEAR_EXT;
-  case ColorSpace::HDR10_ST2084:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_HDR10_ST2084_EXT;
-  case ColorSpace::DOLBYVISION:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_DOLBYVISION_EXT;
-  case ColorSpace::HDR10_HLG:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_HDR10_HLG_EXT;
-  case ColorSpace::ADOBERGB_LINEAR:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_ADOBERGB_LINEAR_EXT;
-  case ColorSpace::ADOBERGB_NONLINEAR:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_ADOBERGB_NONLINEAR_EXT;
-  case ColorSpace::PASS_THROUGH:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_PASS_THROUGH_EXT;
-  case ColorSpace::EXTENDED_SRGB_NONLINEAR:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT;
-  case ColorSpace::DISPLAY_NATIVE_AMD:
-    return VkColorSpaceKHR::VK_COLOR_SPACE_DISPLAY_NATIVE_AMD;
-  case ColorSpace::BT2020_NONLINEAR:
-  case ColorSpace::BT601_NONLINEAR:
-  case ColorSpace::BT2100_HLG_NONLINEAR:
-  case ColorSpace::BT2100_PQ_NONLINEAR:
-    IGL_ASSERT_NOT_IMPLEMENTED();
-    return VkColorSpaceKHR::VK_COLOR_SPACE_BT709_NONLINEAR_EXT;
-  }
-  IGL_UNREACHABLE_RETURN(VK_COLOR_SPACE_BT709_NONLINEAR_EXT);
-}
-
 uint32_t getVkLayer(TextureType type, uint32_t face, uint32_t layer) {
   return type == TextureType::Cube ? face : layer;
 }
@@ -473,10 +394,10 @@ void transitionToGeneral(VkCommandBuffer cmdBuf, ITexture* texture) {
   }
 
   const vulkan::Texture& tex = static_cast<vulkan::Texture&>(*texture);
-  const vulkan::VulkanImage& img = tex.getVulkanTexture().getVulkanImage();
+  const vulkan::VulkanImage& img = tex.getVulkanTexture().image_;
 
   if (!img.isStorageImage()) {
-    IGL_ASSERT_MSG(false, "Did you forget to specify TextureUsageBits::Storage on your texture?");
+    IGL_DEBUG_ABORT("Did you forget to specify TextureUsageBits::Storage on your texture?");
     return;
   }
 
@@ -503,15 +424,15 @@ void transitionToColorAttachment(VkCommandBuffer cmdBuf, ITexture* colorTex) {
   }
 
   const auto& vkTex = static_cast<Texture&>(*colorTex);
-  const auto& img = vkTex.getVulkanTexture().getVulkanImage();
-  if (IGL_UNEXPECTED(img.isDepthFormat_ || img.isStencilFormat_)) {
-    IGL_ASSERT_MSG(false, "Color attachments cannot have depth/stencil formats");
+  const igl::vulkan::VulkanImage& img = vkTex.getVulkanTexture().image_;
+  if (IGL_DEBUG_VERIFY_NOT(img.isDepthFormat_ || img.isStencilFormat_)) {
+    IGL_DEBUG_ABORT("Color attachments cannot have depth/stencil formats");
     IGL_LOG_ERROR("Color attachments cannot have depth/stencil formats");
     return;
   }
-  IGL_ASSERT_MSG(img.imageFormat_ != VK_FORMAT_UNDEFINED, "Invalid color attachment format");
-  if (!IGL_VERIFY((img.usageFlags_ & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) != 0)) {
-    IGL_ASSERT_MSG(false, "Did you forget to specify TextureUsageBit::Attachment usage bit?");
+  IGL_DEBUG_ASSERT(img.imageFormat_ != VK_FORMAT_UNDEFINED, "Invalid color attachment format");
+  if (!IGL_DEBUG_VERIFY((img.usageFlags_ & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) != 0)) {
+    IGL_DEBUG_ABORT("Did you forget to specify TextureUsageBit::Attachment usage bit?");
     IGL_LOG_ERROR("Did you forget to specify TextureUsageBit::Attachment usage bit?");
   }
   if (img.usageFlags_ & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) {
@@ -536,15 +457,15 @@ void transitionToDepthStencilAttachment(VkCommandBuffer cmdBuf, ITexture* depthS
   }
 
   const auto& vkTex = static_cast<Texture&>(*depthStencilTex);
-  const auto& img = vkTex.getVulkanTexture().getVulkanImage();
-  if (IGL_UNEXPECTED(!img.isDepthFormat_ && !img.isStencilFormat_)) {
-    IGL_ASSERT_MSG(false, "Only depth/stencil formats are accepted");
+  const igl::vulkan::VulkanImage& img = vkTex.getVulkanTexture().image_;
+  if (IGL_DEBUG_VERIFY_NOT(!img.isDepthFormat_ && !img.isStencilFormat_)) {
+    IGL_DEBUG_ABORT("Only depth/stencil formats are accepted");
     IGL_LOG_ERROR("Only depth/stencil formats are accepted");
     return;
   }
-  IGL_ASSERT_MSG(img.imageFormat_ != VK_FORMAT_UNDEFINED, "Invalid color attachment format");
-  if (!IGL_VERIFY((img.usageFlags_ & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0)) {
-    IGL_ASSERT_MSG(false, "Did you forget to specify TextureUsageBit::Attachment usage bit?");
+  IGL_DEBUG_ASSERT(img.imageFormat_ != VK_FORMAT_UNDEFINED, "Invalid color attachment format");
+  if (!IGL_DEBUG_VERIFY((img.usageFlags_ & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0)) {
+    IGL_DEBUG_ABORT("Did you forget to specify TextureUsageBit::Attachment usage bit?");
     IGL_LOG_ERROR("Did you forget to specify TextureUsageBit::Attachment usage bit?");
   }
   if (img.usageFlags_ & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
@@ -576,7 +497,7 @@ void transitionToShaderReadOnly(VkCommandBuffer cmdBuf, ITexture* texture) {
   }
 
   const vulkan::Texture& tex = static_cast<vulkan::Texture&>(*texture);
-  const vulkan::VulkanImage& img = tex.getVulkanTexture().getVulkanImage();
+  const vulkan::VulkanImage& img = tex.getVulkanTexture().image_;
 
   const bool isColor = (img.getImageAspectFlags() & VK_IMAGE_ASPECT_COLOR_BIT) > 0;
 
@@ -599,17 +520,17 @@ void overrideImageLayout(ITexture* texture, VkImageLayout layout) {
     return;
   }
   const vulkan::Texture* tex = static_cast<vulkan::Texture*>(texture);
-  tex->getVulkanTexture().getVulkanImage().imageLayout_ = layout;
+  tex->getVulkanTexture().image_.imageLayout_ = layout;
 }
 
 void ensureShaderModule(IShaderModule* sm) {
-  IGL_ASSERT(sm);
+  IGL_DEBUG_ASSERT(sm);
 
   const igl::vulkan::util::SpvModuleInfo& info =
       static_cast<igl::vulkan::ShaderModule*>(sm)->getVulkanShaderModule().getSpvModuleInfo();
 
   for (const auto& t : info.textures) {
-    if (!IGL_VERIFY(t.descriptorSet == kBindPoint_CombinedImageSamplers)) {
+    if (!IGL_DEBUG_VERIFY(t.descriptorSet == kBindPoint_CombinedImageSamplers)) {
       IGL_LOG_ERROR(
           "Missing descriptor set id for textures: the shader should contain \"layout(set = "
           "%u, ...)\"",
@@ -618,7 +539,7 @@ void ensureShaderModule(IShaderModule* sm) {
     }
   }
   for (const auto& b : info.buffers) {
-    if (!IGL_VERIFY(b.descriptorSet == kBindPoint_Buffers)) {
+    if (!IGL_DEBUG_VERIFY(b.descriptorSet == kBindPoint_Buffers)) {
       IGL_LOG_ERROR(
           "Missing descriptor set id for buffers: the shader should contain \"layout(set = "
           "%u, ...)\"",
@@ -641,3 +562,58 @@ uint32_t getNumImagePlanes(VkFormat format) {
   }
 }
 } // namespace igl::vulkan
+
+namespace igl::vulkan::functions {
+
+namespace {
+PFN_vkGetInstanceProcAddr getVkGetInstanceProcAddr() {
+#if defined(_WIN32)
+  HMODULE lib = LoadLibraryA("vulkan-1.dll");
+  if (!lib) {
+    return nullptr;
+  }
+  return (PFN_vkGetInstanceProcAddr)GetProcAddress(lib, "vkGetInstanceProcAddr");
+#elif defined(__APPLE__)
+  void* lib = dlopen("libvulkan.dylib", RTLD_NOW | RTLD_LOCAL);
+  if (!lib) {
+    lib = dlopen("libvulkan.1.dylib", RTLD_NOW | RTLD_LOCAL);
+  }
+  if (!lib) {
+    lib = dlopen("libMoltenVK.dylib", RTLD_NOW | RTLD_LOCAL);
+  }
+  if (!lib) {
+    return nullptr;
+  }
+  return (PFN_vkGetInstanceProcAddr)dlsym(lib, "vkGetInstanceProcAddr");
+#else
+  void* lib = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+  if (!lib) {
+    lib = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+  }
+  if (!lib) {
+    return nullptr;
+  }
+  return (PFN_vkGetInstanceProcAddr)dlsym(lib, "vkGetInstanceProcAddr");
+#endif
+  return nullptr;
+}
+} // namespace
+
+void initialize(VulkanFunctionTable& table) {
+  table.vkGetInstanceProcAddr = getVkGetInstanceProcAddr();
+  IGL_DEBUG_ASSERT(table.vkGetInstanceProcAddr != nullptr);
+
+  loadVulkanLoaderFunctions(&table, table.vkGetInstanceProcAddr);
+}
+
+void loadInstanceFunctions(VulkanFunctionTable& table, VkInstance instance) {
+  IGL_DEBUG_ASSERT(table.vkGetInstanceProcAddr != nullptr);
+  loadVulkanInstanceFunctions(&table, instance, table.vkGetInstanceProcAddr);
+}
+
+void loadDeviceFunctions(VulkanFunctionTable& table, VkDevice device) {
+  IGL_DEBUG_ASSERT(table.vkGetDeviceProcAddr != nullptr);
+  loadVulkanDeviceFunctions(&table, device, table.vkGetDeviceProcAddr);
+}
+
+} // namespace igl::vulkan::functions

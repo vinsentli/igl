@@ -32,7 +32,7 @@ ManagedUniformBuffer::ManagedUniformBuffer(igl::IDevice& device,
   igl::BufferDesc desc;
   desc.length = info.length;
 
-  if (!IGL_VERIFY(desc.length != 0)) {
+  if (!IGL_DEBUG_VERIFY(desc.length != 0)) {
     result.code = igl::Result::Code::ArgumentInvalid;
     return;
   }
@@ -132,7 +132,7 @@ void ManagedUniformBuffer::bind(const igl::IDevice& device,
       }
     }
 #else
-    IGL_ASSERT_MSG(0, "Should not use OpenGL backend on Mac Catalyst, use Metal instead\n");
+    IGL_DEBUG_ABORT("Should not use OpenGL backend on Mac Catalyst, use Metal instead\n");
 #endif
   } else {
     if (useBindBytes_) {
@@ -152,7 +152,7 @@ void ManagedUniformBuffer::bind(const igl::IDevice& device,
 
 void ManagedUniformBuffer::bind(const igl::IDevice& device, igl::IComputeCommandEncoder& encoder) {
   if (device.getBackendType() == igl::BackendType::OpenGL) {
-    IGL_ASSERT_MSG(0, "No ComputeEncoder supported for OpenGL\n");
+    IGL_DEBUG_ABORT("No ComputeEncoder supported for OpenGL\n");
   } else {
     if (useBindBytes_) {
       encoder.bindBytes(uniformInfo.index, data_, length_);
@@ -191,7 +191,7 @@ static int findUniformByName(const std::vector<igl::UniformDesc>& uniforms, cons
 }
 
 bool ManagedUniformBuffer::updateData(const char* name, const void* data, size_t dataSize) {
-  IGL_ASSERT(name);
+  IGL_DEBUG_ASSERT(name);
 
   int index = -1;
   if (uniformLUT_) {
@@ -222,7 +222,9 @@ bool ManagedUniformBuffer::updateData(const char* name, const void* data, size_t
       return true;
     }
   }
-  IGL_ASSERT_MSG(0, "call to updateData: uniform with name %s not found, skipping update\n", name);
+#ifndef GTEST
+  IGL_DEBUG_ABORT("call to updateData: uniform with name %s not found, skipping update\n", name);
+#endif
   return false;
 }
 

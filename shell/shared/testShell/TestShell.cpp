@@ -5,12 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <igl/opengl/Device.h>
-#include <igl/opengl/IContext.h>
+#include <igl/tests/util/device/TestDevice.h>
 #include <memory>
 #include <shell/shared/imageLoader/ImageLoader.h>
 #include <shell/shared/platform/android/PlatformAndroid.h>
 #include <shell/shared/platform/ios/PlatformIos.h>
+#include <shell/shared/platform/linux/PlatformLinux.h>
 #include <shell/shared/platform/mac/PlatformMac.h>
 #include <shell/shared/platform/win/PlatformWin.h>
 #include <shell/shared/renderSession/ShellParams.h>
@@ -18,36 +18,53 @@
 
 namespace igl::shell {
 
+namespace {
+std::shared_ptr<::igl::IDevice> createTestDevice() {
+  const std::string backend(IGL_BACKEND_TYPE);
+
+  if (backend == "ogl") {
+#ifdef IGL_UNIT_TESTS_GLES_VERSION
+    std::string backendApi(IGL_UNIT_TESTS_GLES_VERSION);
+#else
+    const std::string backendApi("3.0es");
+#endif
+    return tests::util::device::createTestDevice(::igl::BackendType::OpenGL, backendApi);
+  } else if (backend == "metal") {
+    return tests::util::device::createTestDevice(::igl::BackendType::Metal);
+  } else if (backend == "vulkan") {
+    return tests::util::device::createTestDevice(::igl::BackendType::Vulkan);
+  // @fb-only
+    // @fb-only
+  // @fb-only
+    return nullptr;
+  }
+}
+} // namespace
 void TestShellBase::SetUp(ScreenSize screenSize) {
   // Create igl device for requested backend
-  const std::string backendTypeOption = IGL_BACKEND_TYPE;
-  std::unique_ptr<igl::IDevice> iglDevice = nullptr;
-  if (backendTypeOption == "ogl") {
-    iglDevice = iglu::device::OpenGLFactory::create(igl::opengl::RenderingAPI::GLES3);
-    ASSERT_TRUE(iglDevice != nullptr);
-#if defined(IGL_PLATFORM_APPLE) && IGL_PLATFORM_APPLE
-  } else if (backendTypeOption == "metal") {
-    iglDevice = iglu::device::MetalFactory::create();
-    ASSERT_TRUE(iglDevice != nullptr);
-#endif
-  }
-
+  std::shared_ptr<igl::IDevice> iglDevice = createTestDevice();
+  ASSERT_TRUE(iglDevice != nullptr);
   // Create platform shell to run the tests with
 #if defined(IGL_PLATFORM_MACOS) && IGL_PLATFORM_MACOS
   platform_ = std::make_shared<igl::shell::PlatformMac>(std::move(iglDevice));
-  IGL_ASSERT(platform_);
 #elif defined(IGL_PLATFORM_IOS) && IGL_PLATFORM_IOS
   platform_ = std::make_shared<igl::shell::PlatformIos>(std::move(iglDevice));
-  IGL_ASSERT(platform_);
 #elif defined(IGL_PLATFORM_WIN) && IGL_PLATFORM_WIN
   platform_ = std::make_shared<igl::shell::PlatformWin>(std::move(iglDevice));
-  IGL_ASSERT(platform_);
 #elif defined(IGL_PLATFORM_ANDROID) && IGL_PLATFORM_ANDROID
-  platform_ =
-      std::make_shared<igl::shell::PlatformAndroid>(std::move(iglDevice), true /*useFakeLoader*/);
-  IGL_ASSERT(platform_);
+  platform_ = std::make_shared<igl::shell::PlatformAndroid>(std::move(iglDevice));
+#elif defined(IGL_PLATFORM_LINUX) && IGL_PLATFORM_LINUX
+  platform_ = std::make_shared<igl::shell::PlatformLinux>(std::move(iglDevice));
 #endif
 
+  IGL_DEBUG_ASSERT(platform_);
+
+  if (platform_->getDevice().getBackendType() == igl::BackendType::OpenGL) {
+    auto version = platform_->getDevice().getBackendVersion();
+    if (version.majorVersion < 2) {
+      GTEST_SKIP() << "OpenGL version is too low";
+    }
+  }
   // Create an offscreen texture to render to
   igl::Result ret;
   igl::TextureDesc texDesc = igl::TextureDesc::new2D(
@@ -69,7 +86,7 @@ void TestShellBase::SetUp(ScreenSize screenSize) {
   offscreenDepthTexture_ = platform_->getDevice().createTexture(depthDextureDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_TRUE(offscreenDepthTexture_ != nullptr);
-};
+}
 
 void TestShell::run(igl::shell::RenderSession& session, size_t numFrames) {
   ShellParams shellParams;

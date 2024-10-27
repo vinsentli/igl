@@ -14,7 +14,9 @@
 #include <igl/Common.h>
 #include <iterator>
 #include <string>
-
+// @fb-only
+// @fb-only
+// @fb-only
 #if IGL_PLATFORM_WIN
 #include <windows.h>
 #endif
@@ -51,7 +53,7 @@ namespace igl::shell {
 FileLoaderWin::FileLoaderWin() {
 #if IGL_PLATFORM_WIN
   wchar_t path[MAX_PATH] = {0};
-  if (IGL_VERIFY(GetModuleFileNameW(NULL, path, MAX_PATH) != 0)) {
+  if (IGL_DEBUG_VERIFY(GetModuleFileNameW(NULL, path, MAX_PATH) != 0)) {
     basePath_ = std::filesystem::path(path).parent_path().string();
   }
 #endif
@@ -97,6 +99,8 @@ std::string FileLoaderWin::fullPath(const std::string& fileName) const {
       "samples/resources/fonts/optimistic",
       // @fb-only
       // @fb-only
+      // @fb-only
+      // @fb-only
   };
 
   // find folders somewhere above our current directory
@@ -105,6 +109,25 @@ std::string FileLoaderWin::fullPath(const std::string& fileName) const {
       return p;
     }
   }
+
+#if !defined(IGL_CMAKE_BUILD)
+  // @lint-ignore CLANGTIDY
+  const std::string resfolders[] = {
+      // @fb-only
+      // @fb-only
+      // @fb-only
+  };
+  // @fb-only
+    // @fb-only
+    // @fb-only
+      // @fb-only
+          // @fb-only
+      // @fb-only
+        // @fb-only
+      // @fb-only
+    // @fb-only
+  // @fb-only
+#endif
 
   return fileName;
 }

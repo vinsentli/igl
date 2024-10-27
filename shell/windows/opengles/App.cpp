@@ -19,63 +19,23 @@
 #endif // IGL_ANGLE
 #include <memory>
 #include <shell/shared/platform/win/PlatformWin.h>
-#include <shell/shared/renderSession/AppParams.h>
-#include <shell/shared/renderSession/DefaultSession.h>
-#include <shell/shared/renderSession/ShellParams.h>
-#include <sstream>
-#include <stdexcept>
-#include <stdio.h>
-
-#if defined(_WIN32)
-#define GLFW_EXPOSE_NATIVE_WIN32
-#else
-#define GLFW_EXPOSE_NATIVE_X11
-#endif // _WIN32
-
-#if IGL_ANGLE
-#define GLFW_EXPOSE_NATIVE_EGL
-#endif // IGL_ANGLE
-#define GLFW_INCLUDE_NONE
+#include <shell/windows/common/GlfwShell.h>
 
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
 using namespace igl;
-
+namespace igl::shell {
 namespace {
+class OpenGlEsShell final : public GlfwShell {
+  igl::SurfaceTextures createSurfaceTextures() noexcept final;
+  std::shared_ptr<Platform> createPlatform() noexcept final;
 
-// Backend toggle, currentonly Angle vs Vulkan
-bool angleBackend = true;
+  void willCreateWindow() noexcept final;
+  void didCreateWindow() noexcept final;
 
-void throwOnBadResult(const Result& result) {
-  if (result.code != Result::Code::Ok) {
-    std::stringstream errorMsg;
-    errorMsg << "IGL error:\nCode: " << static_cast<int>(result.code)
-             << "\nMessage: " << result.message;
-    IGL_LOG_ERROR("%s", errorMsg.str().c_str());
-    throw std::runtime_error(errorMsg.str());
-  }
-}
-
-std::shared_ptr<igl::shell::Platform> glesShellPlatform_;
-std::unique_ptr<igl::shell::RenderSession> glesSession_;
-igl::shell::ShellParams shellParams_;
-
-void glfwErrorHandler(int error, const char* description) {
-  IGL_LOG_ERROR("GLFW Error: %s\n", description);
-}
-
-igl::shell::MouseButton getIGLMouseButton(int button) {
-  if (button == GLFW_MOUSE_BUTTON_LEFT)
-    return igl::shell::MouseButton::Left;
-
-  if (button == GLFW_MOUSE_BUTTON_RIGHT)
-    return igl::shell::MouseButton::Right;
-
-  return igl::shell::MouseButton::Middle;
-}
-
-} // namespace
+  void willTick() noexcept final;
+};
 
 class EGLDevice final : public ::igl::opengl::Device {
  public:
@@ -91,70 +51,32 @@ class EGLDevice final : public ::igl::opengl::Device {
   ::igl::opengl::PlatformDevice platformDevice_;
 };
 
-GLFWwindow* initGLESWindow(uint32_t majorVersion, uint32_t minorVersion) {
-  glfwSetErrorCallback(glfwErrorHandler);
-  if (!glfwInit())
-    return nullptr;
-
+void OpenGlEsShell::willCreateWindow() noexcept {
   glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
   glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, majorVersion);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, minorVersion);
-  glfwWindowHint(GLFW_VISIBLE, true);
-  glfwWindowHint(GLFW_DOUBLEBUFFER, true);
-  glfwWindowHint(GLFW_RESIZABLE, true);
-  glfwWindowHint(GLFW_SRGB_CAPABLE, true);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, sessionConfig().backendVersion.majorVersion);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, sessionConfig().backendVersion.minorVersion);
+  glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
+}
 
-  GLFWwindow* windowHandle = glfwCreateWindow(
-      shellParams_.viewportSize.x, shellParams_.viewportSize.y, "Hello igl", NULL, NULL);
-  if (!windowHandle) {
-    glfwTerminate();
-    return nullptr;
-  }
+void OpenGlEsShell::didCreateWindow() noexcept {
+  int result = glfwGetWindowAttrib(&window(), GLFW_CLIENT_API);
 
-  int result = glfwGetWindowAttrib(windowHandle, GLFW_CLIENT_API);
-
-  glfwMakeContextCurrent(windowHandle);
+  glfwMakeContextCurrent(&window());
   glfwSwapInterval(1);
-
-  glfwSetCursorPosCallback(windowHandle, [](GLFWwindow* window, double xpos, double ypos) {
-    glesShellPlatform_->getInputDispatcher().queueEvent(
-        igl::shell::MouseMotionEvent((float)xpos, (float)ypos, 0, 0));
-  });
-  glfwSetScrollCallback(windowHandle, [](GLFWwindow* window, double xoffset, double yoffset) {
-    glesShellPlatform_->getInputDispatcher().queueEvent(
-        igl::shell::MouseWheelEvent((float)xoffset, (float)yoffset));
-  });
-  glfwSetMouseButtonCallback(
-      windowHandle, [](GLFWwindow* window, int button, int action, int mods) {
-        igl::shell::MouseButton iglButton = getIGLMouseButton(button);
-        double xpos, ypos;
-        glfwGetCursorPos(window, &xpos, &ypos);
-        glesShellPlatform_->getInputDispatcher().queueEvent(igl::shell::MouseButtonEvent(
-            iglButton, action == GLFW_PRESS, (float)xpos, (float)ypos));
-      });
-
-  glfwSetKeyCallback(windowHandle,
-                     [](GLFWwindow* window, int key, int scancode, int action, int mods) {
-                       if (key == GLFW_KEY_SPACE && action == GLFW_RELEASE) {
-                         angleBackend = !angleBackend;
-                         IGL_LOG_INFO("%s\n", angleBackend ? "Angle" : "Vulkan");
-                       }
-                     });
 
   IGL_LOG_INFO("Renderer: %s\n", (const char*)glGetString(GL_RENDERER));
   IGL_LOG_INFO("Version: %s\n", (const char*)glGetString(GL_VERSION));
   IGL_LOG_INFO("WindowAttrib: 0x%x\n", result);
-
-  return windowHandle;
 }
 
-igl::SurfaceTextures createSurfaceTextures(igl::IDevice& device) {
+igl::SurfaceTextures OpenGlEsShell::createSurfaceTextures() noexcept {
 #if IGL_ANGLE
-  if (IGL_VERIFY(device.getBackendType() == igl::BackendType::OpenGL)) {
+  auto& device = platform().getDevice();
+  if (IGL_DEBUG_VERIFY(device.getBackendType() == igl::BackendType::OpenGL)) {
     auto platformDevice = device.getPlatformDevice<igl::opengl::egl::PlatformDevice>();
-    IGL_ASSERT(platformDevice != nullptr);
-    if (IGL_VERIFY(platformDevice)) {
+    IGL_DEBUG_ASSERT(platformDevice != nullptr);
+    if (IGL_DEBUG_VERIFY(platformDevice)) {
       auto color = platformDevice->createTextureFromNativeDrawable(nullptr);
       auto depth =
           platformDevice->createTextureFromNativeDepth(igl::TextureFormat::Z_UNorm24, nullptr);
@@ -165,8 +87,28 @@ igl::SurfaceTextures createSurfaceTextures(igl::IDevice& device) {
   return igl::SurfaceTextures{};
 }
 
+std::shared_ptr<Platform> OpenGlEsShell::createPlatform() noexcept {
+#if IGL_ANGLE
+  auto glesDevice = std::make_unique</*EGLDevice*/ igl::opengl::egl::Device>(
+      std::make_unique<::igl::opengl::egl::Context>(glfwGetEGLDisplay(),
+                                                    glfwGetEGLContext(&window()),
+                                                    glfwGetEGLSurface(&window()),
+                                                    glfwGetEGLSurface(&window())));
+
+  return std::make_shared<igl::shell::PlatformWin>(std::move(glesDevice));
+#endif // IGL_ANGLE
+  return nullptr;
+}
+
+void OpenGlEsShell::willTick() noexcept {
+  glfwMakeContextCurrent(&window());
+}
+
+} // namespace
+} // namespace igl::shell
+
 int main(int argc, char* argv[]) {
-  igl::shell::Platform::initializeCommandLineArgs(argc, argv);
+  igl::shell::OpenGlEsShell shell;
 
   uint32_t majorVersion = 3;
   uint32_t minorVersion = 1;
@@ -174,39 +116,27 @@ int main(int argc, char* argv[]) {
     std::tie(majorVersion, minorVersion) = igl::opengl::parseVersionString(argv[1]);
   }
 
-  using WindowPtr = std::unique_ptr<GLFWwindow, decltype(&glfwDestroyWindow)>;
-  WindowPtr glesWindow(initGLESWindow(majorVersion, minorVersion), &glfwDestroyWindow);
-  if (!glesWindow.get())
-    return 0;
+  igl::shell::RenderSessionWindowConfig suggestedWindowConfig = {
+      .width = 1024,
+      .height = 768,
+      .windowMode = shell::WindowMode::Window,
+  };
+  igl::shell::RenderSessionConfig suggestedConfig = {
+      .displayName =
+          "OpenGL ES " + std::to_string(majorVersion) + "." + std::to_string(minorVersion),
+      .backendVersion = {.flavor = BackendFlavor::OpenGL_ES,
+                         .majorVersion = static_cast<uint8_t>(majorVersion),
+                         .minorVersion = static_cast<uint8_t>(minorVersion)},
+      .swapchainColorTextureFormat = TextureFormat::RGBA_UNorm8,
+  };
 
-#if IGL_ANGLE
-  auto glesDevice = std::make_unique</*EGLDevice*/ igl::opengl::egl::Device>(
-      std::make_unique<::igl::opengl::egl::Context>(glfwGetEGLDisplay(),
-                                                    glfwGetEGLContext(glesWindow.get()),
-                                                    glfwGetEGLSurface(glesWindow.get()),
-                                                    glfwGetEGLSurface(glesWindow.get())));
-
-  glesShellPlatform_ = std::make_shared<igl::shell::PlatformWin>(std::move(glesDevice));
-#endif // IGL_ANGLE
-  IGL_ASSERT(glesShellPlatform_);
-
-  glesSession_ = igl::shell::createDefaultRenderSession(glesShellPlatform_);
-  IGL_ASSERT_MSG(glesSession_, "createDefaultRenderSession() must return a valid session");
-  glesSession_->initialize();
-
-  auto surfaceTextures = createSurfaceTextures(glesShellPlatform_->getDevice());
-  IGL_ASSERT(surfaceTextures.color != nullptr && surfaceTextures.depth != nullptr);
-
-  while (!glfwWindowShouldClose(glesWindow.get()) && !glesSession_->appParams().exitRequested) {
-    glesShellPlatform_->getInputDispatcher().processEvents();
-    glesSession_->update(surfaceTextures);
-    glfwMakeContextCurrent(glesWindow.get());
-    glfwSwapBuffers(glesWindow.get());
-    glfwPollEvents();
+  if (!shell.initialize(argc, argv, suggestedWindowConfig, std::move(suggestedConfig))) {
+    shell.teardown();
+    return -1;
   }
 
-  glfwDestroyWindow(glesWindow.get());
-  glfwTerminate();
+  shell.run();
+  shell.teardown();
 
   return 0;
 }

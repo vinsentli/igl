@@ -12,15 +12,14 @@
 #include <igl/vulkan/Buffer.h>
 #include <igl/vulkan/CommandBuffer.h>
 #include <igl/vulkan/CommandQueue.h>
+#include <igl/vulkan/Common.h>
 #include <igl/vulkan/ComputePipelineState.h>
-#include <igl/vulkan/DepthStencilState.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/PlatformDevice.h>
 #include <igl/vulkan/RenderPipelineState.h>
 #include <igl/vulkan/SamplerState.h>
 #include <igl/vulkan/ShaderModule.h>
 #include <igl/vulkan/Texture.h>
-#include <igl/vulkan/VertexInputState.h>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanDevice.h>
 #include <igl/vulkan/VulkanFramebuffer.h>
@@ -46,12 +45,12 @@ std::vector<size_t> Framebuffer::getColorAttachmentIndices() const {
 }
 
 std::shared_ptr<igl::ITexture> Framebuffer::getColorAttachment(size_t index) const {
-  IGL_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
+  IGL_DEBUG_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
   return desc_.colorAttachments[index].texture;
 }
 
 std::shared_ptr<ITexture> Framebuffer::getResolveColorAttachment(size_t index) const {
-  IGL_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
+  IGL_DEBUG_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
   return desc_.colorAttachments[index].resolveTexture;
 }
 
@@ -72,16 +71,16 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* Not Used */,
                                            void* pixelBytes,
                                            const TextureRangeDesc& range,
                                            size_t bytesPerRow) const {
-  IGL_ASSERT_MSG(range.numFaces == 1, "range.numFaces MUST be 1");
-  IGL_ASSERT_MSG(range.numLayers == 1, "range.numLayers MUST be 1");
-  IGL_ASSERT_MSG(range.numMipLevels == 1, "range.numMipLevels MUST be 1");
+  IGL_DEBUG_ASSERT(range.numFaces == 1, "range.numFaces MUST be 1");
+  IGL_DEBUG_ASSERT(range.numLayers == 1, "range.numLayers MUST be 1");
+  IGL_DEBUG_ASSERT(range.numMipLevels == 1, "range.numMipLevels MUST be 1");
   IGL_PROFILER_FUNCTION();
-  if (!IGL_VERIFY(pixelBytes)) {
+  if (!IGL_DEBUG_VERIFY(pixelBytes)) {
     return;
   }
 
   const auto& itexture = getColorAttachment(index);
-  if (!IGL_VERIFY(itexture)) {
+  if (!IGL_DEBUG_VERIFY(itexture)) {
     return;
   }
 
@@ -90,7 +89,7 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* Not Used */,
       itexture->getSamples() == 1 ? *itexture : *getResolveColorAttachment(index));
   const VkRect2D imageRegion = {
       VkOffset2D{static_cast<int32_t>(range.x), static_cast<int32_t>(range.y)},
-      VkExtent2D{static_cast<uint32_t>(range.width), static_cast<uint32_t>(range.height)},
+      VkExtent2D{range.width, range.height},
   };
 
   if (bytesPerRow == 0) {
@@ -99,17 +98,16 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* Not Used */,
   // Vulkan uses array layer to represent either cube face or array layer. IGL's TextureRangeDesc
   // represents these separately. This gets the correct vulkan array layer for the either the
   // range's cube face or array layer.
-  const auto layer = getVkLayer(
-      itexture->getType(), static_cast<uint32_t>(range.face), static_cast<uint32_t>(range.layer));
+  const auto layer = getVkLayer(itexture->getType(), range.face, range.layer);
 
   const VulkanContext& ctx = device_.getVulkanContext();
   ctx.stagingDevice_->getImageData2D(vkTex.getVkImage(),
-                                     static_cast<uint32_t>(range.mipLevel),
+                                     range.mipLevel,
                                      layer, // Layer is either cube face or array layer
                                      imageRegion,
                                      vkTex.getProperties(),
                                      VK_FORMAT_R8G8B8A8_UNORM,
-                                     vkTex.getVulkanTexture().getVulkanImage().imageLayout_,
+                                     vkTex.getVulkanTexture().image_.imageLayout_,
                                      pixelBytes,
                                      static_cast<uint32_t>(bytesPerRow),
                                      true); // Flip the image vertically
@@ -119,14 +117,14 @@ void Framebuffer::copyBytesDepthAttachment(ICommandQueue& /*cmdQueue*/,
                                            void* /*pixelBytes*/,
                                            const TextureRangeDesc& /*range*/,
                                            size_t /*bytesPerRow*/) const {
-  IGL_ASSERT_NOT_IMPLEMENTED();
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
 }
 
 void Framebuffer::copyBytesStencilAttachment(ICommandQueue& /*cmdQueue*/,
                                              void* /*pixelBytes*/,
                                              const TextureRangeDesc& /*range*/,
                                              size_t /*bytesPerRow*/) const {
-  IGL_ASSERT_NOT_IMPLEMENTED();
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
 }
 
 void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
@@ -135,7 +133,7 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
                                              const TextureRangeDesc& range) const {
   IGL_PROFILER_FUNCTION();
   // Currently doesn't support mipmaps
-  if (!IGL_VERIFY(range.mipLevel == 0 && range.numMipLevels == 1)) {
+  if (!IGL_DEBUG_VERIFY(range.mipLevel == 0 && range.numMipLevels == 1)) {
     return;
   }
 
@@ -148,14 +146,14 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
   VkCommandBuffer cmdBuf = vulkanBuffer.getVkCommandBuffer();
 
   const std::shared_ptr<igl::ITexture>& srcTexture = getColorAttachment(index);
-  if (!IGL_VERIFY(srcTexture)) {
+  if (!IGL_DEBUG_VERIFY(srcTexture)) {
     return;
   }
   // If we're doing MSAA, we should be using the resolve color attachment
   const igl::vulkan::Texture& srcVkTex = static_cast<Texture&>(
       srcTexture->getSamples() == 1 ? *srcTexture : *getResolveColorAttachment(index));
 
-  if (!IGL_VERIFY(destTexture)) {
+  if (!IGL_DEBUG_VERIFY(destTexture)) {
     return;
   }
   const igl::vulkan::Texture& dstVkTex = static_cast<Texture&>(*destTexture);
@@ -173,7 +171,7 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
                         VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
 
   // 2. Transition src into TRANSFER_SRC_OPTIMAL
-  srcVkTex.getVulkanTexture().getVulkanImage().transitionLayout(
+  srcVkTex.getVulkanTexture().image_.transitionLayout(
       cmdBuf,
       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
       VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, // Wait for all previous operation to
@@ -181,10 +179,10 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
       VK_PIPELINE_STAGE_TRANSFER_BIT,
       VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
   // 3. Copy Image
-  const VkImageCopy copy = ivkGetImageCopy2D(
-      VkOffset2D{static_cast<int32_t>(range.x), static_cast<int32_t>(range.y)},
-      VkImageSubresourceLayers{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-      VkExtent2D{static_cast<uint32_t>(range.width), static_cast<uint32_t>(range.height)});
+  const VkImageCopy copy =
+      ivkGetImageCopy2D(VkOffset2D{static_cast<int32_t>(range.x), static_cast<int32_t>(range.y)},
+                        VkImageSubresourceLayers{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                        VkExtent2D{range.width, range.height});
 
   ctx.vf_.vkCmdCopyImage(cmdBuf,
                          srcVkTex.getVkImage(),
@@ -195,14 +193,14 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
                          &copy);
 
   // 4. Transition images back
-  srcVkTex.getVulkanTexture().getVulkanImage().transitionLayout(
+  srcVkTex.getVulkanTexture().image_.transitionLayout(
       cmdBuf,
       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       VK_PIPELINE_STAGE_TRANSFER_BIT, // Wait for Copy to be done
       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, // Don't start anything until Copy is
                                          // done
       VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
-  dstVkTex.getVulkanTexture().getVulkanImage().transitionLayout(
+  dstVkTex.getVulkanTexture().image_.transitionLayout(
       cmdBuf,
       dstVkTex.isSwapchainTexture() ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
                                     : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -225,43 +223,59 @@ void Framebuffer::updateDrawable(SurfaceTextures surfaceTextures) {
 void Framebuffer::updateResolveAttachment(std::shared_ptr<ITexture> texture) {
   if (getColorAttachment(0) && getResolveColorAttachment(0) != texture) {
     desc_.colorAttachments[0].resolveTexture = std::move(texture);
+    validateAttachments();
   }
 }
 
 void Framebuffer::updateDrawableInternal(SurfaceTextures surfaceTextures, bool updateDepthStencil) {
   IGL_PROFILER_FUNCTION();
 
+  bool updated = false;
   if (getColorAttachment(0) != surfaceTextures.color) {
     if (!surfaceTextures.color) {
       desc_.colorAttachments[0] = {};
     } else {
       desc_.colorAttachments[0].texture = std::move(surfaceTextures.color);
     }
+    updated = true;
   }
 
   if (updateDepthStencil) {
     if (surfaceTextures.depth && surfaceTextures.depth->getProperties().hasStencil()) {
       if (getStencilAttachment() != surfaceTextures.depth) {
         desc_.stencilAttachment.texture = surfaceTextures.depth;
+        updated = true;
       }
     } else {
       desc_.stencilAttachment.texture = nullptr;
+      updated = true;
     }
     if (getDepthAttachment() != surfaceTextures.depth) {
       desc_.depthAttachment.texture = std::move(surfaceTextures.depth);
+      updated = true;
     }
+  }
+  if (updated) {
+    validateAttachments();
   }
 }
 
 Framebuffer::Framebuffer(const Device& device, FramebufferDesc desc) :
   device_(device), desc_(std::move(desc)) {
+  validateAttachments();
+}
+
+void Framebuffer::validateAttachments() {
+  width_ = 0u;
+  height_ = 0u;
+
   IGL_PROFILER_FUNCTION();
   auto ensureSize = [this](const vulkan::Texture& tex) {
-    const uint32_t attachmentWidth = static_cast<uint32_t>(tex.getDimensions().width);
-    const uint32_t attachmentHeight = static_cast<uint32_t>(tex.getDimensions().height);
+    const uint32_t attachmentWidth = tex.getDimensions().width;
+    const uint32_t attachmentHeight = tex.getDimensions().height;
 
-    IGL_ASSERT(attachmentWidth);
-    IGL_ASSERT(attachmentHeight);
+    IGL_DEBUG_ASSERT(attachmentWidth);
+    IGL_DEBUG_ASSERT(attachmentHeight);
 
     // Initialize width/height
     if (!width_ || !height_) {
@@ -269,13 +283,13 @@ Framebuffer::Framebuffer(const Device& device, FramebufferDesc desc) :
       height_ = attachmentHeight;
     } else {
       // We expect all subsequent color attachments to have the same size.
-      IGL_ASSERT(width_ == attachmentWidth);
-      IGL_ASSERT(height_ == attachmentHeight);
+      IGL_DEBUG_ASSERT(width_ == attachmentWidth);
+      IGL_DEBUG_ASSERT(height_ == attachmentHeight);
     }
 
-    IGL_ASSERT_MSG(tex.getVkFormat() != VK_FORMAT_UNDEFINED,
-                   "Invalid texture format: %d",
-                   static_cast<int>(tex.getVkFormat()));
+    IGL_DEBUG_ASSERT(tex.getVkFormat() != VK_FORMAT_UNDEFINED,
+                     "Invalid texture format: %d",
+                     static_cast<int>(tex.getVkFormat()));
   };
 
   for (const auto& attachment : desc_.colorAttachments) {
@@ -284,28 +298,22 @@ Framebuffer::Framebuffer(const Device& device, FramebufferDesc desc) :
     }
     const auto& colorTexture = static_cast<vulkan::Texture&>(*attachment.texture);
     ensureSize(colorTexture);
-    if (!IGL_VERIFY((colorTexture.getUsage() & TextureDesc::TextureUsageBits::Attachment) != 0)) {
-      IGL_ASSERT_MSG(
-          false, "Did you forget to specify TextureUsageBits::Attachment on your color texture?");
-      IGL_LOG_ERROR(
-          "Did you forget to specify TextureUsageBits::Attachment on your color texture?");
-    }
+    IGL_DEBUG_ASSERT(
+        (colorTexture.getUsage() & TextureDesc::TextureUsageBits::Attachment) != 0,
+        "Did you forget to specify TextureUsageBits::Attachment on your color texture?");
   }
 
   const auto* depthTexture = static_cast<vulkan::Texture*>(desc_.depthAttachment.texture.get());
 
   if (depthTexture) {
     ensureSize(*depthTexture);
-    if (!IGL_VERIFY((depthTexture->getUsage() & TextureDesc::TextureUsageBits::Attachment) != 0)) {
-      IGL_ASSERT_MSG(
-          false, "Did you forget to specify TextureUsageBits::Attachment on your depth texture?");
-      IGL_LOG_ERROR(
-          "Did you forget to specify TextureUsageBits::Attachment on your depth texture?");
-    }
+    IGL_DEBUG_ASSERT(
+        (depthTexture->getUsage() & TextureDesc::TextureUsageBits::Attachment) != 0,
+        "Did you forget to specify TextureUsageBits::Attachment on your depth texture?");
   }
 
-  IGL_ASSERT(width_);
-  IGL_ASSERT(height_);
+  IGL_DEBUG_ASSERT(width_);
+  IGL_DEBUG_ASSERT(height_);
 }
 
 VkFramebuffer Framebuffer::getVkFramebuffer(uint32_t mipLevel,
@@ -322,14 +330,14 @@ VkFramebuffer Framebuffer::getVkFramebuffer(uint32_t mipLevel,
     if (!colorAttachment.texture) {
       continue;
     }
-    IGL_ASSERT(colorAttachment.texture);
+    IGL_DEBUG_ASSERT(colorAttachment.texture);
 
     const auto& colorTexture = static_cast<vulkan::Texture&>(*colorAttachment.texture);
     attachments.attachments_.push_back(
         colorTexture.getVkImageViewForFramebuffer(mipLevel, layer, desc_.mode));
     // handle color MSAA
     if (colorAttachment.resolveTexture) {
-      IGL_ASSERT(mipLevel == 0);
+      IGL_DEBUG_ASSERT(mipLevel == 0);
       const auto& colorResolveTexture =
           static_cast<vulkan::Texture&>(*colorAttachment.resolveTexture);
       attachments.attachments_.push_back(

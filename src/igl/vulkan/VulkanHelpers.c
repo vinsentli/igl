@@ -316,42 +316,6 @@ uint32_t ivkFindMemoryType(const struct VulkanFunctionTable* vt,
   return 0;
 }
 
-VkResult ivkCreateSemaphore(const struct VulkanFunctionTable* vt,
-                            VkDevice device,
-                            bool exportable,
-                            VkSemaphore* outSemaphore) {
-  const VkExportSemaphoreCreateInfo exportInfo = {
-      .sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO,
-      .pNext = NULL,
-      .handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT,
-  };
-
-  const VkSemaphoreCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-      .pNext = exportable ? &exportInfo : NULL,
-      .flags = 0,
-  };
-  return vt->vkCreateSemaphore(device, &ci, NULL, outSemaphore);
-}
-
-VkResult ivkCreateFence(const struct VulkanFunctionTable* vt,
-                        VkDevice device,
-                        VkFlags flags,
-                        const bool exportable,
-                        VkFence* outFence) {
-  const VkExportFenceCreateInfo exportInfo = {
-      .sType = VK_STRUCTURE_TYPE_EXPORT_FENCE_CREATE_INFO,
-      .handleTypes = VK_EXTERNAL_FENCE_HANDLE_TYPE_SYNC_FD_BIT,
-  };
-
-  const VkFenceCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-      .pNext = exportable ? &exportInfo : NULL,
-      .flags = flags,
-  };
-  return vt->vkCreateFence(device, &ci, NULL, outFence);
-}
-
 void ivkAddNext(void* node, const void* next) {
   if (!node || !next) {
     return;
@@ -372,22 +336,17 @@ VkResult ivkCreateDevice(const struct VulkanFunctionTable* vt,
                          const VkDeviceQueueCreateInfo* queueCreateInfos,
                          size_t numDeviceExtensions,
                          const char** deviceExtensions,
-                         VkBool32 enableMultiview,
-                         VkBool32 enableShaderFloat16,
-                         VkBool32 enableBufferDeviceAddress,
-                         VkBool32 enableDescriptorIndexing,
-                         VkBool32 enableDrawParameters,
-                         VkBool32 enableYcbcr,
-                         const VkPhysicalDeviceFeatures* supported,
+                         const VkPhysicalDeviceFeatures2* supported,
                          VkDevice* outDevice) {
   assert(numQueueCreateInfos >= 1);
   const VkPhysicalDeviceFeatures deviceFeatures10 = {
-      .dualSrcBlend = supported ? supported->dualSrcBlend : VK_TRUE,
-      .multiDrawIndirect = supported ? supported->multiDrawIndirect : VK_TRUE,
-      .drawIndirectFirstInstance = supported ? supported->drawIndirectFirstInstance : VK_TRUE,
-      .depthBiasClamp = supported ? supported->depthBiasClamp : VK_TRUE,
-      .fillModeNonSolid = supported ? supported->fillModeNonSolid : VK_TRUE,
-      .shaderInt16 = supported ? supported->shaderInt16 : VK_TRUE,
+      .dualSrcBlend = supported ? supported->features.dualSrcBlend : VK_TRUE,
+      .multiDrawIndirect = supported ? supported->features.multiDrawIndirect : VK_TRUE,
+      .drawIndirectFirstInstance = supported ? supported->features.drawIndirectFirstInstance
+                                             : VK_TRUE,
+      .depthBiasClamp = supported ? supported->features.depthBiasClamp : VK_TRUE,
+      .fillModeNonSolid = supported ? supported->features.fillModeNonSolid : VK_TRUE,
+      .shaderInt16 = supported ? supported->features.shaderInt16 : VK_TRUE,
   };
   VkDeviceCreateInfo ci = {
       .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -397,67 +356,9 @@ VkResult ivkCreateDevice(const struct VulkanFunctionTable* vt,
       .ppEnabledExtensionNames = deviceExtensions,
       .pEnabledFeatures = &deviceFeatures10,
   };
-  const VkPhysicalDeviceDescriptorIndexingFeaturesEXT descriptorIndexingFeature = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT,
-      .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
-      .descriptorBindingUniformBufferUpdateAfterBind = VK_TRUE,
-      .descriptorBindingSampledImageUpdateAfterBind = VK_TRUE,
-      .descriptorBindingStorageImageUpdateAfterBind = VK_TRUE,
-      .descriptorBindingStorageBufferUpdateAfterBind = VK_TRUE,
-      .descriptorBindingUpdateUnusedWhilePending = VK_TRUE,
-      .descriptorBindingPartiallyBound = VK_TRUE,
-      .runtimeDescriptorArray = VK_TRUE,
-  };
-  if (enableDescriptorIndexing) {
-    ivkAddNext(&ci, &descriptorIndexingFeature);
-  }
 
-  const VkPhysicalDevice16BitStorageFeatures float16StorageBuffersFeature = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES,
-      .storageBuffer16BitAccess = VK_TRUE,
-  };
-  const VkPhysicalDeviceShaderFloat16Int8Features float16ArithmeticFeature = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES,
-      .shaderFloat16 = VK_TRUE,
-  };
-  if (enableShaderFloat16) {
-    ivkAddNext(&ci, &float16ArithmeticFeature);
-    ivkAddNext(&ci, &float16StorageBuffersFeature);
-  }
-
-#if defined(VK_KHR_buffer_device_address)
-  const VkPhysicalDeviceBufferDeviceAddressFeaturesKHR bufferDeviceAddressFeature = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR,
-      .bufferDeviceAddress = VK_TRUE,
-  };
-  if (enableBufferDeviceAddress) {
-    ivkAddNext(&ci, &bufferDeviceAddressFeature);
-  }
-#endif // defined(VK_KHR_buffer_device_address)
-
-  // Note this must exist outside of the if statement below
-  // due to scope issues.
-  VkPhysicalDeviceMultiviewFeatures multiviewFeature = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES,
-      .multiview = VK_TRUE,
-  };
-  if (enableMultiview) {
-    ivkAddNext(&ci, &multiviewFeature);
-  }
-  VkPhysicalDeviceSamplerYcbcrConversionFeatures ycbcrFeature = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES,
-      .samplerYcbcrConversion = VK_TRUE,
-  };
-  if (enableYcbcr) {
-    ivkAddNext(&ci, &ycbcrFeature);
-  }
-  VkPhysicalDeviceShaderDrawParameterFeatures shaderDrawParameterFeature = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETER_FEATURES,
-      .shaderDrawParameters = VK_TRUE,
-  };
-  if (enableDrawParameters) {
-    ivkAddNext(&ci, &shaderDrawParameterFeature);
-  }
+  // Append all feature structs being requested for this device
+  ci.pNext = supported->pNext;
 
   return vt->vkCreateDevice(physicalDevice, &ci, NULL, outDevice);
 }
@@ -629,85 +530,6 @@ VkResult ivkCreateHeadlessSurface(const struct VulkanFunctionTable* vt,
   };
 
   return vt->vkCreateHeadlessSurfaceEXT(instance, &ci, NULL, outSurface);
-}
-
-VkResult ivkCreateSampler(const struct VulkanFunctionTable* vt,
-                          VkDevice device,
-                          VkSampler* outSampler) {
-  const VkSamplerCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-      .pNext = NULL,
-      .flags = 0,
-      .magFilter = VK_FILTER_LINEAR,
-      .minFilter = VK_FILTER_LINEAR,
-      .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-      .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-      .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-      .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-      .mipLodBias = 0.0f,
-      .anisotropyEnable = VK_FALSE,
-      .maxAnisotropy = 0.0f,
-      .compareEnable = VK_FALSE,
-      .compareOp = VK_COMPARE_OP_ALWAYS,
-      .minLod = 0.0f,
-      .maxLod = 0.0f,
-      .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-      .unnormalizedCoordinates = VK_FALSE,
-  };
-  return vt->vkCreateSampler(device, &ci, NULL, outSampler);
-}
-
-VkSamplerCreateInfo ivkGetSamplerCreateInfo(VkFilter minFilter,
-                                            VkFilter magFilter,
-                                            VkSamplerMipmapMode mipmapMode,
-                                            VkSamplerAddressMode addressModeU,
-                                            VkSamplerAddressMode addressModeV,
-                                            VkSamplerAddressMode addressModeW,
-                                            float minLod,
-                                            float maxLod) {
-  const VkSamplerCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-      .pNext = NULL,
-      .flags = 0,
-      .magFilter = magFilter,
-      .minFilter = minFilter,
-      .mipmapMode = mipmapMode,
-      .addressModeU = addressModeU,
-      .addressModeV = addressModeV,
-      .addressModeW = addressModeW,
-      .mipLodBias = 0.0f,
-      .anisotropyEnable = VK_FALSE,
-      .maxAnisotropy = 0.0f,
-      .compareEnable = VK_FALSE,
-      .compareOp = VK_COMPARE_OP_ALWAYS,
-      .minLod = minLod,
-      .maxLod = maxLod,
-      .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-      .unnormalizedCoordinates = VK_FALSE,
-  };
-  return ci;
-}
-
-VkSamplerYcbcrConversionCreateInfo ivkGetSamplerYcbcrCreateInfo(VkFormat format) {
-  const VkSamplerYcbcrConversionCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_CREATE_INFO,
-      .pNext = NULL,
-      .format = format,
-      .ycbcrModel = VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_709,
-      .ycbcrRange = VK_SAMPLER_YCBCR_RANGE_ITU_FULL,
-      .components =
-          {
-              VK_COMPONENT_SWIZZLE_IDENTITY,
-              VK_COMPONENT_SWIZZLE_IDENTITY,
-              VK_COMPONENT_SWIZZLE_IDENTITY,
-              VK_COMPONENT_SWIZZLE_IDENTITY,
-          },
-      .xChromaOffset = VK_CHROMA_LOCATION_MIDPOINT,
-      .yChromaOffset = VK_CHROMA_LOCATION_MIDPOINT,
-      .chromaFilter = VK_FILTER_LINEAR,
-      .forceExplicitReconstruction = VK_FALSE,
-  };
-  return ci;
 }
 
 VkImageViewCreateInfo ivkGetImageViewCreateInfo(VkImage image,
@@ -939,19 +761,6 @@ VkResult ivkCreateDescriptorPool(const struct VulkanFunctionTable* vt,
       .pPoolSizes = poolSizes,
   };
   return vt->vkCreateDescriptorPool(device, &ci, NULL, outDescriptorPool);
-}
-
-VkResult ivkBeginCommandBuffer(const struct VulkanFunctionTable* vt, VkCommandBuffer buffer) {
-  const VkCommandBufferBeginInfo bi = {
-      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-      .pNext = NULL,
-      .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-  };
-  return vt->vkBeginCommandBuffer(buffer, &bi);
-}
-
-VkResult ivkEndCommandBuffer(const struct VulkanFunctionTable* vt, VkCommandBuffer buffer) {
-  return vt->vkEndCommandBuffer(buffer);
 }
 
 VkSubmitInfo ivkGetSubmitInfo(const VkCommandBuffer* buffer,
@@ -1705,7 +1514,7 @@ VkResult ivkVmaCreateAllocator(const struct VulkanFunctionTable* vt,
 #if IGL_USE_GLSLANG
 void ivkUpdateGlslangResource(glslang_resource_t* res, const VkPhysicalDeviceProperties* props) {
   const VkPhysicalDeviceLimits* limits = props ? &props->limits : NULL;
-  if (!limits) {
+  if (!limits || !res) {
     return;
   }
 

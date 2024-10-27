@@ -60,7 +60,7 @@ class VulkanImmediateCommands final {
     /// @brief Creates a SubmitHandle object from an existing handle
     explicit SubmitHandle(uint64_t handle) :
       bufferIndex_(uint32_t(handle & 0xffffffff)), submitId_(uint32_t(handle >> 32)) {
-      IGL_ASSERT(submitId_);
+      IGL_DEBUG_ASSERT(submitId_);
     }
 
     /// @brief Checks whether the structure is empty and has not been associates with a command
@@ -134,11 +134,7 @@ class VulkanImmediateCommands final {
 
   /// @brief Returns the last SubmitHandle, which was submitted when `submit()` was last called
   [[nodiscard]] SubmitHandle getLastSubmitHandle() const;
-
-  /// @brief Checks whether the SubmitHandle is recycled. A recycled SubmitHandle is a handle that
-  /// has a submit id greater than the submit id associated with the same command buffer stored
-  /// internally in `VulkanImmediateCommands`. A SubmitHandle handle is also recycled if it's empty
-  [[nodiscard]] bool isRecycled(SubmitHandle handle) const;
+  [[nodiscard]] SubmitHandle getNextSubmitHandle() const;
 
   /** @brief Checks whether a SubmitHandle is ready. A SubmitHandle is ready if it is recycled or
    * empty. If it has not been recycled and is not empty, a SubmitHandle is ready if the fence
@@ -166,6 +162,10 @@ class VulkanImmediateCommands final {
   /// encoded, and have completed execution by the GPU (their fences have been signaled). Resets the
   /// number of available command buffers.
   void purge();
+  /// @brief Checks whether the SubmitHandle is recycled. A recycled SubmitHandle is a handle that
+  /// has a submit id greater than the submit id associated with the same command buffer stored
+  /// internally in `VulkanImmediateCommands`. A SubmitHandle handle is also recycled if it's empty
+  [[nodiscard]] bool isRecycled(SubmitHandle handle) const;
 
  private:
   const VulkanFunctionTable& vf_;
@@ -177,6 +177,7 @@ class VulkanImmediateCommands final {
 
   /// @brief The last submitted handle. Updated on `submit()`
   SubmitHandle lastSubmitHandle_ = SubmitHandle();
+  SubmitHandle nextSubmitHandle_ = SubmitHandle();
 
   /// @brief The semaphore submitted with the last command buffer. Updated on `submit()`
   VkSemaphore lastSubmitSemaphore_ = VK_NULL_HANDLE;

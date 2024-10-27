@@ -14,6 +14,7 @@
 #include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/RenderCommandEncoder.h>
 #include <shell/shared/imageLoader/ImageLoader.h>
+#include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/ShellParams.h>
 #if defined(IGL_PLATFORM_UWP)
 #include "BindGroupSession.h"
@@ -79,7 +80,7 @@ std::string getProlog(igl::IDevice& device) {
   }
 #endif // IGL_BACKEND_OPENGL
   return "";
-};
+}
 
 std::string getMetalShaderSource() {
   return R"(
@@ -195,7 +196,7 @@ const char* getVulkanVertexShaderSource() {
 std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
-    IGL_ASSERT_NOT_REACHED();
+    IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
   case igl::BackendType::Vulkan:
     return igl::ShaderStagesCreator::fromModuleStringInput(device,
@@ -327,7 +328,7 @@ void BindGroupSession::initialize() noexcept {
   renderPass_.colorAttachments.resize(1);
   renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
   renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPass_.colorAttachments[0].clearColor = getPlatform().getDevice().backendDebugColor();
+  renderPass_.colorAttachments[0].clearColor = getPreferredClearColor();
   renderPass_.depthAttachment.loadAction = LoadAction::Clear;
   renderPass_.depthAttachment.storeAction = StoreAction::DontCare;
   renderPass_.depthAttachment.clearDepth = 1.0;
@@ -354,8 +355,8 @@ void BindGroupSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
     framebufferDesc_.colorAttachments[0].texture = surfaceTextures.color;
     framebufferDesc_.depthAttachment.texture = surfaceTextures.depth;
     framebuffer_ = device.createFramebuffer(framebufferDesc_, &ret);
-    IGL_ASSERT(ret.isOk());
-    IGL_ASSERT(framebuffer_ != nullptr);
+    IGL_DEBUG_ASSERT(ret.isOk());
+    IGL_DEBUG_ASSERT(framebuffer_ != nullptr);
   } else {
     framebuffer_->updateDrawable(surfaceTextures.color);
   }
@@ -374,7 +375,7 @@ void BindGroupSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
     desc.cullMode = igl::CullMode::Back;
     desc.frontFaceWinding = igl::WindingMode::Clockwise;
     pipelineState_ = device.createRenderPipeline(desc, &ret);
-    IGL_ASSERT(ret.isOk());
+    IGL_DEBUG_ASSERT(ret.isOk());
   }
 
   auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
@@ -391,7 +392,7 @@ void BindGroupSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
 
   const std::shared_ptr<iglu::ManagedUniformBuffer> vertUniformBuffer =
       std::make_shared<iglu::ManagedUniformBuffer>(device, info);
-  IGL_ASSERT(vertUniformBuffer->result.isOk());
+  IGL_DEBUG_ASSERT(vertUniformBuffer->result.isOk());
   *static_cast<VertexFormat*>(vertUniformBuffer->getData()) = vertexParameters_;
   vertUniformBuffer->bind(device, *pipelineState_, *commands);
   commands->bindBindGroup(bindGroupTextures_);
@@ -400,7 +401,7 @@ void BindGroupSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
   commands->bindIndexBuffer(*ib0_, IndexFormat::UInt16);
   commands->drawIndexed(static_cast<size_t>(3u * 6u * 2u));
 
-  imguiSession_->beginFrame(framebufferDesc_, getPlatform().getDisplayContext().pixelsPerPoint * 2);
+  imguiSession_->beginFrame(framebufferDesc_, getPlatform().getDisplayContext().pixelsPerPoint);
   imguiSession_->drawFPS(fps_.getAverageFPS());
   imguiSession_->endFrame(device, *commands);
 

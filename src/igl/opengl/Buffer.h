@@ -16,7 +16,6 @@
 namespace igl {
 class ICommandBuffer;
 namespace opengl {
-class RenderPipelineState;
 
 class Buffer : public WithContext, public IBuffer {
  public:
@@ -27,7 +26,7 @@ class Buffer : public WithContext, public IBuffer {
          BufferDesc::BufferType bufferType) :
     WithContext(context), requestedApiHints_(requestedApiHints), bufferType_(bufferType) {}
   [[nodiscard]] uint64_t gpuAddress(size_t /*offset*/) const override {
-    IGL_ASSERT_NOT_IMPLEMENTED();
+    IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
     return 0;
   }
   virtual void initialize(const BufferDesc& desc, Result* outResult) = 0;

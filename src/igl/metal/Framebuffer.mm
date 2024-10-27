@@ -30,12 +30,12 @@ std::vector<size_t> Framebuffer::getColorAttachmentIndices() const {
 }
 
 std::shared_ptr<ITexture> Framebuffer::getColorAttachment(size_t index) const {
-  IGL_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
+  IGL_DEBUG_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
   return value_.colorAttachments[index].texture;
 }
 
 std::shared_ptr<ITexture> Framebuffer::getResolveColorAttachment(size_t index) const {
-  IGL_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
+  IGL_DEBUG_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
   return value_.colorAttachments[index].resolveTexture;
 }
 
@@ -63,13 +63,13 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& cmdQueue,
                                            void* pixelBytes,
                                            const TextureRangeDesc& range,
                                            size_t bytesPerRow) const {
-  IGL_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
-  IGL_ASSERT_MSG(range.numFaces == 1, "range.numFaces MUST be 1");
-  IGL_ASSERT_MSG(range.numLayers == 1, "range.numLayers MUST be 1");
-  IGL_ASSERT_MSG(range.numMipLevels == 1, "range.numMipLevels MUST be 1");
+  IGL_DEBUG_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
+  IGL_DEBUG_ASSERT(range.numFaces == 1, "range.numFaces MUST be 1");
+  IGL_DEBUG_ASSERT(range.numLayers == 1, "range.numLayers MUST be 1");
+  IGL_DEBUG_ASSERT(range.numMipLevels == 1, "range.numMipLevels MUST be 1");
   const auto& colorAttachment = value_.colorAttachments[index];
 
-  if (IGL_VERIFY(colorAttachment.texture != nullptr)) {
+  if (IGL_DEBUG_VERIFY(colorAttachment.texture != nullptr)) {
     auto texture = colorAttachment.texture;
     copyBytes(cmdQueue, texture, pixelBytes, range, bytesPerRow);
   }
@@ -99,14 +99,14 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
                                              size_t index,
                                              std::shared_ptr<ITexture> destTexture,
                                              const TextureRangeDesc& range) const {
-  IGL_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
+  IGL_DEBUG_ASSERT(index < IGL_COLOR_ATTACHMENTS_MAX);
   const auto& colorAttachment = value_.colorAttachments[index];
 
-  if (IGL_VERIFY(colorAttachment.texture != nullptr)) {
+  if (IGL_DEBUG_VERIFY(colorAttachment.texture != nullptr)) {
     auto srcTexture = colorAttachment.texture;
     id<MTLTexture> srcMtlTexture = static_cast<Texture&>(*srcTexture).get();
     id<MTLTexture> dstMtlTexture = static_cast<Texture&>(*destTexture).get();
-    if (IGL_VERIFY(srcMtlTexture && dstMtlTexture)) {
+    if (IGL_DEBUG_VERIFY(srcMtlTexture && dstMtlTexture)) {
       auto iglMtlCmdQueue = static_cast<CommandQueue&>(cmdQueue);
 
       id<MTLCommandBuffer> cmdBuf = [iglMtlCmdQueue.get() commandBuffer];
@@ -137,11 +137,11 @@ void Framebuffer::copyBytes(ICommandQueue& cmdQueue,
   if (bytesPerRow == 0) {
     bytesPerRow = iglTexture->getProperties().getBytesPerRow(range);
   }
-  if (IGL_VERIFY(canCopy(cmdQueue, mtlTexture->get(), range))) {
+  if (IGL_DEBUG_VERIFY(canCopy(cmdQueue, mtlTexture->get(), range))) {
     mtlTexture->getBytes(range, pixelBytes, bytesPerRow);
   } else {
     // Use MTLBlitCommandEncoder to copy into a non-private storage texture that can be read from
-    IGL_ASSERT_NOT_IMPLEMENTED();
+    IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   }
 }
 

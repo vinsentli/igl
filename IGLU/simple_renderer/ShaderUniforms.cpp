@@ -9,7 +9,6 @@
 
 #include <igl/Buffer.h>
 #include <igl/Device.h>
-#include <igl/Log.h>
 #include <igl/Uniform.h>
 #if IGL_BACKEND_OPENGL
 #include <igl/opengl/RenderCommandEncoder.h>
@@ -39,7 +38,7 @@ uint8_t bindTargetForShaderStage(igl::ShaderStage stage) {
   case igl::ShaderStage::Fragment:
     return igl::BindTarget::kFragment;
   default:
-    IGL_ASSERT_MSG(0, "invalid shader stage for rendering: %d", (int)stage);
+    IGL_DEBUG_ABORT("invalid shader stage for rendering: %d", (int)stage);
     return 0;
   }
 }
@@ -66,10 +65,10 @@ ShaderUniforms::ShaderUniforms(igl::IDevice& device,
                               device_.getBackendType() == igl::BackendType::Vulkan;
   for (const igl::BufferArgDesc& iglDesc : reflection.allUniformBuffers()) {
     const size_t length = iglDesc.bufferDataSize;
-    IGL_ASSERT_MSG(length > 0, "unexpected buffer with size 0");
-    IGL_ASSERT_MSG(length <= MAX_SUBALLOCATED_BUFFER_SIZE_BYTES &&
-                       (uniformBufferLimit == 0 || length <= uniformBufferLimit),
-                   "buffer size exceeds limits");
+    IGL_DEBUG_ASSERT(length > 0, "unexpected buffer with size 0");
+    IGL_DEBUG_ASSERT(length <= MAX_SUBALLOCATED_BUFFER_SIZE_BYTES &&
+                         (uniformBufferLimit == 0 || length <= uniformBufferLimit),
+                     "buffer size exceeds limits");
     const size_t bufferAllocationLength =
         std::min(isSuballocated ? MAX_SUBALLOCATED_BUFFER_SIZE_BYTES : length,
                  uniformBufferLimit != 0 ? uniformBufferLimit : std::numeric_limits<size_t>::max());
@@ -122,7 +121,13 @@ ShaderUniforms::ShaderUniforms(igl::IDevice& device,
 
     if (isSuballocated) {
       bufferDesc->isSuballocated = true;
-      bufferDesc->suballocationsSize = length;
+      // In Vulkan, Uniform buffers must have offets that are a multiple of
+      // VkPhysicalDeviceLimits::minUniformBufferOffsetAlignment
+      size_t alignement = 0;
+      device.getFeatureLimits(igl::DeviceFeatureLimits::BufferAlignment, alignement);
+
+      // Align the suballocation size to the physical device alignment
+      bufferDesc->suballocationsSize = (length + alignement - 1) & ~(alignement - 1);
     }
 
     for (int i = 0; i < static_cast<int>(iglDesc.members.size()); ++i) {
@@ -437,7 +442,7 @@ void ShaderUniforms::setFloat3Array(const igl::NameHandle& uniformName,
     // This code path should not be used for Vulkan. (it should only be used for OpenGL when uniform
     // blocks are not used).
     const size_t size = sizeof(float) * 3u * count;
-    IGL_ASSERT(size <= 65536);
+    IGL_DEBUG_ASSERT(size <= 65536);
     float* IGL_RESTRICT packedArray = reinterpret_cast<float*>(alloca(size));
     float* IGL_RESTRICT packedArrayPtr = packedArray;
     const float* paddedArrayPtr = reinterpret_cast<const float*>(value);
@@ -643,7 +648,7 @@ void ShaderUniforms::setFloat3x3Array(const igl::NameHandle& blockTypeName,
     // simdtypes::float3x3 has an extra float per float-vector.
     // Remove it so we can send the packed version to OpenGL
     const size_t size = sizeof(float) * 9u * count;
-    IGL_ASSERT(size <= 65536);
+    IGL_DEBUG_ASSERT(size <= 65536);
     float* IGL_RESTRICT packedMatrix = reinterpret_cast<float*>(alloca(size));
     float* IGL_RESTRICT packedMatrixPtr = packedMatrix;
 
@@ -775,7 +780,7 @@ void ShaderUniforms::setTexture(const std::string& name,
                                 const std::shared_ptr<igl::ITexture>& value,
                                 const std::shared_ptr<igl::ISamplerState>& sampler,
                                 IGL_MAYBE_UNUSED size_t arrayIndex) {
-  IGL_ASSERT_MSG(arrayIndex == 0, "texture arrays not supported");
+  IGL_DEBUG_ASSERT(arrayIndex == 0, "texture arrays not supported");
   auto it = _allTexturesByName.find(name);
   if (it == _allTexturesByName.end()) {
     IGL_LOG_ERROR_ONCE("[IGL][Error] Invalid texture name: %s\n", name.c_str());
@@ -826,7 +831,7 @@ void ShaderUniforms::bindUniformOpenGL(const igl::NameHandle& uniformName,
     auto strongBuffer = uniformDesc.buffer.lock();
     if (strongBuffer) {
       // We are binding individual uniforms. Confirm that iglBuffer is null
-      IGL_ASSERT(strongBuffer->allocation->iglBuffer == nullptr);
+      IGL_DEBUG_ASSERT(strongBuffer->allocation->iglBuffer == nullptr);
       encoder.bindUniform(desc, strongBuffer->allocation->ptr);
     }
   } else {
@@ -846,7 +851,7 @@ void ShaderUniforms::bindBuffer(igl::IDevice& device,
 #if IGL_BACKEND_OPENGL
     const auto& uniformName = buffer->iglBufferDesc.name;
     if (buffer->iglBufferDesc.isUniformBlock) {
-      IGL_ASSERT(buffer->allocation->iglBuffer != nullptr);
+      IGL_DEBUG_ASSERT(buffer->allocation->iglBuffer != nullptr);
       buffer->allocation->iglBuffer->upload(buffer->allocation->ptr,
                                             igl::BufferRange(buffer->allocation->size, 0));
       const auto& glPipelineState =
@@ -855,9 +860,9 @@ void ShaderUniforms::bindBuffer(igl::IDevice& device,
                          buffer->allocation->iglBuffer.get());
     } else {
       // not a uniform block
-      IGL_ASSERT(buffer->iglBufferDesc.name == buffer->iglBufferDesc.members[0].name);
-      IGL_ASSERT(buffer->uniforms.size() == 1);
-      IGL_ASSERT(buffer->iglBufferDesc.name == buffer->uniforms[0].iglMemberDesc.name);
+      IGL_DEBUG_ASSERT(buffer->iglBufferDesc.name == buffer->iglBufferDesc.members[0].name);
+      IGL_DEBUG_ASSERT(buffer->uniforms.size() == 1);
+      IGL_DEBUG_ASSERT(buffer->iglBufferDesc.name == buffer->uniforms[0].iglMemberDesc.name);
       auto& uniformDesc = buffer->uniforms[0];
 
       bindUniformOpenGL(uniformName, uniformDesc, pipelineState, encoder);

@@ -16,6 +16,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/random.hpp>
 #include <igl/FPSCounter.h>
+#include <shell/shared/platform/DisplayContext.h>
 #if IGL_BACKEND_OPENGL
 #include <igl/opengl/Device.h>
 #include <igl/opengl/GLIncludes.h>
@@ -71,10 +72,12 @@ using glm::vec4;
 
 constexpr uint32_t kNumBufferedFrames = 3;
 
+namespace {
 int width_ = 0;
 int height_ = 0;
+} // namespace
 
-constexpr uint32_t kNumCubes = 16;
+constexpr uint32_t kNumCubes = 256;
 
 struct VertexPosUvw {
   vec3 position;
@@ -131,10 +134,11 @@ static uint16_t indexData[] = {0,  1,  2,  2,  3,  0,  4,  5,  6,  6,  7,  4,
                                8,  9,  10, 10, 11, 8,  12, 13, 14, 14, 15, 12,
                                16, 17, 18, 18, 19, 16, 20, 21, 22, 22, 23, 20};
 
+namespace {
 UniformsPerFrame perFrame;
 UniformsPerObject perObject[kNumCubes];
-
 vec3 axis_[kNumCubes];
+} // namespace
 
 #if IGL_BACKEND_METAL
 static std::string getMetalShaderSource() {
@@ -239,7 +243,7 @@ void main() {
 static std::unique_ptr<IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
-    IGL_ASSERT_NOT_REACHED();
+    IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
 
 #if IGL_BACKEND_VULKAN
@@ -281,14 +285,14 @@ static std::unique_ptr<IShaderStages> getShaderStagesForBackend(igl::IDevice& de
       return igl::ShaderStagesCreator::fromModuleStringInput(
           device, codeVS2.c_str(), "main", "", codeFS.c_str(), "main", "", nullptr);
     } else {
-      IGL_ASSERT_MSG(0, "This sample is incompatible with OpenGL 2.1");
+      IGL_DEBUG_ABORT("This sample is incompatible with OpenGL 2.1");
       return nullptr;
     }
   }
 #endif // IGL_BACKEND_OPENGL
 
   default:
-    IGL_ASSERT_NOT_IMPLEMENTED();
+    IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
     return nullptr;
   }
 }
@@ -409,8 +413,8 @@ void TinyMeshSession::initialize() noexcept {
                                 &texHeight,
                                 &channels,
                                 4);
-    IGL_ASSERT_MSG(pixels,
-                   "Cannot load textures. Run `deploy_content.py` before running this app.");
+    IGL_DEBUG_ASSERT(pixels,
+                     "Cannot load textures. Run `deploy_content.py` before running this app.");
     const TextureDesc desc = TextureDesc::new2D(igl::TextureFormat::RGBA_SRGB,
                                                 texWidth,
                                                 texHeight,
@@ -453,13 +457,13 @@ std::shared_ptr<ITexture> TinyMeshSession::getVulkanNativeDepth() {
   if (device_->getBackendType() == BackendType::Vulkan) {
     const auto& vkPlatformDevice = device_->getPlatformDevice<igl::vulkan::PlatformDevice>();
 
-    IGL_ASSERT(vkPlatformDevice != nullptr);
+    IGL_DEBUG_ASSERT(vkPlatformDevice != nullptr);
 
     Result ret;
     std::shared_ptr<ITexture> drawable =
         vkPlatformDevice->createTextureFromNativeDepth(width_, height_, &ret);
 
-    IGL_ASSERT(ret.isOk());
+    IGL_DEBUG_ASSERT(ret.isOk());
     return drawable;
   }
 #endif // IGL_BACKEND_VULKAN
@@ -484,7 +488,7 @@ void TinyMeshSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
     framebufferDesc_.depthAttachment.texture = getVulkanNativeDepth();
 #endif // TINY_TEST_USE_DEPTH_BUFFER
     framebuffer_ = device_->createFramebuffer(framebufferDesc_, nullptr);
-    IGL_ASSERT(framebuffer_);
+    IGL_DEBUG_ASSERT(framebuffer_);
 
     RenderPipelineDesc desc;
 
@@ -499,16 +503,6 @@ void TinyMeshSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
 
     desc.vertexInputState = vertexInput0_;
     desc.shaderStages = getShaderStagesForBackend(*device_);
-    /*
-    desc.shaderStages = ShaderStagesCreator::fromModuleStringInput(*device_,
-                                                                   getVulkanVertexShaderSource(),
-                                                                   "main",
-                                                                   "",
-                                                                   getVulkanFragmentShaderSource(),
-                                                                   "main",
-                                                                   "",
-                                                                   nullptr);
-                                                                   */
 
 #if !TINY_TEST_USE_DEPTH_BUFFER
     desc.cullMode = igl::CullMode::Back;
@@ -574,8 +568,7 @@ void TinyMeshSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
   }
   commands->popDebugGroupLabel();
   {
-    imguiSession_->beginFrame(framebufferDesc_,
-                              getPlatform().getDisplayContext().pixelsPerPoint * 2);
+    imguiSession_->beginFrame(framebufferDesc_, getPlatform().getDisplayContext().pixelsPerPoint);
     ImGui::Begin("Texture Viewer", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
     ImGui::Image(ImTextureID(texture1_.get()), ImVec2(512, 512));
     ImGui::End();
@@ -591,13 +584,12 @@ void TinyMeshSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
   frameIndex_ = (frameIndex_ + 1) % kNumBufferedFrames;
 }
 
-bool TinyMeshSession::Listener::process(const KeyEvent& event) {
-  if (!event.isDown) {
-    if (event.key == 84) { // VK_T
-      session.texture1_.reset();
-    }
+bool TinyMeshSession::Listener::process(const CharEvent& event) {
+  if (event.character == 't') {
+    session.texture1_.reset();
+    return true;
   }
-  return true;
+  return false;
 }
 
 } // namespace igl::shell

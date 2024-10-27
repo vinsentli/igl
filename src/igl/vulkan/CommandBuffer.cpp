@@ -23,7 +23,7 @@ namespace igl::vulkan {
 
 CommandBuffer::CommandBuffer(VulkanContext& ctx, CommandBufferDesc desc) :
   ctx_(ctx), wrapper_(ctx_.immediate_->acquire()), desc_(std::move(desc)) {
-  IGL_ASSERT(wrapper_.cmdBuf_ != VK_NULL_HANDLE);
+  IGL_DEBUG_ASSERT(wrapper_.cmdBuf_ != VK_NULL_HANDLE);
 }
 
 std::unique_ptr<IComputeCommandEncoder> CommandBuffer::createComputeCommandEncoder() {
@@ -36,7 +36,7 @@ std::unique_ptr<IRenderCommandEncoder> CommandBuffer::createRenderCommandEncoder
     const Dependencies& dependencies,
     Result* outResult) {
   IGL_PROFILER_FUNCTION();
-  IGL_ASSERT(framebuffer);
+  IGL_DEBUG_ASSERT(framebuffer);
 
   framebuffer_ = framebuffer;
 
@@ -53,10 +53,10 @@ std::unique_ptr<IRenderCommandEncoder> CommandBuffer::createRenderCommandEncoder
   const auto depthTex = framebuffer->getDepthAttachment();
   if (depthTex) {
     const auto& vkDepthTex = static_cast<Texture&>(*depthTex);
-    const auto& depthImg = vkDepthTex.getVulkanTexture().getVulkanImage();
-    IGL_ASSERT_MSG(depthImg.imageFormat_ != VK_FORMAT_UNDEFINED, "Invalid depth attachment format");
-    const VkImageAspectFlags flags =
-        vkDepthTex.getVulkanTexture().getVulkanImage().getImageAspectFlags();
+    const igl::vulkan::VulkanImage& depthImg = vkDepthTex.getVulkanTexture().image_;
+    IGL_DEBUG_ASSERT(depthImg.imageFormat_ != VK_FORMAT_UNDEFINED,
+                     "Invalid depth attachment format");
+    const VkImageAspectFlags flags = vkDepthTex.getVulkanTexture().image_.getImageAspectFlags();
     depthImg.transitionLayout(
         wrapper_.cmdBuf_,
         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
@@ -82,13 +82,13 @@ std::unique_ptr<IRenderCommandEncoder> CommandBuffer::createRenderCommandEncoder
 void CommandBuffer::present(const std::shared_ptr<ITexture>& surface) const {
   IGL_PROFILER_FUNCTION();
 
-  IGL_ASSERT(surface);
+  IGL_DEBUG_ASSERT(surface);
 
   presentedSurface_ = surface;
 
   const auto& vkTex = static_cast<Texture&>(*surface);
   const VulkanTexture& tex = vkTex.getVulkanTexture();
-  const VulkanImage& img = tex.getVulkanImage();
+  const VulkanImage& img = tex.image_;
 
   // prepare image for presentation
   if (vkTex.isSwapchainTexture()) {
@@ -111,8 +111,7 @@ void CommandBuffer::present(const std::shared_ptr<ITexture>& surface) const {
 
   // transition only non-multisampled images - MSAA images cannot be accessed from shaders
   if (img.samples_ == VK_SAMPLE_COUNT_1_BIT) {
-    const VkImageAspectFlags flags =
-        vkTex.getVulkanTexture().getVulkanImage().getImageAspectFlags();
+    const VkImageAspectFlags flags = vkTex.getVulkanTexture().image_.getImageAspectFlags();
     const VkPipelineStageFlags srcStage = vkTex.getProperties().isDepthOrStencil()
                                               ? VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
                                               : VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -128,7 +127,7 @@ void CommandBuffer::present(const std::shared_ptr<ITexture>& surface) const {
 }
 
 void CommandBuffer::pushDebugGroupLabel(const char* label, const igl::Color& color) const {
-  IGL_ASSERT(label != nullptr && *label);
+  IGL_DEBUG_ASSERT(label != nullptr && *label);
   ivkCmdBeginDebugUtilsLabel(&ctx_.vf_, wrapper_.cmdBuf_, label, color.toFloatPtr());
 }
 

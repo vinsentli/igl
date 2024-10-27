@@ -19,8 +19,8 @@ VulkanFeatures::VulkanFeatures(uint32_t version, VulkanContextConfig config) noe
 void VulkanFeatures::populateWithAvailablePhysicalDeviceFeatures(
     const VulkanContext& context,
     VkPhysicalDevice physicalDevice) noexcept {
-  IGL_ASSERT_MSG(context.vf_.vkGetPhysicalDeviceFeatures2 != nullptr,
-                 "Pointer to function vkGetPhysicalDeviceFeatures2() is nullptr");
+  IGL_DEBUG_ASSERT(context.vf_.vkGetPhysicalDeviceFeatures2 != nullptr,
+                   "Pointer to function vkGetPhysicalDeviceFeatures2() is nullptr");
 
   context.vf_.vkGetPhysicalDeviceFeatures2(physicalDevice, &VkPhysicalDeviceFeatures2_);
 }
@@ -32,7 +32,12 @@ void VulkanFeatures::enableDefaultFeatures1_1() noexcept {
   features.multiDrawIndirect = VK_TRUE;
   features.drawIndirectFirstInstance = VK_TRUE;
   features.depthBiasClamp = VK_TRUE;
+#ifdef IGL_PLATFORM_ANDROID
+  // fillModeNonSolid is not well supported on Android, only enable by default when it's not android
+  features.fillModeNonSolid = VK_FALSE;
+#else
   features.fillModeNonSolid = VK_TRUE;
+#endif
 
 #if defined(VK_EXT_descriptor_indexing) && VK_EXT_descriptor_indexing
   if (config_.enableDescriptorIndexing) {
@@ -62,9 +67,9 @@ void VulkanFeatures::enableDefaultFeatures1_1() noexcept {
 
 igl::Result VulkanFeatures::checkSelectedFeatures(
     const VulkanFeatures& availableFeatures) const noexcept {
-  IGL_ASSERT_MSG(availableFeatures.version_ == version_,
-                 "The API versions don't match between the requested features and the ones that "
-                 "are available");
+  IGL_DEBUG_ASSERT(availableFeatures.version_ == version_,
+                   "The API versions don't match between the requested features and the ones that "
+                   "are available");
 
   // Stores missing features
   std::string missingFeatures;
@@ -149,13 +154,13 @@ igl::Result VulkanFeatures::checkSelectedFeatures(
                          availableFeatures.VkPhysicalDeviceShaderFloat16Int8Features_,
                          shaderFloat16)
 #undef ENABLE_FEATURE_1_2_EXT
-#endif
+#endif // VK_VERSION_1_2
 
 #undef ENABLE_VULKAN_FEATURE
 
   if (!missingFeatures.empty()) {
 #if !IGL_PLATFORM_APPLE
-    IGL_ASSERT_MSG(false, "Missing Vulkan features: %s\n", missingFeatures.c_str());
+    IGL_DEBUG_ABORT("Missing Vulkan features: %s\n", missingFeatures.c_str());
     return Result(Result::Code::RuntimeError);
 #else
     IGL_LOG_INFO("Missing Vulkan features: %s\n", missingFeatures.c_str());
@@ -181,15 +186,17 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& config) noe
 
 #if defined(VK_VERSION_1_2)
   VkPhysicalDeviceShaderFloat16Int8Features_.pNext = nullptr;
-#endif
+#endif // VK_VERSION_1_2
 
   // Add the required and optional features to the VkPhysicalDeviceFetaures2_
   ivkAddNext(&VkPhysicalDeviceFeatures2_, &VkPhysicalDeviceSamplerYcbcrConversionFeatures_);
   ivkAddNext(&VkPhysicalDeviceFeatures2_, &VkPhysicalDeviceShaderDrawParametersFeatures_);
   ivkAddNext(&VkPhysicalDeviceFeatures2_, &VkPhysicalDeviceMultiviewFeatures_);
 #if defined(VK_VERSION_1_2)
-  ivkAddNext(&VkPhysicalDeviceFeatures2_, &VkPhysicalDeviceShaderFloat16Int8Features_);
-#endif
+  if (version_ >= VK_API_VERSION_1_2) {
+    ivkAddNext(&VkPhysicalDeviceFeatures2_, &VkPhysicalDeviceShaderFloat16Int8Features_);
+  }
+#endif // VK_VERSION_1_2
 #if defined(VK_KHR_buffer_device_address) && VK_KHR_buffer_device_address
   VkPhysicalDeviceBufferDeviceAddressFeaturesKHR_.pNext = nullptr;
   if (config.enableBufferDeviceAddress) {
@@ -204,6 +211,46 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& config) noe
 #endif
   VkPhysicalDevice16BitStorageFeatures_.pNext = nullptr;
   ivkAddNext(&VkPhysicalDeviceFeatures2_, &VkPhysicalDevice16BitStorageFeatures_);
+}
+
+VulkanFeatures& VulkanFeatures::operator=(const VulkanFeatures& other) noexcept {
+  if (this == &other) {
+    return *this;
+  }
+
+  const bool sameVersion = version_ == other.version_;
+  const bool sameConfiguration =
+      config_.enableBufferDeviceAddress == other.config_.enableBufferDeviceAddress &&
+      config_.enableDescriptorIndexing == other.config_.enableDescriptorIndexing;
+  if (!sameVersion || !sameConfiguration) {
+    return *this;
+  }
+
+  VkPhysicalDeviceFeatures2_ = other.VkPhysicalDeviceFeatures2_;
+
+  VkPhysicalDeviceSamplerYcbcrConversionFeatures_ =
+      other.VkPhysicalDeviceSamplerYcbcrConversionFeatures_;
+  VkPhysicalDeviceShaderDrawParametersFeatures_ =
+      other.VkPhysicalDeviceShaderDrawParametersFeatures_;
+  VkPhysicalDeviceMultiviewFeatures_ = other.VkPhysicalDeviceMultiviewFeatures_;
+#if defined(VK_KHR_buffer_device_address) && VK_KHR_buffer_device_address
+  VkPhysicalDeviceBufferDeviceAddressFeaturesKHR_ =
+      other.VkPhysicalDeviceBufferDeviceAddressFeaturesKHR_;
+#endif
+#if defined(VK_EXT_descriptor_indexing) && VK_EXT_descriptor_indexing
+  VkPhysicalDeviceDescriptorIndexingFeaturesEXT_ =
+      other.VkPhysicalDeviceDescriptorIndexingFeaturesEXT_;
+#endif
+  VkPhysicalDevice16BitStorageFeatures_ = other.VkPhysicalDevice16BitStorageFeatures_;
+
+  // Vulkan 1.2
+#if defined(VK_VERSION_1_2)
+  VkPhysicalDeviceShaderFloat16Int8Features_ = other.VkPhysicalDeviceShaderFloat16Int8Features_;
+#endif
+
+  assembleFeatureChain(config_);
+
+  return *this;
 }
 
 } // namespace igl::vulkan

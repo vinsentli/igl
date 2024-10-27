@@ -32,7 +32,7 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
       Result* outResult);
 
   ~RenderCommandEncoder() override {
-    IGL_ASSERT(!isEncoding_); // did you forget to call endEncoding()?
+    IGL_DEBUG_ASSERT(!isEncoding_); // did you forget to call endEncoding()?
     endEncoding();
   }
 
@@ -127,7 +127,7 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
   void initialize(const RenderPassDesc& renderPass,
                   const std::shared_ptr<IFramebuffer>& framebuffer,
                   const Dependencies& dependencies,
-                  Result* outResult);
+                  Result& outResult);
   void processDependencies(const Dependencies& dependencies);
 
  private:
