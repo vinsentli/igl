@@ -51,7 +51,7 @@ struct FramebufferDesc {
  */
 class IFramebuffer : public ITrackedResource<IFramebuffer> {
  public:
-  ~IFramebuffer() override = default;
+  ~IFramebuffer() = default;
 
   // Accessors
   /** @brief Retrieve array of all valid color and resolve color attachment indices */

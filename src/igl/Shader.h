@@ -49,8 +49,6 @@ struct ShaderModuleInfo {
     
   std::string debugName;
 
-  std::string debugName;
-
   bool operator==(const ShaderModuleInfo& other) const;
   bool operator!=(const ShaderModuleInfo& other) const;
 };

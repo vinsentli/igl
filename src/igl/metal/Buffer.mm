@@ -105,9 +105,6 @@ Buffer::Buffer(id<MTLBuffer> value,
 //  mtlBuffers_.push_back(value);
 }
 
-Buffer::~Buffer(){
-}
-
 Result Buffer::upload(const void* data, const BufferRange& range) {
 //  return ::upload(mtlBuffers_, 0, data, range, resourceOptions_, acceptedApiHints_);
     

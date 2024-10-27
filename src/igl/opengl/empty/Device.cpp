@@ -34,7 +34,7 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
     if (sanitized.type == TextureType::TwoD || sanitized.type == TextureType::TwoDArray) {
 size_t textureSizeLimit;
 getFeatureLimits(DeviceFeatureLimits::MaxTextureDimension1D2D, textureSizeLimit);
-IGL_ASSERT_MSG(sanitized.width <= textureSizeLimit && sanitized.height <= textureSizeLimit,
+        IGL_DEBUG_ASSERT(sanitized.width <= textureSizeLimit && sanitized.height <= textureSizeLimit,
                "Texture limit size %zu is smaller than texture size %zux%zu",
                textureSizeLimit,
                sanitized.width,
@@ -72,7 +72,7 @@ IGL_ASSERT_MSG(sanitized.width <= textureSizeLimit && sanitized.height <= textur
 
     // sanity check to ensure that the Result value and the returned object are in sync
     // i.e. we never have a valid Result with a nullptr return value, or vice versa
-    IGL_ASSERT(outResult == nullptr || (outResult->isOk() == (texture != nullptr)));
+    IGL_DEBUG_ASSERT(outResult == nullptr || (outResult->isOk() == (texture != nullptr)));
 
     return texture;
 }

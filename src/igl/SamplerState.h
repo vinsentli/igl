@@ -195,7 +195,7 @@ class ISamplerState : public ITrackedResource<ISamplerState> {
   ISamplerState() = default;
 
  public:
-  ~ISamplerState() override = default;
+  ~ISamplerState() = default;
 
   [[nodiscard]] virtual bool isYUV() const noexcept = 0;
 };

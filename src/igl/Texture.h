@@ -704,7 +704,7 @@ class ITexture : public ITrackedResource<ITexture> {
  public:
   explicit ITexture(TextureFormat format) :
     properties_(TextureFormatProperties::fromTextureFormat(format)) {}
-  ~ITexture() override = default;
+  ~ITexture() = default;
 
   /**
    * @brief Indicates if this type of texture supports upload.

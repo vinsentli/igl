@@ -43,8 +43,6 @@ class ITrackedResource {
       }
     }
   }
-    
-  virtual const std::string & getResourceName() const { return resourceName_;}
 
   [[nodiscard]] virtual const std::string& getResourceName() const {
     return resourceName_;
