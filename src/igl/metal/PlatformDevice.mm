@@ -90,6 +90,10 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(CALaye
     return nullptr;
   }
 #if (!TARGET_OS_SIMULATOR || __IPHONE_OS_VERSION_MAX_ALLOWED >= 130000)
+    //注意：XCode有时会提示编译警告'CAMetalLayer' is only available on iOS 13.0 or newer，请忽略！！！否则会带来问题。
+    //实际在iOS8以上就可能使用CAMetalLayer。
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunguarded-availability-new"
   if ([nativeDrawable isKindOfClass:[CAMetalLayer class]]) {
     id<CAMetalDrawable> drawableObject = [(CAMetalLayer*)nativeDrawable nextDrawable];
     if (!drawableObject) {
@@ -104,6 +108,7 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(CALaye
     Result::setResult(outResult, Result::Code::Unsupported);
     return nullptr;
   }
+#pragma clang diagnostic pop
 #else
   Result::setResult(outResult, Result::Code::Unsupported);
   return nullptr;
@@ -207,6 +212,10 @@ TextureFormat PlatformDevice::getNativeDrawableTextureFormat(CALayer* nativeDraw
   TextureFormat formatResult = TextureFormat::Invalid;
 
 #if (!TARGET_OS_SIMULATOR || __IPHONE_OS_VERSION_MAX_ALLOWED >= 130000)
+    //注意：XCode有时会提示编译警告'CAMetalLayer' is only available on iOS 13.0 or newer，请忽略！！！否则会带来问题。
+    //实际在iOS8以上就可能使用CAMetalLayer。
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunguarded-availability-new"
   if ([nativeDrawable isKindOfClass:[CAMetalLayer class]]) {
     auto metalLayer = (CAMetalLayer*)nativeDrawable;
     formatResult = Texture::mtlPixelFormatToTextureFormat(metalLayer.pixelFormat);
@@ -217,6 +226,7 @@ TextureFormat PlatformDevice::getNativeDrawableTextureFormat(CALayer* nativeDraw
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
     Result::setResult(outResult, Result::Code::Unsupported);
   }
+#pragma clang diagnostic pop
 #else
   Result::setResult(outResult, Result::Code::Unsupported, "Metal not supported on iOS simulator.");
 #endif
