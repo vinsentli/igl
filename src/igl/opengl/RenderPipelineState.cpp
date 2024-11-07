@@ -106,7 +106,7 @@ Result RenderPipelineState::create() {
   if (!IGL_DEBUG_VERIFY(desc_.shaderStages->getType() == ShaderStagesType::Render)) {
     return Result(Result::Code::ArgumentInvalid, "Shader stages not for render");
   }
-  const auto& shaderStages = static_cast<ShaderStages*>(desc_.shaderStages.get());
+  const auto* shaderStages = static_cast<ShaderStages*>(desc_.shaderStages.get());
   if (!shaderStages) {
     return Result(Result::Code::ArgumentInvalid,
                   "Shader stages required to create pipeline state.");
@@ -122,7 +122,7 @@ Result RenderPipelineState::create() {
   const auto& mFramebufferDesc = desc_.targetDesc;
   // Get and cache all attribute locations, since this won't change throughout
   // the lifetime of this RenderPipelineState
-  const auto& vertexInputState = static_cast<VertexInputState*>(desc_.vertexInputState.get());
+  const auto* vertexInputState = static_cast<VertexInputState*>(desc_.vertexInputState.get());
   if (desc_.vertexInputState != nullptr) {
     auto bufferAttribMap = vertexInputState->getBufferAttribMap();
 
@@ -152,7 +152,7 @@ Result RenderPipelineState::create() {
   }
 
   for (const auto& [bindingIndex, names] : desc_.uniformBlockBindingMap) {
-    for (auto& [blockName, instanceName] : names) {
+    for (const auto& [blockName, instanceName] : names) {
       auto& uniformBlockDict = reflection_->getUniformBlocksDictionary();
       auto blockDescIt = uniformBlockDict.find(blockName);
       if (blockDescIt != uniformBlockDict.end()) {
@@ -219,7 +219,7 @@ Result RenderPipelineState::create() {
 void RenderPipelineState::bind() {
   IGL_PROFILER_ZONE_GPU_OGL("bindRenderPipelineState");
   if (desc_.shaderStages) {
-    const auto& shaderStages = static_cast<ShaderStages*>(desc_.shaderStages.get());
+    auto* const shaderStages = static_cast<ShaderStages*>(desc_.shaderStages.get());
     shaderStages->bind();
     if (!uniformBlockBindingPointSet_) {
       for (const auto& binding : uniformBlockBindingMap_) {
@@ -261,7 +261,7 @@ void RenderPipelineState::bind() {
 
 void RenderPipelineState::unbind() {
   if (desc_.shaderStages) {
-      static_cast<ShaderStages&>(*desc_.shaderStages).unbind();
+    static_cast<ShaderStages*>(desc_.shaderStages.get())->unbind();
   }
 }
 
@@ -276,8 +276,8 @@ void RenderPipelineState::bindVertexAttributes(size_t bufferIndex, size_t buffer
   }
 #endif
 
-  const auto& attribList = static_cast<VertexInputState&>(*desc_.vertexInputState)
-                               .getAssociatedAttributes(bufferIndex);
+  const auto attribList = static_cast<VertexInputState*>(desc_.vertexInputState.get())
+                              ->getAssociatedAttributes(bufferIndex);
   auto& locations = bufferAttribLocations_[bufferIndex];
 
   // attributeList and locations should have an 1-to-1 correspondence
@@ -368,8 +368,8 @@ Result RenderPipelineState::bindTextureUnit(const size_t unit, uint8_t bindTarge
 }
 
 bool RenderPipelineState::matchesShaderProgram(const RenderPipelineState& rhs) const {
-  return static_cast<ShaderStages&>(*desc_.shaderStages).getProgramID() ==
-         static_cast<ShaderStages&>(*rhs.desc_.shaderStages).getProgramID();
+  return static_cast<ShaderStages*>(desc_.shaderStages.get())->getProgramID() ==
+         static_cast<ShaderStages*>(rhs.desc_.shaderStages.get())->getProgramID();
 }
 
 bool RenderPipelineState::matchesVertexInputState(const RenderPipelineState& rhs) const {

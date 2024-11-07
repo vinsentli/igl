@@ -206,12 +206,6 @@ VkResult ivkCreateRenderPass(const struct VulkanFunctionTable* vt,
                              const VkRenderPassMultiviewCreateInfo* renderPassMultiview,
                              VkRenderPass* outRenderPass);
 
-VkResult ivkCreateShaderModuleFromSPIRV(const struct VulkanFunctionTable* vt,
-                                        VkDevice device,
-                                        const void* dataSPIRV,
-                                        size_t size,
-                                        VkShaderModule* outShaderModule);
-
 VkResult ivkCreateGraphicsPipeline(const struct VulkanFunctionTable* vt,
                                    VkDevice device,
                                    VkPipelineCache pipelineCache,
@@ -401,8 +395,6 @@ VkPipelineLayoutCreateInfo ivkGetPipelineLayoutCreateInfo(uint32_t numLayouts,
 VkPushConstantRange ivkGetPushConstantRange(VkShaderStageFlags stageFlags,
                                             size_t offset,
                                             size_t size);
-
-VkViewport ivkGetViewport(float x, float y, float width, float height);
 
 VkRect2D ivkGetRect2D(int32_t x, int32_t y, uint32_t width, uint32_t height);
 

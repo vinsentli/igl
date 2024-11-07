@@ -10,15 +10,12 @@
 #include <igl/opengl/Buffer.h>
 #include <igl/opengl/CommandBuffer.h>
 #include <igl/opengl/DepthStencilState.h>
-#include <igl/opengl/Device.h>
 #include <igl/opengl/Errors.h>
 #include <igl/opengl/Framebuffer.h>
 #include <igl/opengl/IContext.h>
 #include <igl/opengl/RenderCommandAdapter.h>
 #include <igl/opengl/RenderPipelineState.h>
 #include <igl/opengl/SamplerState.h>
-#include <igl/opengl/Shader.h>
-#include <igl/opengl/Texture.h>
 #include <igl/opengl/UniformAdapter.h>
 #include <igl/opengl/VertexInputState.h>
 
@@ -48,6 +45,8 @@ GLenum toGlPrimitive(PrimitiveType t) {
 
 int toGlType(IndexFormat format) {
   switch (format) {
+  case IndexFormat::UInt8:
+    return GL_UNSIGNED_BYTE;
   case IndexFormat::UInt16:
     return GL_UNSIGNED_SHORT;
   case IndexFormat::UInt32:
@@ -123,7 +122,7 @@ void RenderCommandEncoder::endEncoding() {
 
     // Disable depthBias
     getContext().setEnabled(false, GL_POLYGON_OFFSET_FILL);
-    adapter_->setDepthBias(0.0f, 0.0f);
+    adapter_->setDepthBias(0.0f, 0.0f, 0.0f);
 
     adapter_->endEncoding();
     getContext().getAdapterPool().push_back(std::move(adapter_));
@@ -428,9 +427,9 @@ void RenderCommandEncoder::setBlendColor(Color color) {
   }
 }
 
-void RenderCommandEncoder::setDepthBias(float depthBias, float slopeScale, float /*clamp*/) {
+void RenderCommandEncoder::setDepthBias(float depthBias, float slopeScale, float clamp) {
   if (IGL_DEBUG_VERIFY(adapter_)) {
-    adapter_->setDepthBias(depthBias, slopeScale);
+    adapter_->setDepthBias(depthBias, slopeScale, clamp);
   }
 }
 

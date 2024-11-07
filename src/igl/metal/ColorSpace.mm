@@ -35,13 +35,15 @@ CGColorSpaceRef colorSpaceToCGColorSpace(igl::ColorSpace colorSpace) {
   case ColorSpace::BT2020_NONLINEAR:
     return CGColorSpaceCreateWithName(kCGColorSpaceITUR_2020);
   case ColorSpace::DISPLAY_P3_LINEAR:
-    if (@available(macOS 12.0, iOS 15.0, *)){
+    if (@available(macOS 12.0, iOS 15.0, *)) {
       return CGColorSpaceCreateWithName(kCGColorSpaceLinearDisplayP3);
     }
+    [[fallthrough]];
   case ColorSpace::BT2020_LINEAR:
-    if (@available(macOS 12.0, iOS 15.0, *)){
+    if (@available(macOS 12.0, iOS 15.0, *)) {
       return CGColorSpaceCreateWithName(kCGColorSpaceLinearITUR_2020);
     }
+    [[fallthrough]];
   case ColorSpace::HDR10_ST2084:
   case ColorSpace::DOLBYVISION:
   case ColorSpace::HDR10_HLG:

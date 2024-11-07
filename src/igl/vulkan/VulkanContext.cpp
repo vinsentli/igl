@@ -474,6 +474,8 @@ VulkanContext::~VulkanContext() {
   destroy(pimpl_->dummySampler_);
   destroy(pimpl_->dummyTexture_);
 
+  pruneTextures();
+
 #if IGL_DEBUG
   if (textures_.numObjects()) {
     IGL_LOG_ERROR("Leaked %u textures\n", textures_.numObjects());
@@ -554,7 +556,7 @@ void VulkanContext::createInstance(const size_t numExtraExtensions,
                                    const char* IGL_NULLABLE* IGL_NULLABLE extraExtensions) {
   // Enumerate all instance extensions
   extensions_.enumerate(vf_);
-  extensions_.enableCommonExtensions(VulkanExtensions::ExtensionType::Instance, config_);
+  extensions_.enableCommonInstanceExtensions(config_);
   for (size_t index = 0; index < numExtraExtensions; ++index) {
     extensions_.enable(extraExtensions[index], VulkanExtensions::ExtensionType::Instance);
   }
@@ -738,7 +740,7 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
   }
 #endif
 
-  extensions_.enableCommonExtensions(VulkanExtensions::ExtensionType::Device, config_);
+  extensions_.enableCommonDeviceExtensions(config_);
   // Enable extra device extensions
   for (size_t i = 0; i < numExtraDeviceExtensions; i++) {
     extensions_.enable(extraDeviceExtensions[i], VulkanExtensions::ExtensionType::Device);
@@ -1268,6 +1270,20 @@ std::unique_ptr<VulkanImage> VulkanContext::createImageFromFileDescriptor(
                                        debugName);
 }
 
+void VulkanContext::pruneTextures() {
+  // here we remove deleted textures - everything which has only 1 reference is owned by this
+  // context and can be released safely
+
+  // textures
+  {
+    for (uint32_t i = 1; i < (uint32_t)textures_.objects_.size(); i++) {
+      if (textures_.objects_[i].obj_ && textures_.objects_[i].obj_.use_count() == 1) {
+        textures_.destroy(i);
+      }
+    }
+  }
+}
+
 VkResult VulkanContext::checkAndUpdateDescriptorSets() {
   if (!awaitingCreation_) {
     // nothing to update here
@@ -1277,20 +1293,7 @@ VkResult VulkanContext::checkAndUpdateDescriptorSets() {
   // newly created resources can be used immediately - make sure they are put into descriptor sets
   IGL_PROFILER_FUNCTION();
 
-  // here we remove deleted textures - everything which has only 1 reference is owned by this
-  // context and can be released safely
-
-  // textures
-  {
-    while (textures_.objects_.size() > 1 && textures_.objects_.back().obj_.use_count() == 1) {
-      textures_.objects_.pop_back();
-    }
-    for (uint32_t i = 1; i < (uint32_t)textures_.objects_.size(); i++) {
-      if (textures_.objects_[i].obj_ && textures_.objects_[i].obj_.use_count() == 1) {
-        textures_.destroy(i);
-      }
-    }
-  }
+  pruneTextures();
 
   // update Vulkan bindless descriptor sets here
   if (!config_.enableDescriptorIndexing) {

@@ -1104,37 +1104,12 @@ VkPipelineShaderStageCreateInfo ivkGetPipelineShaderStageCreateInfo(VkShaderStag
   return ci;
 }
 
-VkViewport ivkGetViewport(float x, float y, float width, float height) {
-  const VkViewport viewport = {
-      .x = x,
-      .y = y,
-      .width = width,
-      .height = height,
-      .minDepth = 0.0f,
-      .maxDepth = +1.0f,
-  };
-  return viewport;
-}
-
 VkRect2D ivkGetRect2D(int32_t x, int32_t y, uint32_t width, uint32_t height) {
   const VkRect2D rect = {
       .offset = {.x = x, .y = y},
       .extent = {.width = width, .height = height},
   };
   return rect;
-}
-
-VkResult ivkCreateShaderModuleFromSPIRV(const struct VulkanFunctionTable* vt,
-                                        VkDevice device,
-                                        const void* dataSPIRV,
-                                        size_t size,
-                                        VkShaderModule* outShaderModule) {
-  const VkShaderModuleCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-      .codeSize = size,
-      .pCode = dataSPIRV,
-  };
-  return vt->vkCreateShaderModule(device, &ci, NULL, outShaderModule);
 }
 
 VkResult ivkCreateGraphicsPipeline(const struct VulkanFunctionTable* vt,
