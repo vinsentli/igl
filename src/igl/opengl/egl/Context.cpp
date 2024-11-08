@@ -82,8 +82,6 @@ EGLDisplay getDefaultEGLDisplay() {
 // typical high-quality attrib list
 EGLint attribs[] = {
     // 32 bit color
-    EGL_BUFFER_SIZE,
-    32,
     EGL_RED_SIZE,
     8,
     EGL_GREEN_SIZE,
@@ -95,11 +93,8 @@ EGLint attribs[] = {
     // 16-bit depth
     EGL_DEPTH_SIZE,
     16,
-    EGL_STENCIL_SIZE, 8,
     EGL_SURFACE_TYPE,
-    EGL_WINDOW_BIT,
-    EGL_SAMPLE_BUFFERS,GL_TRUE,
-    EGL_SAMPLES,2,
+    EGL_PBUFFER_BIT,
     // want opengl-es 2.x conformant CONTEXT
     EGL_RENDERABLE_TYPE,
     EGL_OPENGL_ES2_BIT,
@@ -212,13 +207,13 @@ Context::Context(RenderingAPI api,
            std::find(sharegroup->begin(), sharegroup->end(), shareContext) != sharegroup->end()),
       "shareContext and sharegroup values must be consistent");
   EGLConfig config{nullptr};
-  // auto contextDisplay = newEGLContext(getDefaultEGLDisplay(), shareContext, &config);
-  // IGL_DEBUG_ASSERT(contextDisplay.second != EGL_NO_CONTEXT, "newEGLContext failed");
+  auto contextDisplay = newEGLContext(getDefaultEGLDisplay(), shareContext, &config);
+  IGL_DEBUG_ASSERT(contextDisplay.second != EGL_NO_CONTEXT, "newEGLContext failed");
 
-  contextOwned_ = false;
+  contextOwned_ = true;
   api_ = api;
-  display_ = getDefaultEGLDisplay();// contextDisplay.first;
-  context_ = eglGetCurrentContext();//contextDisplay.second;
+  display_ = contextDisplay.first;
+  context_ = contextDisplay.second;
   IContext::registerContext((void*)context_, this);
   if (!window) {
     if (offscreen) {
@@ -283,21 +278,19 @@ void Context::updateSurface(NativeWindowType window) {
 Context::~Context() {
   willDestroy((void*)context_);
   IContext::unregisterContext((void*)context_);
-  if (context_ != EGL_NO_CONTEXT) {
+  if (contextOwned_ && context_ != EGL_NO_CONTEXT) {
     if (surface_ != nullptr) {
       eglDestroySurface(display_, surface_);
       CHECK_EGL_ERRORS();
     }
 
-    if (contextOwned_) {
-        eglDestroyContext(display_, context_);
-    }
+    eglDestroyContext(display_, context_);
     CHECK_EGL_ERRORS();
   }
 }
 
 void Context::setCurrent() {
-  eglMakeCurrent(display_, drawSurface_, readSurface_, context_);
+  eglMakeCurrent(display_, eglGetCurrentSurface(EGL_DRAW), eglGetCurrentSurface(EGL_READ), context_);
   CHECK_EGL_ERRORS();
   flushDeletionQueue();
 }
@@ -308,17 +301,12 @@ void Context::clearCurrentContext() const {
 }
 
 bool Context::isCurrentContext() const {
-#if IGL_DEBUG
   auto* curContext = eglGetCurrentContext();
   return curContext == context_;
   CHECK_EGL_ERRORS();
-#else
-  return true;
-#endif
 }
 
 bool Context::isCurrentSharegroup() const {
-#if IGL_DEBUG
   // EGL doesn't seem to provide a way to check if two contexts are in the same group.
   // For now we can at least check some trivial cases before hitting the assertion below.
   EGLContext currentContext = eglGetCurrentContext();
@@ -335,9 +323,6 @@ bool Context::isCurrentSharegroup() const {
     return it != sharegroup.end();
   }
   return false;
-#else 
-  return true;
-#endif
 }
 
 void Context::present(std::shared_ptr<ITexture> /*surface*/) const {
