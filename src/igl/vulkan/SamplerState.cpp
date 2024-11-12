@@ -68,7 +68,7 @@ VkSamplerCreateInfo samplerStateDescToVkSamplerCreateInfo(const igl::SamplerStat
       .mipLodBias = 0.0f,
       .anisotropyEnable = VK_FALSE,
       .maxAnisotropy = 0.0f,
-      .compareEnable = desc.depthCompareEnabled ? VK_TRUE : VK_FALSE,
+      .compareEnable = static_cast<VkBool32>(desc.depthCompareEnabled ? VK_TRUE : VK_FALSE),
       .compareOp = desc.depthCompareEnabled
                        ? igl::vulkan::compareFunctionToVkCompareOp(desc.depthCompareFunction)
                        : VK_COMPARE_OP_ALWAYS,

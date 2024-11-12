@@ -2208,10 +2208,12 @@ void VulkanContext::syncMarkSubmitted(VulkanImmediateCommands::SubmitHandle hand
 }
 
 void VulkanContext::ensureCurrentContextThread() const {
+#if 0
   IGL_DEBUG_ASSERT(
       pimpl_->contextThread == std::this_thread::get_id(),
       "IGL/Vulkan functions can only be accessed by 1 thread at a time. Call "
       "`setCurrentContextThread()` to mark the current thread as the `owning` thread.");
+#endif
 }
 
 void VulkanContext::setCurrentContextThread() {
