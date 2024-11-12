@@ -219,7 +219,7 @@ Result RenderPipelineState::create() {
 void RenderPipelineState::bind() {
   IGL_PROFILER_ZONE_GPU_OGL("bindRenderPipelineState");
   if (desc_.shaderStages) {
-    auto* const shaderStages = static_cast<ShaderStages*>(desc_.shaderStages.get());
+    const auto* shaderStages = static_cast<ShaderStages*>(desc_.shaderStages.get());
     shaderStages->bind();
     if (!uniformBlockBindingPointSet_) {
       for (const auto& binding : uniformBlockBindingMap_) {
