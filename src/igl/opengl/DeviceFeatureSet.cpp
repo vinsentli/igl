@@ -432,6 +432,9 @@ bool DeviceFeatureSet::isFeatureSupported(DeviceFeatures feature) const {
 
   case DeviceFeatures::ValidationLayersEnabled:
     return false;
+
+  case DeviceFeatures::Indices8Bit:
+    return true;
   }
 
   return false;
