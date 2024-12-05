@@ -351,9 +351,9 @@ void RenderCommandEncoder::bindViewport(const Viewport& viewport) {
   **/
   const VkViewport vp = {
       viewport.x, // float x;
-      viewport.height - viewport.y, // float y;
+      viewport.y, // float y;
       viewport.width, // float width;
-      -viewport.height, // float height;
+      viewport.height, // float height;
       viewport.minDepth, // float minDepth;
       viewport.maxDepth, // float maxDepth;
   };
