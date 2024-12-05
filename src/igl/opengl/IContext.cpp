@@ -2093,23 +2093,6 @@ void IContext::getShaderInfoLog(GLuint shader,
   GLCHECK_ERRORS();
 }
 
-void IContext::getShaderSource(GLuint shader,
-                               GLsizei bufsize,
-                               GLsizei* length,
-                               GLchar* source) const {
-  GLCALL(GetShaderSource)(shader, bufsize, length, source);
-  APILOG("glGetShaderSource(%u, %u, %p, %p) = %.*s\n",
-         shader,
-         bufsize,
-         length,
-         source,
-         static_cast<int>(length == nullptr
-                              ? (source == nullptr ? 0 : static_cast<int>(std::strlen(source)))
-                              : *length),
-         source == nullptr ? "" : source);
-  GLCHECK_ERRORS();
-}
-
 const GLubyte* IContext::getString(GLenum name) const {
   const GLubyte* ret;
 
@@ -3316,7 +3299,7 @@ void IContext::initialize(Result* result) {
 #endif // IGL_DEBUG || defined(IGL_API_LOG)
 
 #if defined(IGL_WITH_TRACY_GPU)
-  constexpr std::string_view kTracyContextName = "IGL OpenGL";
+  [[maybe_unused]] constexpr std::string_view kTracyContextName = "IGL OpenGL";
   TracyGpuContext;
   TracyGpuContextName(kTracyContextName.data(), kTracyContextName.size());
 #endif

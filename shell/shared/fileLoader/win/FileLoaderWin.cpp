@@ -5,8 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-// @fb-only
-
 #include <shell/shared/fileLoader/win/FileLoaderWin.h>
 
 #include <filesystem>
@@ -97,6 +95,9 @@ std::string FileLoaderWin::fullPath(const std::string& fileName) const {
       "samples/resources/models/",
       "samples/resources/fonts/",
       "samples/resources/fonts/optimistic",
+      // @fb-only
+      // @fb-only
+      // @fb-only
       // @fb-only
       // @fb-only
       // @fb-only

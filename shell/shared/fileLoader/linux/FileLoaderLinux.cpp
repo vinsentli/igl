@@ -87,6 +87,11 @@ std::string FileLoaderLinux::fullPath(const std::string& fileName) const {
       "samples/resources/fonts/optimistic",
       // @fb-only
       // @fb-only
+      // @fb-only
+      // @fb-only
+      // @fb-only
+      // @fb-only
+      // @fb-only
   };
 
   // find folders somewhere above our current directory
@@ -99,6 +104,11 @@ std::string FileLoaderLinux::fullPath(const std::string& fileName) const {
 // @fb-only
   // clang-format off
   // @fb-only
+  // @fb-only
+  // @fb-only
+                                     // @fb-only
+                                     // @fb-only
+                                     // @fb-only
                                      // @fb-only
                                      // @fb-only
                                      // @fb-only

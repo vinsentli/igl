@@ -102,9 +102,12 @@ void TinyRenderer::init(AAssetManager* mgr,
     config.requestedSwapChainTextureFormat = swapchainColorTextureFormat;
     auto ctx = vulkan::HWDevice::createContext(config, nativeWindow);
 
-    auto devices = vulkan::HWDevice::queryDevices(
-        *ctx, HWDeviceQueryDesc(HWDeviceType::IntegratedGpu), &result);
+    auto devices =
+        vulkan::HWDevice::queryDevices(*ctx, HWDeviceQueryDesc(HWDeviceType::Unknown), &result);
 
+    if (!result.isOk()) {
+      __android_log_print(ANDROID_LOG_ERROR, "igl", "Error: %s\n", result.message.c_str());
+    }
     IGL_DEBUG_ASSERT(result.isOk());
     width_ = static_cast<uint32_t>(ANativeWindow_getWidth(nativeWindow));
     height_ = static_cast<uint32_t>(ANativeWindow_getHeight(nativeWindow));
@@ -125,6 +128,7 @@ void TinyRenderer::init(AAssetManager* mgr,
                                  0,
                                  nullptr,
                                  &vulkanFeatures,
+                                 "TinyRenderer",
                                  &result);
     break;
   }
@@ -215,6 +219,7 @@ void TinyRenderer::render(float displayScale) {
 
   const ContextGuard guard(platform_->getDevice()); // wrap 'session_' operations
 
+  platform_->getDevice().setCurrentThread();
   session_->setPixelsPerPoint(displayScale);
   session_->update(std::move(surfaceTextures));
 }
@@ -239,6 +244,7 @@ void TinyRenderer::onSurfacesChanged(ANativeWindow* /*surface*/, int width, int 
 #if IGL_BACKEND_VULKAN
   if (backendVersion_.flavor == igl::BackendFlavor::Vulkan) {
     recreateSwapchain(nativeWindow_, false);
+    platform_->updatePreRotationMatrix();
   }
 #endif
 }

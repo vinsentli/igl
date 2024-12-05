@@ -224,8 +224,8 @@ void RenderCommandAdapter::clearDependentResources(
     clearFragmentTexture();
   }
     
-  if (curStateOpenGL && newStateOpenGL){
-    newStateOpenGL->savePrePipelineStateAttributesLocations(*curStateOpenGL);
+  if (curStateOpenGL && newStateOpenGL) {
+    newStateOpenGL->savePrevPipelineStateAttributesLocations(*curStateOpenGL);
   }
 
   if (!newStateOpenGL || !curStateOpenGL->matchesVertexInputState(*newStateOpenGL)) {
@@ -349,7 +349,7 @@ void RenderCommandAdapter::willDraw() {
         CLEAR_DIRTY(vertexBuffersDirty_, bufferIndex);
       }
     }
-    pipelineState->unbindPrePipelineVertexAttributes();
+    pipelineState->unbindPrevPipelineVertexAttributes();
     if (isDirty(StateMask::PIPELINE)) {
       pipelineState->bind();
       clearDirty(StateMask::PIPELINE);
