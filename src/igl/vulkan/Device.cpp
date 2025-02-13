@@ -103,6 +103,10 @@ std::unique_ptr<IBuffer> Device::createBuffer(const BufferDesc& desc,
   IGL_DEBUG_ASSERT(uploadResult.isOk());
   Result::setResult(outResult, uploadResult);
 
+  if (getResourceTracker()) {
+    buffer->initResourceTracker(getResourceTracker(), desc.debugName);
+  }
+
   return buffer;
 }
 
@@ -134,6 +138,10 @@ std::unique_ptr<IShaderStages> Device::createShaderStages(const ShaderStagesDesc
     Result::setOk(outResult);
   }
 
+  if (getResourceTracker()) {
+    shaderStages->initResourceTracker(getResourceTracker(), desc.debugName);
+  }
+
   return shaderStages;
 }
 
@@ -146,6 +154,10 @@ std::shared_ptr<ISamplerState> Device::createSamplerState(const SamplerStateDesc
   auto samplerState = std::make_shared<vulkan::SamplerState>(const_cast<Device&>(*this));
 
   Result::setResult(outResult, samplerState->create(desc));
+
+  if (getResourceTracker()) {
+    samplerState->initResourceTracker(getResourceTracker(), desc.debugName);
+  }
 
   return samplerState;
 }
@@ -161,6 +173,10 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
   auto texture = std::make_shared<vulkan::Texture>(const_cast<Device&>(*this), desc.format);
 
   const Result res = texture->create(sanitized);
+
+  if (getResourceTracker()) {
+    texture->initResourceTracker(getResourceTracker(), desc.debugName);
+  }
 
   Result::setResult(outResult, res);
 
@@ -263,7 +279,13 @@ std::shared_ptr<IShaderModule> Device::createShaderModule(const ShaderModuleDesc
     return nullptr;
   }
   Result::setResult(outResult, std::move(result));
-  return std::make_shared<ShaderModule>(desc.info, std::move(vulkanShaderModule));
+  auto shaderModule = std::make_shared<ShaderModule>(desc.info, std::move(vulkanShaderModule));
+
+  if (getResourceTracker()) {
+    shaderModule->initResourceTracker(getResourceTracker(), desc.debugName);
+  }
+
+  return shaderModule;
 }
 
 std::shared_ptr<VulkanShaderModule> Device::createShaderModule(const void* IGL_NULLABLE data,
@@ -454,6 +476,11 @@ std::shared_ptr<IFramebuffer> Device::createFramebuffer(const FramebufferDesc& d
 
   auto resource = std::make_shared<Framebuffer>(*this, desc);
   Result::setOk(outResult);
+
+  if (getResourceTracker()) {
+    resource->initResourceTracker(getResourceTracker(), desc.debugName);
+  }
+
   return resource;
 }
 
@@ -503,7 +530,13 @@ std::unique_ptr<igl::IShaderLibrary> Device::createShaderLibrary(const ShaderLib
   }
 
   Result::setResult(outResult, std::move(result));
-  return std::make_unique<igl::vulkan::ShaderLibrary>(std::move(modules));
+  auto shaderLibrary = std::make_unique<igl::vulkan::ShaderLibrary>(std::move(modules));
+
+  if (getResourceTracker()) {
+    shaderLibrary->initResourceTracker(getResourceTracker(), desc.debugName);
+  }
+
+  return shaderLibrary;
 }
 
 bool Device::hasFeature(DeviceFeatures feature) const {
