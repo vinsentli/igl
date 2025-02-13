@@ -789,7 +789,7 @@ void IContext::attachShader(GLuint program, GLuint shader) {
 }
 
 void IContext::bindBuffer(GLenum target, GLuint buffer) {
-  if (bindBufferIndexs_[target] == buffer) return;
+  if (bindBufferIndexs_.count(target) && bindBufferIndexs_[target] == buffer) return;
   bindBufferIndexs_[target] = buffer;
   GLCALL(BindBuffer)(target, buffer);
   APILOG("glBindBuffer(%s, %u)\n", GL_ENUM_TO_STRING(target), buffer);
@@ -3447,7 +3447,7 @@ void IContext::SynchronizedDeletionQueues::queueDeleteTextures(
 void IContext::clearCacheState(){
     programID_ = 0;
     enableVertexAttribArray_.fill(false);
-    vertexAttribDivisors_.fill(0);
+    vertexAttribDivisors_.fill(-1);
     bindBufferIndexs_.clear();
     samplerLocations_.clear();
     enableGLFeatures_.clear();

@@ -9,6 +9,7 @@
 
 #include <igl/opengl/GLFunc.h>
 
+#define __IGL_INNER_USER__
 #include <igl/IGL.h>
 
 #if IGL_EGL

@@ -13,7 +13,7 @@
 #include <string>
 #include <unordered_map>
 
-#include <glm/glm.hpp>
+//#include <glm/glm.hpp>
 
 #include <igl/RenderPass.h>
 #include <igl/vulkan/Common.h>
@@ -36,11 +36,11 @@ class VulkanExtensions;
 class EnhancedShaderDebuggingStore {
  public:
   struct Line {
-    glm::vec4 v0_;
-    glm::vec4 color0_;
-    glm::vec4 v1_;
-    glm::vec4 color1_;
-    glm::mat4 transform_;
+//    glm::vec4 v0_;
+//    glm::vec4 color0_;
+//    glm::vec4 v1_;
+//    glm::vec4 color1_;
+//    glm::mat4 transform_;
   };
 
   struct Metadata {

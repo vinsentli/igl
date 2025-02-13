@@ -6,7 +6,9 @@
  */
 
 #pragma once
-
+#ifndef __IGL_INNER_USER__
+#   error "Only inner use"
+#endif
 #include <igl/Buffer.h>
 #include <igl/CommandBuffer.h>
 #include <igl/CommandQueue.h>

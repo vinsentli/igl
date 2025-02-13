@@ -139,6 +139,7 @@ void ResourcesBinder::bindTexture(uint32_t index, igl::vulkan::Texture* tex) {
       ((newTexture->image_.samples_ & VK_SAMPLE_COUNT_1_BIT) == VK_SAMPLE_COUNT_1_BIT);
   const bool isSampledImage = isTextureAvailable && newTexture->image_.isSampledImage();
 
+  //NOCA:NullPointer(误报)
   VkImageView imageView = isSampledImage ? newTexture->imageView_.vkImageView_ : VK_NULL_HANDLE;
 
   if (bindingsTextures_.textures[index] != imageView) {

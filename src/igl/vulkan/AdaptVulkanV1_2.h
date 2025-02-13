@@ -43,9 +43,18 @@
 #define VkBufferDeviceAddressInfo 		VkBufferDeviceAddressInfoEXT
 #define vkGetBufferDeviceAddressKHR 	vkGetBufferDeviceAddressEXT
 
+#ifndef VK_API_VERSION_VARIANT
 #define VK_API_VERSION_VARIANT(version) ((uint32_t)(version) >> 29)
+#endif 
+
+#ifndef VK_API_VERSION_MAJOR
 #define VK_API_VERSION_MAJOR(version) (((uint32_t)(version) >> 22) & 0x7FU)
+#endif
+
+#ifndef VK_API_VERSION_MINOR
 #define VK_API_VERSION_MINOR(version) (((uint32_t)(version) >> 12) & 0x3FFU)
+#endif
+
 #define VK_API_VERSION_PATCH(version) ((uint32_t)(version) & 0xFFFU)
 
 //  clang-format on
