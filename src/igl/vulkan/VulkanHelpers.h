@@ -18,7 +18,6 @@
 #include <igl/Macros.h>
 #include <igl/vulkan/VulkanFunctionTable.h>
 #include <igl/vulkan/VulkanVma.h>
-#include "AdaptVulkanV1_2.h"
 
 #define IGL_ARRAY_NUM_ELEMENTS(x) (sizeof(x) / sizeof((x)[0]))
 

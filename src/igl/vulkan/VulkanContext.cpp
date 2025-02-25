@@ -13,7 +13,6 @@
 #include <utility>
 #include <vector>
 
-#include "AdaptVulkanV1_2.h"
 #include <igl/IGLSafeC.h>
 
 // For vk_mem_alloc.h, define this before including VulkanContext.h in exactly

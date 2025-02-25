@@ -23,7 +23,7 @@ class VulkanImmediateCommands final {
  public:
   // The maximum number of command buffers which can simultaneously exist in the system; when we run
   // out of buffers, we stall and wait until an existing buffer becomes available
-  static constexpr uint32_t kMaxCommandBuffers = 4;
+  static constexpr uint32_t kMaxCommandBuffers = 12;
 
   /** @brief Creates an instance of the class for a specific queue family and whether the fences
    * created for each command buffer are exportable (see VulkanFence for more details about the
@@ -156,6 +156,8 @@ class VulkanImmediateCommands final {
   /// @brief Returns the fence associated with the handle if the handle has not been recycled.
   /// Returns `VK_NULL_HANDLE` otherwise.
   VkFence getVkFenceFromSubmitHandle(SubmitHandle handle);
+
+  VulkanCommandPool & getCommandPool() { return  commandPool_; }
 
  private:
   /// @brief Resets all commands buffers and their associated fences that are valid, are not being
