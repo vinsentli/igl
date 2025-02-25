@@ -29,7 +29,8 @@ void loadVulkanLoaderFunctions(struct VulkanFunctionTable* table, PFN_vkGetInsta
 
 void loadVulkanInstanceFunctions(struct VulkanFunctionTable* table,
                                  VkInstance context,
-                                 PFN_vkGetInstanceProcAddr load) {
+                                 PFN_vkGetInstanceProcAddr load,
+                                 VkBool32 enableExtDebugUtils) {
   /* IGL_GENERATE_LOAD_INSTANCE_TABLE */
 #if defined(VK_VERSION_1_0)
   table->vkCreateDevice = (PFN_vkCreateDevice)load(context, "vkCreateDevice");
@@ -118,28 +119,32 @@ void loadVulkanInstanceFunctions(struct VulkanFunctionTable* table,
       (PFN_vkDestroyDebugReportCallbackEXT)load(context, "vkDestroyDebugReportCallbackEXT");
 #endif /* defined(VK_EXT_debug_report) */
 #if defined(VK_EXT_debug_utils)
-  table->vkCmdBeginDebugUtilsLabelEXT =
-      (PFN_vkCmdBeginDebugUtilsLabelEXT)load(context, "vkCmdBeginDebugUtilsLabelEXT");
-  table->vkCmdEndDebugUtilsLabelEXT =
-      (PFN_vkCmdEndDebugUtilsLabelEXT)load(context, "vkCmdEndDebugUtilsLabelEXT");
-  table->vkCmdInsertDebugUtilsLabelEXT =
-      (PFN_vkCmdInsertDebugUtilsLabelEXT)load(context, "vkCmdInsertDebugUtilsLabelEXT");
-  table->vkCreateDebugUtilsMessengerEXT =
-      (PFN_vkCreateDebugUtilsMessengerEXT)load(context, "vkCreateDebugUtilsMessengerEXT");
-  table->vkDestroyDebugUtilsMessengerEXT =
-      (PFN_vkDestroyDebugUtilsMessengerEXT)load(context, "vkDestroyDebugUtilsMessengerEXT");
-  table->vkQueueBeginDebugUtilsLabelEXT =
-      (PFN_vkQueueBeginDebugUtilsLabelEXT)load(context, "vkQueueBeginDebugUtilsLabelEXT");
-  table->vkQueueEndDebugUtilsLabelEXT =
-      (PFN_vkQueueEndDebugUtilsLabelEXT)load(context, "vkQueueEndDebugUtilsLabelEXT");
-  table->vkQueueInsertDebugUtilsLabelEXT =
-      (PFN_vkQueueInsertDebugUtilsLabelEXT)load(context, "vkQueueInsertDebugUtilsLabelEXT");
-  table->vkSetDebugUtilsObjectNameEXT =
-      (PFN_vkSetDebugUtilsObjectNameEXT)load(context, "vkSetDebugUtilsObjectNameEXT");
-  table->vkSetDebugUtilsObjectTagEXT =
-      (PFN_vkSetDebugUtilsObjectTagEXT)load(context, "vkSetDebugUtilsObjectTagEXT");
-  table->vkSubmitDebugUtilsMessageEXT =
-      (PFN_vkSubmitDebugUtilsMessageEXT)load(context, "vkSubmitDebugUtilsMessageEXT");
+  if (enableExtDebugUtils) {
+      table->vkCmdBeginDebugUtilsLabelEXT =
+              (PFN_vkCmdBeginDebugUtilsLabelEXT) load(context, "vkCmdBeginDebugUtilsLabelEXT");
+      table->vkCmdEndDebugUtilsLabelEXT =
+              (PFN_vkCmdEndDebugUtilsLabelEXT) load(context, "vkCmdEndDebugUtilsLabelEXT");
+      table->vkCmdInsertDebugUtilsLabelEXT =
+              (PFN_vkCmdInsertDebugUtilsLabelEXT) load(context, "vkCmdInsertDebugUtilsLabelEXT");
+      table->vkCreateDebugUtilsMessengerEXT =
+              (PFN_vkCreateDebugUtilsMessengerEXT) load(context, "vkCreateDebugUtilsMessengerEXT");
+      table->vkDestroyDebugUtilsMessengerEXT =
+              (PFN_vkDestroyDebugUtilsMessengerEXT) load(context,
+                                                         "vkDestroyDebugUtilsMessengerEXT");
+      table->vkQueueBeginDebugUtilsLabelEXT =
+              (PFN_vkQueueBeginDebugUtilsLabelEXT) load(context, "vkQueueBeginDebugUtilsLabelEXT");
+      table->vkQueueEndDebugUtilsLabelEXT =
+              (PFN_vkQueueEndDebugUtilsLabelEXT) load(context, "vkQueueEndDebugUtilsLabelEXT");
+      table->vkQueueInsertDebugUtilsLabelEXT =
+              (PFN_vkQueueInsertDebugUtilsLabelEXT) load(context,
+                                                         "vkQueueInsertDebugUtilsLabelEXT");
+      table->vkSetDebugUtilsObjectNameEXT =
+              (PFN_vkSetDebugUtilsObjectNameEXT) load(context, "vkSetDebugUtilsObjectNameEXT");
+      table->vkSetDebugUtilsObjectTagEXT =
+              (PFN_vkSetDebugUtilsObjectTagEXT) load(context, "vkSetDebugUtilsObjectTagEXT");
+      table->vkSubmitDebugUtilsMessageEXT =
+              (PFN_vkSubmitDebugUtilsMessageEXT) load(context, "vkSubmitDebugUtilsMessageEXT");
+  }
 #endif /* defined(VK_EXT_debug_utils) */
 #if defined(VK_EXT_direct_mode_display)
   table->vkReleaseDisplayEXT = (PFN_vkReleaseDisplayEXT)load(context, "vkReleaseDisplayEXT");
