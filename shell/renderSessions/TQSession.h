@@ -22,9 +22,13 @@ struct FragmentFormat {
 
 class TQSession : public RenderSession {
  public:
-  TQSession(std::shared_ptr<Platform> platform) : RenderSession(std::move(platform)) {}
+  explicit TQSession(std::shared_ptr<Platform> platform) : RenderSession(std::move(platform)) {}
   void initialize() noexcept override;
-  void update(igl::SurfaceTextures surfaceTextures) noexcept override;
+  void update(SurfaceTextures surfaceTextures) noexcept override;
+
+  void setUVScale(float uvScale) noexcept {
+    uvScale_ = uvScale;
+  }
 
  private:
   std::shared_ptr<ICommandQueue> commandQueue_;
@@ -39,10 +43,11 @@ class TQSession : public RenderSession {
   std::shared_ptr<ITexture> depthTexture_;
   std::shared_ptr<ITexture> tex0_;
   RenderPassDesc renderPass_;
-  std::shared_ptr<IFramebuffer> framebuffer_;
   FragmentFormat fragmentParameters_{};
   std::vector<UniformDesc> fragmentUniformDescriptors_;
   std::vector<UniformDesc> vertexUniformDescriptors_;
+
+  float uvScale_ = 1.0f;
 };
 
 } // namespace igl::shell

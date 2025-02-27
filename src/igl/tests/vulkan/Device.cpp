@@ -10,7 +10,7 @@
 
 #include "../util/TestDevice.h"
 
-#if IGL_PLATFORM_WIN || IGL_PLATFORM_ANDROID || IGL_PLATFORM_MACOS || IGL_PLATFORM_LINUX
+#if IGL_PLATFORM_WINDOWS || IGL_PLATFORM_ANDROID || IGL_PLATFORM_MACOSX || IGL_PLATFORM_LINUX
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/HWDevice.h>
 #include <igl/vulkan/PlatformDevice.h>
@@ -51,8 +51,6 @@ TEST_F(DeviceVulkanTest, CreateCommandQueue) {
   Result ret;
   CommandQueueDesc desc{};
 
-  desc.type = CommandQueueType::Graphics;
-
   auto cmdQueue = iglDev_->createCommandQueue(desc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(cmdQueue, nullptr);
@@ -70,8 +68,6 @@ TEST_F(DeviceVulkanTest, PlatformDevice) {
   // ASSERT_TRUE(texture != nullptr); // no swapchain so null
 
   CommandQueueDesc desc{};
-
-  desc.type = CommandQueueType::Graphics;
 
   auto cmdQueue = iglDev_->createCommandQueue(desc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -106,8 +102,6 @@ TEST_F(DeviceVulkanTest, PlatformDeviceSampler) {
 
   CommandQueueDesc cmdQueueDesc{};
 
-  cmdQueueDesc.type = CommandQueueType::Graphics;
-
   auto cmdQueue = iglDev_->createCommandQueue(cmdQueueDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(cmdQueue, nullptr);
@@ -115,7 +109,7 @@ TEST_F(DeviceVulkanTest, PlatformDeviceSampler) {
   cmdQueue->submit(*cmdBuf);
 }
 
-#if IGL_PLATFORM_WIN || IGL_PLATFORM_ANDROID || IGL_PLATFORM_MACOS || IGL_PLATFORM_LINUX
+#if IGL_PLATFORM_WINDOWS || IGL_PLATFORM_ANDROID || IGL_PLATFORM_MACOSX || IGL_PLATFORM_LINUX
 TEST_F(DeviceVulkanTest, StagingDeviceLargeBufferTest) {
   Result ret;
 
@@ -194,6 +188,19 @@ TEST_F(DeviceVulkanTest, CurrentThreadIdTest) {
   ctx.ensureCurrentContextThread();
 }
 
+TEST_F(DeviceVulkanTest, EnsureValidation) {
+  GTEST_SKIP() << "Some tests are still running without Validation Layers enabled, so this test "
+                  "has been temporarily disabled.";
+
+#if !defined(IGL_DISABLE_VALIDATION)
+  // @fb-only
+  // igl::vulkan::VulkanContext& ctx =
+  //   static_cast<igl::vulkan::Device*>(iglDev_.get())->getVulkanContext();
+
+  // ASSERT_TRUE(ctx.areValidationLayersEnabled());
+#endif // !defined(IGL_DISABLE_VALIDATION)
+}
+
 TEST_F(DeviceVulkanTest, UpdateGlslangResource) {
   const igl::vulkan::VulkanContext& ctx =
       static_cast<const igl::vulkan::Device*>(iglDev_.get())->getVulkanContext();
@@ -238,7 +245,7 @@ GTEST_TEST(VulkanContext, BufferDeviceAddress) {
   std::shared_ptr<igl::IDevice> iglDev = nullptr;
 
   igl::vulkan::VulkanContextConfig config;
-#if IGL_PLATFORM_MACOS
+#if IGL_PLATFORM_MACOSX
   config.terminateOnValidationError = false;
 #elif IGL_DEBUG
   config.enableValidation = true;
@@ -320,7 +327,7 @@ GTEST_TEST(VulkanContext, DescriptorIndexing) {
   std::shared_ptr<igl::IDevice> iglDev = nullptr;
 
   igl::vulkan::VulkanContextConfig config;
-#if IGL_PLATFORM_MACOS
+#if IGL_PLATFORM_MACOSX
   config.terminateOnValidationError = false;
 #elif IGL_DEBUG
   config.enableValidation = true;

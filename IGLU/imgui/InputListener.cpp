@@ -8,7 +8,7 @@
 // @MARK:COVERAGE_EXCLUDE_FILE
 
 #include "InputListener.h"
-
+#include "KeyCodeTranslator.h"
 // ImGui has a very awkward expectation when it comes to processing inputs and making decisions
 // based on them. This is what it expects clients to do, in order, every frame:
 // 1. Send ImGui all events via the input parameters in ImGuiIO.
@@ -64,6 +64,25 @@ bool InputListener::process(const igl::shell::TouchEvent& event) {
 
 void InputListener::makeCurrentContext() const {
   ImGui::SetCurrentContext(_context);
+}
+
+bool InputListener::process(const igl::shell::KeyEvent& event) {
+  makeCurrentContext();
+
+  ImGuiIO& io = ImGui::GetIO();
+  // support IsKeyDown
+  io.KeysDown[keyFromShellKeyEvent(event)] = event.isDown;
+  // support IsKeyPressed
+  io.KeysData[keyFromShellKeyEvent(event)].Down = event.isDown;
+  return io.WantCaptureKeyboard;
+}
+
+bool InputListener::process(const igl::shell::CharEvent& event) {
+  makeCurrentContext();
+
+  ImGuiIO& io = ImGui::GetIO();
+  io.AddInputCharacter(event.character);
+  return io.WantTextInput;
 }
 
 } // namespace iglu::imgui

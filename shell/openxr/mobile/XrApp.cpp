@@ -16,7 +16,6 @@
 
 #if IGL_PLATFORM_ANDROID
 #include <android/asset_manager.h>
-#include <android/log.h>
 #include <android_native_app_glue.h>
 #endif
 
@@ -25,10 +24,9 @@
 
 #if IGL_PLATFORM_ANDROID
 #include <shell/shared/fileLoader/android/FileLoaderAndroid.h>
-#include <shell/shared/imageLoader/android/ImageLoaderAndroid.h>
 #include <shell/shared/platform/android/PlatformAndroid.h>
 #endif
-#if IGL_PLATFORM_WIN
+#if IGL_PLATFORM_WINDOWS
 #include <shell/shared/platform/win/PlatformWin.h>
 #endif
 
@@ -417,7 +415,7 @@ bool XrApp::initialize(const struct android_app* app, const InitParams& params) 
     return false;
   }
 
-  std::unique_ptr<igl::IDevice> device;
+  std::unique_ptr<IDevice> device;
   device = impl_->initIGL(instance_, systemId_);
   if (!device) {
     IGL_LOG_ERROR("Failed to initialize IGL\n");
@@ -548,16 +546,14 @@ void XrApp::updateQuadComposition() noexcept {
   compositionLayers_.resize(quadLayersParams.numQuads());
 }
 
-void XrApp::createShellSession(std::unique_ptr<igl::IDevice> device, AAssetManager* assetMgr) {
+void XrApp::createShellSession(std::unique_ptr<IDevice> device, AAssetManager* assetMgr) {
 #if IGL_PLATFORM_ANDROID
-  platform_ = std::make_shared<igl::shell::PlatformAndroid>(std::move(device));
+  platform_ = std::make_shared<PlatformAndroid>(std::move(device));
   IGL_DEBUG_ASSERT(platform_ != nullptr);
-  static_cast<igl::shell::ImageLoaderAndroid&>(platform_->getImageLoader())
-      .setAssetManager(assetMgr);
-  static_cast<igl::shell::FileLoaderAndroid&>(platform_->getFileLoader()).setAssetManager(assetMgr);
+  static_cast<FileLoaderAndroid&>(platform_->getFileLoader()).setAssetManager(assetMgr);
 #elif IGL_PLATFORM_APPLE
   platform_ = std::make_shared<igl::shell::PlatformMac>(std::move(device));
-#elif IGL_PLATFORM_WIN
+#elif IGL_PLATFORM_WINDOWS
   platform_ = std::make_shared<igl::shell::PlatformWin>(std::move(device));
 #endif
 
@@ -664,7 +660,7 @@ void XrApp::handleXrEvents() {
 
 void XrApp::handleActionView(const std::string& data) {
   if (platform_ != nullptr) {
-    igl::shell::IntentEvent event;
+    IntentEvent event;
     event.type = igl::shell::IntentType::ActionView;
     event.data = data;
     platform_->getInputDispatcher().queueEvent(event);
@@ -758,14 +754,14 @@ XrFrameState XrApp::beginFrame() {
 void XrApp::render() {
   if (passthrough_) {
     if (passthroughEnabled()) {
-      shellParams_->clearColorValue = igl::Color{0.0f, 0.0f, 0.0f, 0.0f};
+      shellParams_->clearColorValue = Color{0.0f, 0.0f, 0.0f, 0.0f};
     } else {
       shellParams_->clearColorValue.reset();
     }
   }
 #if USE_FORCE_ZERO_CLEAR
   else {
-    shellParams_->clearColorValue = igl::Color{0.0f, 0.0f, 0.0f, 0.0f};
+    shellParams_->clearColorValue = Color{0.0f, 0.0f, 0.0f, 0.0f};
   }
 #endif
 

@@ -107,7 +107,7 @@ class ICommandBuffer {
    * to pop the label off the stack.
    */
   virtual void pushDebugGroupLabel(const char* IGL_NONNULL label,
-                                   const igl::Color& color = igl::Color(1, 1, 1, 1)) const = 0;
+                                   const igl::Color& color = Color(1, 1, 1, 1)) const = 0;
 
   /**
    * @brief Pops a most recent debug label off a stack of debug string labels.
@@ -115,6 +115,15 @@ class ICommandBuffer {
    * This should be preceded by pushDebugGroupLabel().
    */
   virtual void popDebugGroupLabel() const = 0;
+
+  /**
+   * @brief Copy data between buffers.
+   */
+  virtual void copyBuffer(IBuffer& src,
+                          IBuffer& dst,
+                          uint64_t srcOffset,
+                          uint64_t dstOffset,
+                          uint64_t size) = 0;
 
   /**
    * @returns the number of draw operations tracked by this CommandBuffer. This is tracked manually

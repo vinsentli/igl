@@ -83,8 +83,8 @@ std::unique_ptr<IBuffer> Device::createBuffer(const BufferDesc& desc,
     metalObject.label = [NSString stringWithUTF8String:desc.debugName.c_str()];
     
   std::unique_ptr<IBuffer> resource = std::make_unique<Buffer>(
-      metalObject, options, desc.hint, 0 /* No accepted hints */, desc.type);
-  if (getResourceTracker()) {
+      std::move(metalObject), options, desc.hint, 0 /* No accepted hints */, desc.type);
+  if (hasResourceTracker()) {
     resource->initResourceTracker(getResourceTracker(), desc.debugName);
   }
   Result::setOk(outResult);
@@ -105,7 +105,7 @@ std::unique_ptr<IBuffer> Device::createRingBuffer(const BufferDesc& desc,
   std::unique_ptr<IBuffer> resource = std::make_unique<RingBuffer>(
       std::move(bufferRing), options, bufferSyncManager_, desc.hint, desc.type);
 
-  if (getResourceTracker()) {
+  if (hasResourceTracker()) {
     resource->initResourceTracker(getResourceTracker(), desc.debugName);
   }
   Result::setOk(outResult);
@@ -126,7 +126,7 @@ std::unique_ptr<IBuffer> Device::createBufferNoCopy(const BufferDesc& desc,
 
   std::unique_ptr<IBuffer> resource = std::make_unique<Buffer>(
       metalObject, options, desc.hint, BufferDesc::BufferAPIHintBits::NoCopy, desc.type);
-  if (getResourceTracker()) {
+  if (hasResourceTracker()) {
     resource->initResourceTracker(getResourceTracker(), desc.debugName);
   }
   Result::setOk(outResult);
@@ -147,6 +147,12 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
                       "Array textures are only supported when type is TwoDArray.");
     return nullptr;
   }
+  if (desc.exportability != TextureDesc::TextureExportability::NoExport) {
+    Result::setResult(outResult,
+                      Result::Code::Unimplemented,
+                      "Exportable textures are not supported on this platform.");
+    return nullptr;
+  };
 
   MTLTextureDescriptor* metalDesc = [MTLTextureDescriptor new];
   metalDesc.textureType = Texture::convertType(sanitized.type, sanitized.numSamples);
@@ -201,7 +207,7 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
   }
   metalObject.label = [NSString stringWithUTF8String:desc.debugName.c_str()];
   auto iglObject = std::make_shared<Texture>(metalObject, *this);
-  if (getResourceTracker()) {
+  if (hasResourceTracker()) {
     iglObject->initResourceTracker(getResourceTracker(), desc.debugName);
   }
   Result::setOk(outResult);
@@ -226,7 +232,7 @@ std::shared_ptr<igl::IVertexInputState> Device::createVertexInputState(
   }
 
   // Avoid buffer overrun in numInputBindings.
-  if (desc.numInputBindings > IGL_VERTEX_BINDINGS_MAX) {
+  if (desc.numInputBindings > IGL_BUFFER_BINDINGS_MAX) {
     Result::setResult(outResult,
                       Result::Code::ArgumentOutOfRange,
                       "numInputBindings is too large in VertexInputStateDesc");
@@ -239,7 +245,7 @@ std::shared_ptr<igl::IVertexInputState> Device::createVertexInputState(
   std::unordered_set<int> attributeLocationSet;
   for (int i = 0; i < desc.numAttributes; ++i) {
     size_t bufferIndex = desc.attributes[i].bufferIndex;
-    if (bufferIndex >= IGL_VERTEX_BINDINGS_MAX) {
+    if (bufferIndex >= IGL_BUFFER_BINDINGS_MAX) {
       Result::setResult(outResult, Result::Code::ArgumentOutOfRange, "bufferIndex out of range");
       IGL_DEBUG_ABORT(outResult->message.c_str());
       return nullptr;
@@ -611,7 +617,7 @@ ShaderVersion Device::getShaderVersion() const {
     version.majorVersion = 1;
     version.minorVersion = 1;
   }
-#elif IGL_PLATFORM_MACOS || IGL_PLATFORM_MACCATALYST
+#elif IGL_PLATFORM_MACOSX || IGL_PLATFORM_MACCATALYST
   if (@available(macOS 12.0, *)) {
     version.majorVersion = 2;
     version.minorVersion = 4;
@@ -667,7 +673,7 @@ MTLStorageMode Device::toMTLStorageMode(ResourceStorage storage) {
     return MTLStorageModePrivate;
   case ResourceStorage::Shared:
     return MTLStorageModeShared;
-#if IGL_PLATFORM_MACOS || IGL_PLATFORM_MACCATALYST
+#if IGL_PLATFORM_MACOSX || IGL_PLATFORM_MACCATALYST
   case ResourceStorage::Managed:
   default:
     return MTLStorageModeManaged;
@@ -686,7 +692,7 @@ MTLResourceOptions Device::toMTLResourceStorageMode(ResourceStorage storage) {
     return MTLResourceStorageModePrivate;
   case ResourceStorage::Shared:
     return MTLResourceStorageModeShared;
-#if IGL_PLATFORM_MACOS || IGL_PLATFORM_MACCATALYST
+#if IGL_PLATFORM_MACOSX || IGL_PLATFORM_MACCATALYST
   case ResourceStorage::Managed:
   default:
     return MTLResourceStorageModeManaged;

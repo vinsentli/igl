@@ -229,10 +229,10 @@ TEST_F(TextureMTLTest, ConvertTextureFormats) {
       TextureFormat::R_UNorm8,
       TextureFormat::R_F16,
       TextureFormat::R_UInt16,
-#if !IGL_PLATFORM_MACOS
+#if !IGL_PLATFORM_MACOSX
       TextureFormat::B5G5R5A1_UNorm,
 #endif
-#if !(IGL_PLATFORM_MACOS || IGL_PLATFORM_IOS_SIMULATOR)
+#if !(IGL_PLATFORM_MACOSX || IGL_PLATFORM_IOS_SIMULATOR)
       // https://developer.apple.com/documentation/metal/developing_metal_apps_that_run_in_simulator
       TextureFormat::B5G6R5_UNorm,
       TextureFormat::ABGR_UNorm4,
@@ -248,11 +248,12 @@ TEST_F(TextureMTLTest, ConvertTextureFormats) {
       TextureFormat::RGB10_A2_Uint_Rev,
       TextureFormat::BGR10_A2_Unorm,
       TextureFormat::R_F32,
+      TextureFormat::R_UInt32,
       TextureFormat::RG_F32,
       TextureFormat::RGBA_F16,
       TextureFormat::RGBA_UInt32,
       TextureFormat::RGBA_F32,
-#if !IGL_PLATFORM_MACOS
+#if !IGL_PLATFORM_MACOSX
       TextureFormat::RGBA_ASTC_4x4,
       TextureFormat::SRGB8_A8_ASTC_4x4,
       TextureFormat::RGBA_ASTC_5x4,
@@ -305,10 +306,10 @@ TEST_F(TextureMTLTest, ConvertTextureFormats) {
   const std::vector<TextureFormat> invalidTextureFormats = {
       TextureFormat::Invalid,
       TextureFormat::L_UNorm8,
-#if IGL_PLATFORM_MACOS
+#if IGL_PLATFORM_MACOSX
       TextureFormat::B5G5R5A1_UNorm,
 #endif
-#if IGL_PLATFORM_MACOS || IGL_PLATFORM_IOS_SIMULATOR
+#if IGL_PLATFORM_MACOSX || IGL_PLATFORM_IOS_SIMULATOR
       TextureFormat::B5G6R5_UNorm,
       TextureFormat::ABGR_UNorm4,
 #endif
@@ -318,7 +319,7 @@ TEST_F(TextureMTLTest, ConvertTextureFormats) {
       TextureFormat::BGRA_UNorm8_Rev,
       TextureFormat::RGB_F16,
       TextureFormat::RGB_F32,
-#if IGL_PLATFORM_MACOS
+#if IGL_PLATFORM_MACOSX
       TextureFormat::RGBA_ASTC_4x4,
       TextureFormat::SRGB8_A8_ASTC_4x4,
       TextureFormat::RGBA_ASTC_5x4,
@@ -357,7 +358,7 @@ TEST_F(TextureMTLTest, ConvertTextureFormats) {
 #endif
       TextureFormat::RGB8_Punchthrough_A1_ETC2,
       TextureFormat::SRGB8_Punchthrough_A1_ETC2,
-#if IGL_PLATFORM_MACOS
+#if IGL_PLATFORM_MACOSX
       TextureFormat::RGBA8_EAC_ETC2,
       TextureFormat::SRGB8_A8_EAC_ETC2,
       TextureFormat::RG_EAC_UNorm,

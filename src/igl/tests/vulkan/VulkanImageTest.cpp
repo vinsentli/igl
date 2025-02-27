@@ -9,18 +9,13 @@
 #include <gtest/gtest.h>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/Device.h>
-#include <igl/vulkan/HWDevice.h>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanImage.h>
 #include <memory>
 
 #include <igl/tests/util/device/TestDevice.h>
 
-#ifdef __ANDROID__
-#include <vulkan/vulkan_android.h>
-#endif
-
-#if IGL_PLATFORM_WIN || IGL_PLATFORM_ANDROID || IGL_PLATFORM_LINUX
+#if IGL_PLATFORM_WINDOWS || IGL_PLATFORM_ANDROID || IGL_PLATFORM_LINUX
 
 namespace igl::tests {
 
@@ -67,13 +62,10 @@ TEST_F(VulkanImageTest, CreateImageWithExportedMemory) {
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
       0, /* createFlags */
       VK_SAMPLE_COUNT_1_BIT,
-#if IGL_PLATFORM_ANDROID && __ANDROID_MIN_SDK_VERSION__ >= 26
-      nullptr,
-#endif
       "Image: vulkan export memory");
   ASSERT_NE(vulkanImage.valid(), false);
   EXPECT_TRUE(vulkanImage.isExported_);
-#if IGL_PLATFORM_WIN
+#if IGL_PLATFORM_WINDOWS
   EXPECT_NE(vulkanImage.exportedMemoryHandle_, nullptr);
   EXPECT_NE(vulkanImage.getVkImage(), static_cast<VkImage_T*>(VK_NULL_HANDLE));
 #elif IGL_PLATFORM_ANDROID || IGL_PLATFORM_LINUX
@@ -82,7 +74,7 @@ TEST_F(VulkanImageTest, CreateImageWithExportedMemory) {
 #endif
 }
 
-#if IGL_PLATFORM_WIN
+#if IGL_PLATFORM_WINDOWS
 TEST_F(VulkanImageTest, CreateImageWithImportedMemoryWin32) {
   auto exportedImage = igl::vulkan::VulkanImage::createWithExportMemory(
       *context_,
@@ -117,8 +109,8 @@ TEST_F(VulkanImageTest, CreateImageWithImportedMemoryWin32) {
   EXPECT_TRUE(importedImage.isImported_);
   EXPECT_NE(importedImage.getVkImage(), static_cast<VkImage_T*>(VK_NULL_HANDLE));
 }
-#endif // IGL_PLATFORM_WIN
+#endif // IGL_PLATFORM_WINDOWS
 
 } // namespace igl::tests
 
-#endif // IGL_PLATFORM_WIN || IGL_PLATFORM_ANDROID || IGL_PLATFORM_LINUX
+#endif // IGL_PLATFORM_WINDOWS || IGL_PLATFORM_ANDROID || IGL_PLATFORM_LINUX

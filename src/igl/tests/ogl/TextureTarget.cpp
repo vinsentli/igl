@@ -9,7 +9,6 @@
 
 #include <gtest/gtest.h>
 #include <igl/IGL.h>
-#include <igl/opengl/CommandQueue.h>
 #include <igl/opengl/Device.h>
 #include <igl/opengl/TextureTarget.h>
 #include <string>
@@ -166,7 +165,7 @@ TEST_F(TextureTargetOGLTest, TextureBindAndAttachAndDetach) {
   // Since the default framebuffer already comes with unattachable color,
   // depth and stencil, we have to create a new framebuffer before trying
   // to attach our renderbuffers
-  GLuint tmpFb;
+  GLuint tmpFb = 0;
   context_->genFramebuffers(1, &tmpFb);
   context_->bindFramebuffer(GL_FRAMEBUFFER, tmpFb);
 
@@ -227,7 +226,7 @@ TEST_F(TextureTargetOGLTest, TextureBindAndAttachAndDetach) {
   //--------------------------------------------------------------------------
   // Test bind and unbind
   //--------------------------------------------------------------------------
-  GLint value;
+  GLint value = 0;
 
   colorTarget_->bind();
   // Get renderBuffer binding and check it is non-zero

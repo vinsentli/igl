@@ -7,7 +7,6 @@
 
 #include "Common.h"
 
-#include <cstdio>
 #include <cstdlib>
 
 // clang-format off
@@ -89,7 +88,7 @@ VkFormat invertRedAndBlue(VkFormat format) {
   }
 }
 
-VkStencilOp stencilOperationToVkStencilOp(igl::StencilOperation op) {
+VkStencilOp stencilOperationToVkStencilOp(StencilOperation op) {
   switch (op) {
   case igl::StencilOperation::Keep:
     return VK_STENCIL_OP_KEEP;
@@ -112,8 +111,8 @@ VkStencilOp stencilOperationToVkStencilOp(igl::StencilOperation op) {
   return VK_STENCIL_OP_KEEP;
 }
 
-VkFormat textureFormatToVkFormat(igl::TextureFormat format) {
-  using TextureFormat = ::igl::TextureFormat;
+VkFormat textureFormatToVkFormat(TextureFormat format) {
+  using TextureFormat = TextureFormat;
   switch (format) {
   case TextureFormat::Invalid:
     return VK_FORMAT_UNDEFINED;
@@ -170,6 +169,8 @@ VkFormat textureFormatToVkFormat(igl::TextureFormat format) {
     return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
   case TextureFormat::R_F32:
     return VK_FORMAT_R32_SFLOAT;
+  case TextureFormat::R_UInt32:
+    return VK_FORMAT_R32_UINT;
   case TextureFormat::RG_F32:
     return VK_FORMAT_R32G32_SFLOAT;
   case TextureFormat::RGB_F16:
@@ -302,11 +303,11 @@ bool isTextureFormatBGR(VkFormat format) {
          format == VK_FORMAT_A2B10G10R10_UNORM_PACK32;
 }
 
-igl::TextureFormat vkFormatToTextureFormat(VkFormat format) {
+TextureFormat vkFormatToTextureFormat(VkFormat format) {
   return util::vkTextureFormatToTextureFormat(static_cast<int32_t>(format));
 }
 
-VkMemoryPropertyFlags resourceStorageToVkMemoryPropertyFlags(igl::ResourceStorage resourceStorage) {
+VkMemoryPropertyFlags resourceStorageToVkMemoryPropertyFlags(ResourceStorage resourceStorage) {
   VkMemoryPropertyFlags memFlags{0};
 
   switch (resourceStorage) {
@@ -330,7 +331,7 @@ VkMemoryPropertyFlags resourceStorageToVkMemoryPropertyFlags(igl::ResourceStorag
   return memFlags;
 }
 
-VkCompareOp compareFunctionToVkCompareOp(igl::CompareFunction func) {
+VkCompareOp compareFunctionToVkCompareOp(CompareFunction func) {
   switch (func) {
   case igl::CompareFunction::Never:
     return VK_COMPARE_OP_NEVER;
@@ -390,7 +391,7 @@ void transitionToGeneral(VkCommandBuffer cmdBuf, ITexture* texture) {
     return;
   }
 
-  const vulkan::Texture& tex = static_cast<vulkan::Texture&>(*texture);
+  const vulkan::Texture& tex = static_cast<Texture&>(*texture);
   const vulkan::VulkanImage& img = tex.getVulkanTexture().image_;
 
   if (!img.isStorageImage()) {
@@ -493,7 +494,7 @@ void transitionToShaderReadOnly(VkCommandBuffer cmdBuf, ITexture* texture) {
     return;
   }
 
-  const vulkan::Texture& tex = static_cast<vulkan::Texture&>(*texture);
+  const vulkan::Texture& tex = static_cast<Texture&>(*texture);
   const vulkan::VulkanImage& img = tex.getVulkanTexture().image_;
 
   const bool isColor = (img.getImageAspectFlags() & VK_IMAGE_ASPECT_COLOR_BIT) > 0;
@@ -516,7 +517,7 @@ void overrideImageLayout(ITexture* texture, VkImageLayout layout) {
   if (!texture) {
     return;
   }
-  const vulkan::Texture* tex = static_cast<vulkan::Texture*>(texture);
+  const vulkan::Texture* tex = static_cast<Texture*>(texture);
   tex->getVulkanTexture().image_.imageLayout_ = layout;
 }
 
@@ -524,7 +525,7 @@ void ensureShaderModule(IShaderModule* sm) {
   IGL_DEBUG_ASSERT(sm);
 
   const igl::vulkan::util::SpvModuleInfo& info =
-      static_cast<igl::vulkan::ShaderModule*>(sm)->getVulkanShaderModule().getSpvModuleInfo();
+      static_cast<ShaderModule*>(sm)->getVulkanShaderModule().getSpvModuleInfo();
 
   for (const auto& t : info.textures) {
     if (!IGL_DEBUG_VERIFY(t.descriptorSet == kBindPoint_CombinedImageSamplers)) {
@@ -541,6 +542,15 @@ void ensureShaderModule(IShaderModule* sm) {
           "Missing descriptor set id for buffers: the shader should contain \"layout(set = "
           "%u, ...)\"",
           kBindPoint_Buffers);
+      continue;
+    }
+  }
+  for (const auto& i : info.images) {
+    if (!IGL_DEBUG_VERIFY(i.descriptorSet == kBindPoint_StorageImages)) {
+      IGL_LOG_ERROR(
+          "Missing descriptor set id for storage images: the shader should contain \"layout(set = "
+          "%u, ...)\"",
+          kBindPoint_StorageImages);
       continue;
     }
   }
@@ -585,6 +595,7 @@ PFN_vkGetInstanceProcAddr getVkGetInstanceProcAddr() {
 #else
   void* lib = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
   if (!lib) {
+    IGL_LOG_DEBUG("dlopen failed: %s\n", dlerror());
     lib = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
   }
   if (!lib) {
@@ -592,22 +603,24 @@ PFN_vkGetInstanceProcAddr getVkGetInstanceProcAddr() {
   }
   return (PFN_vkGetInstanceProcAddr)dlsym(lib, "vkGetInstanceProcAddr");
 #endif
-  return nullptr;
 }
 } // namespace
 
 void initialize(VulkanFunctionTable& table) {
   table.vkGetInstanceProcAddr = getVkGetInstanceProcAddr();
-  IGL_DEBUG_ASSERT(table.vkGetInstanceProcAddr != nullptr);
 
-  loadVulkanLoaderFunctions(&table, table.vkGetInstanceProcAddr);
+  if (!loadVulkanLoaderFunctions(&table, table.vkGetInstanceProcAddr)) {
+    IGL_LOG_ERROR("Failed to load Vulkan loader functions");
+    abort();
+  }
 }
 
 void loadInstanceFunctions(VulkanFunctionTable& table,
                            VkInstance instance,
                            bool enableExtDebugUtils) {
   IGL_DEBUG_ASSERT(table.vkGetInstanceProcAddr != nullptr);
-  loadVulkanInstanceFunctions(&table, instance, table.vkGetInstanceProcAddr, enableExtDebugUtils);
+  loadVulkanInstanceFunctions(
+      &table, instance, table.vkGetInstanceProcAddr, enableExtDebugUtils ? VK_TRUE : VK_FALSE);
 }
 
 void loadDeviceFunctions(VulkanFunctionTable& table, VkDevice device) {

@@ -66,6 +66,7 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
   void bindSamplerState(size_t index, uint8_t target, ISamplerState* samplerState) override;
 
   void bindTexture(size_t index, uint8_t target, ITexture* texture) override;
+  void bindTexture(size_t index, ITexture* texture) override;
 
   /// @brief This is only for backends that MUST use single uniforms in some situations. Do not
   /// implement!
@@ -102,7 +103,7 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
     return cmdBuffer_;
   }
 
-  igl::vulkan::ResourcesBinder& binder() {
+  ResourcesBinder& binder() {
     return binder_;
   }
 
@@ -137,7 +138,7 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
   bool hasDepthAttachment_ = false;
   std::shared_ptr<IFramebuffer> framebuffer_;
 
-  igl::vulkan::ResourcesBinder binder_;
+  ResourcesBinder binder_;
 
   RenderPipelineDynamicState dynamicState_;
 
@@ -146,13 +147,13 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
    *  1: All other times */
   uint32_t drawCallCountEnabled_ = 1u;
 
-  bool isVertexBufferBound_[IGL_VERTEX_BUFFER_MAX] = {};
+  bool isVertexBufferBound_[IGL_BUFFER_BINDINGS_MAX] = {};
 
   Dependencies dependencies_ = {};
 
   const igl::vulkan::RenderPipelineState* rps_ = nullptr;
-  igl::BindGroupTextureHandle pendingBindGroupTexture_ = {};
-  igl::BindGroupBufferHandle pendingBindGroupBuffer_ = {};
+  BindGroupTextureHandle pendingBindGroupTexture_ = {};
+  BindGroupBufferHandle pendingBindGroupBuffer_ = {};
   uint32_t numDynamicOffsets_ = 0;
   uint32_t dynamicOffsets_[IGL_UNIFORM_BLOCKS_BINDING_MAX] = {};
 };

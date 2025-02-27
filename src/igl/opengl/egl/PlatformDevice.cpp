@@ -145,7 +145,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(
 
   depthTexture_ = std::move(texture);
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    depthTexture_->initResourceTracker(resourceTracker, "TextureFromNativeDepth");
+    depthTexture_->initResourceTracker(std::move(resourceTracker), "TextureFromNativeDepth");
   }
 
   return depthTexture_;
@@ -196,7 +196,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(AHardwar
 
   auto texture = std::make_shared<android::NativeHWTextureBuffer>(
       getContext(), igl::android::getIglFormat(hwbDesc.format));
-  subResult = texture->attachHWBuffer(buffer);
+  subResult = texture->createWithHWBuffer(buffer);
   Result::setResult(outResult, subResult.code, subResult.message);
   if (!subResult.isOk()) {
     return nullptr;

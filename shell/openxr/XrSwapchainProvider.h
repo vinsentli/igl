@@ -17,14 +17,13 @@
 #include <igl/Texture.h>
 
 // forward declarations
-namespace igl::shell::openxr::impl {} // namespace igl::shell::openxr::impl
 
 namespace igl::shell::openxr {
 
 class XrSwapchainProvider {
  public:
   XrSwapchainProvider(std::unique_ptr<impl::XrSwapchainProviderImpl>&& impl,
-                      std::shared_ptr<igl::shell::Platform> platform,
+                      std::shared_ptr<Platform> platform,
                       XrSession session,
                       impl::SwapchainImageInfo swapchainImageInfo,
                       uint8_t numViews) noexcept;
@@ -36,7 +35,7 @@ class XrSwapchainProvider {
     return currentImageIndex_;
   }
 
-  [[nodiscard]] igl::SurfaceTextures getSurfaceTextures() const noexcept;
+  [[nodiscard]] SurfaceTextures getSurfaceTextures() const noexcept;
 
   void releaseSwapchainImages() const noexcept;
 
@@ -52,7 +51,7 @@ class XrSwapchainProvider {
   XrSwapchain createXrSwapchain(XrSwapchainUsageFlags extraUsageFlags, int64_t format) noexcept;
 
   std::unique_ptr<impl::XrSwapchainProviderImpl> impl_;
-  std::shared_ptr<igl::shell::Platform> platform_;
+  std::shared_ptr<Platform> platform_;
   const XrSession session_;
   impl::SwapchainImageInfo swapchainImageInfo_;
 

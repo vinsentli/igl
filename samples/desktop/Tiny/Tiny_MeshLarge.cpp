@@ -76,7 +76,7 @@
   #include <igl/RenderCommandEncoder.h>
   #include <igl/opengl/RenderCommandEncoder.h>
   #include <igl/opengl/RenderPipelineState.h>
-  #if IGL_PLATFORM_WIN
+  #if IGL_PLATFORM_WINDOWS
     #include <igl/opengl/wgl/Context.h>
     #include <igl/opengl/wgl/Device.h>
     #include <igl/opengl/wgl/HWDevice.h>
@@ -218,15 +218,15 @@ layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 #ifdef VULKAN
 // kBinding_StorageImages in VulkanContext.cpp
-layout (set = 2, binding = 6, rgba8) uniform readonly  image2D kTextures2Din[];
-layout (set = 2, binding = 6, rgba8) uniform writeonly image2D kTextures2Dout[];
+layout (set = 3, binding = 6, rgba8) uniform readonly  image2D kTextures2Din[];
+layout (set = 3, binding = 6, rgba8) uniform writeonly image2D kTextures2Dout[];
 
 layout(push_constant) uniform PushConstants {
   uint textureId;
 } pc;
 #else
-layout (binding = 3, rgba8) uniform readonly  image2D kTextures2Din;
-layout (binding = 3, rgba8) uniform writeonly image2D kTextures2Dout;
+layout (binding = 2, rgba8) uniform readonly  image2D kTextures2Din;
+layout (binding = 2, rgba8) uniform writeonly image2D kTextures2Dout;
 #endif
 
 vec4 imageLoad2D(ivec2 uv) {
@@ -951,7 +951,7 @@ void initIGL() {
     {
       const Result result;
 #if USE_OPENGL_BACKEND
-#if IGL_PLATFORM_WIN
+#if IGL_PLATFORM_WINDOWS
       auto ctx = std::make_unique<igl::opengl::wgl::Context>(GetDC(glfwGetWin32Window(window_)),
                                                              glfwGetWGLContext(window_));
       device_ = std::make_unique<igl::opengl::wgl::Device>(std::move(ctx));
@@ -966,7 +966,7 @@ void initIGL() {
 #endif
 #else
       const igl::vulkan::VulkanContextConfig cfg = {
-          .terminateOnValidationError = true,
+          .terminateOnValidationError = false,
           .enhancedShaderDebugging = false,
           .enableValidation = kEnableValidationLayers,
           .enableDescriptorIndexing = true,
@@ -1130,7 +1130,7 @@ void initIGL() {
   }
 
   // Command queue: backed by different types of GPU HW queues
-  const CommandQueueDesc desc{CommandQueueType::Graphics};
+  const CommandQueueDesc desc{};
   commandQueue_ = device_->createCommandQueue(desc, nullptr);
 
   renderPassOffscreen_.colorAttachments.emplace_back();
@@ -1736,7 +1736,7 @@ std::shared_ptr<ITexture> getNativeDrawable() {
   Result ret;
   std::shared_ptr<ITexture> drawable;
 #if USE_OPENGL_BACKEND
-#if IGL_PLATFORM_WIN
+#if IGL_PLATFORM_WINDOWS
   const auto& platformDevice = device_->getPlatformDevice<opengl::wgl::PlatformDevice>();
   IGL_DEBUG_ASSERT(platformDevice != nullptr);
   drawable = platformDevice->createTextureFromNativeDrawable(&ret);
@@ -1760,7 +1760,7 @@ std::shared_ptr<ITexture> getNativeDepthDrawable() {
   Result ret;
   std::shared_ptr<ITexture> drawable;
 #if USE_OPENGL_BACKEND
-#if IGL_PLATFORM_WIN
+#if IGL_PLATFORM_WINDOWS
   const auto& platformDevice = device_->getPlatformDevice<opengl::wgl::PlatformDevice>();
   IGL_DEBUG_ASSERT(platformDevice != nullptr);
   drawable = platformDevice->createTextureFromNativeDepth(width_, height_, &ret);

@@ -9,7 +9,6 @@
 
 #include <cstdlib>
 #include <igl/RenderPass.h>
-#include <igl/opengl/CommandBuffer.h>
 #include <igl/opengl/Device.h>
 #include <igl/opengl/DummyTexture.h>
 #include <igl/opengl/Errors.h>
@@ -400,17 +399,21 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& /*cmdQueue*/,
                                  static_cast<GLsizei>(range.height));
 }
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 bool Framebuffer::CachedState::needsUpdate(FramebufferMode mode,
                                            uint8_t layer,
                                            uint8_t face,
                                            uint8_t mipLevel) {
+  // NOLINTEND(bugprone-easily-swappable-parameters)
   return mode_ != mode || layer_ != layer || face_ != face || mipLevel_ != mipLevel;
 }
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 void Framebuffer::CachedState::updateCache(FramebufferMode mode,
                                            uint8_t layer,
                                            uint8_t face,
                                            uint8_t mipLevel) {
+  // NOLINTEND(bugprone-easily-swappable-parameters)
   mode_ = mode;
   layer_ = layer;
   face_ = face;
@@ -476,7 +479,7 @@ void CustomFramebuffer::updateDrawable(SurfaceTextures surfaceTextures) {
 
 void CustomFramebuffer::updateResolveAttachment(std::shared_ptr<ITexture> texture) {
   if (resolveFramebuffer) {
-    resolveFramebuffer->updateDrawable(texture);
+    resolveFramebuffer->updateDrawable(std::move(texture));
   }
 }
 

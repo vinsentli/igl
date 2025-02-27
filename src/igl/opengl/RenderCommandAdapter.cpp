@@ -110,9 +110,9 @@ void RenderCommandAdapter::setVertexBuffer(Buffer& buffer,
                                            size_t offset,
                                            size_t index,
                                            Result* outResult) {
-  IGL_DEBUG_ASSERT(index < IGL_VERTEX_BUFFER_MAX,
+  IGL_DEBUG_ASSERT(index < IGL_BUFFER_BINDINGS_MAX,
                    "Buffer index is beyond max, may want to increase limit");
-  if (index < IGL_VERTEX_BUFFER_MAX) {
+  if (index < IGL_BUFFER_BINDINGS_MAX) {
     vertexBuffers_[index] = {&buffer, offset};
     SET_DIRTY(vertexBuffersDirty_, index);
     Result::setOk(outResult);
@@ -209,13 +209,13 @@ void RenderCommandAdapter::setFragmentSamplerState(ISamplerState* samplerState,
 void RenderCommandAdapter::clearDependentResources(
     const std::shared_ptr<IRenderPipelineState>& newValue,
     Result* outResult) {
-  auto* curStateOpenGL = static_cast<opengl::RenderPipelineState*>(pipelineState_.get());
+  auto* curStateOpenGL = static_cast<RenderPipelineState*>(pipelineState_.get());
   if (!IGL_DEBUG_VERIFY(curStateOpenGL)) {
     Result::setResult(outResult, Result::Code::RuntimeError, "pipeline state is null");
     return;
   }
 
-  auto* newStateOpenGL = static_cast<opengl::RenderPipelineState*>(newValue.get());
+  auto* newStateOpenGL = static_cast<RenderPipelineState*>(newValue.get());
 
   if (!newStateOpenGL || !curStateOpenGL->matchesShaderProgram(*newStateOpenGL)) {
     // Don't use previously set resources. Uniforms/texture locations not same between programs
@@ -340,7 +340,7 @@ void RenderCommandAdapter::willDraw() {
   // Vertex Buffers must be bound before pipelineState->bind()
   if (pipelineState) {
     pipelineState->clearActiveAttributesLocations();
-    for (size_t bufferIndex = 0; bufferIndex < IGL_VERTEX_BUFFER_MAX; ++bufferIndex) {
+    for (size_t bufferIndex = 0; bufferIndex < IGL_BUFFER_BINDINGS_MAX; ++bufferIndex) {
       if (IS_DIRTY(vertexBuffersDirty_, bufferIndex)) {
         auto& bufferState = vertexBuffers_[bufferIndex];
         bindBufferWithShaderStorageBufferOverride((*bufferState.resource), GL_ARRAY_BUFFER);

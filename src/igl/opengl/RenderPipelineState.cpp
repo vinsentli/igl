@@ -133,8 +133,8 @@ Result RenderPipelineState::create() {
         if (loc < 0) {
           IGL_LOG_ERROR("Vertex attribute (%s) not found in shader.", attrib.name.c_str());
         }
-        IGL_DEBUG_ASSERT(index < IGL_VERTEX_BUFFER_MAX);
-        if (index < IGL_VERTEX_BUFFER_MAX) {
+        IGL_DEBUG_ASSERT(index < IGL_BUFFER_BINDINGS_MAX);
+        if (index < IGL_BUFFER_BINDINGS_MAX) {
           bufferAttribLocations_[index].push_back(loc);
         }
       }
@@ -268,6 +268,7 @@ void RenderPipelineState::unbind() {
 // A buffer can be shared by multiple attributes. So bind all the attributes
 // associated with the associated buffer.
 // bufferOffset is an offset in bytes to the start of the vertex attributes in the buffer.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 void RenderPipelineState::bindVertexAttributes(size_t bufferIndex, size_t bufferOffset) {
 #if IGL_VERIFY_ENABLED
   static GLint sMaxNumVertexAttribs = 0;

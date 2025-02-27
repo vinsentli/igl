@@ -17,7 +17,6 @@
 #include <igl/opengl/egl/PlatformDevice.h>
 #endif
 #include <shell/shared/fileLoader/android/FileLoaderAndroid.h>
-#include <shell/shared/imageLoader/android/ImageLoaderAndroid.h>
 #include <shell/shared/input/InputDispatcher.h>
 #include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/ShellParams.h>
@@ -146,7 +145,6 @@ void TinyRenderer::init(AAssetManager* mgr,
   if (d) {
     platform_ = std::make_shared<igl::shell::PlatformAndroid>(std::move(d));
     IGL_DEBUG_ASSERT(platform_ != nullptr);
-    static_cast<igl::shell::ImageLoaderAndroid&>(platform_->getImageLoader()).setAssetManager(mgr);
     static_cast<igl::shell::FileLoaderAndroid&>(platform_->getFileLoader()).setAssetManager(mgr);
 
     const ContextGuard guard(platform_->getDevice()); // wrap 'session_' operations
@@ -188,7 +186,7 @@ void TinyRenderer::render(float displayScale) {
 
   // draw
   Result result;
-  igl::SurfaceTextures surfaceTextures;
+  SurfaceTextures surfaceTextures;
 
   switch (backendVersion_.flavor) {
 #if IGL_BACKEND_OPENGL

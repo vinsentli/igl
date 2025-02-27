@@ -196,6 +196,11 @@ using namespace igl;
 
 #if IGL_BACKEND_OPENGL
   case igl::BackendFlavor::OpenGL: {
+    const bool enableStencilBuffer =
+        config_.depthTextureFormat == igl::TextureFormat::S8_UInt_Z24_UNorm ||
+        config_.depthTextureFormat == igl::TextureFormat::S_UInt8;
+    const NSOpenGLPixelFormatAttribute stencilSize = enableStencilBuffer ? 8 : 0;
+
     NSOpenGLPixelFormat* pixelFormat;
     if (config_.backendVersion.majorVersion == 4 && config_.backendVersion.minorVersion == 1) {
       static NSOpenGLPixelFormatAttribute attributes[] = {
@@ -211,6 +216,8 @@ using namespace igl;
           32,
           NSOpenGLPFADepthSize,
           24,
+          NSOpenGLPFAStencilSize,
+          stencilSize,
           NSOpenGLPFAOpenGLProfile,
           NSOpenGLProfileVersion4_1Core,
           0,
@@ -232,6 +239,8 @@ using namespace igl;
           32,
           NSOpenGLPFADepthSize,
           24,
+          NSOpenGLPFAStencilSize,
+          stencilSize,
           NSOpenGLPFAOpenGLProfile,
           NSOpenGLProfileVersion3_2Core,
           0,
@@ -252,6 +261,8 @@ using namespace igl;
           32,
           NSOpenGLPFADepthSize,
           24,
+          NSOpenGLPFAStencilSize,
+          stencilSize,
           NSOpenGLPFAOpenGLProfile,
           NSOpenGLProfileVersionLegacy,
           0,
@@ -357,6 +368,7 @@ using namespace igl;
     GLView* v = (GLView*)self.view;
     [v startTimer];
   }
+  [self.view.window makeFirstResponder:self];
 }
 
 - (void)viewWillDisappear {
@@ -499,7 +511,7 @@ using namespace igl;
 
 static uint32_t getModifiers(NSEvent* event) {
   uint32_t modifiers = igl::shell::KeyEventModifierNone;
-  NSUInteger flags = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
+  const NSUInteger flags = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
 
   if (flags & NSEventModifierFlagShift) {
     modifiers |= igl::shell::KeyEventModifierShift;

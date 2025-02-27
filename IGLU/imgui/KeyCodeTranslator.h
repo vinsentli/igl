@@ -7,7 +7,9 @@
 
 #pragma once
 
-#include <igl/IGLFolly.h>
+#include "imgui.h"
+#include <shell/shared/input/KeyListener.h>
 
-#define IGL_NULLABLE FOLLY_NULLABLE
-#define IGL_NONNULL FOLLY_NONNULL
+namespace iglu::imgui {
+ImGuiKey keyFromShellKeyEvent(igl::shell::KeyEvent event);
+} // namespace iglu::imgui

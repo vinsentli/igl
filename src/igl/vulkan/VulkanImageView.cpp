@@ -22,7 +22,7 @@ VulkanImageView::VulkanImageView(const VulkanContext& ctx,
                                  uint32_t baseLayer,
                                  uint32_t numLayers,
                                  const char* debugName) :
-  ctx_(&ctx) {
+  ctx_(&ctx), aspectMask_(aspectMask) {
   IGL_DEBUG_ASSERT(ctx_);
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
@@ -68,12 +68,25 @@ VulkanImageView::~VulkanImageView() {
   destroy();
 }
 
+VulkanImageView::VulkanImageView(const VulkanContext& ctx,
+                                 const VkImageViewCreateInfo& createInfo,
+                                 const char* debugName) :
+  ctx_(&ctx), aspectMask_(createInfo.subresourceRange.aspectMask) {
+  VkDevice device = ctx_->getVkDevice();
+  VK_ASSERT(ctx_->vf_.vkCreateImageView(device, &createInfo, nullptr, &vkImageView_));
+
+  VK_ASSERT(ivkSetDebugObjectName(
+      &ctx_->vf_, device, VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)vkImageView_, debugName));
+}
+
 VulkanImageView& VulkanImageView::operator=(VulkanImageView&& other) noexcept {
   destroy();
   ctx_ = other.ctx_;
   vkImageView_ = other.vkImageView_;
+  aspectMask_ = other.aspectMask_;
   other.ctx_ = nullptr;
   other.vkImageView_ = VK_NULL_HANDLE;
+  other.aspectMask_ = 0;
   return *this;
 }
 
@@ -82,15 +95,19 @@ VulkanImageView& VulkanImageView::operator=(VulkanImageView&& other) noexcept {
 }
 
 void VulkanImageView::destroy() {
-  if (valid()) {
-    ctx_->deferredTask(std::packaged_task<void()>(
-        [vf = &ctx_->vf_, device = ctx_->getVkDevice(), imageView = vkImageView_]() {
-          vf->vkDestroyImageView(device, imageView, nullptr);
-        }));
-
-    vkImageView_ = VK_NULL_HANDLE;
-    ctx_ = nullptr;
+  if (!valid()) {
+    return;
   }
+
+  IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
+
+  ctx_->deferredTask(std::packaged_task<void()>(
+      [vf = &ctx_->vf_, device = ctx_->getVkDevice(), imageView = vkImageView_]() {
+        vf->vkDestroyImageView(device, imageView, nullptr);
+      }));
+
+  vkImageView_ = VK_NULL_HANDLE;
+  ctx_ = nullptr;
 }
 
 } // namespace igl::vulkan

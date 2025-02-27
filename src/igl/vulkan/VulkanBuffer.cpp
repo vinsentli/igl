@@ -113,8 +113,7 @@ VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
 VulkanBuffer::~VulkanBuffer() {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
 
-//    --s_buffer_count;
-//    IGL_LOG_ERROR("[VulkanBuffer][LeakDetect]delete VulkanBuffer, Remain count:%d", s_buffer_count.load());
+  IGL_ENSURE_VULKAN_CONTEXT_THREAD(&ctx_);
 
   if (IGL_VULKAN_USE_VMA) {
     if (mappedPtr_) {

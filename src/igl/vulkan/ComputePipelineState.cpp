@@ -77,6 +77,7 @@ VkPipeline ComputePipelineState::getVkPipeline() const {
   const VkDescriptorSetLayout DSLs[] = {
       dslCombinedImageSamplers_->getVkDescriptorSetLayout(),
       dslBuffers_->getVkDescriptorSetLayout(),
+      dslStorageImages_->getVkDescriptorSetLayout(),
       ctx.getBindlessVkDescriptorSetLayout(),
   };
 
@@ -98,7 +99,7 @@ VkPipeline ComputePipelineState::getVkPipeline() const {
 
   const auto& shaderModule = desc_.shaderStages->getComputeModule();
 
-  igl::vulkan::VulkanComputePipelineBuilder()
+  VulkanComputePipelineBuilder()
       .shaderStage(ivkGetPipelineShaderStageCreateInfo(
           VK_SHADER_STAGE_COMPUTE_BIT,
           igl::vulkan::ShaderModule::getVkShaderModule(shaderModule),

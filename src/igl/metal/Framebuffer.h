@@ -11,12 +11,7 @@
 
 @protocol MTLTexture;
 
-namespace igl {
-
-class ICommandQueue;
-class ITexture;
-
-namespace metal {
+namespace igl::metal {
 
 class Framebuffer : public IFramebuffer {
  public:
@@ -76,5 +71,4 @@ class Framebuffer : public IFramebuffer {
   FramebufferDesc value_;
 };
 
-} // namespace metal
-} // namespace igl
+} // namespace igl::metal

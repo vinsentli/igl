@@ -112,7 +112,7 @@ VkResult ivkCreateInstance(const struct VulkanFunctionTable* vt,
                            const char** extensions,
                            VkInstance* outInstance) {
   // Validation Features not available on most Android devices
-#if !IGL_PLATFORM_ANDROID && !IGL_PLATFORM_MACOS
+#if !IGL_PLATFORM_ANDROID && !IGL_PLATFORM_MACOSX
   VkValidationFeatureEnableEXT validationFeaturesEnabled[2];
   int validationFeaturesCount = 0;
   if (enableGPUAssistedValidation) {
@@ -144,17 +144,17 @@ VkResult ivkCreateInstance(const struct VulkanFunctionTable* vt,
 
   const VkInstanceCreateInfo ci = {
       .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-#if !IGL_PLATFORM_ANDROID && !IGL_PLATFORM_MACOS
+#if !IGL_PLATFORM_ANDROID && !IGL_PLATFORM_MACOSX
       .pNext = enableValidation ? &features : NULL,
 #endif
       .pApplicationInfo = &appInfo,
-#if !IGL_PLATFORM_MACOS
+#if !IGL_PLATFORM_MACOSX
       .enabledLayerCount = enableValidation ? IGL_ARRAY_NUM_ELEMENTS(kDefaultValidationLayers) : 0,
       .ppEnabledLayerNames = enableValidation ? kDefaultValidationLayers : NULL,
 #endif
       .enabledExtensionCount = (uint32_t)numExtensions,
       .ppEnabledExtensionNames = extensions,
-#if IGL_PLATFORM_MACOS || IGL_PLATFORM_MACCATALYST
+#if IGL_PLATFORM_MACOSX || IGL_PLATFORM_MACCATALYST
       .flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
 #endif
   };
@@ -448,7 +448,7 @@ VkResult ivkCreateSurface(const struct VulkanFunctionTable* vt,
       .hinstance = GetModuleHandle(NULL),
       .hwnd = (HWND)window,
   };
-  return vkCreateWin32SurfaceKHR(instance, &ci, NULL, outSurface);
+  return vt->vkCreateWin32SurfaceKHR(instance, &ci, NULL, outSurface);
 #elif defined(VK_USE_PLATFORM_ANDROID_KHR)
   const VkAndroidSurfaceCreateInfoKHR ci = {
       .sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR,
@@ -1210,6 +1210,19 @@ void ivkBufferBarrier(const struct VulkanFunctionTable* vt,
       .size = VK_WHOLE_SIZE,
   };
 
+  if (srcStageMask & VK_PIPELINE_STAGE_ALL_COMMANDS_BIT) {
+    barrier.srcAccessMask |= VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+  }
+  if (srcStageMask & VK_PIPELINE_STAGE_TRANSFER_BIT) {
+    barrier.srcAccessMask |= VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+  }
+
+  if (dstStageMask & VK_PIPELINE_STAGE_TRANSFER_BIT) {
+    barrier.dstAccessMask |= VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+  }
+  if (dstStageMask & VK_PIPELINE_STAGE_ALL_COMMANDS_BIT) {
+    barrier.dstAccessMask |= VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+  }
   if (dstStageMask & VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT) {
     barrier.dstAccessMask |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
   }

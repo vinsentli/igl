@@ -11,7 +11,7 @@
 // @fb-only
 // @fb-only
 #include <shell/shared/fileLoader/android/FileLoaderAndroid.h>
-#include <shell/shared/imageLoader/android/ImageLoaderAndroid.h>
+#include <shell/shared/imageLoader/ImageLoader.h>
 #include <shell/shared/imageWriter/ImageWriter.h>
 #include <shell/shared/imageWriter/android/ImageWriterAndroid.h>
 
@@ -64,19 +64,15 @@ namespace {
 
 namespace igl::shell {
 
-PlatformAndroid::PlatformAndroid(std::shared_ptr<igl::IDevice> device, bool useFakeLoader) :
+PlatformAndroid::PlatformAndroid(std::shared_ptr<IDevice> device, bool useFakeLoader) :
   device_(std::move(device)) {
   // @fb-only
-  fileLoader_ = std::make_unique<igl::shell::FileLoaderAndroid>();
+  fileLoader_ = std::make_unique<FileLoaderAndroid>();
   // @fb-only
       // @fb-only
-  if (useFakeLoader) {
-    imageLoader_ = std::make_unique<igl::shell::ImageLoader>(*fileLoader_);
-  } else {
-    imageLoader_ = std::make_unique<igl::shell::ImageLoaderAndroid>(*fileLoader_);
-    // @fb-only
-        // @fb-only
-    imageWriter_ = std::make_unique<igl::shell::ImageWriterAndroid>();
+  imageLoader_ = std::make_unique<ImageLoader>(*fileLoader_);
+  if (!useFakeLoader) {
+    imageWriter_ = std::make_unique<ImageWriterAndroid>();
   }
 }
 
@@ -109,11 +105,11 @@ void PlatformAndroid::updatePreRotationMatrix() {
 #endif
 }
 
-igl::IDevice& PlatformAndroid::getDevice() noexcept {
+IDevice& PlatformAndroid::getDevice() noexcept {
   return *device_;
 }
 
-std::shared_ptr<igl::IDevice> PlatformAndroid::getDevicePtr() const noexcept {
+std::shared_ptr<IDevice> PlatformAndroid::getDevicePtr() const noexcept {
   return device_;
 }
 

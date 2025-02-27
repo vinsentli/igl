@@ -20,7 +20,7 @@ std::shared_ptr<Framebuffer> PlatformDevice::createFramebuffer(const Framebuffer
   auto resource = std::make_shared<CustomFramebuffer>(getContext());
   resource->initialize(desc, outResult);
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    resource->initResourceTracker(resourceTracker, desc.debugName);
+    resource->initResourceTracker(std::move(resourceTracker), desc.debugName);
   }
   return resource;
 }
@@ -28,11 +28,12 @@ std::shared_ptr<Framebuffer> PlatformDevice::createFramebuffer(const Framebuffer
 std::shared_ptr<Framebuffer> PlatformDevice::createCurrentFramebuffer() const {
   auto resource = std::make_shared<CurrentFramebuffer>(getContext());
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    resource->initResourceTracker(resourceTracker, "CurrentFramebuffer");
+    resource->initResourceTracker(std::move(resourceTracker), "CurrentFramebuffer");
   }
   return resource;
 }
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 std::unique_ptr<TextureBufferExternal> PlatformDevice::createTextureBufferExternal(
     GLuint textureID,
     GLenum target,
@@ -41,11 +42,12 @@ std::unique_ptr<TextureBufferExternal> PlatformDevice::createTextureBufferExtern
     GLsizei height,
     TextureFormat format,
     GLsizei numLayers) const {
+  // NOLINTEND(bugprone-easily-swappable-parameters)
   auto textureBuffer = std::make_unique<TextureBufferExternal>(getContext(), format, usage);
   textureBuffer->setTextureBufferProperties(textureID, target);
   textureBuffer->setTextureProperties(width, height, numLayers);
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    textureBuffer->initResourceTracker(resourceTracker, "TextureBufferExternal");
+    textureBuffer->initResourceTracker(std::move(resourceTracker), "TextureBufferExternal");
   }
   return textureBuffer;
 }

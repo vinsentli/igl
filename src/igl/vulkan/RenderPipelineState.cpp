@@ -294,12 +294,12 @@ RenderPipelineState::RenderPipelineState(const igl::vulkan::Device& device,
 
   // Iterate and cache vertex input bindings and attributes
   const igl::vulkan::VertexInputState* vstate =
-      static_cast<igl::vulkan::VertexInputState*>(desc_.vertexInputState.get());
+      static_cast<VertexInputState*>(desc_.vertexInputState.get());
 
   vertexInputStateCreateInfo_ = ivkGetPipelineVertexInputStateCreateInfo_Empty();
 
   if (vstate) {
-    std::array<bool, IGL_VERTEX_BUFFER_MAX> bufferAlreadyBound{};
+    std::array<bool, IGL_BUFFER_BINDINGS_MAX> bufferAlreadyBound{};
     vkBindings_.reserve(vstate->desc_.numInputBindings);
 
     for (size_t i = 0; i != vstate->desc_.numAttributes; i++) {
@@ -391,14 +391,15 @@ VkPipeline RenderPipelineState::getVkPipeline(
 
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
-  // @fb-only
-  const VkDescriptorSetLayout DSLs[] = {
-      dslCombinedImageSamplers_->getVkDescriptorSetLayout(),
-      dslBuffers_->getVkDescriptorSetLayout(),
-      ctx.getBindlessVkDescriptorSetLayout(),
-  };
-
   if (!pipelineLayout_) {
+    // @fb-only
+    const VkDescriptorSetLayout DSLs[] = {
+        dslCombinedImageSamplers_->getVkDescriptorSetLayout(),
+        dslBuffers_->getVkDescriptorSetLayout(),
+        dslStorageImages_->getVkDescriptorSetLayout(),
+        ctx.getBindlessVkDescriptorSetLayout(),
+    };
+
     const VkPipelineLayoutCreateInfo ci = ivkGetPipelineLayoutCreateInfo(
         static_cast<uint32_t>(ctx.config_.enableDescriptorIndexing
                                   ? IGL_ARRAY_NUM_ELEMENTS(DSLs)
@@ -533,7 +534,7 @@ int RenderPipelineState::getIndexByName(const std::string& name, ShaderStage sta
   return 0;
 }
 
-std::shared_ptr<igl::IRenderPipelineReflection> RenderPipelineState::renderPipelineReflection() {
+std::shared_ptr<IRenderPipelineReflection> RenderPipelineState::renderPipelineReflection() {
   return reflection_;
 }
 

@@ -23,12 +23,9 @@
 #include <IGLU/managedUniformBuffer/ManagedUniformBuffer.h>
 #include <array>
 #include <cstring>
-#include <glm/glm.hpp>
 #include <glm/gtc/color_space.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/packing.hpp>
 #include <gtest/gtest.h>
-#include <igl/IGL.h>
 #include <igl/Macros.h>
 #include <igl/NameHandle.h>
 #include <string>
@@ -450,13 +447,13 @@ TEST_F(TextureHalfFloatTest, Passthrough_SampleRGBA16) {
 }
 
 TEST_F(TextureHalfFloatTest, Passthrough_SampleRGB16) {
-#if IGL_PLATFORM_WIN && !IGL_ANGLE
+#if IGL_PLATFORM_WINDOWS && !IGL_ANGLE
   GTEST_SKIP() << "Skipping due to known issue on Windows without angle";
 #endif
 
   if (iglDev_->getBackendType() == BackendType::Vulkan ||
       iglDev_->getBackendType() == BackendType::Metal ||
-#if IGL_PLATFORM_MACOS
+#if IGL_PLATFORM_MACOSX
       iglDev_->getBackendType() == BackendType::OpenGL ||
 #endif
       kUsesOpenGLES) {
@@ -466,7 +463,7 @@ TEST_F(TextureHalfFloatTest, Passthrough_SampleRGB16) {
 }
 
 TEST_F(TextureHalfFloatTest, Passthrough_SampleRG16) {
-#if IGL_PLATFORM_MACOS
+#if IGL_PLATFORM_MACOSX
   if (iglDev_->getBackendType() == BackendType::OpenGL) {
     GTEST_SKIP() << "Skip due to lack of support for RG on mac OpenGL";
   }
@@ -475,7 +472,7 @@ TEST_F(TextureHalfFloatTest, Passthrough_SampleRG16) {
 }
 
 TEST_F(TextureHalfFloatTest, Passthrough_SampleR16) {
-#if IGL_PLATFORM_MACOS
+#if IGL_PLATFORM_MACOSX
   if (iglDev_->getBackendType() == BackendType::OpenGL) {
     GTEST_SKIP() << "Skip due to lack of support for RG on mac OpenGL";
   }

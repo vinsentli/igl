@@ -27,7 +27,7 @@ ResourcesBinder::ResourcesBinder(const CommandBuffer* commandBuffer,
                                   : VulkanImmediateCommands::SubmitHandle{}) {}
 
 void ResourcesBinder::bindBuffer(uint32_t index,
-                                 igl::vulkan::Buffer* buffer,
+                                 Buffer* buffer,
                                  size_t bufferOffset,
                                  size_t bufferSize) {
   IGL_PROFILER_FUNCTION();
@@ -67,7 +67,7 @@ void ResourcesBinder::bindBuffer(uint32_t index,
   }
 }
 
-void ResourcesBinder::bindSamplerState(uint32_t index, igl::vulkan::SamplerState* samplerState) {
+void ResourcesBinder::bindSamplerState(uint32_t index, SamplerState* samplerState) {
   IGL_PROFILER_FUNCTION();
 
   if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
@@ -75,8 +75,7 @@ void ResourcesBinder::bindSamplerState(uint32_t index, igl::vulkan::SamplerState
     return;
   }
 
-  igl::vulkan::VulkanSampler* newSampler = samplerState ? ctx_.samplers_.get(samplerState->sampler_)
-                                                        : nullptr;
+  VulkanSampler* newSampler = samplerState ? ctx_.samplers_.get(samplerState->sampler_) : nullptr;
 
   VkSampler sampler = newSampler ? newSampler->vkSampler : VK_NULL_HANDLE;
 
@@ -86,7 +85,7 @@ void ResourcesBinder::bindSamplerState(uint32_t index, igl::vulkan::SamplerState
   }
 }
 
-void ResourcesBinder::bindTexture(uint32_t index, igl::vulkan::Texture* tex) {
+void ResourcesBinder::bindTexture(uint32_t index, Texture* tex) {
   IGL_PROFILER_FUNCTION();
 
   if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
@@ -100,21 +99,15 @@ void ResourcesBinder::bindTexture(uint32_t index, igl::vulkan::Texture* tex) {
     const bool isStorage = tex ? (tex->getUsage() & TextureDesc::TextureUsageBits::Storage) > 0
                                : false;
 
-    if (isGraphics()) {
-      if (!IGL_DEBUG_VERIFY(isSampled || isStorage)) {
-        IGL_DEBUG_ABORT(
-            "Did you forget to specify TextureUsageBits::Sampled or "
-            "TextureUsageBits::Storage on your texture? `Sampled` is used for sampling; "
-            "`Storage` is used for load/store operations");
-      }
-    } else {
-      if (!IGL_DEBUG_VERIFY(isStorage)) {
-        IGL_DEBUG_ABORT("Did you forget to specify TextureUsageBits::Storage on your texture?");
-      }
+    if (!IGL_DEBUG_VERIFY(isSampled || isStorage)) {
+      IGL_DEBUG_ABORT(
+          "Did you forget to specify TextureUsageBits::Sampled or "
+          "TextureUsageBits::Storage on your texture? `Sampled` is used for sampling; "
+          "`Storage` is used for load/store operations");
     }
   }
 
-  igl::vulkan::VulkanTexture* newTexture = tex ? &tex->getVulkanTexture() : nullptr;
+  VulkanTexture* newTexture = tex ? &tex->getVulkanTexture() : nullptr;
 
 #if IGL_DEBUG
   if (newTexture) {
@@ -126,9 +119,10 @@ void ResourcesBinder::bindTexture(uint32_t index, igl::vulkan::Texture* tex) {
       // that was not rendered to by IGL. If that's the case, then make sure
       // the underlying image is transitioned to
       // VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-      // IGL_DEBUG_ASSERT(img.imageLayout_ == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+      IGL_DEBUG_ASSERT(img.imageLayout_ == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     } else {
-      IGL_DEBUG_ASSERT(img.imageLayout_ == VK_IMAGE_LAYOUT_GENERAL);
+      IGL_DEBUG_ASSERT(img.imageLayout_ == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL ||
+                       img.imageLayout_ == VK_IMAGE_LAYOUT_GENERAL);
     }
   }
 #endif // IGL_DEBUG
@@ -145,6 +139,52 @@ void ResourcesBinder::bindTexture(uint32_t index, igl::vulkan::Texture* tex) {
   if (bindingsTextures_.textures[index] != imageView) {
     bindingsTextures_.textures[index] = imageView;
     isDirtyFlags_ |= DirtyFlagBits_Textures;
+  }
+}
+
+void ResourcesBinder::bindStorageImage(uint32_t index, Texture* tex) {
+  IGL_PROFILER_FUNCTION();
+
+  if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
+    IGL_DEBUG_ABORT("Invalid texture index");
+    return;
+  }
+
+  const bool isStorage = tex ? (tex->getUsage() & TextureDesc::TextureUsageBits::Storage) > 0
+                             : false;
+
+  if (tex) {
+    if (!IGL_DEBUG_VERIFY(isStorage)) {
+      IGL_DEBUG_ABORT("Did you forget to specify TextureUsageBits::Storage on your texture?");
+    }
+  }
+
+  VulkanTexture* newTexture = tex ? &tex->getVulkanTexture() : nullptr;
+
+#if IGL_DEBUG
+  if (newTexture) {
+    const igl::vulkan::VulkanImage& img = newTexture->image_;
+    IGL_DEBUG_ASSERT(img.samples_ == VK_SAMPLE_COUNT_1_BIT,
+                     "Multisampled images cannot be sampled in shaders");
+    // If you trip this assert, then you are likely using an IGL texture
+    // that was not rendered to by IGL. If that's the case, then make sure
+    // the underlying image is transitioned to
+    // VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    IGL_DEBUG_ASSERT(img.imageLayout_ == VK_IMAGE_LAYOUT_GENERAL);
+  }
+#endif // IGL_DEBUG
+
+  // multisampled images cannot be directly accessed from shaders
+  const bool isTextureAvailable =
+      (newTexture != nullptr) &&
+      ((newTexture->image_.samples_ & VK_SAMPLE_COUNT_1_BIT) == VK_SAMPLE_COUNT_1_BIT);
+  const bool isStorageImage = isTextureAvailable && newTexture->image_.isStorageImage();
+
+  VkImageView imageView = isStorageImage ? newTexture->imageView_.vkImageView_ : VK_NULL_HANDLE;
+
+  if (bindingsStorageImages_.images[index] != imageView) {
+    bindingsStorageImages_.images[index] = imageView;
+    isDirtyFlags_ |= DirtyFlagBits_StorageImages;
   }
 }
 
@@ -170,6 +210,15 @@ void ResourcesBinder::updateBindings(VkPipelineLayout layout, const vulkan::Pipe
                                bindingsBuffers_,
                                *state.dslBuffers_,
                                state.info_);
+  }
+  if (isDirtyFlags_ & DirtyFlagBits_StorageImages) {
+    ctx_.updateBindingsStorageImages(cmdBuffer_,
+                                     layout,
+                                     bindPoint_,
+                                     nextSubmitHandle_,
+                                     bindingsStorageImages_,
+                                     *state.dslStorageImages_,
+                                     state.info_);
   }
 
   isDirtyFlags_ = 0;

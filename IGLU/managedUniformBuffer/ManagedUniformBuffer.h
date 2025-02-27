@@ -34,11 +34,15 @@ class ManagedUniformBuffer {
   void bind(const igl::IDevice& device,
             const igl::IRenderPipelineState& pipelineState,
             igl::IRenderCommandEncoder& encoder);
-  void bind(const igl::IDevice& device, igl::IComputeCommandEncoder& encoder);
+  void bind(const igl::IDevice& device,
+            const igl::IComputePipelineState& pipelineState,
+            igl::IComputeCommandEncoder& encoder);
 
   void* getData();
 
-  void buildUnifromLUT();
+  void buildUniformLUT();
+
+  int getIndex(const char* name) const;
 
  private:
   size_t getUniformDataSizeInternal(igl::UniformDesc& uniform);

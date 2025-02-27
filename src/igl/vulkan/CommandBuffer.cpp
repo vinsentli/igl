@@ -70,7 +70,7 @@ std::unique_ptr<IRenderCommandEncoder> CommandBuffer::createRenderCommandEncoder
   if (encoder && ctx_.enhancedShaderDebuggingStore_) {
     encoder->binder().bindBuffer(
         EnhancedShaderDebuggingStore::kBufferIndex,
-        static_cast<igl::vulkan::Buffer*>(ctx_.enhancedShaderDebuggingStore_->vertexBuffer().get()),
+        static_cast<Buffer*>(ctx_.enhancedShaderDebuggingStore_->vertexBuffer().get()),
         0,
         0);
   }
@@ -134,6 +134,52 @@ void CommandBuffer::popDebugGroupLabel() const {
   ivkCmdEndDebugUtilsLabel(&ctx_.vf_, wrapper_.cmdBuf_);
 }
 
+void CommandBuffer::copyBuffer(IBuffer& src,
+                               IBuffer& dst,
+                               uint64_t srcOffset,
+                               uint64_t dstOffset,
+                               uint64_t size) {
+  IGL_PROFILER_FUNCTION();
+
+  auto& bufSrc = static_cast<Buffer&>(src);
+  auto& bufDst = static_cast<Buffer&>(dst);
+
+  ivkBufferBarrier(&ctx_.vf_,
+                   wrapper_.cmdBuf_,
+                   bufSrc.getVkBuffer(),
+                   bufSrc.getBufferUsageFlags(),
+                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                   VK_PIPELINE_STAGE_TRANSFER_BIT);
+  ivkBufferBarrier(&ctx_.vf_,
+                   wrapper_.cmdBuf_,
+                   bufDst.getVkBuffer(),
+                   bufDst.getBufferUsageFlags(),
+                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                   VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+  const VkBufferCopy region = {
+      .srcOffset = srcOffset,
+      .dstOffset = dstOffset,
+      .size = size,
+  };
+
+  ctx_.vf_.vkCmdCopyBuffer(
+      wrapper_.cmdBuf_, bufSrc.getVkBuffer(), bufDst.getVkBuffer(), 1, &region);
+
+  ivkBufferBarrier(&ctx_.vf_,
+                   wrapper_.cmdBuf_,
+                   bufSrc.getVkBuffer(),
+                   bufSrc.getBufferUsageFlags(),
+                   VK_PIPELINE_STAGE_TRANSFER_BIT,
+                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+  ivkBufferBarrier(&ctx_.vf_,
+                   wrapper_.cmdBuf_,
+                   bufDst.getVkBuffer(),
+                   bufDst.getBufferUsageFlags(),
+                   VK_PIPELINE_STAGE_TRANSFER_BIT,
+                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+}
+
 void CommandBuffer::waitUntilCompleted() {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_WAIT);
 
@@ -144,7 +190,7 @@ void CommandBuffer::waitUntilCompleted() {
 
 void CommandBuffer::waitUntilScheduled() {}
 
-const std::shared_ptr<igl::IFramebuffer>& CommandBuffer::getFramebuffer() const {
+const std::shared_ptr<IFramebuffer>& CommandBuffer::getFramebuffer() const {
   return framebuffer_;
 }
 

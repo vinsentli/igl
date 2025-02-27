@@ -21,22 +21,18 @@
 #include <glm/fwd.hpp>
 #include <igl/NameHandle.h>
 #include <igl/ShaderCreator.h>
-#include <igl/opengl/Device.h>
 #include <igl/opengl/GLIncludes.h>
 #include <memory>
 #include <random>
 #include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/AppParams.h>
-#include <shell/shared/renderSession/QuadLayerParams.h>
 #include <shell/shared/renderSession/ShellParams.h>
 
-#if defined(_MSC_VER) || IGL_PLATFORM_LINUX
-static uint32_t arc4random(void) {
+static uint32_t arc4random_() {
   return static_cast<uint32_t>(rand()) * (0xffffffff / RAND_MAX);
 }
-#endif // _MSC_VER || IGL_PLATFORM_LINUX
 
-#if ANDROID
+#if IGL_PLATFORM_ANDROID
 
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -137,17 +133,17 @@ std::string getLightingCalc() {
              sizeof(tmp),
              "const vec3 lightColor%d = vec3(%f, %f, %f);\n",
              i,
-             i % 3 == 0 ? 1.0 : static_cast<float>(arc4random() % 32) / 32.f,
-             i % 3 == 1 ? 1.0 : static_cast<float>(arc4random() % 32) / 32.f,
-             i % 3 == 2 ? 1.0 : static_cast<float>(arc4random() % 32) / 32.f);
+             i % 3 == 0 ? 1.0 : static_cast<float>(arc4random_() % 32) / 32.f,
+             i % 3 == 1 ? 1.0 : static_cast<float>(arc4random_() % 32) / 32.f,
+             i % 3 == 2 ? 1.0 : static_cast<float>(arc4random_() % 32) / 32.f);
     params += tmp;
     snprintf(tmp,
              sizeof(tmp),
              "const vec3 lightPos%d = vec3(%f, %f, %f);\n",
              i,
-             -1.f + static_cast<float>(arc4random() % 32) / 16.f,
-             -1.f + static_cast<float>(arc4random() % 32) / 16.f,
-             -1.f + static_cast<float>(arc4random() % 32) / 16.f);
+             -1.f + static_cast<float>(arc4random_() % 32) / 16.f,
+             -1.f + static_cast<float>(arc4random_() % 32) / 16.f,
+             -1.f + static_cast<float>(arc4random_() % 32) / 16.f);
     params += tmp;
     snprintf(
         tmp,
@@ -217,7 +213,7 @@ layout(push_constant) uniform PushConstants {
 })";
 }
 
-std::unique_ptr<IShaderStages> getShaderStagesForBackend(igl::IDevice& device) noexcept {
+std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) noexcept {
   const bool bMultiView = device.hasFeature(DeviceFeatures::Multiview);
   switch (device.getBackendType()) {
   // @fb-only
@@ -379,7 +375,7 @@ float doReadWrite(std::vector<std::vector<std::vector<float>>>& memBlock,
     const int block = randBlocks(gen);
     const int row = randRows(gen);
     const int col = randCols(gen);
-    memBlock[block].at(row)[col] = arc4random();
+    memBlock[block].at(row)[col] = arc4random_();
   }
 
   for (int i = 0; i < kMemoryReads; i++) {
@@ -550,7 +546,7 @@ void GPUStressSession::createCubes() {
 
   // Vertex buffer, Index buffer and Vertex Input
   for (int i = 1; i < kCubeCount; i++) {
-    float x, y, z;
+    float x = NAN, y = NAN, z = NAN;
     getOffset(i, x, y, z);
     glm::vec4 color(1.0, 1.0, 1.0, 1.f);
     color[0] = (dis(gen));
@@ -649,7 +645,7 @@ void GPUStressSession::initialize() noexcept {
   shaderStages_ = getShaderStagesForBackend(device);
 
   // Command queue: backed by different types of GPU HW queues
-  const CommandQueueDesc desc{igl::CommandQueueType::Graphics};
+  const CommandQueueDesc desc{};
   commandQueue_ = device.createCommandQueue(desc, nullptr);
 
   tex0_->generateMipmap(*commandQueue_);
@@ -713,11 +709,11 @@ void GPUStressSession::setModelViewMatrix(float angle,
 }
 
 void GPUStressSession::initState(const igl::SurfaceTextures& surfaceTextures) {
-  igl::Result ret;
+  Result ret;
 
   // TODO: fix framebuffers so you can update the resolve texture
   if (framebuffer_ == nullptr) {
-    igl::FramebufferDesc framebufferDesc;
+    FramebufferDesc framebufferDesc;
     framebufferDesc.colorAttachments[0].texture = surfaceTextures.color;
     framebufferDesc.depthAttachment.texture = surfaceTextures.depth;
     framebufferDesc.mode = surfaceTextures.color->getNumLayers() > 1 ? FramebufferMode::Stereo
@@ -800,7 +796,7 @@ void GPUStressSession::initState(const igl::SurfaceTextures& surfaceTextures) {
 }
 
 void GPUStressSession::drawCubes(const igl::SurfaceTextures& surfaceTextures,
-                                 std::shared_ptr<igl::IRenderCommandEncoder> commands) {
+                                 std::shared_ptr<IRenderCommandEncoder> commands) {
   static float angle = 0.0f;
   static int frameCount = 0;
   frameCount++;
@@ -865,20 +861,20 @@ void GPUStressSession::drawCubes(const igl::SurfaceTextures& surfaceTextures,
           iglu::ManagedUniformBufferInfo info;
           info.index = 1;
           info.length = sizeof(VertexFormat);
-          info.uniforms = std::vector<igl::UniformDesc>{
-              igl::UniformDesc{"projectionMatrix",
-                               -1,
-                               igl::UniformType::Mat4x4,
-                               1,
-                               offsetof(VertexFormat, projectionMatrix),
-                               0},
-              igl::UniformDesc{"modelViewMatrix",
-                               -1,
-                               igl::UniformType::Mat4x4,
-                               1,
-                               offsetof(VertexFormat, modelViewMatrix),
-                               0},
-              igl::UniformDesc{
+          info.uniforms = std::vector<UniformDesc>{
+              UniformDesc{"projectionMatrix",
+                          -1,
+                          igl::UniformType::Mat4x4,
+                          1,
+                          offsetof(VertexFormat, projectionMatrix),
+                          0},
+              UniformDesc{"modelViewMatrix",
+                          -1,
+                          igl::UniformType::Mat4x4,
+                          1,
+                          offsetof(VertexFormat, modelViewMatrix),
+                          0},
+              UniformDesc{
                   "scaleZ", -1, igl::UniformType::Float, 1, offsetof(VertexFormat, scaleZ), 0}};
 
           vertUniformBuffer = std::make_shared<iglu::ManagedUniformBuffer>(device, info);
@@ -893,7 +889,7 @@ void GPUStressSession::drawCubes(const igl::SurfaceTextures& surfaceTextures,
   }
 }
 
-void GPUStressSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
+void GPUStressSession::update(SurfaceTextures surfaceTextures) noexcept {
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
     return;
@@ -914,17 +910,17 @@ void GPUStressSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
 
   // Command buffers (1-N per thread): create, submit and forget
   auto buffer = commandQueue_->createCommandBuffer(CommandBufferDesc{}, nullptr);
-  const std::shared_ptr<igl::IRenderCommandEncoder> commands =
+  const std::shared_ptr<IRenderCommandEncoder> commands =
       buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
 
-  igl::FramebufferDesc framebufferDesc;
+  FramebufferDesc framebufferDesc;
   framebufferDesc.colorAttachments[0].texture = framebuffer_->getColorAttachment(0);
   framebufferDesc.depthAttachment.texture = framebuffer_->getDepthAttachment();
 
   // setup UI
   const ImGuiViewport* v = ImGui::GetMainViewport();
   imguiSession_->beginFrame(framebufferDesc, getPlatform().getDisplayContext().pixelsPerPoint);
-  bool open;
+  bool open = false;
   ImGui::SetNextWindowPos(
       {
           v->WorkPos.x + v->WorkSize.x - 60.0f,
@@ -1105,7 +1101,7 @@ std::string GPUStressSession::getCurrentUsageString() const {
   return output;
 }
 void GPUStressSession::setNumLayers(size_t numLayers) {
-#if !defined(IGL_PLATFORM_WIN)
+#if !defined(IGL_PLATFORM_WINDOWS)
   igl::shell::QuadLayerParams params;
   params.layerInfo.reserve(numLayers);
   for (int i = 0; i < numLayers; i++) {

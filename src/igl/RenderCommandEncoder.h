@@ -15,12 +15,9 @@
 
 namespace igl {
 
-class IBuffer;
 class IDepthStencilState;
 class IRenderPipelineState;
 class ISamplerState;
-class ITexture;
-struct RenderPassDesc;
 
 namespace BindTarget {
 const uint8_t kVertex = 0x0001;
@@ -70,6 +67,8 @@ class IRenderCommandEncoder : public ICommandEncoder {
   // by the "texture" attribute specified in the shader.
   // For OpenGL, 'index' is the texture unit
   virtual void bindTexture(size_t index, uint8_t target, ITexture* texture) = 0;
+  // This `bindTexture()` overload assumes `BindTarget::kFragment`
+  virtual void bindTexture(size_t index, ITexture* texture) = 0;
 
   /// Binds an individual uniform. Exclusively for use when uniform blocks are not supported.
   virtual void bindUniform(const UniformDesc& uniformDesc, const void* data) = 0;

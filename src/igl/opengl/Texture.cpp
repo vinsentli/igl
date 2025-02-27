@@ -62,6 +62,10 @@ Result Texture::create(const TextureDesc& desc, bool hasStorageAlready) {
     return Result{Result::Code::Unsupported,
                   "Array textures are only supported when type is TwoDArray."};
   }
+  if (desc.exportability != TextureDesc::TextureExportability::NoExport) {
+    return Result{Result::Code::Unimplemented,
+                  "Exportable textures are not supported on this platform."};
+  }
   if (IGL_DEBUG_VERIFY(!isCreated_)) {
     isCreated_ = true;
     IGL_DEBUG_ASSERT(desc.format != TextureFormat::Invalid && desc.format == getFormat());
@@ -100,7 +104,7 @@ Result Texture::create(const TextureDesc& desc, bool hasStorageAlready) {
 //
 // openGL only uses alignment instead of stride when reading/writing pixels so it will not support
 // padding that is not 8, 4, 2, or 1 byte aligned to the actual pixel data
-
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 GLint Texture::getAlignment(uint32_t stride, uint32_t mipLevel, uint32_t widthAtMipLevel) const {
   IGL_DEBUG_ASSERT(mipLevel < numMipLevels_);
 
@@ -584,6 +588,12 @@ bool Texture::toFormatDescGL(const IContext& ctx,
     if (texImage && !deviceFeatures.hasTextureFeature(TextureFeatures::ColorTexImage32f)) {
       internalFormat = GL_RED;
     }
+    return true;
+
+  case TextureFormat::R_UInt32:
+    internalFormat = GL_R32UI;
+    format = GL_RED_INTEGER;
+    type = GL_UNSIGNED_INT;
     return true;
 
   case TextureFormat::R_UInt16:

@@ -21,20 +21,20 @@ void SaveFrameBufferToPng(const char* absoluteFilename,
   const int bytesPerPixel = 4;
   const auto rangeDesc =
       TextureRangeDesc::new2D(0, 0, frameBuffersize.width, frameBuffersize.height);
-  igl::shell::ImageData imageData;
+  ImageData imageData;
   imageData.desc.format = drawableSurface->getFormat();
   imageData.desc.width = frameBuffersize.width;
   imageData.desc.height = frameBuffersize.height;
   auto buffer =
       std::make_unique<uint8_t[]>(frameBuffersize.width * frameBuffersize.height * bytesPerPixel);
 
-  const CommandQueueDesc desc{igl::CommandQueueType::Graphics};
+  const CommandQueueDesc desc{};
   auto commandQueue = platform.getDevice().createCommandQueue(desc, nullptr);
   framebuffer->copyBytesColorAttachment(*commandQueue, 0, buffer.get(), rangeDesc);
 
   const size_t numPixels = frameBuffersize.width * frameBuffersize.height * bytesPerPixel;
 
-#if IGL_PLATFORM_WIN
+#if IGL_PLATFORM_WINDOWS
   if (imageData.desc.format == TextureFormat::BGRA_UNorm8) {
     // Swap B and R channels, as image writer expects RGBA.
     // Note that this is only defined for the Windows platform, as in practice

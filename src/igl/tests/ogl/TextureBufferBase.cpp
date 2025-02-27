@@ -71,11 +71,13 @@ class TextureBufferBaseMock : public igl::opengl::TextureBufferBase {
     return num_samples;
   }
 
+  // NOLINTBEGIN(bugprone-easily-swappable-parameters)
   bool getFormatDetails(TextureFormat textureFormat,
                         igl::TextureDesc::TextureUsage usage,
                         GLint& internalFormat,
                         GLenum& format,
                         GLenum& type) const {
+    // NOLINTEND(bugprone-easily-swappable-parameters)
     FormatDescGL formatGL;
     const auto result = toFormatDescGL(textureFormat, usage, formatGL);
     internalFormat = formatGL.internalFormat;
@@ -118,11 +120,11 @@ TEST_F(TextureBufferBaseOGLTest, TextureBindAndUnbind) {
   textureBufferBase_ = std::make_unique<TextureBufferBaseMock>(*context_);
   textureBufferBase_->setUsage(TextureDesc::TextureUsageBits::Sampled);
 
-  GLuint textureID;
+  GLuint textureID = 0;
   context_->genTextures(1, &textureID);
   textureBufferBase_->setTextureBufferProperties(textureID, GL_TEXTURE_2D);
 
-  GLint value;
+  GLint value = 0;
   textureBufferBase_->bind();
   // Get binding and check it is non-zero
   context_->getIntegerv(GL_TEXTURE_BINDING_2D, &value);
@@ -148,10 +150,10 @@ TEST_F(TextureBufferBaseOGLTest, TextureAttach) {
   textureBufferBase_ = std::make_unique<TextureBufferBaseMock>(*context_);
   textureBufferBase_->setUsage(TextureDesc::TextureUsageBits::Sampled);
 
-  GLuint textureID;
+  GLuint textureID = 0;
   context_->genTextures(1, &textureID);
 
-  GLuint tmpFb;
+  GLuint tmpFb = 0;
   context_->genFramebuffers(1, &tmpFb);
   context_->bindFramebuffer(GL_FRAMEBUFFER, tmpFb);
 
@@ -201,9 +203,9 @@ TEST_F(TextureBufferBaseOGLTest, TextureAttach) {
   ASSERT_EQ(type, GL_TEXTURE);
 
   // Must initialize texture for multisample functionality to work
-  GLint internalFormat;
-  GLenum format;
-  GLenum textureType;
+  GLint internalFormat = 0;
+  GLenum format = 0;
+  GLenum textureType = 0;
   textureBufferBase_->setTextureBufferProperties(textureID, GL_TEXTURE_2D);
   ASSERT_TRUE(textureBufferBase_->getFormatDetails(TextureFormat::RGBA_UNorm8,
                                                    TextureDesc::TextureUsageBits::Sampled,

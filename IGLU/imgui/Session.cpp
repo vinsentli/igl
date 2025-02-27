@@ -62,7 +62,7 @@ static std::string getOpenGLVertexShaderSource(igl::ShaderVersion shaderVersion)
   std::string shader;
   if (shaderVersion.majorVersion > 1 || shaderVersion.minorVersion > 30 ||
       shaderVersion.family == igl::ShaderFamily::GlslEs) {
-#if IGL_PLATFORM_MACOS
+#if IGL_PLATFORM_MACOSX
     shader += "#version 100\n";
 #endif
     shader += "precision mediump float;";
@@ -105,7 +105,7 @@ static std::string getOpenGLFragmentShaderSource(igl::ShaderVersion shaderVersio
   std::string shader;
   if (shaderVersion.majorVersion > 1 || shaderVersion.minorVersion > 30 ||
       shaderVersion.family == igl::ShaderFamily::GlslEs) {
-#if IGL_PLATFORM_MACOS
+#if IGL_PLATFORM_MACOSX
     shader += "#version 100\n";
 #endif
     shader += "precision mediump float;";
@@ -439,6 +439,7 @@ void Session::initialize(igl::IDevice& device) {
     _renderer = std::make_unique<Renderer>(device);
     _inputDispatcher.addMouseListener(_inputListener);
     _inputDispatcher.addTouchListener(_inputListener);
+    _inputDispatcher.addKeyListener(_inputListener);
     _isInitialized = true;
   }
 }
@@ -448,6 +449,7 @@ Session::~Session() {
 
   _inputDispatcher.removeTouchListener(_inputListener);
   _inputDispatcher.removeMouseListener(_inputListener);
+  _inputDispatcher.removeKeyListener(_inputListener);
   _renderer = nullptr;
   _inputListener = nullptr;
   ImGui::DestroyContext();

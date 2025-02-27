@@ -20,20 +20,6 @@ struct VertexPosUv {
   iglu::simdtypes::float3 position;
   iglu::simdtypes::float2 uv;
 };
-VertexPosUv vertexData[] = {
-    {{-0.8f, 0.8f, 0.0}, {0.0, 0.0}},
-    {{0.8f, 0.8f, 0.0}, {1.0, 0.0}},
-    {{-0.8f, -0.8f, 0.0}, {0.0, 1.0}},
-    {{0.8f, -0.8f, 0.0}, {1.0, 1.0}},
-};
-uint16_t indexData[] = {
-    0,
-    1,
-    2,
-    1,
-    3,
-    2,
-};
 
 std::string getVersion() {
   return {"#version 100"};
@@ -141,7 +127,7 @@ std::string getVulkanFragmentShaderSource() {
 }
 // @fb-only
 
-std::unique_ptr<IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
+std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
     IGL_DEBUG_ASSERT_NOT_REACHED();
@@ -186,10 +172,24 @@ void TQSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
 
   // Vertex & Index buffer
+  const VertexPosUv vertexData[] = {
+      {{-0.8f, 0.8f, 0.0}, {0.0, 0.0}},
+      {{0.8f, 0.8f, 0.0}, {uvScale_, 0.0}},
+      {{-0.8f, -0.8f, 0.0}, {0.0, uvScale_}},
+      {{0.8f, -0.8f, 0.0}, {uvScale_, uvScale_}},
+  };
   const BufferDesc vbDesc =
       BufferDesc(BufferDesc::BufferTypeBits::Vertex, vertexData, sizeof(vertexData));
   vb0_ = device.createBuffer(vbDesc, nullptr);
   IGL_DEBUG_ASSERT(vb0_ != nullptr);
+  const uint16_t indexData[] = {
+      0,
+      1,
+      2,
+      1,
+      3,
+      2,
+  };
   const BufferDesc ibDesc =
       BufferDesc(BufferDesc::BufferTypeBits::Index, indexData, sizeof(indexData));
   ib0_ = device.createBuffer(ibDesc, nullptr);
@@ -218,7 +218,7 @@ void TQSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(shaderStages_ != nullptr);
 
   // Command queue
-  const CommandQueueDesc desc{igl::CommandQueueType::Graphics};
+  const CommandQueueDesc desc{};
   commandQueue_ = device.createCommandQueue(desc, nullptr);
   IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
 
@@ -242,10 +242,10 @@ void TQSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(fragmentParamBuffer_ != nullptr);
 }
 
-void TQSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
-  igl::Result ret;
+void TQSession::update(SurfaceTextures surfaceTextures) noexcept {
+  Result ret;
   if (framebuffer_ == nullptr) {
-    igl::FramebufferDesc framebufferDesc;
+    FramebufferDesc framebufferDesc;
     framebufferDesc.colorAttachments[0].texture = surfaceTextures.color;
     framebufferDesc.depthAttachment.texture = surfaceTextures.depth;
     if (surfaceTextures.depth && surfaceTextures.depth->getProperties().hasStencil()) {
@@ -306,7 +306,7 @@ void TQSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
   }
 
   // Submit commands
-  const std::shared_ptr<igl::IRenderCommandEncoder> commands =
+  const std::shared_ptr<IRenderCommandEncoder> commands =
       buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
   IGL_DEBUG_ASSERT(commands != nullptr);
   if (commands) {

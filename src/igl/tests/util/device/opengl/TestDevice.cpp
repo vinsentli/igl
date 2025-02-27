@@ -7,18 +7,17 @@
 
 #include <igl/tests/util/device/opengl/TestDevice.h>
 
-#include <igl/Macros.h>
 #include <igl/opengl/IContext.h>
 
 #if IGL_PLATFORM_IOS
 #include <igl/opengl/ios/HWDevice.h>
-#elif IGL_PLATFORM_MACOS
+#elif IGL_PLATFORM_MACOSX
 #include <igl/opengl/macos/HWDevice.h>
 #elif IGL_PLATFORM_ANDROID || IGL_PLATFORM_LINUX_USE_EGL
 #include <igl/opengl/egl/HWDevice.h>
 #elif IGL_PLATFORM_LINUX
 #include <igl/opengl/glx/HWDevice.h>
-#elif IGL_PLATFORM_WIN
+#elif IGL_PLATFORM_WINDOWS
 #if defined(FORCE_USE_ANGLE)
 #include <igl/opengl/egl/HWDevice.h>
 #else
@@ -63,19 +62,19 @@ igl::opengl::RenderingAPI getOpenGLRenderingAPI(const std::string& backendApi) {
 // Used by clients to get an IGL device. The backend is determined by
 // the IGL_BACKEND_TYPE compiler flag in the BUCK file
 //
-std::shared_ptr<::igl::IDevice> createTestDevice(const std::string& backendApi) {
-  std::shared_ptr<igl::IDevice> iglDev = nullptr;
+std::shared_ptr<IDevice> createTestDevice(const std::string& backendApi) {
+  std::shared_ptr<IDevice> iglDev = nullptr;
   auto renderingAPI = getOpenGLRenderingAPI(backendApi);
 
 #if IGL_PLATFORM_IOS
   iglDev = createDevice<::igl::opengl::ios::HWDevice>(renderingAPI);
-#elif IGL_PLATFORM_MACOS
+#elif IGL_PLATFORM_MACOSX
   iglDev = createDevice<::igl::opengl::macos::HWDevice>(renderingAPI);
 #elif IGL_PLATFORM_ANDROID || IGL_PLATFORM_LINUX_USE_EGL
   iglDev = createOffscreenDevice<::igl::opengl::egl::HWDevice>(renderingAPI);
 #elif IGL_PLATFORM_LINUX
   iglDev = createOffscreenDevice<::igl::opengl::glx::HWDevice>(renderingAPI);
-#elif IGL_PLATFORM_WIN
+#elif IGL_PLATFORM_WINDOWS
 #if defined(FORCE_USE_ANGLE)
   iglDev = createOffscreenDevice<::igl::opengl::egl::HWDevice>(renderingAPI);
 #else
@@ -85,7 +84,7 @@ std::shared_ptr<::igl::IDevice> createTestDevice(const std::string& backendApi) 
 
 #endif
 
-  return std::static_pointer_cast<igl::IDevice>(iglDev);
+  return std::static_pointer_cast<IDevice>(iglDev);
 }
 
 } // namespace igl::tests::util::device::opengl

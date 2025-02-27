@@ -8,16 +8,15 @@
 #include <igl/tests/util/device/vulkan/TestDevice.h>
 
 #include <igl/Common.h>
-#include <igl/Macros.h>
 
-#if IGL_PLATFORM_WIN || IGL_PLATFORM_ANDROID || IGL_PLATFORM_MACOS || IGL_PLATFORM_IOS || \
+#if IGL_PLATFORM_WINDOWS || IGL_PLATFORM_ANDROID || IGL_PLATFORM_MACOSX || IGL_PLATFORM_IOS || \
     IGL_PLATFORM_LINUX
 #include <igl/vulkan/HWDevice.h>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanFeatures.h>
 #endif
 
-#if IGL_PLATFORM_MACOS
+#if IGL_PLATFORM_MACOSX
 #include <igl/vulkan/moltenvk/MoltenVKHelpers.h>
 #endif
 
@@ -35,7 +34,7 @@ igl::vulkan::VulkanContextConfig getContextConfig(bool enableValidation) {
   config.enableValidation = enableValidation;
   config.enableGPUAssistedValidation = enableValidation;
 
-#if IGL_PLATFORM_MACOS
+#if IGL_PLATFORM_MACOSX
   config.terminateOnValidationError = false;
 #elif IGL_DEBUG
   config.terminateOnValidationError = enableValidation;
@@ -53,12 +52,12 @@ igl::vulkan::VulkanContextConfig getContextConfig(bool enableValidation) {
   return config;
 }
 
-std::shared_ptr<::igl::IDevice> createTestDevice(const igl::vulkan::VulkanContextConfig& config) {
-#if IGL_PLATFORM_MACOS
+std::shared_ptr<IDevice> createTestDevice(const igl::vulkan::VulkanContextConfig& config) {
+#if IGL_PLATFORM_MACOSX
   ::igl::vulkan::setupMoltenVKEnvironment();
 #endif
 
-  std::shared_ptr<igl::IDevice> iglDev = nullptr;
+  std::shared_ptr<IDevice> iglDev = nullptr;
   Result ret;
 
   auto ctx = igl::vulkan::HWDevice::createContext(config, nullptr);
@@ -91,7 +90,7 @@ std::shared_ptr<::igl::IDevice> createTestDevice(const igl::vulkan::VulkanContex
   return iglDev;
 }
 
-std::shared_ptr<::igl::IDevice> createTestDevice(bool enableValidation) {
+std::shared_ptr<IDevice> createTestDevice(bool enableValidation) {
   return createTestDevice(getContextConfig(enableValidation));
 }
 

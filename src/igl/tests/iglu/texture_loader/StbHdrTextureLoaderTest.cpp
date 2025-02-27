@@ -10,9 +10,6 @@
 #include <IGLU/texture_loader/stb_hdr/Header.h>
 #include <IGLU/texture_loader/stb_hdr/TextureLoaderFactory.h>
 #include <cstring>
-#include <igl/vulkan/util/TextureFormat.h>
-#include <numeric>
-#include <vector>
 
 namespace igl::tests::stb::hdr {
 

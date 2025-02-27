@@ -7,6 +7,7 @@
 
 #pragma once
 #include <cstdint>
+#include <igl/Common.h>
 
 namespace igl {
 /**
@@ -134,6 +135,7 @@ enum class TextureFormat : uint8_t {
   RGB10_A2_Uint_Rev,
   BGR10_A2_Unorm,
   R_F32,
+  R_UInt32,
   // 48 bpp
   RGB_F16,
 
@@ -209,4 +211,41 @@ enum class TextureFormat : uint8_t {
   YUV_NV12, // Semi-planar 8-bit YUV 4:2:0 NV12; 2 planes in a single image
   YUV_420p, // Tri-planar  8-bit YUV 4:2:0;      3 planes in a single image
 };
+
+inline TextureFormat sRGBToUNorm(TextureFormat format) {
+  if (format == TextureFormat::RGBA_SRGB) {
+    return TextureFormat::RGBA_UNorm8;
+  } else if (format == TextureFormat::BGRA_SRGB) {
+    return TextureFormat::BGRA_UNorm8;
+  }
+  IGL_UNREACHABLE_RETURN(TextureFormat::RGBA_UNorm8)
+}
+
+inline TextureFormat UNormTosRGB(TextureFormat format) {
+  if (format == TextureFormat::RGBA_UNorm8) {
+    return TextureFormat::RGBA_SRGB;
+  } else if (format == TextureFormat::BGRA_UNorm8) {
+    return TextureFormat::BGRA_SRGB;
+  }
+  IGL_UNREACHABLE_RETURN(TextureFormat::RGBA_SRGB)
+}
+
+inline TextureFormat BgraToRgba(TextureFormat format) {
+  if (format == TextureFormat::BGRA_UNorm8) {
+    return TextureFormat::RGBA_UNorm8;
+  } else if (format == TextureFormat::BGRA_SRGB) {
+    return TextureFormat::RGBA_SRGB;
+  }
+  return format;
+}
+
+inline TextureFormat RgbaToBgra(TextureFormat format) {
+  if (format == TextureFormat::RGBA_UNorm8) {
+    return TextureFormat::BGRA_UNorm8;
+  } else if (format == TextureFormat::RGBA_SRGB) {
+    return TextureFormat::BGRA_SRGB;
+  }
+  return format;
+}
+
 } // namespace igl

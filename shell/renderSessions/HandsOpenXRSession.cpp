@@ -18,7 +18,6 @@
 #include <igl/NameHandle.h>
 #include <igl/ShaderCreator.h>
 #include <igl/opengl/Device.h>
-#include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/RenderCommandEncoder.h>
 #include <shell/renderSessions/HandsOpenXRSession.h>
 #include <shell/shared/renderSession/ShellParams.h>
@@ -89,7 +88,7 @@ std::string getVulkanVertexShaderSource(bool stereoRendering) {
 }
 
 [[nodiscard]] std::unique_ptr<IShaderStages> getShaderStagesForBackend(
-    igl::IDevice& device,
+    IDevice& device,
     const iglu::ShaderCross& shaderCross,
     bool stereoRendering) noexcept {
   switch (device.getBackendType()) {
@@ -110,7 +109,7 @@ std::string getVulkanVertexShaderSource(bool stereoRendering) {
         "",
         nullptr);
   case igl::BackendType::OpenGL: {
-    igl::Result res;
+    Result res;
     const auto vs = shaderCross.crossCompileFromVulkanSource(
         getVulkanVertexShaderSource(stereoRendering).c_str(), igl::ShaderStage::Vertex, &res);
     IGL_DEBUG_ASSERT(res.isOk(), res.message.c_str());
@@ -257,7 +256,7 @@ void HandsOpenXRSession::initialize() noexcept {
   shaderStages_ = getShaderStagesForBackend(device, shaderCross, stereoRendering);
 
   // Command queue: backed by different types of GPU HW queues
-  const CommandQueueDesc desc{igl::CommandQueueType::Graphics};
+  const CommandQueueDesc desc{};
   commandQueue_ = device.createCommandQueue(desc, nullptr);
 
   renderPass_.colorAttachments.resize(1);
@@ -272,7 +271,7 @@ void HandsOpenXRSession::initialize() noexcept {
   renderPass_.depthAttachment.clearDepth = 1.0;
 }
 
-void HandsOpenXRSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
+void HandsOpenXRSession::update(SurfaceTextures surfaceTextures) noexcept {
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
     return;
@@ -295,9 +294,9 @@ void HandsOpenXRSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
   IGL_DEBUG_ASSERT(!shellParams().viewParams.empty());
   const auto viewIndex = shellParams().viewParams[0].viewIndex;
 
-  igl::Result ret;
+  Result ret;
   if (framebuffer_[viewIndex] == nullptr) {
-    igl::FramebufferDesc framebufferDesc;
+    FramebufferDesc framebufferDesc;
     framebufferDesc.colorAttachments[0].texture = surfaceTextures.color;
     framebufferDesc.depthAttachment.texture = surfaceTextures.depth;
 
@@ -335,9 +334,9 @@ void HandsOpenXRSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
 
   // Command buffers (1-N per thread): create, submit and forget
   auto buffer = commandQueue_->createCommandBuffer(CommandBufferDesc{}, nullptr);
-  const std::shared_ptr<igl::IRenderCommandEncoder> commands =
+  const std::shared_ptr<IRenderCommandEncoder> commands =
       buffer->createRenderCommandEncoder(renderPass_, framebuffer_[viewIndex]);
-  commands->pushDebugGroupLabel("HandsOpenXRSession Commands", igl::Color(0.0f, 1.0f, 0.0f));
+  commands->pushDebugGroupLabel("HandsOpenXRSession Commands", Color(0.0f, 1.0f, 0.0f));
 
   commands->bindVertexBuffer(0, *vb0_);
 
@@ -347,29 +346,28 @@ void HandsOpenXRSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
   iglu::ManagedUniformBufferInfo info;
   info.index = 1;
   info.length = sizeof(UniformBlock);
-  info.uniforms =
-      std::vector<igl::UniformDesc>{igl::UniformDesc{
-                                        "jointMatrices",
-                                        -1,
-                                        igl::UniformType::Mat4x4,
-                                        kMaxJoints,
-                                        offsetof(UniformBlock, jointMatrices),
-                                        sizeof(glm::mat4),
-                                    },
-                                    igl::UniformDesc{"viewProjectionMatrix",
-                                                     -1,
-                                                     igl::UniformType::Mat4x4,
-                                                     2,
-                                                     offsetof(UniformBlock, viewProjectionMatrix),
-                                                     sizeof(glm::mat4)},
-                                    igl::UniformDesc{
-                                        "viewId",
-                                        -1,
-                                        igl::UniformType::Int,
-                                        1,
-                                        offsetof(UniformBlock, viewId),
-                                        0,
-                                    }};
+  info.uniforms = std::vector<UniformDesc>{UniformDesc{
+                                               "jointMatrices",
+                                               -1,
+                                               igl::UniformType::Mat4x4,
+                                               kMaxJoints,
+                                               offsetof(UniformBlock, jointMatrices),
+                                               sizeof(glm::mat4),
+                                           },
+                                           UniformDesc{"viewProjectionMatrix",
+                                                       -1,
+                                                       igl::UniformType::Mat4x4,
+                                                       2,
+                                                       offsetof(UniformBlock, viewProjectionMatrix),
+                                                       sizeof(glm::mat4)},
+                                           UniformDesc{
+                                               "viewId",
+                                               -1,
+                                               igl::UniformType::Int,
+                                               1,
+                                               offsetof(UniformBlock, viewId),
+                                               0,
+                                           }};
 
   std::shared_ptr<iglu::ShaderCrossUniformBuffer> ubos[2];
   for (int i = 0; i < 2; ++i) {

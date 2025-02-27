@@ -54,6 +54,7 @@ class VulkanTexture;
 
 struct BindingsBuffers;
 struct BindingsTextures;
+struct BindingsStorageImages;
 struct VulkanContextImpl;
 struct VulkanImageCreateInfo;
 struct VulkanImageViewCreateInfo;
@@ -63,12 +64,14 @@ struct VulkanSampler;
  * Descriptor sets:
  *  0 - combined image samplers
  *  1 - uniform/storage buffers
- *  2 - bindless textures/samplers  <--  optional
+ *  2 - storage images
+ *  3 - bindless textures/samplers  <--  optional
  */
 enum {
   kBindPoint_CombinedImageSamplers = 0,
   kBindPoint_Buffers = 1,
-  kBindPoint_Bindless = 2,
+  kBindPoint_StorageImages = 2,
+  kBindPoint_Bindless = 3,
 };
 
 struct DeviceQueues {
@@ -242,6 +245,8 @@ class VulkanContext final {
   VkCommandBuffer IGL_NULLABLE profilingCommandBuffer_ = VK_NULL_HANDLE;
 #endif
 
+  void waitDeferredTasks();
+
  private:
   void createInstance(size_t numExtraExtensions,
                       const char* IGL_NULLABLE* IGL_NULLABLE extraExtensions);
@@ -249,7 +254,6 @@ class VulkanContext final {
   void pruneTextures();
   void querySurfaceCapabilities();
   void processDeferredTasks() const;
-  void waitDeferredTasks();
   void growBindlessDescriptorPool(uint32_t newMaxTextures, uint32_t newMaxSamplers);
   igl::BindGroupTextureHandle createBindGroup(const BindGroupTextureDesc& desc,
                                               const IRenderPipelineState* IGL_NULLABLE
@@ -308,7 +312,6 @@ class VulkanContext final {
  public:
   const VulkanFunctionTable& vf_;
   DeviceQueues deviceQueues_;
-  std::unordered_map<CommandQueueType, VulkanQueueDescriptor> userQueues_;
   std::unique_ptr<igl::vulkan::VulkanDevice> device_;
   std::unique_ptr<igl::vulkan::VulkanSwapchain> swapchain_;
   std::unique_ptr<igl::vulkan::VulkanImmediateCommands> immediate_;
@@ -363,6 +366,13 @@ class VulkanContext final {
                              BindingsBuffers& data,
                              const VulkanDescriptorSetLayout& dsl,
                              const util::SpvModuleInfo& info) const;
+  void updateBindingsStorageImages(VkCommandBuffer IGL_NONNULL cmdBuf,
+                                   VkPipelineLayout layout,
+                                   VkPipelineBindPoint bindPoint,
+                                   VulkanImmediateCommands::SubmitHandle nextSubmitHandle,
+                                   const BindingsStorageImages& data,
+                                   const VulkanDescriptorSetLayout& dsl,
+                                   const util::SpvModuleInfo& info) const;
 
   struct DeferredTask {
     DeferredTask(std::packaged_task<void()>&& task, SubmitHandle handle) :

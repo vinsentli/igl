@@ -28,7 +28,6 @@
 #endif
 #include <GLFW/glfw3native.h>
 #include <glm/ext.hpp>
-#include <glm/glm.hpp>
 #include <glm/gtc/random.hpp>
 #include <igl/FPSCounter.h>
 #include <igl/IGL.h>
@@ -221,7 +220,7 @@ static bool initWindow(GLFWwindow** outWindow) {
     inputDispatcher_.queueEvent(igl::shell::MouseMotionEvent(x, y, 0, 0));
   });
   glfwSetMouseButtonCallback(window, [](auto* window, int button, int action, int mods) {
-    double xpos, ypos;
+    double xpos = 0.0, ypos = 0.0;
     glfwGetCursorPos(window, &xpos, &ypos);
     using igl::shell::MouseButton;
     const MouseButton iglButton =
@@ -389,7 +388,7 @@ static void initIGL() {
   }
 
   // Command queue: backed by different types of GPU HW queues
-  CommandQueueDesc desc{CommandQueueType::Graphics};
+  CommandQueueDesc desc{};
   commandQueue_ = device_->createCommandQueue(desc, nullptr);
 
   renderPass_.colorAttachments.push_back(igl::RenderPassDesc::ColorAttachmentDesc{});

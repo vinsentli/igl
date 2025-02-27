@@ -11,8 +11,23 @@
 extern "C" {
 #endif
 
-void loadVulkanLoaderFunctions(struct VulkanFunctionTable* table, PFN_vkGetInstanceProcAddr load) {
+#if defined(FORCE_USE_STATIC_SWIFTSHADER) && !defined(FORCE_USE_STATIC_SWIFTSHADER_DISABLED)
+extern PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(VkInstance instance, const char* pName);
+#endif
+
+int loadVulkanLoaderFunctions(struct VulkanFunctionTable* table, PFN_vkGetInstanceProcAddr load) {
   /* IGL_GENERATE_LOAD_LOADER_TABLE */
+
+#if defined(FORCE_USE_STATIC_SWIFTSHADER) && !defined(FORCE_USE_STATIC_SWIFTSHADER_DISABLED)
+  if (table->vkGetInstanceProcAddr == NULL) {
+    table->vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+    load = table->vkGetInstanceProcAddr;
+  }
+#endif
+
+  if (!load) {
+    return 0;
+  }
 #if defined(VK_VERSION_1_0)
   table->vkCreateInstance = (PFN_vkCreateInstance)load(NULL, "vkCreateInstance");
   table->vkEnumerateInstanceExtensionProperties = (PFN_vkEnumerateInstanceExtensionProperties)load(
@@ -25,6 +40,7 @@ void loadVulkanLoaderFunctions(struct VulkanFunctionTable* table, PFN_vkGetInsta
       (PFN_vkEnumerateInstanceVersion)load(NULL, "vkEnumerateInstanceVersion");
 #endif /* defined(VK_VERSION_1_1) */
   /* IGL_GENERATE_LOAD_LOADER_TABLE */
+  return 1;
 }
 
 void loadVulkanInstanceFunctions(struct VulkanFunctionTable* table,
@@ -120,30 +136,28 @@ void loadVulkanInstanceFunctions(struct VulkanFunctionTable* table,
 #endif /* defined(VK_EXT_debug_report) */
 #if defined(VK_EXT_debug_utils)
   if (enableExtDebugUtils) {
-      table->vkCmdBeginDebugUtilsLabelEXT =
-              (PFN_vkCmdBeginDebugUtilsLabelEXT) load(context, "vkCmdBeginDebugUtilsLabelEXT");
-      table->vkCmdEndDebugUtilsLabelEXT =
-              (PFN_vkCmdEndDebugUtilsLabelEXT) load(context, "vkCmdEndDebugUtilsLabelEXT");
-      table->vkCmdInsertDebugUtilsLabelEXT =
-              (PFN_vkCmdInsertDebugUtilsLabelEXT) load(context, "vkCmdInsertDebugUtilsLabelEXT");
-      table->vkCreateDebugUtilsMessengerEXT =
-              (PFN_vkCreateDebugUtilsMessengerEXT) load(context, "vkCreateDebugUtilsMessengerEXT");
-      table->vkDestroyDebugUtilsMessengerEXT =
-              (PFN_vkDestroyDebugUtilsMessengerEXT) load(context,
-                                                         "vkDestroyDebugUtilsMessengerEXT");
-      table->vkQueueBeginDebugUtilsLabelEXT =
-              (PFN_vkQueueBeginDebugUtilsLabelEXT) load(context, "vkQueueBeginDebugUtilsLabelEXT");
-      table->vkQueueEndDebugUtilsLabelEXT =
-              (PFN_vkQueueEndDebugUtilsLabelEXT) load(context, "vkQueueEndDebugUtilsLabelEXT");
-      table->vkQueueInsertDebugUtilsLabelEXT =
-              (PFN_vkQueueInsertDebugUtilsLabelEXT) load(context,
-                                                         "vkQueueInsertDebugUtilsLabelEXT");
-      table->vkSetDebugUtilsObjectNameEXT =
-              (PFN_vkSetDebugUtilsObjectNameEXT) load(context, "vkSetDebugUtilsObjectNameEXT");
-      table->vkSetDebugUtilsObjectTagEXT =
-              (PFN_vkSetDebugUtilsObjectTagEXT) load(context, "vkSetDebugUtilsObjectTagEXT");
-      table->vkSubmitDebugUtilsMessageEXT =
-              (PFN_vkSubmitDebugUtilsMessageEXT) load(context, "vkSubmitDebugUtilsMessageEXT");
+    table->vkCmdBeginDebugUtilsLabelEXT =
+        (PFN_vkCmdBeginDebugUtilsLabelEXT)load(context, "vkCmdBeginDebugUtilsLabelEXT");
+    table->vkCmdEndDebugUtilsLabelEXT =
+        (PFN_vkCmdEndDebugUtilsLabelEXT)load(context, "vkCmdEndDebugUtilsLabelEXT");
+    table->vkCmdInsertDebugUtilsLabelEXT =
+        (PFN_vkCmdInsertDebugUtilsLabelEXT)load(context, "vkCmdInsertDebugUtilsLabelEXT");
+    table->vkCreateDebugUtilsMessengerEXT =
+        (PFN_vkCreateDebugUtilsMessengerEXT)load(context, "vkCreateDebugUtilsMessengerEXT");
+    table->vkDestroyDebugUtilsMessengerEXT =
+        (PFN_vkDestroyDebugUtilsMessengerEXT)load(context, "vkDestroyDebugUtilsMessengerEXT");
+    table->vkQueueBeginDebugUtilsLabelEXT =
+        (PFN_vkQueueBeginDebugUtilsLabelEXT)load(context, "vkQueueBeginDebugUtilsLabelEXT");
+    table->vkQueueEndDebugUtilsLabelEXT =
+        (PFN_vkQueueEndDebugUtilsLabelEXT)load(context, "vkQueueEndDebugUtilsLabelEXT");
+    table->vkQueueInsertDebugUtilsLabelEXT =
+        (PFN_vkQueueInsertDebugUtilsLabelEXT)load(context, "vkQueueInsertDebugUtilsLabelEXT");
+    table->vkSetDebugUtilsObjectNameEXT =
+        (PFN_vkSetDebugUtilsObjectNameEXT)load(context, "vkSetDebugUtilsObjectNameEXT");
+    table->vkSetDebugUtilsObjectTagEXT =
+        (PFN_vkSetDebugUtilsObjectTagEXT)load(context, "vkSetDebugUtilsObjectTagEXT");
+    table->vkSubmitDebugUtilsMessageEXT =
+        (PFN_vkSubmitDebugUtilsMessageEXT)load(context, "vkSubmitDebugUtilsMessageEXT");
   }
 #endif /* defined(VK_EXT_debug_utils) */
 #if defined(VK_EXT_direct_mode_display)
@@ -383,7 +397,7 @@ void loadVulkanInstanceFunctions(struct VulkanFunctionTable* table,
 void loadVulkanDeviceFunctions(struct VulkanFunctionTable* table,
                                VkDevice context,
                                PFN_vkGetDeviceProcAddr load) {
-  /* IGL_GENERATE_LOAD_DEVICE_TABLE */
+/* IGL_GENERATE_LOAD_DEVICE_TABLE */
 #if defined(VK_VERSION_1_0)
   table->vkAllocateCommandBuffers =
       (PFN_vkAllocateCommandBuffers)load(context, "vkAllocateCommandBuffers");

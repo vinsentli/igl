@@ -18,7 +18,7 @@
 
 #include <igl/Macros.h>
 #include <igl/vulkan/VulkanFunctionTable.h>
-#if IGL_PLATFORM_MACOS
+#if IGL_PLATFORM_MACOSX
 #include <vulkan/vulkan_metal.h>
 #endif
 
@@ -136,10 +136,8 @@ struct VulkanContextConfig {
   bool enableStorageBuffer16BitAccess = true;
   bool enableDualSrcBlend = true;
 
-  igl::ColorSpace swapChainColorSpace = igl::ColorSpace::SRGB_NONLINEAR;
-  igl::TextureFormat requestedSwapChainTextureFormat = igl::TextureFormat::RGBA_UNorm8;
-
-  std::vector<CommandQueueType> userQueues;
+  ColorSpace swapChainColorSpace = igl::ColorSpace::SRGB_NONLINEAR;
+  TextureFormat requestedSwapChainTextureFormat = igl::TextureFormat::RGBA_UNorm8;
 
   // the number of resources to support BufferAPIHintBits::Ring
   uint32_t maxResourceCount = 3u;
@@ -185,18 +183,18 @@ struct VulkanSampler final {
 
 Result getResultFromVkResult(VkResult result);
 void setResultFrom(Result* outResult, VkResult result);
-VkFormat textureFormatToVkFormat(igl::TextureFormat format);
-igl::TextureFormat vkFormatToTextureFormat(VkFormat format);
+VkFormat textureFormatToVkFormat(TextureFormat format);
+TextureFormat vkFormatToTextureFormat(VkFormat format);
 VkFormat invertRedAndBlue(VkFormat format);
 bool isTextureFormatRGB(VkFormat format);
 bool isTextureFormatBGR(VkFormat format);
 uint32_t getNumImagePlanes(VkFormat format);
-VkMemoryPropertyFlags resourceStorageToVkMemoryPropertyFlags(igl::ResourceStorage resourceStorage);
-VkCompareOp compareFunctionToVkCompareOp(igl::CompareFunction func);
-VkStencilOp stencilOperationToVkStencilOp(igl::StencilOperation op);
+VkMemoryPropertyFlags resourceStorageToVkMemoryPropertyFlags(ResourceStorage resourceStorage);
+VkCompareOp compareFunctionToVkCompareOp(CompareFunction func);
+VkStencilOp stencilOperationToVkStencilOp(StencilOperation op);
 VkSampleCountFlagBits getVulkanSampleCountFlags(size_t numSamples);
-VkSurfaceFormatKHR colorSpaceToVkSurfaceFormat(igl::ColorSpace colorSpace, bool isBGR);
-uint32_t getVkLayer(igl::TextureType type, uint32_t face, uint32_t layer);
+VkSurfaceFormatKHR colorSpaceToVkSurfaceFormat(ColorSpace colorSpace, bool isBGR);
+uint32_t getVkLayer(TextureType type, uint32_t face, uint32_t layer);
 TextureRangeDesc atVkLayer(TextureType type, const TextureRangeDesc& range, uint32_t vkLayer);
 
 /// @brief Transition from the current layout to VK_IMAGE_LAYOUT_GENERAL
@@ -222,7 +220,7 @@ void ensureShaderModule(IShaderModule* sm);
 
 /// @brief Implements the igl::IDepthStencilState interface
 struct DepthStencilState final : public IDepthStencilState {
-  explicit DepthStencilState(const DepthStencilStateDesc& desc) : desc_(desc) {}
+  explicit DepthStencilState(DepthStencilStateDesc desc) : desc_(std::move(desc)) {}
   const DepthStencilStateDesc desc_;
 };
 

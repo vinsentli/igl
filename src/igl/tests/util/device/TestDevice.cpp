@@ -10,7 +10,7 @@
 #include <igl/Common.h>
 #include <igl/Macros.h>
 
-#if (IGL_PLATFORM_IOS || IGL_PLATFORM_MACOS || IGL_PLATFORM_MACCATALYST) && IGL_BACKEND_METAL
+#if (IGL_PLATFORM_IOS || IGL_PLATFORM_MACOSX || IGL_PLATFORM_MACCATALYST) && IGL_BACKEND_METAL
 #define IGL_METAL_SUPPORTED 1
 #else
 #define IGL_METAL_SUPPORTED 0
@@ -22,7 +22,7 @@
 #define IGL_OPENGL_SUPPORTED 0
 #endif
 
-#if (IGL_PLATFORM_WIN || IGL_PLATFORM_ANDROID || IGL_PLATFORM_MACOS || IGL_PLATFORM_LINUX) && \
+#if (IGL_PLATFORM_WINDOWS || IGL_PLATFORM_ANDROID || IGL_PLATFORM_MACOSX || IGL_PLATFORM_LINUX) && \
     IGL_BACKEND_VULKAN && !defined(IGL_UNIT_TESTS_NO_VULKAN)
 #define IGL_VULKAN_SUPPORTED 1
 #else
@@ -52,7 +52,7 @@
 
 namespace igl::tests::util::device {
 
-bool isBackendTypeSupported(::igl::BackendType backendType) {
+bool isBackendTypeSupported(BackendType backendType) {
   switch (backendType) {
   case ::igl::BackendType::Invalid:
     IGL_DEBUG_ASSERT_NOT_REACHED();
@@ -69,9 +69,9 @@ bool isBackendTypeSupported(::igl::BackendType backendType) {
   IGL_UNREACHABLE_RETURN(false)
 }
 
-std::shared_ptr<::igl::IDevice> createTestDevice(::igl::BackendType backendType,
-                                                 const std::string& backendApi,
-                                                 bool enableValidation) {
+std::shared_ptr<IDevice> createTestDevice(BackendType backendType,
+                                          const std::string& backendApi,
+                                          bool enableValidation) {
   if (backendType == ::igl::BackendType::Metal) {
 #if IGL_METAL_SUPPORTED
     return metal::createTestDevice();

@@ -69,8 +69,14 @@ Result NativeHWTextureBuffer::create(const TextureDesc& desc, bool hasStorageAlr
   return createHWBuffer(desc, hasStorageAlready, false);
 }
 
-Result NativeHWTextureBuffer::createTextureInternal(const TextureDesc& desc,
-                                                    AHardwareBuffer* buffer) {
+Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* buffer) {
+  AHardwareBuffer_Desc hwbDesc;
+  AHardwareBuffer_describe(buffer, &hwbDesc);
+
+  auto desc = TextureDesc::newNativeHWBufferImage(igl::android::getIglFormat(hwbDesc.format),
+                                                  igl::android::getIglBufferUsage(hwbDesc.usage),
+                                                  hwbDesc.width,
+                                                  hwbDesc.height);
   auto result = Super::create(desc, false);
   if (!result.isOk()) {
     return result;
@@ -129,6 +135,8 @@ Result NativeHWTextureBuffer::createTextureInternal(const TextureDesc& desc,
   hwBufferCtx->display = display;
   hwBufferCtx->elgImage = eglImage;
   hwBufferHelper_ = std::static_pointer_cast<AHardwareBufferHelper>(hwBufferCtx);
+
+  textureDesc_ = desc;
 
   return Result{};
 }

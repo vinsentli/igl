@@ -11,7 +11,6 @@
 
 #include <cmath>
 #include <cstddef>
-#include <cstdio>
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/random.hpp>
@@ -19,7 +18,6 @@
 #include <shell/shared/platform/DisplayContext.h>
 #if IGL_BACKEND_OPENGL
 #include <igl/opengl/Device.h>
-#include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/RenderCommandEncoder.h>
 #endif // IGL_BACKEND_OPENGL
 #if IGL_BACKEND_VULKAN
@@ -31,7 +29,6 @@
 #endif // IGL_BACKEND_VULKAN
 
 #include <filesystem>
-namespace fs = std::filesystem;
 
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wimplicit-fallthrough"
@@ -249,7 +246,7 @@ void main() {
 )";
 }
 
-static std::unique_ptr<IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
+static std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
     IGL_DEBUG_ASSERT_NOT_REACHED();
@@ -383,7 +380,7 @@ void TinyMeshBindGroupSession::initialize() noexcept {
   }
 
   // Command queue: backed by different types of GPU HW queues
-  commandQueue_ = device_->createCommandQueue({CommandQueueType::Graphics}, nullptr);
+  commandQueue_ = device_->createCommandQueue({}, nullptr);
 
   renderPass_.colorAttachments.emplace_back();
   renderPass_.colorAttachments.back().loadAction = LoadAction::Clear;
@@ -485,7 +482,7 @@ void TinyMeshBindGroupSession::createRenderPipeline() {
     stbi_image_free(pixels);
   }
   {
-    igl::SamplerStateDesc desc = igl::SamplerStateDesc::newLinear();
+    SamplerStateDesc desc = igl::SamplerStateDesc::newLinear();
     desc.addressModeU = igl::SamplerAddressMode::Repeat;
     desc.addressModeV = igl::SamplerAddressMode::Repeat;
     desc.debugName = "Sampler: linear";
@@ -536,7 +533,7 @@ std::shared_ptr<ITexture> TinyMeshBindGroupSession::getVulkanNativeDepth() {
   return nullptr;
 }
 
-void TinyMeshBindGroupSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
+void TinyMeshBindGroupSession::update(SurfaceTextures surfaceTextures) noexcept {
   width_ = surfaceTextures.color->getSize().width;
   height_ = surfaceTextures.color->getSize().height;
 
@@ -566,7 +563,7 @@ void TinyMeshBindGroupSession::update(igl::SurfaceTextures surfaceTextures) noex
   // place a "camera" behind the cubes, the distance depends on the total number of cubes
   perFrame.view =
       glm::translate(mat4(1.0f), vec3(0.0f, 0.0f, sqrtf(kNumCubes / 16.0f) * 20.0f * half));
-  ubPerFrame_[frameIndex_]->upload(&perFrame, igl::BufferRange(sizeof(perFrame)));
+  ubPerFrame_[frameIndex_]->upload(&perFrame, BufferRange(sizeof(perFrame)));
 
   // rotate cubes around random axes
   for (uint32_t i = 0; i != kNumCubes; i++) {
@@ -574,13 +571,13 @@ void TinyMeshBindGroupSession::update(igl::SurfaceTextures surfaceTextures) noex
     const uint32_t cubesInLine = (uint32_t)sqrt(kNumCubes);
     const vec3 offset =
         vec3(-1.5f * sqrt(kNumCubes) + 4.0f * static_cast<float>(i % cubesInLine),
-             -1.5f * sqrt(kNumCubes) + 4.0f * floor(static_cast<float>(i) / cubesInLine),
+             -1.5f * sqrt(kNumCubes) + 4.0f * std::floor(static_cast<float>(i) / cubesInLine),
              0);
     perObject[i].model =
         glm::rotate(glm::translate(mat4(1.0f), offset), float(direction * currentTime_), axis_[i]);
   }
 
-  ubPerObject_[frameIndex_]->upload(&perObject, igl::BufferRange(sizeof(perObject)));
+  ubPerObject_[frameIndex_]->upload(&perObject, BufferRange(sizeof(perObject)));
 
   // Command buffers (1-N per thread): create, submit and forget
   const std::shared_ptr<ICommandBuffer> buffer = commandQueue_->createCommandBuffer({}, nullptr);
@@ -594,10 +591,9 @@ void TinyMeshBindGroupSession::update(igl::SurfaceTextures surfaceTextures) noex
   commands->bindRenderPipelineState(renderPipelineState_Mesh_);
   commands->bindViewport(viewport);
   commands->bindScissorRect(scissor);
-  commands->pushDebugGroupLabel("Render Mesh", igl::Color(1, 0, 0));
+  commands->pushDebugGroupLabel("Render Mesh", Color(1, 0, 0));
   commands->bindVertexBuffer(0, *vb0_);
   commands->bindDepthStencilState(depthStencilState_);
-  commands->bindBuffer(0, ubPerFrame_[frameIndex_].get());
   commands->bindBindGroup(bindGroupTextures_);
   // Draw 2 cubes: we use uniform buffer to update matrices
   commands->bindIndexBuffer(*ib0_, IndexFormat::UInt16);

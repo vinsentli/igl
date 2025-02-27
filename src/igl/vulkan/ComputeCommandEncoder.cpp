@@ -69,7 +69,7 @@ void ComputeCommandEncoder::bindComputePipelineState(
     return;
   }
 
-  cps_ = static_cast<igl::vulkan::ComputePipelineState*>(pipelineState.get());
+  cps_ = static_cast<ComputePipelineState*>(pipelineState.get());
 
   binder_.bindPipeline(cps_->getVkPipeline(), &cps_->getSpvModuleInfo());
 
@@ -115,7 +115,7 @@ void ComputeCommandEncoder::processDependencies(const Dependencies& dependencies
         if (!buf) {
           break;
         }
-        const auto* vkBuf = static_cast<igl::vulkan::Buffer*>(buf);
+        const auto* vkBuf = static_cast<Buffer*>(buf);
         ivkBufferBarrier(&ctx_.vf_,
                          cmdBuffer_,
                          vkBuf->getVkBuffer(),
@@ -176,15 +176,49 @@ void ComputeCommandEncoder::bindTexture(uint32_t index, ITexture* texture) {
 
   IGL_DEBUG_ASSERT(texture);
 
-  const igl::vulkan::Texture* tex = static_cast<igl::vulkan::Texture*>(texture);
+  const igl::vulkan::Texture* tex = static_cast<Texture*>(texture);
   const igl::vulkan::VulkanTexture& vkTex = tex->getVulkanTexture();
   const igl::vulkan::VulkanImage* vkImage = &vkTex.image_;
+
+  IGL_DEBUG_ASSERT(vkImage);
+
+  if (vkImage->isStorageImage()) {
+    igl::vulkan::transitionToGeneral(cmdBuffer_, texture);
+  } else if (vkImage->isSampledImage()) {
+    igl::vulkan::transitionToShaderReadOnly(cmdBuffer_, texture);
+  } else {
+    IGL_DEBUG_ASSERT(false, "A texture should be Sampled or Storage");
+  }
+
+  restoreLayout_.push_back(vkImage);
+
+  binder_.bindTexture(index, static_cast<Texture*>(texture));
+}
+
+void ComputeCommandEncoder::bindImageTexture(uint32_t index,
+                                             ITexture* texture,
+                                             TextureFormat format) {
+  IGL_PROFILER_FUNCTION();
+
+  IGL_DEBUG_ASSERT(texture);
+
+  (void)format;
+
+  igl::vulkan::Texture* tex = static_cast<Texture*>(texture);
+  const VulkanImage* vkImage = tex ? &tex->getVulkanTexture().image_ : nullptr;
+
+  IGL_DEBUG_ASSERT(vkImage);
+
+  if (!vkImage || !vkImage->isStorageImage()) {
+    IGL_DEBUG_ABORT("A texture should be Storage");
+    return;
+  }
 
   igl::vulkan::transitionToGeneral(cmdBuffer_, texture);
 
   restoreLayout_.push_back(vkImage);
 
-  binder_.bindTexture(index, static_cast<igl::vulkan::Texture*>(texture));
+  binder_.bindStorageImage(index, tex);
 }
 
 void ComputeCommandEncoder::bindBuffer(uint32_t index,
@@ -197,13 +231,15 @@ void ComputeCommandEncoder::bindBuffer(uint32_t index,
     return;
   }
 
-  auto* buf = static_cast<igl::vulkan::Buffer*>(buffer);
+  auto* buf = static_cast<Buffer*>(buffer);
 
-  const bool isStorageBuffer = (buf->getBufferType() & BufferDesc::BufferTypeBits::Storage) != 0;
+  const bool isUniformBuffer = (buf->getBufferType() & BufferDesc::BufferTypeBits::Uniform) > 0;
+  const bool isStorageBuffer = (buf->getBufferType() & BufferDesc::BufferTypeBits::Storage) > 0;
+  const bool isUniformOrStorageBuffer = isUniformBuffer || isStorageBuffer;
 
-  if (!isStorageBuffer) {
-    IGL_DEBUG_ABORT(
-        "Did you forget to specify igl::BufferDesc::BufferTypeBits::Storage on your buffer?");
+  if (!IGL_DEBUG_VERIFY(isUniformOrStorageBuffer,
+                        "Did you forget to specify igl::BufferDesc::BufferTypeBits::Storage or "
+                        "BufferDesc::BufferTypeBits::Uniform on your buffer?")) {
     return;
   }
 

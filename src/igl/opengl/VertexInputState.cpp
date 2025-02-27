@@ -8,7 +8,6 @@
 #include <igl/opengl/VertexInputState.h>
 
 #include <cstdlib>
-#include <igl/opengl/CommandBuffer.h>
 #include <igl/opengl/Device.h>
 #include <igl/opengl/Errors.h>
 #include <string>
@@ -19,10 +18,12 @@ namespace igl::opengl {
 //
 // A utility function to convert an IGL attribute to an OGL attribute
 //
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 static void toOGLAttribute(const VertexAttribute& attrib,
                            GLint& numComponents,
                            GLenum& componentType,
                            GLboolean& normalized) {
+  // NOLINTEND(bugprone-easily-swappable-parameters)
   switch (attrib.format) {
   case VertexAttributeFormat::Float1:
     numComponents = 1;

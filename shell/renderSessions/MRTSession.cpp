@@ -17,7 +17,6 @@
 #include <igl/ShaderCreator.h>
 #include <igl/VertexInputState.h>
 #include <igl/opengl/Device.h>
-#include <igl/opengl/GLIncludes.h>
 #include <shell/renderSessions/MRTSession.h>
 #include <shell/shared/renderSession/ShellParams.h>
 
@@ -321,7 +320,7 @@ void MRTSession::initialize() noexcept {
   }
 
   // Command queue: backed by different types of GPU HW queues
-  const CommandQueueDesc desc{igl::CommandQueueType::Graphics};
+  const CommandQueueDesc desc{};
   commandQueue_ = device.createCommandQueue(desc, nullptr);
 
   tex0_->generateMipmap(*commandQueue_);

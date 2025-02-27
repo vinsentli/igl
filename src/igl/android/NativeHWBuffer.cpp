@@ -49,6 +49,11 @@ uint32_t getNativeHWFormat(TextureFormat iglFormat) {
   case TextureFormat::YUV_NV12:
     return AHARDWAREBUFFER_FORMAT_YCbCr_420_SP_VENUS;
 
+#if __ANDROID_MIN_SDK_VERSION__ >= 30
+  case TextureFormat::YUV_420p:
+    return AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420;
+#endif
+
   default:
     return 0;
   }
@@ -104,7 +109,13 @@ TextureFormat getIglFormat(uint32_t nativeFormat) {
     return TextureFormat::S_UInt8;
 
   case AHARDWAREBUFFER_FORMAT_YCbCr_420_SP_VENUS:
+  case COLOR_QCOM_FORMATYUV420PackedSemiPlanar32m:
     return TextureFormat::YUV_NV12;
+
+#if __ANDROID_MIN_SDK_VERSION__ >= 30
+  case AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420:
+    return TextureFormat::YUV_420p;
+#endif
 
   default:
     return TextureFormat::Invalid;
@@ -172,33 +183,19 @@ INativeHWTextureBuffer::~INativeHWTextureBuffer() {
     hwBuffer_ = nullptr;
   }
 }
-
-Result INativeHWTextureBuffer::attachHWBuffer(AHardwareBuffer* buffer) {
+Result INativeHWTextureBuffer::createWithHWBuffer(AHardwareBuffer* buffer) {
   if (hwBuffer_) {
     return Result{Result::Code::InvalidOperation, "Hardware buffer already provided"};
   }
 
   AHardwareBuffer_acquire(buffer);
 
-  AHardwareBuffer_Desc hwbDesc;
-  AHardwareBuffer_describe(buffer, &hwbDesc);
-
-  auto desc = TextureDesc::newNativeHWBufferImage(igl::android::getIglFormat(hwbDesc.format),
-                                                  igl::android::getIglBufferUsage(hwbDesc.usage),
-                                                  hwbDesc.width,
-                                                  hwbDesc.height);
-  const bool isValid = desc.format != TextureFormat::Invalid && desc.usage != 0;
-  if (!isValid) {
-    AHardwareBuffer_release(buffer);
-    return Result(Result::Code::Unsupported, "Can not create texture for hardware buffer");
-  }
-
-  Result result = createTextureInternal(desc, buffer);
+  // textureDesc_ should be updated through createTextureInternal function.
+  Result result = createTextureInternal(buffer);
   if (!result.isOk()) {
     AHardwareBuffer_release(buffer);
   } else {
     hwBuffer_ = buffer;
-    textureDesc_ = desc;
   }
 
   return result;
@@ -244,7 +241,7 @@ Result INativeHWTextureBuffer::createHWBuffer(const TextureDesc& desc,
     return allocationResult;
   }
 
-  Result result = createTextureInternal(desc, buffer);
+  Result result = createTextureInternal(buffer);
   if (!result.isOk()) {
     IGL_LOG_ERROR("HW internal failed");
     AHardwareBuffer_release(buffer);

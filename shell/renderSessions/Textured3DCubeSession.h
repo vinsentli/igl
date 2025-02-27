@@ -25,9 +25,10 @@ struct VertexFormat {
 
 class Textured3DCubeSession : public RenderSession {
  public:
-  Textured3DCubeSession(std::shared_ptr<Platform> platform) : RenderSession(std::move(platform)) {}
+  explicit Textured3DCubeSession(std::shared_ptr<Platform> platform) :
+    RenderSession(std::move(platform)) {}
   void initialize() noexcept override;
-  void update(igl::SurfaceTextures surfaceTextures) noexcept override;
+  void update(SurfaceTextures surfaceTextures) noexcept override;
 
  private:
   std::shared_ptr<ICommandQueue> commandQueue_;

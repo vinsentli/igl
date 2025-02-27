@@ -15,10 +15,7 @@
 #include <IGLU/managedUniformBuffer/ManagedUniformBuffer.h>
 #include <array>
 #include <cstring>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
-#include <igl/IGL.h>
 #include <igl/NameHandle.h>
 #include <string>
 
@@ -735,7 +732,7 @@ TEST_F(TextureArrayTest, GetEstimatedSizeInBytes) {
                           : TextureFormat::RGBA_UNorm8;
   const uint32_t formatBytes = iglDev_->getBackendType() == BackendType::OpenGL ? 2u : 4u;
 
-  uint32_t bytes;
+  uint32_t bytes = 0;
   bytes = 12u * 34u * formatBytes * 2u;
   ASSERT_EQ(calcSize(12, 34, format, 1), bytes);
   bytes = (16u + 8u + 4u + 2u + 1u) * formatBytes * 2u;

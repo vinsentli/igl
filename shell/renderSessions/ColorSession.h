@@ -23,11 +23,11 @@ class ColorSession : public RenderSession {
   };
 
  public:
-  ColorSession(std::shared_ptr<Platform> platform) : RenderSession(std::move(platform)) {}
+  explicit ColorSession(std::shared_ptr<Platform> platform) : RenderSession(std::move(platform)) {}
   // clang-tidy off
   void initialize() noexcept override;
   // clang-tidy on
-  void update(igl::SurfaceTextures surfaceTextures) noexcept override;
+  void update(SurfaceTextures surfaceTextures) noexcept override;
 
   enum class ColorTestModes {
     eMacbethTexture,

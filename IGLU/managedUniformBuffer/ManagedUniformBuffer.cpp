@@ -150,9 +150,18 @@ void ManagedUniformBuffer::bind(const igl::IDevice& device,
   }
 }
 
-void ManagedUniformBuffer::bind(const igl::IDevice& device, igl::IComputeCommandEncoder& encoder) {
+void ManagedUniformBuffer::bind(const igl::IDevice& device,
+                                const igl::IComputePipelineState& pipelineState,
+                                igl::IComputeCommandEncoder& encoder) {
   if (device.getBackendType() == igl::BackendType::OpenGL) {
-    IGL_DEBUG_ABORT("No ComputeEncoder supported for OpenGL\n");
+    for (auto& uniform : uniformInfo.uniforms) {
+      uniform.location = pipelineState.getIndexByName(igl::genNameHandle(uniform.name));
+      if (uniform.location >= 0) {
+        encoder.bindUniform(uniform, data_);
+      } else {
+        IGL_LOG_ERROR_ONCE("The uniform %s was not found in shader\n", uniform.name.c_str());
+      }
+    }
   } else {
     if (useBindBytes_) {
       encoder.bindBytes(uniformInfo.index, data_, length_);
@@ -173,7 +182,7 @@ void* ManagedUniformBuffer::getData() {
   return data_;
 }
 
-void ManagedUniformBuffer::buildUnifromLUT() {
+void ManagedUniformBuffer::buildUniformLUT() {
   uniformLUT_ = std::make_unique<std::unordered_map<std::string, size_t>>();
   for (size_t i = 0; i < uniformInfo.uniforms.size(); ++i) {
     auto& uniform = uniformInfo.uniforms[i];
@@ -190,9 +199,7 @@ static int findUniformByName(const std::vector<igl::UniformDesc>& uniforms, cons
   return -1;
 }
 
-bool ManagedUniformBuffer::updateData(const char* name, const void* data, size_t dataSize) {
-  IGL_DEBUG_ASSERT(name);
-
+int ManagedUniformBuffer::getIndex(const char* name) const {
   int index = -1;
   if (uniformLUT_) {
     auto search = uniformLUT_->find(name);
@@ -200,6 +207,13 @@ bool ManagedUniformBuffer::updateData(const char* name, const void* data, size_t
   } else {
     index = findUniformByName(uniformInfo.uniforms, name);
   }
+  return index;
+}
+
+bool ManagedUniformBuffer::updateData(const char* name, const void* data, size_t dataSize) {
+  IGL_DEBUG_ASSERT(name);
+
+  const int index = getIndex(name);
 
   if (index >= 0) {
     auto& uniform = uniformInfo.uniforms[index];

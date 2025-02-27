@@ -87,7 +87,7 @@ std::unique_ptr<IBuffer> Device::createBuffer(const BufferDesc& desc,
 
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
 
-  auto buffer = std::make_unique<vulkan::Buffer>(*this);
+  auto buffer = std::make_unique<Buffer>(*this);
 
   const auto result = buffer->create(desc);
 
@@ -103,7 +103,7 @@ std::unique_ptr<IBuffer> Device::createBuffer(const BufferDesc& desc,
   IGL_DEBUG_ASSERT(uploadResult.isOk());
   Result::setResult(outResult, uploadResult);
 
-  if (getResourceTracker()) {
+  if (hasResourceTracker()) {
     buffer->initResourceTracker(getResourceTracker(), desc.debugName);
   }
 
@@ -118,7 +118,7 @@ std::shared_ptr<IDepthStencilState> Device::createDepthStencilState(
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
 
   Result::setOk(outResult);
-  return std::make_shared<vulkan::DepthStencilState>(desc);
+  return std::make_shared<DepthStencilState>(desc);
 }
 
 std::unique_ptr<IShaderStages> Device::createShaderStages(const ShaderStagesDesc& desc,
@@ -138,7 +138,7 @@ std::unique_ptr<IShaderStages> Device::createShaderStages(const ShaderStagesDesc
     Result::setOk(outResult);
   }
 
-  if (getResourceTracker()) {
+  if (hasResourceTracker()) {
     shaderStages->initResourceTracker(getResourceTracker(), desc.debugName);
   }
 
@@ -151,11 +151,11 @@ std::shared_ptr<ISamplerState> Device::createSamplerState(const SamplerStateDesc
 
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
 
-  auto samplerState = std::make_shared<vulkan::SamplerState>(const_cast<Device&>(*this));
+  auto samplerState = std::make_shared<SamplerState>(const_cast<Device&>(*this));
 
   Result::setResult(outResult, samplerState->create(desc));
 
-  if (getResourceTracker()) {
+  if (hasResourceTracker()) {
     samplerState->initResourceTracker(getResourceTracker(), desc.debugName);
   }
 
@@ -170,11 +170,11 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
 
   const auto sanitized = sanitize(desc);
 
-  auto texture = std::make_shared<vulkan::Texture>(const_cast<Device&>(*this), desc.format);
+  auto texture = std::make_shared<Texture>(const_cast<Device&>(*this), desc.format);
 
   const Result res = texture->create(sanitized);
 
-  if (getResourceTracker()) {
+  if (hasResourceTracker()) {
     texture->initResourceTracker(getResourceTracker(), desc.debugName);
   }
 
@@ -194,7 +194,7 @@ std::shared_ptr<IVertexInputState> Device::createVertexInputState(const VertexIn
   // have to store the description.
   Result::setOk(outResult);
 
-  return std::make_shared<vulkan::VertexInputState>(desc);
+  return std::make_shared<VertexInputState>(desc);
 }
 
 std::shared_ptr<IComputePipelineState> Device::createComputePipeline(
@@ -281,7 +281,7 @@ std::shared_ptr<IShaderModule> Device::createShaderModule(const ShaderModuleDesc
   Result::setResult(outResult, std::move(result));
   auto shaderModule = std::make_shared<ShaderModule>(desc.info, std::move(vulkanShaderModule));
 
-  if (getResourceTracker()) {
+  if (hasResourceTracker()) {
     shaderModule->initResourceTracker(getResourceTracker(), desc.debugName);
   }
 
@@ -399,12 +399,12 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage
     const std::string bindlessTexturesSource = ctx_->config_.enableDescriptorIndexing ?
                                                                                       R"(
       // everything - indexed by global texture/sampler id
-      layout (set = 2, binding = 0) uniform texture2D kTextures2D[];
-      layout (set = 2, binding = 1) uniform texture2DArray kTextures2DArray[];
-      layout (set = 2, binding = 2) uniform texture3D kTextures3D[];
-      layout (set = 2, binding = 3) uniform textureCube kTexturesCube[];
-      layout (set = 2, binding = 4) uniform sampler kSamplers[];
-      layout (set = 2, binding = 5) uniform samplerShadow kSamplersShadow[];
+      layout (set = 3, binding = 0) uniform texture2D kTextures2D[];
+      layout (set = 3, binding = 1) uniform texture2DArray kTextures2DArray[];
+      layout (set = 3, binding = 2) uniform texture3D kTextures3D[];
+      layout (set = 3, binding = 3) uniform textureCube kTexturesCube[];
+      layout (set = 3, binding = 4) uniform sampler kSamplers[];
+      layout (set = 3, binding = 5) uniform samplerShadow kSamplersShadow[];
       // binding #6 is reserved for STORAGE_IMAGEs: check VulkanContext.cpp
       )"
                                                                                       : "";
@@ -477,7 +477,7 @@ std::shared_ptr<IFramebuffer> Device::createFramebuffer(const FramebufferDesc& d
   auto resource = std::make_shared<Framebuffer>(*this, desc);
   Result::setOk(outResult);
 
-  if (getResourceTracker()) {
+  if (hasResourceTracker()) {
     resource->initResourceTracker(getResourceTracker(), desc.debugName);
   }
 
@@ -492,9 +492,8 @@ size_t Device::getCurrentDrawCount() const {
   return ctx_->drawCallCount_;
 }
 
-std::unique_ptr<igl::IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryDesc& desc,
-                                                                 Result* IGL_NULLABLE
-                                                                     outResult) const {
+std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryDesc& desc,
+                                                            Result* IGL_NULLABLE outResult) const {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
@@ -530,9 +529,9 @@ std::unique_ptr<igl::IShaderLibrary> Device::createShaderLibrary(const ShaderLib
   }
 
   Result::setResult(outResult, std::move(result));
-  auto shaderLibrary = std::make_unique<igl::vulkan::ShaderLibrary>(std::move(modules));
+  auto shaderLibrary = std::make_unique<ShaderLibrary>(std::move(modules));
 
-  if (getResourceTracker()) {
+  if (hasResourceTracker()) {
     shaderLibrary->initResourceTracker(getResourceTracker(), desc.debugName);
   }
 
@@ -797,10 +796,10 @@ BackendVersion Device::getBackendVersion() const {
           static_cast<uint8_t>(VK_API_VERSION_MINOR(apiVersion))};
 }
 
-Holder<igl::BindGroupTextureHandle> Device::createBindGroup(const igl::BindGroupTextureDesc& desc,
-                                                            const IRenderPipelineState* IGL_NULLABLE
-                                                                compatiblePipeline,
-                                                            Result* IGL_NULLABLE outResult) {
+Holder<BindGroupTextureHandle> Device::createBindGroup(const igl::BindGroupTextureDesc& desc,
+                                                       const IRenderPipelineState* IGL_NULLABLE
+                                                           compatiblePipeline,
+                                                       Result* IGL_NULLABLE outResult) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_DEBUG_ASSERT(ctx_);
   IGL_DEBUG_ASSERT(!desc.debugName.empty(), "Each bind group should have a debug name");
@@ -809,8 +808,8 @@ Holder<igl::BindGroupTextureHandle> Device::createBindGroup(const igl::BindGroup
   return {this, ctx_->createBindGroup(desc, compatiblePipeline, outResult)};
 }
 
-Holder<igl::BindGroupBufferHandle> Device::createBindGroup(const igl::BindGroupBufferDesc& desc,
-                                                           Result* IGL_NULLABLE outResult) {
+Holder<BindGroupBufferHandle> Device::createBindGroup(const igl::BindGroupBufferDesc& desc,
+                                                      Result* IGL_NULLABLE outResult) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_DEBUG_ASSERT(ctx_);
   IGL_DEBUG_ASSERT(!desc.debugName.empty(), "Each bind group should have a debug name");
@@ -819,7 +818,7 @@ Holder<igl::BindGroupBufferHandle> Device::createBindGroup(const igl::BindGroupB
   return {this, ctx_->createBindGroup(desc, outResult)};
 }
 
-void Device::destroy(igl::BindGroupTextureHandle handle) {
+void Device::destroy(BindGroupTextureHandle handle) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
   IGL_DEBUG_ASSERT(ctx_);
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
@@ -827,7 +826,7 @@ void Device::destroy(igl::BindGroupTextureHandle handle) {
   ctx_->destroy(handle);
 }
 
-void Device::destroy(igl::BindGroupBufferHandle handle) {
+void Device::destroy(BindGroupBufferHandle handle) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
   IGL_DEBUG_ASSERT(ctx_);
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
@@ -835,7 +834,7 @@ void Device::destroy(igl::BindGroupBufferHandle handle) {
   ctx_->destroy(handle);
 }
 
-void Device::destroy(igl::SamplerHandle handle) {
+void Device::destroy(SamplerHandle handle) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
   IGL_DEBUG_ASSERT(ctx_);
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);

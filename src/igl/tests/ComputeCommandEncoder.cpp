@@ -13,11 +13,7 @@
 #include <vector>
 
 #include "data/ShaderData.h"
-#include "data/TextureData.h"
-#include "data/VertexIndexData.h"
 #include "igl/Buffer.h"
-#include "igl/DepthStencilState.h"
-#include "igl/RenderPipelineState.h"
 #include "util/Common.h"
 
 namespace igl::tests {
@@ -165,6 +161,20 @@ TEST_F(ComputeCommandEncoderTest, canEncodeBasicBufferOperation) {
     ASSERT_EQ(dataIn[i] * 2.0f, bytes[i]);
   }
   bufferOut0_->unmap();
+}
+
+TEST_F(ComputeCommandEncoderTest, bindImageTexture) {
+  if (!iglDev_->hasFeature(DeviceFeatures::Compute)) {
+    return;
+  }
+
+  auto cmdBuffer = cmdQueue_->createCommandBuffer({}, nullptr);
+  ASSERT_TRUE(cmdBuffer != nullptr);
+
+  auto computeCommandEncoder = cmdBuffer->createComputeCommandEncoder();
+  computeCommandEncoder->bindImageTexture(0, nullptr, TextureFormat::Invalid);
+  cmdQueue_->submit(*cmdBuffer);
+  cmdBuffer->waitUntilCompleted();
 }
 
 TEST_F(ComputeCommandEncoderTest, canUseOutputBufferFromOnePassAsInputToNext) {

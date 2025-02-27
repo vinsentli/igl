@@ -104,10 +104,22 @@ void ComputeCommandEncoder::bindTexture(uint32_t index, ITexture* texture) {
   }
 }
 
+void ComputeCommandEncoder::bindImageTexture(uint32_t index,
+                                             ITexture* texture,
+                                             TextureFormat format) {
+  (void)index;
+  (void)texture;
+  (void)format;
+
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
+}
+
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 void ComputeCommandEncoder::bindBuffer(uint32_t index,
                                        IBuffer* buffer,
                                        size_t offset,
                                        size_t bufferSize) {
+  // NOLINTEND(bugprone-easily-swappable-parameters)
   (void)bufferSize;
 
   if (IGL_DEBUG_VERIFY(adapter_) && buffer) {

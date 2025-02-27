@@ -58,6 +58,12 @@ class CommandBuffer final : public ICommandBuffer,
 
   void popDebugGroupLabel() const override;
 
+  void copyBuffer(IBuffer& src,
+                  IBuffer& dst,
+                  uint64_t srcOffset,
+                  uint64_t dstOffset,
+                  uint64_t size) override;
+
   /// @brief Waits until the command bufer has been executed by the device.
   void waitUntilCompleted() override;
 
@@ -76,7 +82,7 @@ class CommandBuffer final : public ICommandBuffer,
     return isFromSwapchain_;
   }
 
-  const std::shared_ptr<igl::IFramebuffer>& getFramebuffer() const;
+  const std::shared_ptr<IFramebuffer>& getFramebuffer() const;
 
   const std::shared_ptr<ITexture>& getPresentedSurface() const;
 
@@ -89,7 +95,7 @@ class CommandBuffer final : public ICommandBuffer,
   // was present() called with a swapchain image?
   mutable bool isFromSwapchain_ = false;
 
-  std::shared_ptr<igl::IFramebuffer> framebuffer_;
+  std::shared_ptr<IFramebuffer> framebuffer_;
   mutable std::shared_ptr<ITexture> presentedSurface_;
 
   VulkanImmediateCommands::SubmitHandle lastSubmitHandle_ = {};

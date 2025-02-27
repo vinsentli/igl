@@ -60,6 +60,10 @@ class VulkanImageView final {
                   const VulkanImageViewCreateInfo& createInfo,
                   const char* debugName = nullptr);
 
+  VulkanImageView(const VulkanContext& ctx,
+                  const VkImageViewCreateInfo& createInfo,
+                  const char* debugName = nullptr);
+
   ~VulkanImageView();
 
   VulkanImageView(const VulkanImageView&) = delete;
@@ -80,10 +84,17 @@ class VulkanImageView final {
    * @brief Returns true if the object is valid
    */
   [[nodiscard]] bool valid() const;
+  /**
+   * @brief Returns the VkImageAspectFlags used to create the imageView
+   */
+  [[nodiscard]] VkImageAspectFlags getVkImageAspectFlags() const {
+    return aspectMask_;
+  }
 
  public:
   const VulkanContext* ctx_ = nullptr;
   VkImageView vkImageView_ = VK_NULL_HANDLE;
+  VkImageAspectFlags aspectMask_ = 0;
 
  private:
   void destroy();

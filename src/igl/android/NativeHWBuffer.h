@@ -15,6 +15,10 @@
 #define AHARDWAREBUFFER_FORMAT_YCbCr_420_SP_VENUS 0x7FA30C06
 #endif
 
+#if !defined(COLOR_QCOM_FORMATYUV420PackedSemiPlanar32m)
+#define COLOR_QCOM_FORMATYUV420PackedSemiPlanar32m 0x7FA30C04
+#endif
+
 #include <igl/Texture.h>
 #include <igl/TextureFormat.h>
 
@@ -45,7 +49,8 @@ class INativeHWTextureBuffer {
 
   virtual ~INativeHWTextureBuffer();
 
-  Result attachHWBuffer(AHardwareBuffer* IGL_NULLABLE buffer);
+  Result createWithHWBuffer(AHardwareBuffer* IGL_NULLABLE buffer);
+
   Result createHWBuffer(const TextureDesc& desc, bool hasStorageAlready, bool surfaceComposite);
 
   [[nodiscard]] LockGuard lockHWBuffer(std::byte* IGL_NULLABLE* IGL_NONNULL dst,
@@ -60,8 +65,7 @@ class INativeHWTextureBuffer {
   [[nodiscard]] TextureDesc getTextureDesc() const;
 
  protected:
-  virtual Result createTextureInternal(const TextureDesc& desc, AHardwareBuffer* IGL_NULLABLE buffer) = 0;
-
+  virtual Result createTextureInternal(AHardwareBuffer* IGL_NULLABLE buffer) = 0;
   AHardwareBuffer* IGL_NULLABLE hwBuffer_ = nullptr;
   TextureDesc textureDesc_;
 };

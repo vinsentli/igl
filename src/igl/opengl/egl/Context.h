@@ -13,13 +13,12 @@
 #include <EGL/eglext.h>
 #include <EGL/eglplatform.h>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <igl/opengl/IContext.h>
 
-namespace igl {
-class ITexture;
-namespace opengl::egl {
+namespace igl::opengl::egl {
 
 class Context final : public IContext {
  public:
@@ -39,11 +38,19 @@ class Context final : public IContext {
   /// Create a new offscreen context.
   Context(RenderingAPI api, size_t width, size_t height);
   /// Create a new context applicable for a specific display/context/read surface/draw surface.
+  /// @param ownsContext If true, this means that constructed Context owns the EGL context that is
+  /// passed in and it will destroy the EGL context in its destructor. If false, it's the caller's
+  /// responsibility to ensure the EGL context is destroyed.
+  /// @param ownsSurfaces If true, this means that constructed Context owns the EGL surfaces that
+  /// are passed in and it will destroy the EGL surfaces in its destructor. If false, it's the
+  /// caller's responsibility to ensure the EGL surfaces are destroyed.
   Context(EGLDisplay display,
           EGLContext context,
           EGLSurface readSurface,
           EGLSurface drawSurface,
-          EGLConfig config = nullptr);
+          EGLConfig config = nullptr,
+          bool ownsContext = false,
+          bool ownsSurfaces = false);
   /// Create a new offscreen context, in the same sharegroup as 'sharedContext'. Dimensions are
   /// also inferred from 'sharedContext'.
   Context(const Context& sharedContext);
@@ -75,6 +82,27 @@ class Context final : public IContext {
   void imageTargetTexture(EGLImageKHR eglImage, GLenum target) const;
   EGLImageKHR createImageFromAndroidHardwareBuffer(AHardwareBuffer* hwb) const;
 #endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
+
+  bool eglSupportssRGB() override {
+    if (eglSupportssRGB_.has_value()) {
+      return eglSupportssRGB_.value();
+    }
+    const char* extensionName = "EGL_KHR_gl_colorspace";
+    // Get the list of supported EGL extensions
+    const char* extensions = eglQueryString(getDisplay(), EGL_EXTENSIONS);
+    IGL_LOG_DEBUG("eglQueryString: %s\n", extensions);
+    const std::string strExtensions(extensions);
+    if (strExtensions.find(extensionName) != std::string::npos) {
+      eglSupportssRGB_.emplace(true);
+      return eglSupportssRGB_.value();
+    }
+    eglSupportssRGB_.emplace(false);
+    return eglSupportssRGB_.value();
+  }
+
+ private:
+  std::optional<bool> eglSupportssRGB_;
+
  private:
   Context(RenderingAPI api,
           EGLContext shareContext,
@@ -84,6 +112,7 @@ class Context final : public IContext {
           std::pair<EGLint, EGLint> dimensions);
 
   bool contextOwned_ = false;
+  bool surfacesOwned_ = false;
   FOLLY_PUSH_WARNING
   FOLLY_GNU_DISABLE_WARNING("-Wzero-as-null-pointer-constant")
   RenderingAPI api_ = RenderingAPI::GLES2;
@@ -100,5 +129,4 @@ class Context final : public IContext {
   std::shared_ptr<std::vector<EGLContext>> sharegroup_;
 };
 
-} // namespace opengl::egl
-} // namespace igl
+} // namespace igl::opengl::egl

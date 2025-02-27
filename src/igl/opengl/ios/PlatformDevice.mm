@@ -21,7 +21,6 @@
 #include <igl/Common.h>
 #include <igl/opengl/Errors.h>
 #include <igl/opengl/TextureTarget.h>
-#include <igl/opengl/VertexInputState.h>
 #include <igl/opengl/ios/Context.h>
 #include <igl/opengl/ios/Device.h>
 #include <igl/opengl/ios/TextureBuffer.h>
@@ -200,6 +199,7 @@ TextureFormat PlatformDevice::getNativeDrawableTextureFormat(CAEAGLLayer* /*nati
   return TextureFormat::RGBA_UNorm8; // TODO convert value retrieved with above method to IGL!
 }
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativePixelBufferWithSize(
     const CVImageBufferRef& sourceImage,
     const CVOpenGLESTextureCacheRef& textureCache,
@@ -208,6 +208,7 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativePixelBufferWith
     size_t planeIndex,
     TextureDesc::TextureUsage usage,
     Result* outResult) {
+  // NOLINTEND(bugprone-easily-swappable-parameters)
   auto textureBuffer =
       std::make_unique<TextureBuffer>(getContext(), sourceImage, textureCache, planeIndex, usage);
   const Result result = textureBuffer->createWithSize(width, height);
@@ -242,6 +243,7 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativePixelBuffer(
   return textureBuffer;
 }
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativePixelBufferWithSize(
     const CVImageBufferRef& sourceImage,
     size_t width,
@@ -249,6 +251,7 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativePixelBufferWith
     size_t planeIndex,
     TextureDesc::TextureUsage usage,
     Result* outResult) {
+  // NOLINTEND(bugprone-easily-swappable-parameters)
   auto textureBuffer = std::make_unique<TextureBuffer>(
       getContext(), sourceImage, getTextureCache(), planeIndex, usage);
   const Result result = textureBuffer->createWithSize(width, height);

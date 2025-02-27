@@ -13,8 +13,6 @@
 #include <utility>
 #include <vector>
 
-#include <igl/IGLSafeC.h>
-
 // For vk_mem_alloc.h, define this before including VulkanContext.h in exactly
 // one CPP file
 #if defined(IGL_CMAKE_BUILD)
@@ -33,7 +31,6 @@
 
 #include <igl/SamplerState.h>
 #include <igl/vulkan/Buffer.h>
-#include <igl/vulkan/Device.h>
 #include <igl/vulkan/EnhancedShaderDebuggingStore.h>
 #include <igl/vulkan/RenderPipelineState.h>
 #include <igl/vulkan/SamplerState.h>
@@ -45,7 +42,6 @@
 #include <igl/vulkan/VulkanExtensions.h>
 #include <igl/vulkan/VulkanImageView.h>
 #include <igl/vulkan/VulkanPipelineBuilder.h>
-#include <igl/vulkan/VulkanSemaphore.h>
 #include <igl/vulkan/VulkanSwapchain.h>
 #include <igl/vulkan/VulkanTexture.h>
 #include <igl/vulkan/VulkanVma.h>
@@ -69,7 +65,7 @@ const uint32_t kBinding_Sampler = 4;
 const uint32_t kBinding_SamplerShadow = 5;
 const uint32_t kBinding_StorageImages = 6;
 
-#if defined(VK_EXT_debug_utils) && IGL_PLATFORM_WIN
+#if defined(VK_EXT_debug_utils) && IGL_PLATFORM_WINDOWS
 VKAPI_ATTR VkBool32 VKAPI_CALL
 vulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT msgSeverity,
                     [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT msgType,
@@ -148,18 +144,6 @@ std::vector<VkFormat> getCompatibleDepthStencilFormats(igl::TextureFormat format
   default:
     return {VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_D32_SFLOAT};
   }
-}
-
-VkQueueFlagBits getQueueTypeFlag(igl::CommandQueueType type) {
-  switch (type) {
-  case igl::CommandQueueType::Compute:
-    return VK_QUEUE_COMPUTE_BIT;
-  case igl::CommandQueueType::Graphics:
-    return VK_QUEUE_GRAPHICS_BIT;
-  case igl::CommandQueueType::MemoryTransfer:
-    return VK_QUEUE_TRANSFER_BIT;
-  }
-  IGL_UNREACHABLE_RETURN(VK_QUEUE_GRAPHICS_BIT)
 }
 
 bool validateImageLimits(VkImageType imageType,
@@ -353,6 +337,8 @@ struct VulkanContextImpl final {
       arenaCombinedImageSamplers_;
   std::unordered_map<VkDescriptorSetLayout, std::unique_ptr<igl::vulkan::DescriptorPoolsArena>>
       arenaBuffers_;
+  std::unordered_map<VkDescriptorSetLayout, std::unique_ptr<igl::vulkan::DescriptorPoolsArena>>
+      arenaStorageImages_;
   std::unique_ptr<igl::vulkan::VulkanDescriptorSetLayout> dslBindless_; // everything
   VkDescriptorPool dpBindless_ = VK_NULL_HANDLE;
   VkDescriptorSet dsBindless_ = VK_NULL_HANDLE;
@@ -380,6 +366,17 @@ struct VulkanContextImpl final {
                                                numBindings,
                                                "arenaCombinedImageSamplers_");
     return *arenaCombinedImageSamplers_[dsl].get();
+  }
+  igl::vulkan::DescriptorPoolsArena& getOrCreateArena_StorageImages(const VulkanContext& ctx,
+                                                                    VkDescriptorSetLayout dsl,
+                                                                    uint32_t numBindings) {
+    auto it = arenaStorageImages_.find(dsl);
+    if (it != arenaStorageImages_.end()) {
+      return *it->second;
+    }
+    arenaStorageImages_[dsl] = std::make_unique<DescriptorPoolsArena>(
+        ctx, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, dsl, numBindings, "arenaStorageImages_");
+    return *arenaStorageImages_[dsl].get();
   }
   igl::vulkan::DescriptorPoolsArena& getOrCreateArena_Buffers(const VulkanContext& ctx,
                                                               VkDescriptorSetLayout dsl,
@@ -411,6 +408,7 @@ VulkanContext::VulkanContext(VulkanContextConfig config,
 
   pimpl_ = std::make_unique<VulkanContextImpl>();
 
+#if defined(IGL_CMAKE_BUILD)
   const auto result = volkInitialize();
 
   // Do not remove for backward compatibility with projects using global functions.
@@ -418,7 +416,7 @@ VulkanContext::VulkanContext(VulkanContextConfig config,
     IGL_LOG_ERROR("volkInitialize() failed with error code %d\n", static_cast<int>(result));
     abort();
   };
-
+#endif // IGL_CMAKE_BUILD
   vulkan::functions::initialize(*tableImpl_);
 
 #if IGL_USE_GLSLANG
@@ -514,6 +512,7 @@ VulkanContext::~VulkanContext() {
       }
     }
     pimpl_->arenaCombinedImageSamplers_.clear();
+    pimpl_->arenaStorageImages_.clear();
     pimpl_->arenaBuffers_.clear();
     vf_.vkDestroyPipelineCache(device, pipelineCache_, nullptr);
   }
@@ -549,6 +548,10 @@ VulkanContext::~VulkanContext() {
                  VulkanComputePipelineBuilder::getNumPipelinesCreated());
   }
 #endif // IGL_DEBUG || defined(IGL_FORCE_ENABLE_LOGS)
+
+#if defined(IGL_CMAKE_BUILD)
+  volkFinalize();
+#endif
 }
 
 void VulkanContext::createInstance(const size_t numExtraExtensions,
@@ -578,19 +581,20 @@ void VulkanContext::createInstance(const size_t numExtraExtensions,
 
   VK_ASSERT(creationErrorCode);
 
+#if defined(IGL_CMAKE_BUILD)
   // Do not remove for backward compatibility with projects using global functions.
   volkLoadInstance(vkInstance_);
-
-  const bool enableExtDebugUtils = extensions_.enable(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VulkanExtensions::ExtensionType::Instance);
-
+#endif
+  const bool enableExtDebugUtils = extensions_.enable(VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+                                                      VulkanExtensions::ExtensionType::Instance);
   vulkan::functions::loadInstanceFunctions(*tableImpl_, vkInstance_, enableExtDebugUtils);
 
-#if defined(VK_EXT_debug_utils) && IGL_PLATFORM_WIN
+#if defined(VK_EXT_debug_utils) && IGL_PLATFORM_WINDOWS
   if (extensions_.enabled(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
     VK_ASSERT(ivkCreateDebugUtilsMessenger(
         &vf_, vkInstance_, &vulkanDebugCallback, this, &vkDebugUtilsMessenger_));
   }
-#endif // if defined(VK_EXT_debug_utils) && IGL_PLATFORM_WIN
+#endif // if defined(VK_EXT_debug_utils) && IGL_PLATFORM_WINDOWS
 
 #if IGL_DEBUG || defined(IGL_FORCE_ENABLE_LOGS)
   if (config_.enableExtraLogs) {
@@ -783,31 +787,9 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
   queuePool.reserveQueue(graphicsQueueDescriptor);
   queuePool.reserveQueue(computeQueueDescriptor);
 
-  // Reserve queues requested by user
-  // Reserve transfer types at the end, since those can fallback to compute and graphics queues.
-  // This reduces the risk of failing reservation due to saturation of compute and graphics queues
-  auto sortedUserQueues = config_.userQueues;
-  sort(sortedUserQueues.begin(), sortedUserQueues.end(), [](const auto& /*q1*/, const auto& q2) {
-    return q2 == CommandQueueType::MemoryTransfer;
-  });
-
-  for (const auto& userQueue : sortedUserQueues) {
-    auto userQueueDescriptor = queuePool.findQueueDescriptor(getQueueTypeFlag(userQueue));
-    if (userQueueDescriptor.isValid()) {
-      userQueues_[userQueue] = userQueueDescriptor;
-    } else {
-      IGL_LOG_ERROR("User requested queue is not supported");
-      return Result(Result::Code::Unsupported, "User requested queue is not supported");
-    }
-  }
-
-  for (const auto& [_, descriptor] : userQueues_) {
-    queuePool.reserveQueue(descriptor);
-  }
-
   const auto qcis = queuePool.getQueueCreationInfos();
 
-  VkDevice device;
+  VkDevice device = nullptr;
   VK_ASSERT_RETURN(
       ivkCreateDevice(&vf_,
                       vkPhysicalDevice_,
@@ -817,10 +799,12 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
                       extensions_.allEnabled(VulkanExtensions::ExtensionType::Device).data(),
                       &features_.VkPhysicalDeviceFeatures2_,
                       &device));
+#if defined(IGL_CMAKE_BUILD)
   if (!config_.enableConcurrentVkDevicesSupport) {
     // Do not remove for backward compatibility with projects using global functions.
     volkLoadDevice(device);
   }
+#endif
 
   // Table functions are always bound to a device. Project using enableConcurrentVkDevicesSupport
   // should use own copy of function table bound to a device.
@@ -836,7 +820,11 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
       device, deviceQueues_.computeQueueFamilyIndex, 0, &deviceQueues_.computeQueue);
 
   device_ = std::make_unique<igl::vulkan::VulkanDevice>(
-      vf_, device, IGL_FORMAT("Device: VulkanContext::device_ {}", debugName).c_str());
+      vf_,
+      device,
+      IGL_FORMAT("Device: VulkanContext::device_ {}",
+                 debugName ? debugName : "igl/vulkan/VulkanContext.cpp")
+          .c_str());
   immediate_ =
       std::make_unique<igl::vulkan::VulkanImmediateCommands>(vf_,
                                                              device,
@@ -861,14 +849,15 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
 
   // Create Vulkan Memory Allocator
   if (IGL_VULKAN_USE_VMA) {
-    VK_ASSERT_RETURN(ivkVmaCreateAllocator(&vf_,
-                                           vkPhysicalDevice_,
-                                           device_->getVkDevice(),
-                                           vkInstance_,
-                                           apiVersion,
-                                           config_.enableBufferDeviceAddress,
-                                           (VkDeviceSize)config_.vmaPreferredLargeHeapBlockSize,
-                                           &pimpl_->vma_));
+    VK_ASSERT_RETURN(
+        ivkVmaCreateAllocator(&vf_,
+                              vkPhysicalDevice_,
+                              device_->getVkDevice(),
+                              vkInstance_,
+                              apiVersion > VK_API_VERSION_1_3 ? VK_API_VERSION_1_3 : apiVersion,
+                              config_.enableBufferDeviceAddress,
+                              (VkDeviceSize)config_.vmaPreferredLargeHeapBlockSize,
+                              &pimpl_->vma_));
   }
 
   // The staging device will use VMA to allocate a buffer, so this needs
@@ -984,19 +973,25 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
 
 #if defined(VK_EXT_calibrated_timestamps)
   if (extensions_.enabled(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)) {
-    tracyCtx_ = TracyVkContextCalibrated(getVkPhysicalDevice(),
+    tracyCtx_ = TracyVkContextCalibrated(vkInstance_,
+                                         getVkPhysicalDevice(),
                                          getVkDevice(),
                                          deviceQueues_.graphicsQueue,
                                          profilingCommandBuffer_,
-                                         vkGetPhysicalDeviceCalibrateableTimeDomainsEXT,
-                                         vkGetCalibratedTimestampsEXT);
+                                         tableImpl_->vkGetInstanceProcAddr,
+                                         tableImpl_->vkGetDeviceProcAddr);
   }
 #endif // VK_EXT_calibrated_timestamps
   // If VK_EXT_calibrated_timestamps is not available or it has not been enabled, use the
   // uncalibrated Tracy context
   if (!tracyCtx_) {
-    tracyCtx_ = TracyVkContext(
-        getVkPhysicalDevice(), getVkDevice(), deviceQueues_.graphicsQueue, profilingCommandBuffer_);
+    tracyCtx_ = TracyVkContext(vkInstance_,
+                               getVkPhysicalDevice(),
+                               getVkDevice(),
+                               deviceQueues_.graphicsQueue,
+                               profilingCommandBuffer_,
+                               tableImpl_->vkGetInstanceProcAddr,
+                               tableImpl_->vkGetDeviceProcAddr);
   }
 
   IGL_DEBUG_ASSERT(tracyCtx_, "Failed to create Tracy GPU profiling context");
@@ -1544,7 +1539,7 @@ void VulkanContext::querySurfaceCapabilities() {
     vf_.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
         vkPhysicalDevice_, vkSurface_, &deviceSurfaceCaps_);
 
-    uint32_t formatCount;
+    uint32_t formatCount = 0;
     vf_.vkGetPhysicalDeviceSurfaceFormatsKHR(vkPhysicalDevice_, vkSurface_, &formatCount, nullptr);
 
     if (formatCount) {
@@ -1553,7 +1548,7 @@ void VulkanContext::querySurfaceCapabilities() {
           vkPhysicalDevice_, vkSurface_, &formatCount, deviceSurfaceFormats_.data());
     }
 
-    uint32_t presentModeCount;
+    uint32_t presentModeCount = 0;
     vf_.vkGetPhysicalDeviceSurfacePresentModesKHR(
         vkPhysicalDevice_, vkSurface_, &presentModeCount, nullptr);
 
@@ -1696,6 +1691,62 @@ void VulkanContext::updateBindingsTextures(VkCommandBuffer IGL_NONNULL cmdBuf,
   }
 }
 
+void VulkanContext::updateBindingsStorageImages(
+    VkCommandBuffer IGL_NONNULL cmdBuf,
+    VkPipelineLayout layout,
+    VkPipelineBindPoint bindPoint,
+    VulkanImmediateCommands::SubmitHandle nextSubmitHandle,
+    const BindingsStorageImages& data,
+    const VulkanDescriptorSetLayout& dsl,
+    const util::SpvModuleInfo& info) const {
+  IGL_PROFILER_FUNCTION();
+
+  DescriptorPoolsArena& arena = pimpl_->getOrCreateArena_StorageImages(
+      *this, dsl.getVkDescriptorSetLayout(), dsl.numBindings_);
+
+  VkDescriptorSet dset = arena.getNextDescriptorSet(*immediate_, nextSubmitHandle);
+
+  // @fb-only
+  VkDescriptorImageInfo infoStorageImages[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
+  uint32_t numStorageImages = 0;
+
+  // @fb-only
+  VkWriteDescriptorSet writes[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
+  uint32_t numWrites = 0;
+
+  // make sure the guard value is always there
+  IGL_DEBUG_ASSERT(!textures_.objects_.empty());
+
+  // use the dummy texture to avoid sparse array
+  VkImageView dummyImageView = textures_.objects_[0].obj_->imageView_.getVkImageView();
+
+  for (const util::ImageDescription& d : info.images) {
+    IGL_DEBUG_ASSERT(d.descriptorSet == kBindPoint_StorageImages);
+    const uint32_t loc = d.bindingLocation;
+    IGL_DEBUG_ASSERT(loc < IGL_TEXTURE_SAMPLERS_MAX);
+    VkImageView imageView = data.images[loc];
+    writes[numWrites++] = ivkGetWriteDescriptorSet_ImageInfo(
+        dset, loc, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, &infoStorageImages[numStorageImages]);
+    infoStorageImages[numStorageImages++] = VkDescriptorImageInfo{
+        .sampler = VK_NULL_HANDLE,
+        .imageView = imageView ? imageView : dummyImageView,
+        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+    };
+  }
+
+  if (numWrites) {
+    IGL_PROFILER_ZONE("vkUpdateDescriptorSets()", IGL_PROFILER_COLOR_UPDATE);
+    vf_.vkUpdateDescriptorSets(device_->getVkDevice(), numWrites, writes, 0, nullptr);
+    IGL_PROFILER_ZONE_END();
+
+#if IGL_VULKAN_PRINT_COMMANDS
+    IGL_LOG_INFO("%p vkCmdBindDescriptorSets(%u) - storage images\n", cmdBuf, bindPoint);
+#endif // IGL_VULKAN_PRINT_COMMANDS
+    vf_.vkCmdBindDescriptorSets(
+        cmdBuf, bindPoint, layout, kBindPoint_StorageImages, 1, &dset, 0, nullptr);
+  }
+}
+
 void VulkanContext::updateBindingsBuffers(VkCommandBuffer IGL_NONNULL cmdBuf,
                                           VkPipelineLayout layout,
                                           VkPipelineBindPoint bindPoint,
@@ -1814,7 +1865,7 @@ VkSamplerYcbcrConversionInfo VulkanContext::getOrCreateYcbcrConversionInfo(VkFor
   }
 
   VkFormatProperties props;
-  vkGetPhysicalDeviceFormatProperties(getVkPhysicalDevice(), format, &props);
+  vf_.vkGetPhysicalDeviceFormatProperties(getVkPhysicalDevice(), format, &props);
 
   const bool cosited =
       (props.optimalTilingFeatures & VK_FORMAT_FEATURE_COSITED_CHROMA_SAMPLES_BIT) != 0;
@@ -1864,7 +1915,7 @@ VkSamplerYcbcrConversionInfo VulkanContext::getOrCreateYcbcrConversionInfo(VkFor
       VK_IMAGE_USAGE_SAMPLED_BIT,
       VK_IMAGE_CREATE_DISJOINT_BIT,
   };
-  vkGetPhysicalDeviceImageFormatProperties2(
+  vf_.vkGetPhysicalDeviceImageFormatProperties2(
       getVkPhysicalDevice(), &imageFormatInfo, &imageFormatProps);
 
   IGL_DEBUG_ASSERT(samplerYcbcrConversionImageFormatProps.combinedImageSamplerDescriptorCount <= 3);
@@ -1877,6 +1928,7 @@ VkSamplerYcbcrConversionInfo VulkanContext::getOrCreateYcbcrConversionInfo(VkFor
 void VulkanContext::freeResourcesForDescriptorSetLayout(VkDescriptorSetLayout dsl) const {
   pimpl_->arenaBuffers_.erase(dsl);
   pimpl_->arenaCombinedImageSamplers_.erase(dsl);
+  pimpl_->arenaStorageImages_.erase(dsl);
 }
 
 igl::BindGroupTextureHandle VulkanContext::createBindGroup(const BindGroupTextureDesc& desc,

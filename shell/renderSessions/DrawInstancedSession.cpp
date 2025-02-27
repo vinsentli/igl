@@ -10,7 +10,6 @@
 #include "DrawInstancedSession.h"
 
 #include <igl/opengl/Device.h>
-#include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/RenderCommandEncoder.h>
 #include <shell/shared/renderSession/ShellParams.h>
 
@@ -115,7 +114,7 @@ void main() {
 )";
 }
 
-std::unique_ptr<IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
+std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
     IGL_DEBUG_ASSERT_NOT_REACHED();
@@ -173,8 +172,7 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
 
 void DrawInstancedSession::initialize() noexcept {
   // Command queue: backed by different types of GPU HW queues
-  commandQueue_ =
-      getPlatform().getDevice().createCommandQueue({CommandQueueType::Graphics}, nullptr);
+  commandQueue_ = getPlatform().getDevice().createCommandQueue({}, nullptr);
 
   renderPass_.colorAttachments.resize(1);
 
@@ -195,7 +193,7 @@ void DrawInstancedSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(index_buffer_);
 }
 
-void DrawInstancedSession::update(igl::SurfaceTextures surfaceTextures) noexcept {
+void DrawInstancedSession::update(SurfaceTextures surfaceTextures) noexcept {
   FramebufferDesc framebufferDesc;
   framebufferDesc.colorAttachments[0].texture = surfaceTextures.color;
 
@@ -269,7 +267,7 @@ void DrawInstancedSession::update(igl::SurfaceTextures surfaceTextures) noexcept
   commands->bindRenderPipelineState(renderPipelineState_Triangle_);
   commands->bindViewport(viewport);
   commands->bindScissorRect(scissor);
-  commands->pushDebugGroupLabel("Render Triangle", igl::Color(1, 0, 0));
+  commands->pushDebugGroupLabel("Render Triangle", Color(1, 0, 0));
   commands->bindVertexBuffer(1, *vertex_buffer_);
   commands->bindIndexBuffer(*index_buffer_, IndexFormat::UInt16);
   commands->drawIndexed(6, 100);
