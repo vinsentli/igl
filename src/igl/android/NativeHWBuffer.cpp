@@ -140,9 +140,9 @@ Result allocateNativeHWBuffer(const TextureDesc& desc,
   bufferDesc.rfu0 = 0;
   bufferDesc.rfu1 = 0;
 
-#if __ANDROID_MIN_SDK_VERSION__ >= 33
+#if __ANDROID_API__ >= 33
   bufferDesc.usage |= surfaceComposite ? AHARDWAREBUFFER_USAGE_COMPOSER_OVERLAY : 0;
-#endif // __ANDROID_MIN_SDK_VERSION__ >= 33
+#endif // __ANDROID_API__ >= 33
 
   const auto code = AHardwareBuffer_allocate(&bufferDesc, buffer);
   if (code != 0) {

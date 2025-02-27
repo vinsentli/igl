@@ -34,9 +34,9 @@ class INativeHWTextureBuffer {
    private:
     friend class INativeHWTextureBuffer;
 
-    LockGuard(const INativeHWTextureBuffer* hwBufferOwner = nullptr);
+    LockGuard(const INativeHWTextureBuffer* IGL_NONNULL hwBufferOwner = nullptr);
 
-    const INativeHWTextureBuffer* hwBufferOwner_;
+    const INativeHWTextureBuffer* IGL_NULLABLE hwBufferOwner_;
   };
 
   struct RangeDesc : TextureRangeDesc {
@@ -45,24 +45,24 @@ class INativeHWTextureBuffer {
 
   virtual ~INativeHWTextureBuffer();
 
-  Result attachHWBuffer(AHardwareBuffer* buffer);
+  Result attachHWBuffer(AHardwareBuffer* IGL_NULLABLE buffer);
   Result createHWBuffer(const TextureDesc& desc, bool hasStorageAlready, bool surfaceComposite);
 
   [[nodiscard]] LockGuard lockHWBuffer(std::byte* IGL_NULLABLE* IGL_NONNULL dst,
                                        RangeDesc& outRange,
-                                       Result* outResult) const;
+                                       Result* IGL_NULLABLE outResult) const;
 
   Result lockHWBuffer(std::byte* IGL_NULLABLE* IGL_NONNULL dst, RangeDesc& outRange) const;
   Result unlockHWBuffer() const;
 
-  [[nodiscard]] AHardwareBuffer* getHardwareBuffer() const;
+  [[nodiscard]] AHardwareBuffer* IGL_NULLABLE getHardwareBuffer() const;
 
   [[nodiscard]] TextureDesc getTextureDesc() const;
 
  protected:
-  virtual Result createTextureInternal(const TextureDesc& desc, AHardwareBuffer* buffer) = 0;
+  virtual Result createTextureInternal(const TextureDesc& desc, AHardwareBuffer* IGL_NULLABLE buffer) = 0;
 
-  AHardwareBuffer* hwBuffer_ = nullptr;
+  AHardwareBuffer* IGL_NULLABLE hwBuffer_ = nullptr;
   TextureDesc textureDesc_;
 };
 
@@ -76,7 +76,7 @@ TextureDesc::TextureUsage getIglBufferUsage(uint32_t nativeUsage);
 
 Result allocateNativeHWBuffer(const TextureDesc& desc,
                               bool surfaceComposite,
-                              AHardwareBuffer** buffer);
+                              AHardwareBuffer* IGL_NULLABLE * IGL_NONNULL buffer);
 
 } // namespace igl::android
 
