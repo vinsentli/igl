@@ -367,7 +367,7 @@ class VulkanContext final {
                              const VulkanDescriptorSetLayout& dsl,
                              const util::SpvModuleInfo& info) const;
   void updateBindingsStorageImages(VkCommandBuffer IGL_NONNULL cmdBuf,
-                                   VkPipelineLayout layout,
+                                   VkPipelineLayout IGL_NULLABLE layout,
                                    VkPipelineBindPoint bindPoint,
                                    VulkanImmediateCommands::SubmitHandle nextSubmitHandle,
                                    const BindingsStorageImages& data,

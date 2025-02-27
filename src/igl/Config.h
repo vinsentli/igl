@@ -146,9 +146,9 @@
 
 #endif // !defined(IGL_CMAKE_BUILD)
 
-#if IGL_PLATFORM_ANDROID && __ANDROID_MIN_SDK_VERSION__ >= 26
+#if IGL_PLATFORM_ANDROID && __ANDROID_API__ >= 26
   #define IGL_ANDROID_HWBUFFER_SUPPORTED
-#endif // __ANDROID_MIN_SDK_VERSION__ >= 26
+#endif // __ANDROID_API__ >= 26
 
 // IGL_PLATFORM_XR is for extended reality platforms like OpenXR
 #if !defined(IGL_PLATFORM_XR)
