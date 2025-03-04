@@ -220,7 +220,7 @@ void ComputeCommandEncoder::bindImageTexture(uint32_t index,
 
   restoreLayout_.push_back(vkImage);
   restoreLayoutAspectFlags_.push_back(
-      tex ? tex->getVulkanTexture().imageView_.getVkImageAspectFlags() : VK_IMAGE_ASPECT_NONE);
+      tex ? tex->getVulkanTexture().imageView_.getVkImageAspectFlags() : VK_IMAGE_ASPECT_NONE_KHR);
 
   binder_.bindStorageImage(index, tex);
 }
