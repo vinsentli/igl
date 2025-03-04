@@ -17,7 +17,7 @@ class Device;
 class CommandBuffer final : public ICommandBuffer,
                             public std::enable_shared_from_this<CommandBuffer> {
  public:
-  CommandBuffer(igl::metal::Device& device, id<MTLCommandBuffer> value);
+  CommandBuffer(Device& device, id<MTLCommandBuffer> value);
   ~CommandBuffer() override = default;
 
   std::unique_ptr<IComputeCommandEncoder> createComputeCommandEncoder() override;
@@ -51,12 +51,12 @@ class CommandBuffer final : public ICommandBuffer,
   //@tencent only
   void * getImpl() override { return (__bridge void *)value_;}
 
-  igl::metal::Device& device() {
+  Device& device() {
     return device_;
   }
 
  private:
-  igl::metal::Device& device_;
+  Device& device_;
   id<MTLCommandBuffer> value_;
 };
 

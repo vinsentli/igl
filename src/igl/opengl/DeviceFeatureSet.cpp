@@ -257,6 +257,9 @@ bool DeviceFeatureSet::isExtensionSupported(Extensions extension) const {
 
 bool DeviceFeatureSet::isFeatureSupported(DeviceFeatures feature) const {
   switch (feature) {
+  case DeviceFeatures::CopyBuffer:
+    return hasDesktopOrESVersion(*this, GLVersion::v3_1, GLVersion::v3_0_ES);
+
   case DeviceFeatures::MultiSample:
     return hasDesktopVersion(*this, GLVersion::v3_0) ||
            hasExtension(Extensions::FramebufferObject) || hasESVersion(*this, GLVersion::v3_0_ES) ||
@@ -412,6 +415,8 @@ bool DeviceFeatureSet::isFeatureSupported(DeviceFeatures feature) const {
   case DeviceFeatures::SRGB:
     return hasDesktopOrESVersionOrExtension(
         *this, GLVersion::v2_1, GLVersion::v3_0_ES, "GL_EXT_texture_sRGB", "GL_EXT_sRGB");
+  case DeviceFeatures::SRGBSwapchain:
+    return glContext_.eglSupportssRGB() && hasFeature(DeviceFeatures::SRGB);
   case DeviceFeatures::SRGBWriteControl:
     return hasDesktopVersion(*this, GLVersion::v3_0) ||
            hasDesktopExtension(*this, "GL_ARB_framebuffer_sRGB") ||

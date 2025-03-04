@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <igl/Config.h>
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
 #include <android/hardware_buffer.h>
@@ -38,7 +39,7 @@ class NativeHWBufferTest : public ::testing::Test {
 
 class NativeHWTextureBufferTest : public igl::android::INativeHWTextureBuffer {
  protected:
-  Result createTextureInternal(const TextureDesc& desc, AHardwareBuffer* buffer) override {
+  Result createTextureInternal(AHardwareBuffer* buffer) override {
     return Result();
   }
 };
@@ -385,8 +386,7 @@ TEST_F(NativeHWBufferTextureTestOpenGL3, SharedMemoryTexture) {
       *iglDev_, *cmdQueue_, texture, pixels_.data(), "HWBufferTextureOpenGL3");
 }
 
-// @fb-only
-using NativeHWBufferTextureTestVulkan = NativeHWBufferTextureTest<{igl::BackendType::Vulkan}>;
+using NativeHWBufferTextureTestVulkan = NativeHWBufferTextureTest<igl::BackendType::Vulkan>;
 
 TEST_F(NativeHWBufferTextureTestVulkan, SharedMemoryTexture) {
   Result outResult;
@@ -400,7 +400,6 @@ TEST_F(NativeHWBufferTextureTestVulkan, SharedMemoryTexture) {
   util::validateUploadedTexture(
       *iglDev_, *cmdQueue_, texture, pixels_.data(), "HWBufferTextureVulkan");
 }
-// @fb-only
 
 } // namespace igl::tests
 

@@ -97,6 +97,12 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
       .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID,
   };
 
+  auto desc = TextureDesc::newNativeHWBufferImage(
+      igl::vulkan::vkFormatToTextureFormat(ahb_format_props.format),
+      igl::android::getIglBufferUsage(hwbDesc.usage),
+      hwbDesc.width,
+      hwbDesc.height);
+
   VkImage vk_image;
 
   VkImageCreateInfo vk_image_info = {.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -252,7 +258,8 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
     return Result(Result::Code::RuntimeError, "Failed to create vulkan texture");
   }
 
-  desc_ = textureDesc_;
+  desc_ = desc; // Field within the Texture class
+  textureDesc_ = desc; // Field within the NativeHWTextureBuffer class
   texture_ = std::move(vkTexture);
 
   return Result{Result::Code::Ok};

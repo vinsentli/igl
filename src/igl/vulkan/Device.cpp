@@ -595,6 +595,8 @@ bool Device::hasFeature(DeviceFeatures feature) const {
     return false;
   case DeviceFeatures::Compute:
     return true;
+  case DeviceFeatures::CopyBuffer:
+    return true;
   case DeviceFeatures::ExplicitBinding:
     return true;
   case DeviceFeatures::ExplicitBindingExt:
@@ -628,6 +630,8 @@ bool Device::hasFeature(DeviceFeatures feature) const {
   case DeviceFeatures::TextureArrayExt:
     return false;
   case DeviceFeatures::SRGB:
+    return true;
+  case DeviceFeatures::SRGBSwapchain:
     return true;
   // on Metal and Vulkan, the framebuffer pixel format dictates sRGB control.
   case DeviceFeatures::SRGBWriteControl:

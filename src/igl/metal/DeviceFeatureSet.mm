@@ -140,9 +140,12 @@ bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
   case DeviceFeatures::Texture2DArray:
   case DeviceFeatures::Texture3D:
   case DeviceFeatures::SRGB:
+  case DeviceFeatures::SRGBSwapchain:
   case DeviceFeatures::DrawFirstIndexFirstVertex:
   case DeviceFeatures::DrawIndexedIndirect:
     return true;
+  case DeviceFeatures::CopyBuffer:
+    return false; // not implemented (yet)
   case DeviceFeatures::Indices8Bit:
     return false;
   // on Metal and Vulkan, the framebuffer pixel format dictates sRGB control.

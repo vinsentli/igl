@@ -26,6 +26,7 @@ namespace igl {
  * BufferNoCopy               Supports creating buffers that use previously allocated memory
  * BufferRing                 Supports creating ring buffers with memory for each swapchain image
  * Compute                    Supports compute
+ * CopyBuffer                 Supports ICommandBuffer::copyBuffer()
  * DepthCompare               Supports setting depth compare function
  * DepthShaderRead            Supports reading depth texture from a shader
  * DrawFirstIndexFirstVertex  Supports firstIndex/firstVertex parameters in IRenderCommandEncoder::drawIndexed()
@@ -47,6 +48,7 @@ namespace igl {
  * ShaderTextureLod           Supports explicit control of Lod in the shader
  * ShaderTextureLodExt        Supports explicit control of Lod in the shader via an extension
  * SRGB                       Supports sRGB Textures and FrameBuffer
+ * SRGBSwapchain              Supports sRGB Swapchain
  * StandardDerivative         Supports Standard Derivative function in shader
  * StandardDerivativeExt      Supports Standard Derivative function in shader via an extension
  * StorageBuffers             Supports SSBO
@@ -73,6 +75,7 @@ enum class DeviceFeatures {
   BufferNoCopy,
   BufferRing,
   Compute,
+  CopyBuffer,
   DepthCompare,
   DepthShaderRead,
   DrawFirstIndexFirstVertex,
@@ -95,6 +98,7 @@ enum class DeviceFeatures {
   ShaderTextureLod,
   ShaderTextureLodExt,
   SRGB,
+  SRGBSwapchain,             
   SRGBWriteControl,
   StandardDerivative,
   StandardDerivativeExt,
