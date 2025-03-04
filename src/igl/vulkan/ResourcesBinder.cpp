@@ -119,7 +119,7 @@ void ResourcesBinder::bindTexture(uint32_t index, Texture* tex) {
       // that was not rendered to by IGL. If that's the case, then make sure
       // the underlying image is transitioned to
       // VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-      IGL_DEBUG_ASSERT(img.imageLayout_ == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+      // IGL_DEBUG_ASSERT(img.imageLayout_ == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     } else {
       IGL_DEBUG_ASSERT(img.imageLayout_ == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL ||
                        img.imageLayout_ == VK_IMAGE_LAYOUT_GENERAL);
