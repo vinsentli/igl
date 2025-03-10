@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <igl/Config.h>
+#include <igl/IGLConfig.h>
 
 ///--------------------------------------
 /// MARK: - String Macros

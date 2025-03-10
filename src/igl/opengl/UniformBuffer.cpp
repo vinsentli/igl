@@ -309,5 +309,5 @@ void UniformBuffer::bindUniformArray(IContext& context,
       return;
     }
   }
-}
+}//NOCA:MEMORY_LEAK(设计如此)
 } // namespace igl::opengl

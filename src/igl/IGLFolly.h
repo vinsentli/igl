@@ -123,5 +123,10 @@
 
 #endif // IGL_CMAKE_BUILD
 
+#if 0
 #define IGL_NULLABLE FOLLY_NULLABLE
 #define IGL_NONNULL FOLLY_NONNULL
+#else
+#define IGL_NULLABLE
+#define IGL_NONNULL
+#endif

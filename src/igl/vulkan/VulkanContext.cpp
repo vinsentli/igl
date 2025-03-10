@@ -86,7 +86,7 @@ vulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT msgSeverity,
   std::array<char, 128> typeName = {};
   void* messageID = nullptr;
 
-  if (sscanf(cbData->pMessage,
+  if (sscanf(cbData->pMessage,//NOCA:DangerousMethod(设计如此)
              "Validation Error : [ %127s ] Object %i: handle = %p, type = %127s | MessageID = %p",
              errorName.data(),
              &object,

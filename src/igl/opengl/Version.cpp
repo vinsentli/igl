@@ -181,7 +181,7 @@ std::pair<uint32_t, uint32_t> parseVersionString(const char* version) {
 #ifdef _MSC_VER
   const int ret = sscanf_s(version, versionFormat, &majorVersion, &minorVersion);
 #else
-  const int ret = sscanf(version, versionFormat, &majorVersion, &minorVersion);
+  const int ret = sscanf(version, versionFormat, &majorVersion, &minorVersion);//NOCA:DangerousMethod(设计如此)
 #endif // _MSC_VER
   if (ret != 2) {
     IGL_LOG_DEBUG("failed to parse GL version string %s\n", version);

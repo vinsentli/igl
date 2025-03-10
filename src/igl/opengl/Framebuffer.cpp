@@ -157,7 +157,7 @@ void Framebuffer::attachAsColor(igl::ITexture& texture,
                                 uint32_t index,
                                 const Texture::AttachmentParams& params) const {
   static_cast<Texture&>(texture).attachAsColor(index, params);
-  IGL_DEBUG_ASSERT(index >= 0 && index < kNumCachedStates);
+  IGL_DEBUG_ASSERT(index >= 0 && index < kNumCachedStates);//NOCA:CONSTANT_EXPRESSION_RESULT(设计如此)
   colorCachedState_[index].updateCache(params.stereo ? FramebufferMode::Stereo
                                                      : FramebufferMode::Mono,
                                        params.layer,
@@ -707,12 +707,12 @@ void CustomFramebuffer::bind(const RenderPassDesc& renderPass) const {
     }
 #endif
     const size_t index = i;
-    IGL_DEBUG_ASSERT(index >= 0 && index < renderPass.colorAttachments.size());
+    IGL_DEBUG_ASSERT(index >= 0 && index < renderPass.colorAttachments.size());//NOCA:CONSTANT_EXPRESSION_RESULT(设计如此)
     const auto& renderPassAttachment = renderPass.colorAttachments[index];
     // When setting up a framebuffer, we attach textures as though they were a non-array
     // texture with and set layer, mip-level and face equal to 0.
     // If any of these assumptions are not true, we need to reattach with proper values.
-    IGL_DEBUG_ASSERT(index >= 0 && index < kNumCachedStates);
+    IGL_DEBUG_ASSERT(index >= 0 && index < kNumCachedStates);//NOCA:CONSTANT_EXPRESSION_RESULT(设计如此)
     if (colorCachedState_[index].needsUpdate(renderTarget_.mode,
                                              renderPassAttachment.layer,
                                              renderPassAttachment.face,
