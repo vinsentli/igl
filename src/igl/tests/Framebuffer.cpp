@@ -6,7 +6,6 @@
  */
 
 #include "data/ShaderData.h"
-#include "data/TextureData.h"
 #include "data/VertexIndexData.h"
 #include "util/Common.h"
 #include "util/TestDevice.h"
@@ -16,6 +15,11 @@
 #include <igl/opengl/IContext.h>
 #include <igl/opengl/PlatformDevice.h>
 #endif // #IGL_BACKEND_OPENGL
+#include <igl/CommandBuffer.h>
+#include <igl/RenderPass.h>
+#include <igl/RenderPipelineState.h>
+#include <igl/SamplerState.h>
+#include <igl/VertexInputState.h>
 #include <string>
 
 namespace igl::tests {
@@ -223,7 +227,7 @@ TEST_F(FramebufferTest, Clear) {
   Result ret;
   std::shared_ptr<IRenderPipelineState> pipelineState;
 
-  std::shared_ptr<igl::IDepthStencilState> depthStencilState;
+  std::shared_ptr<IDepthStencilState> depthStencilState;
   DepthStencilStateDesc desc;
   desc.isDepthWriteEnabled = true;
 

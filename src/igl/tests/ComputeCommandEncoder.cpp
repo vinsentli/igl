@@ -5,11 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <functional>
 #include <gtest/gtest.h>
-#include <igl/IGL.h>
+#include <igl/CommandBuffer.h>
+#include <igl/ComputeCommandEncoder.h>
+#include <igl/ComputePipelineState.h>
+#include <igl/Shader.h>
+#include <igl/ShaderCreator.h>
 #include <memory>
-#include <utility>
 #include <vector>
 
 #include "data/ShaderData.h"
@@ -73,7 +75,7 @@ class ComputeCommandEncoderTest : public ::testing::Test {
         IGL_DEBUG_ASSERT_NOT_REACHED();
       }
 
-      igl::Result ret;
+      Result ret;
       computeStages_ =
           ShaderStagesCreator::fromModuleStringInput(*iglDev_, source, entryName, "", &ret);
       ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -85,9 +87,9 @@ class ComputeCommandEncoderTest : public ::testing::Test {
    * @brief This function binds bufferIn and bufferOut to a new computePipelineState and encodes the
    * computePipelineState to a new computeCommandEncoder.
    */
-  void encodeCompute(const std::shared_ptr<igl::ICommandBuffer>& cmdBuffer,
-                     const std::shared_ptr<igl::IBuffer>& bufferIn,
-                     const std::shared_ptr<igl::IBuffer>& bufferOut,
+  void encodeCompute(const std::shared_ptr<ICommandBuffer>& cmdBuffer,
+                     const std::shared_ptr<IBuffer>& bufferIn,
+                     const std::shared_ptr<IBuffer>& bufferOut,
                      std::shared_ptr<IComputePipelineState>& ret) {
     ASSERT_TRUE(computeStages_ != nullptr);
     ComputePipelineDesc computeDesc;
@@ -151,7 +153,7 @@ TEST_F(ComputeCommandEncoderTest, canEncodeBasicBufferOperation) {
 
   std::vector<float> bytes(dataIn.size());
   auto range = BufferRange(sizeof(float) * dataIn.size(), 0);
-  igl::Result ret;
+  Result ret;
   auto* data = bufferOut0_->map(range, &ret);
   ASSERT_TRUE(data != nullptr);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -173,6 +175,7 @@ TEST_F(ComputeCommandEncoderTest, bindImageTexture) {
 
   auto computeCommandEncoder = cmdBuffer->createComputeCommandEncoder();
   computeCommandEncoder->bindImageTexture(0, nullptr, TextureFormat::Invalid);
+  computeCommandEncoder->endEncoding();
   cmdQueue_->submit(*cmdBuffer);
   cmdBuffer->waitUntilCompleted();
 }
@@ -218,7 +221,7 @@ TEST_F(ComputeCommandEncoderTest, canUseOutputBufferFromOnePassAsInputToNext) {
 
   std::vector<float> bytes(dataIn.size());
   auto range = BufferRange(sizeof(float) * dataIn.size(), 0);
-  igl::Result ret;
+  Result ret;
   auto* data = bufferOut2_->map(range, &ret);
   ASSERT_TRUE(data != nullptr);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();

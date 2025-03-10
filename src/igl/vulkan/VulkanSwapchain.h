@@ -95,12 +95,14 @@ class VulkanSwapchain final {
  private:
   void lazyAllocateDepthBuffer() const;
 
- private:
+ public:
   std::vector<VulkanSemaphore> acquireSemaphores_;
   // Used to check whether the acquire semaphore can be used for acquiring
   // Based on
   // https://github.com/corporateshark/lightweightvk/blob/36597fae5c79ad6b310e4ed8c00e8acfa38b5aca/lvk/vulkan/VulkanClasses.h#L146
-  std::vector<VulkanFence> acquireFences_;
+  std::vector<VulkanFence> acquireFences_; // this can be removed once we switch to timeline
+                                           // semaphores
+  std::vector<uint64_t> timelineWaitValues_;
 
  private:
     VulkanContext& ctx_;
@@ -114,7 +116,7 @@ class VulkanSwapchain final {
   // semaphores and fences), the index of the semaphore and fence used to synchronize the current
   // swapchain image is different than the `currentImageIndex_`
   uint32_t currentSemaphoreIndex_ = 0;
-  uint64_t frameNumber_ = 0;
+  uint64_t frameNumber_ = 0; // increasing continuously without bound
   bool getNextImage_ = true;
   VkSwapchainKHR swapchain_{};
   std::unique_ptr<std::shared_ptr<VulkanTexture>[]> swapchainTextures_;

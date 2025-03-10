@@ -8,7 +8,6 @@
 #include "../util/TestDevice.h"
 
 #include <gtest/gtest.h>
-#include <igl/IGL.h>
 #include <igl/opengl/Device.h>
 #include <igl/opengl/TextureTarget.h>
 #include <string>
@@ -55,7 +54,7 @@ class TextureTargetOGLTest : public ::testing::Test {
   // Member variables
  public:
   opengl::IContext* context_{};
-  std::shared_ptr<::igl::IDevice> device_;
+  std::shared_ptr<IDevice> device_;
 };
 
 //

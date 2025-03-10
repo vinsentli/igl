@@ -10,6 +10,10 @@
 #include "../util/Common.h"
 
 #include <gtest/gtest.h>
+#include <igl/CommandBuffer.h>
+#include <igl/RenderPass.h>
+#include <igl/RenderPipelineState.h>
+#include <igl/VertexInputState.h>
 #include <igl/opengl/DepthStencilState.h>
 #include <string>
 
@@ -174,7 +178,7 @@ TEST_F(DepthStencilStateTest, Passthrough) {
 //
 TEST_F(DepthStencilStateTest, CompareFunctionToOGL) {
   struct CompareFuncConversion {
-    igl::CompareFunction igl = igl::CompareFunction::Never;
+    CompareFunction igl = igl::CompareFunction::Never;
     GLenum ogl = GL_NEVER;
   };
 
@@ -202,7 +206,7 @@ TEST_F(DepthStencilStateTest, CompareFunctionToOGL) {
 //
 TEST_F(DepthStencilStateTest, StencilOperationToOGL) {
   struct StencilOpConversion {
-    igl::StencilOperation igl = igl::StencilOperation::Keep;
+    StencilOperation igl = igl::StencilOperation::Keep;
     GLenum ogl = GL_KEEP;
   };
 

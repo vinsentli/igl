@@ -7,7 +7,8 @@
 
 #pragma once
 
-#include <igl/IGL.h>
+#include <cstdarg>
+#include <igl/Core.h>
 
 namespace igl::tests::util {
 /// Sets an IGL handler that will cause gtest to fail when IGLReportErrorHandler is called

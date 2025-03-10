@@ -9,7 +9,6 @@
 
 #include <cmath>
 #include <gtest/gtest.h>
-#include <igl/IGL.h>
 #include <igl/opengl/CommandQueue.h>
 #include <igl/opengl/Device.h>
 #include <igl/opengl/TextureBuffer.h>
@@ -64,7 +63,7 @@ class TextureBufferOGLTest : public ::testing::Test {
   // Member variables
  public:
   opengl::IContext* context_{};
-  std::shared_ptr<::igl::IDevice> device_;
+  std::shared_ptr<IDevice> device_;
 };
 
 //

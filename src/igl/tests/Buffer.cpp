@@ -8,6 +8,8 @@
 #include "util/Common.h"
 #include "util/TestDevice.h"
 
+#include <igl/Buffer.h>
+#include <igl/Uniform.h>
 #include <string>
 
 namespace igl::tests {
@@ -237,7 +239,7 @@ TEST_F(BufferTest, copyBytesErrorsIndexBuffer) {
 TEST_F(BufferTest, mapUniformBuffer) {
   Result ret;
 
-  igl::Color color = {1.0f, 5.0f, 7.0f, 1.0f};
+  Color color = {1.0f, 5.0f, 7.0f, 1.0f};
   BufferDesc bufferDesc;
   bufferDesc.type = BufferDesc::BufferTypeBits::Uniform;
   bufferDesc.data = &color;

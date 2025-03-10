@@ -8,7 +8,6 @@
 #include "../util/TestDevice.h"
 
 #include <gtest/gtest.h>
-#include <igl/IGL.h>
 #include <igl/opengl/Device.h>
 #include <igl/opengl/SamplerState.h>
 #include <string>
@@ -32,12 +31,12 @@ class SamplerStateOGLTest : public ::testing::Test {
     igl::setDebugBreakEnabled(false);
 
     device_ = util::createTestDevice();
-    context_ = &static_cast<opengl::Device&>(*device_.get()).getContext();
+    context_ = &static_cast<opengl::Device&>(*device_).getContext();
 
     ASSERT_TRUE(context_ != nullptr);
   }
 
-  std::shared_ptr<::igl::IDevice> device_;
+  std::shared_ptr<IDevice> device_;
   opengl::IContext* context_{};
 };
 

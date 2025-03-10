@@ -23,7 +23,7 @@
 #include <string>
 
 namespace igl::tests {
-#if IGL_OPENGL_ES && IGL_BACKEND_OPENGL
+#if IGL_BACKEND_OPENGL && IGL_OPENGL_ES
 static const bool kUsesOpenGLES = opengl::DeviceFeatureSet::usesOpenGLES();
 #else
 // no OpenGLES was linked
@@ -96,15 +96,15 @@ class TextureFloatTest : public ::testing::Test {
   TextureFloatTest() = default;
   ~TextureFloatTest() override = default;
 
-  std::shared_ptr<iglu::ManagedUniformBuffer> createVertexUniformBuffer(igl::IDevice& device,
-                                                                        igl::Result* /*result*/) {
+  std::shared_ptr<iglu::ManagedUniformBuffer> createVertexUniformBuffer(IDevice& device,
+                                                                        Result* /*result*/) {
     std::shared_ptr<iglu::ManagedUniformBuffer> vertUniformBuffer = nullptr;
 
     const iglu::ManagedUniformBufferInfo vertInfo = {
         .index = 2,
         .length = sizeof(VertexUniforms),
         .uniforms = {
-            igl::UniformDesc{
+            UniformDesc{
                 .name = "layer",
                 .type = igl::UniformType::Int,
                 .offset = offsetof(VertexUniforms, layer),
@@ -117,7 +117,7 @@ class TextureFloatTest : public ::testing::Test {
     return vertUniformBuffer;
   }
 
-  void createPassthroughFrameBuffer(igl::TextureFormat format) {
+  void createPassthroughFrameBuffer(TextureFormat format) {
     // Create an offscreen texture to render to
     const TextureDesc texDesc = TextureDesc::new2D(
         format, kOffscreenTexWidth, kOffscreenTexHeight, TextureDesc::TextureUsageBits::Attachment);
@@ -271,7 +271,7 @@ class TextureFloatTest : public ::testing::Test {
 
   void TearDown() override {}
   template<typename ColorType>
-  void runPassthroughFormat(igl::TextureFormat format, const ColorType* data) {
+  void runPassthroughFormat(TextureFormat format, const ColorType* data) {
     std::shared_ptr<IRenderPipelineState> pipelineState;
     createPassthroughFrameBuffer(format);
     ASSERT_TRUE(offscreenTexture_ != nullptr);
@@ -382,7 +382,7 @@ namespace {
 template<typename ColorType>
 void runUploadTest(IDevice& device,
                    ICommandQueue& cmdQueue,
-                   igl::TextureFormat format,
+                   TextureFormat format,
                    const ColorType* data) {
   Result ret;
   const std::shared_ptr<IRenderPipelineState> pipelineState;

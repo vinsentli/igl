@@ -16,6 +16,7 @@ VulkanImmediateCommands::VulkanImmediateCommands(const VulkanFunctionTable& vf,
                                                  VkDevice device,
                                                  uint32_t queueFamilyIndex,
                                                  bool exportableFences,
+                                                 bool useTimelineSemaphoreAndSynchronization2,
                                                  const char* debugName) :
   vf_(vf),
   device_(device),
@@ -25,7 +26,8 @@ VulkanImmediateCommands::VulkanImmediateCommands(const VulkanFunctionTable& vf,
                    VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
                queueFamilyIndex,
                debugName),
-  debugName_(debugName) {
+  debugName_(debugName),
+  useTimelineSemaphoreAndSynchronization2_(useTimelineSemaphoreAndSynchronization2) {
   IGL_PROFILER_FUNCTION();
 
   vf_.vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue_);
@@ -218,39 +220,83 @@ bool VulkanImmediateCommands::isReady(const SubmitHandle handle) const {
 VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
     const CommandBufferWrapper& wrapper) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_SUBMIT);
+
   IGL_DEBUG_ASSERT(wrapper.isEncoding_);
   VK_ASSERT(vf_.vkEndCommandBuffer(wrapper.cmdBuf_));
 
-  // @lint-ignore CLANGTIDY
-  const VkPipelineStageFlags waitStageMasks[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                                                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
-  // @lint-ignore CLANGTIDY
-  VkSemaphore waitSemaphores[] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
-  uint32_t numWaitSemaphores = 0;
-  if (waitSemaphore_) {
-    waitSemaphores[numWaitSemaphores++] = waitSemaphore_;
-  }
-  if (lastSubmitSemaphore_) {
-    waitSemaphores[numWaitSemaphores++] = lastSubmitSemaphore_;
-  }
+  if (useTimelineSemaphoreAndSynchronization2_) {
+    // @lint-ignore CLANGTIDY
+    VkSemaphoreSubmitInfo waitSemaphores[] = {{}, {}};
+    uint32_t numWaitSemaphores = 0;
+    if (waitSemaphore_.semaphore) {
+      waitSemaphores[numWaitSemaphores++] = waitSemaphore_;
+    }
+    if (lastSubmitSemaphore_.semaphore) {
+      waitSemaphores[numWaitSemaphores++] = lastSubmitSemaphore_;
+    }
+    // @lint-ignore CLANGTIDY
+    const VkSemaphoreSubmitInfo signalSemaphores[] = {
+        VkSemaphoreSubmitInfo{
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+            .semaphore = wrapper.semaphore_.getVkSemaphore(),
+            .stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        },
+        signalSemaphore_,
+    };
 
-  const VkSubmitInfo si = ivkGetSubmitInfo(&wrapper.cmdBuf_,
-                                           numWaitSemaphores,
-                                           waitSemaphores,
-                                           waitStageMasks,
-                                           &wrapper.semaphore_.vkSemaphore_);
-  // @lint-ignore CLANGTIDY
-  const VkFence vkFence = wrapper.fence_.vkFence_;
-  IGL_PROFILER_ZONE("vkQueueSubmit()", IGL_PROFILER_COLOR_SUBMIT);
+    const VkCommandBufferSubmitInfo bufferSI = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+        .commandBuffer = wrapper.cmdBuf_,
+    };
+    const VkSubmitInfo2 si = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+        .waitSemaphoreInfoCount = numWaitSemaphores,
+        .pWaitSemaphoreInfos = waitSemaphores,
+        .commandBufferInfoCount = 1u,
+        .pCommandBufferInfos = &bufferSI,
+        .signalSemaphoreInfoCount = signalSemaphore_.semaphore ? 2u : 1u,
+        .pSignalSemaphoreInfos = signalSemaphores,
+    };
+
+    IGL_PROFILER_ZONE("vkQueueSubmit2KHR()", IGL_PROFILER_COLOR_SUBMIT);
 #if IGL_VULKAN_PRINT_COMMANDS
-  IGL_LOG_INFO("%p vkQueueSubmit()\n\n", wrapper.cmdBuf_);
+    IGL_LOG_INFO("%p vkQueueSubmit2KHR()\n\n", wrapper.cmdBuf_);
 #endif // IGL_VULKAN_PRINT_COMMANDS
-  VK_ASSERT(vf_.vkQueueSubmit(queue_, 1u, &si, vkFence));
-  IGL_PROFILER_ZONE_END();
+    VK_ASSERT(vf_.vkQueueSubmit2KHR(queue_, 1u, &si, wrapper.fence_.vkFence_));
+    IGL_PROFILER_ZONE_END();
+  } else {
+    // @lint-ignore CLANGTIDY
+    const VkPipelineStageFlags waitStageMasks[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
+    // @lint-ignore CLANGTIDY
+    VkSemaphore waitSemaphores[] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+    uint32_t numWaitSemaphores = 0;
+    if (waitSemaphore_.semaphore) {
+      waitSemaphores[numWaitSemaphores++] = waitSemaphore_.semaphore;
+    }
+    if (lastSubmitSemaphore_.semaphore) {
+      waitSemaphores[numWaitSemaphores++] = lastSubmitSemaphore_.semaphore;
+    }
 
-  lastSubmitSemaphore_ = wrapper.semaphore_.vkSemaphore_;
+    const VkSubmitInfo si = ivkGetSubmitInfo(&wrapper.cmdBuf_,
+                                             numWaitSemaphores,
+                                             waitSemaphores,
+                                             waitStageMasks,
+                                             &wrapper.semaphore_.vkSemaphore_);
+    // @lint-ignore CLANGTIDY
+    const VkFence vkFence = wrapper.fence_.vkFence_;
+    IGL_PROFILER_ZONE("vkQueueSubmit()", IGL_PROFILER_COLOR_SUBMIT);
+#if IGL_VULKAN_PRINT_COMMANDS
+    IGL_LOG_INFO("%p vkQueueSubmit()\n\n", wrapper.cmdBuf_);
+#endif // IGL_VULKAN_PRINT_COMMANDS
+    VK_ASSERT(vf_.vkQueueSubmit(queue_, 1u, &si, vkFence));
+    IGL_PROFILER_ZONE_END();
+  }
+
+  lastSubmitSemaphore_.semaphore = wrapper.semaphore_.vkSemaphore_;
   lastSubmitHandle_ = wrapper.handle_;
-  waitSemaphore_ = VK_NULL_HANDLE;
+  waitSemaphore_.semaphore = VK_NULL_HANDLE;
+  signalSemaphore_.semaphore = VK_NULL_HANDLE;
 
   // reset
   const_cast<CommandBufferWrapper&>(wrapper).isEncoding_ = false;
@@ -267,13 +313,19 @@ VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
 }
 
 void VulkanImmediateCommands::waitSemaphore(VkSemaphore semaphore) {
-  IGL_DEBUG_ASSERT(waitSemaphore_ == VK_NULL_HANDLE);
+  IGL_DEBUG_ASSERT(waitSemaphore_.semaphore == VK_NULL_HANDLE);
 
-  waitSemaphore_ = semaphore;
+  waitSemaphore_.semaphore = semaphore;
+}
+
+void VulkanImmediateCommands::signalSemaphore(VkSemaphore semaphore, uint64_t signalValue) {
+  IGL_DEBUG_ASSERT(signalSemaphore_.semaphore == VK_NULL_HANDLE);
+  signalSemaphore_.semaphore = semaphore;
+  signalSemaphore_.value = signalValue;
 }
 
 VkSemaphore VulkanImmediateCommands::acquireLastSubmitSemaphore() {
-  return std::exchange(lastSubmitSemaphore_, VK_NULL_HANDLE);
+  return std::exchange(lastSubmitSemaphore_.semaphore, VK_NULL_HANDLE);
 }
 
 VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::getLastSubmitHandle() const {

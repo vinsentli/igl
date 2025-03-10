@@ -501,6 +501,7 @@ VulkanContext::~VulkanContext() {
   waitDeferredTasks();
 
   immediate_.reset(nullptr);
+  timelineSemaphore_.reset(nullptr);
 
   if (device_) {
     if (pimpl_->dpBindless_ != VK_NULL_HANDLE) {
@@ -706,6 +707,7 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
   if (requestedFeatures != nullptr) {
     features_ = *requestedFeatures;
   } else {
+    features_.populateWithAvailablePhysicalDeviceFeatures(*this, vkPhysicalDevice_);
     features_.enableDefaultFeatures1_1();
   }
   // ... and check whether they are available in the physical device (they should be)
@@ -825,12 +827,13 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
       IGL_FORMAT("Device: VulkanContext::device_ {}",
                  debugName ? debugName : "igl/vulkan/VulkanContext.cpp")
           .c_str());
-  immediate_ =
-      std::make_unique<igl::vulkan::VulkanImmediateCommands>(vf_,
-                                                             device,
-                                                             deviceQueues_.graphicsQueueFamilyIndex,
-                                                             config_.exportableFences,
-                                                             "VulkanContext::immediate_");
+  immediate_ = std::make_unique<VulkanImmediateCommands>(vf_,
+                                                         device,
+                                                         deviceQueues_.graphicsQueueFamilyIndex,
+                                                         config_.exportableFences,
+                                                         extensions_.hasTimelineSemaphore &&
+                                                             extensions_.hasSynchronization2,
+                                                         "VulkanContext::immediate_");
   IGL_DEBUG_ASSERT(config_.maxResourceCount > 0,
                    "Max resource count needs to be greater than zero");
   syncSubmitHandles_.resize(config_.maxResourceCount);
@@ -916,12 +919,16 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
         textures_.create(std::make_shared<VulkanTexture>(std::move(image), std::move(imageView)));
     IGL_DEBUG_ASSERT(textures_.numObjects() == 1);
     const uint32_t pixel = 0xFF000000;
+
+    const VkImageAspectFlags imageAspectFlags =
+        (*textures_.get(pimpl_->dummyTexture_))->image_.getImageAspectFlags();
     stagingDevice_->imageData(
         (*textures_.get(pimpl_->dummyTexture_))->image_,
         TextureType::TwoD,
         TextureRangeDesc::new2D(0, 0, 1, 1),
         TextureFormatProperties::fromTextureFormat(TextureFormat::RGBA_UNorm8),
         0,
+        imageAspectFlags,
         &pixel);
   }
 
@@ -1143,6 +1150,11 @@ igl::Result VulkanContext::initSwapchain(uint32_t width, uint32_t height) {
   }
 
   swapchain_ = std::make_unique<igl::vulkan::VulkanSwapchain>(*this, width, height);
+
+  if (extensions_.hasTimelineSemaphore && extensions_.hasSynchronization2) {
+    timelineSemaphore_ = std::make_unique<VulkanSemaphore>(
+        vf_, getVkDevice(), 0, false, "Semaphore: VulkanContext::timelineSemaphore_");
+  }
 
   return swapchain_ ? Result() : Result(Result::Code::RuntimeError, "Failed to create Swapchain");
 }
