@@ -137,7 +137,7 @@ TextureDesc::TextureUsage getIglBufferUsage(uint32_t nativeUsage) {
   return bufferUsage;
 }
 
-Result allocateNativeHWBuffer(AHardwareBufferFunctionTable *funcTable,
+Result allocateNativeHWBuffer(AHardwareBufferFunctionTable* funcTable,
                               const TextureDesc& desc,
                               bool surfaceComposite,
                               AHardwareBuffer** buffer) {
@@ -228,7 +228,8 @@ Result INativeHWTextureBuffer::createHWBuffer(const TextureDesc& desc,
   }
 
   AHardwareBuffer* buffer = nullptr;
-  auto allocationResult = igl::android::allocateNativeHWBuffer(funcTable_, desc, surfaceComposite, &buffer);
+  auto allocationResult =
+      igl::android::allocateNativeHWBuffer(funcTable_, desc, surfaceComposite, &buffer);
   if (!allocationResult.isOk()) {
     IGL_LOG_ERROR("HW alloc failed");
     return allocationResult;
@@ -261,10 +262,10 @@ Result INativeHWTextureBuffer::lockHWBuffer(std::byte* IGL_NULLABLE* IGL_NONNULL
   funcTable_->AHardwareBuffer_describe(hwBuffer_, &hwbDesc);
 
   if (funcTable_->AHardwareBuffer_lock(hwBuffer_,
-                           AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
-                           -1,
-                           nullptr,
-                           reinterpret_cast<void**>(dst))) {
+                                       AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
+                                       -1,
+                                       nullptr,
+                                       reinterpret_cast<void**>(dst))) {
     IGL_DEBUG_ABORT("Failed to lock hardware buffer");
     return Result(Result::Code::RuntimeError, "Failed to lock hardware buffer");
   }

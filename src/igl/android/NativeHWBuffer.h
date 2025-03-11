@@ -19,16 +19,16 @@
 #define COLOR_QCOM_FORMATYUV420PackedSemiPlanar32m 0x7FA30C04
 #endif
 
+#include "AHardwareBufferFunctionTable.h"
 #include <android/hardware_buffer.h>
 #include <igl/Texture.h>
 #include <igl/TextureFormat.h>
-#include "AHardwareBufferFunctionTable.h"
 
 namespace igl::android {
 
 class INativeHWTextureBuffer {
  public:
-  INativeHWTextureBuffer(AHardwareBufferFunctionTable *funcTable):funcTable_(funcTable) {}
+  INativeHWTextureBuffer(AHardwareBufferFunctionTable* funcTable) : funcTable_(funcTable) {}
 
   struct LockGuard {
    public:
@@ -75,7 +75,7 @@ class INativeHWTextureBuffer {
   virtual Result createTextureInternal(AHardwareBuffer* IGL_NULLABLE buffer) = 0;
   AHardwareBuffer* IGL_NULLABLE hwBuffer_ = nullptr;
   TextureDesc textureDesc_;
-  AHardwareBufferFunctionTable *funcTable_ = nullptr;
+  AHardwareBufferFunctionTable* funcTable_ = nullptr;
 };
 
 // utils
@@ -86,10 +86,10 @@ uint32_t getNativeHWBufferUsage(TextureDesc::TextureUsage iglUsage);
 TextureFormat getIglFormat(uint32_t nativeFormat);
 TextureDesc::TextureUsage getIglBufferUsage(uint32_t nativeUsage);
 
-Result allocateNativeHWBuffer(AHardwareBufferFunctionTable *funcTable,
+Result allocateNativeHWBuffer(AHardwareBufferFunctionTable* funcTable,
                               const TextureDesc& desc,
                               bool surfaceComposite,
-                              AHardwareBuffer* IGL_NULLABLE * IGL_NONNULL buffer);
+                              AHardwareBuffer* IGL_NULLABLE* IGL_NONNULL buffer);
 
 } // namespace igl::android
 
