@@ -22,6 +22,8 @@ if(ANDROID)
   list(APPEND HEADER_FILES android/LogDefault.h)
   list(APPEND SRC_FILES android/NativeHWBuffer.cpp)
   list(APPEND HEADER_FILES android/NativeHWBuffer.h)
+  list(APPEND SRC_FILES android/AHardwareBufferFunctionTable.cpp)
+  list(APPEND HEADER_FILES android/AHardwareBufferFunctionTable.h)
 endif()
 
 add_library(IGLLibrary OBJECT ${SRC_FILES} ${HEADER_FILES})

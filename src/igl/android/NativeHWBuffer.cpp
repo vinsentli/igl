@@ -137,7 +137,8 @@ TextureDesc::TextureUsage getIglBufferUsage(uint32_t nativeUsage) {
   return bufferUsage;
 }
 
-Result allocateNativeHWBuffer(const TextureDesc& desc,
+Result allocateNativeHWBuffer(AHardwareBufferFunctionTable *funcTable,
+                              const TextureDesc& desc,
                               bool surfaceComposite,
                               AHardwareBuffer** buffer) {
   AHardwareBuffer_Desc bufferDesc = {};
@@ -153,7 +154,7 @@ Result allocateNativeHWBuffer(const TextureDesc& desc,
   bufferDesc.usage |= surfaceComposite ? AHARDWAREBUFFER_USAGE_COMPOSER_OVERLAY : 0;
 #endif // __ANDROID_API__ >= 33
 
-  const auto code = AHardwareBuffer_allocate(&bufferDesc, buffer);
+  const auto code = funcTable->AHardwareBuffer_allocate(&bufferDesc, buffer);
   if (code != 0) {
     return Result(Result::Code::RuntimeError, "AHardwareBuffer allocation failed");
   }
@@ -180,12 +181,12 @@ Result INativeHWTextureBuffer::createWithHWBuffer(AHardwareBuffer* buffer) {
     return Result{Result::Code::InvalidOperation, "Hardware buffer already provided"};
   }
 
-  AHardwareBuffer_acquire(buffer);
+  funcTable_->AHardwareBuffer_acquire(buffer);
 
   // textureDesc_ should be updated through createTextureInternal function.
   Result result = createTextureInternal(buffer);
   if (!result.isOk()) {
-    AHardwareBuffer_release(buffer);
+    funcTable_->AHardwareBuffer_release(buffer);
   } else {
     hwBuffer_ = buffer;
   }
@@ -227,7 +228,7 @@ Result INativeHWTextureBuffer::createHWBuffer(const TextureDesc& desc,
   }
 
   AHardwareBuffer* buffer = nullptr;
-  auto allocationResult = igl::android::allocateNativeHWBuffer(desc, surfaceComposite, &buffer);
+  auto allocationResult = igl::android::allocateNativeHWBuffer(funcTable_, desc, surfaceComposite, &buffer);
   if (!allocationResult.isOk()) {
     IGL_LOG_ERROR("HW alloc failed");
     return allocationResult;
@@ -236,7 +237,7 @@ Result INativeHWTextureBuffer::createHWBuffer(const TextureDesc& desc,
   Result result = createTextureInternal(buffer);
   if (!result.isOk()) {
     IGL_LOG_ERROR("HW internal failed");
-    AHardwareBuffer_release(buffer);
+    funcTable_->AHardwareBuffer_release(buffer);
   } else {
     hwBuffer_ = buffer;
     textureDesc_ = desc;
@@ -257,9 +258,9 @@ INativeHWTextureBuffer::LockGuard INativeHWTextureBuffer::lockHWBuffer(
 Result INativeHWTextureBuffer::lockHWBuffer(std::byte* IGL_NULLABLE* IGL_NONNULL dst,
                                             RangeDesc& outRange) const {
   AHardwareBuffer_Desc hwbDesc;
-  AHardwareBuffer_describe(hwBuffer_, &hwbDesc);
+  funcTable_->AHardwareBuffer_describe(hwBuffer_, &hwbDesc);
 
-  if (AHardwareBuffer_lock(hwBuffer_,
+  if (funcTable_->AHardwareBuffer_lock(hwBuffer_,
                            AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
                            -1,
                            nullptr,
@@ -278,7 +279,7 @@ Result INativeHWTextureBuffer::lockHWBuffer(std::byte* IGL_NULLABLE* IGL_NONNULL
 }
 
 Result INativeHWTextureBuffer::unlockHWBuffer() const {
-  if (AHardwareBuffer_unlock(hwBuffer_, nullptr)) {
+  if (funcTable_->AHardwareBuffer_unlock(hwBuffer_, nullptr)) {
     IGL_DEBUG_ABORT("Failed to unlock hardware buffer");
     return Result(Result::Code::RuntimeError, "Failed to unlock hardware buffer");
   }

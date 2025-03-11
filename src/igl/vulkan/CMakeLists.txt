@@ -35,9 +35,9 @@ add_library(IGLVulkan OBJECT ${SRC_FILES} ${HEADER_FILES})
 igl_set_cxxstd(IGLVulkan 17)
 igl_set_folder(IGLVulkan "IGL")
 
-find_package(Vulkan REQUIRED)
+#find_package(Vulkan REQUIRED)
 
-target_link_libraries(IGLVulkan PUBLIC Vulkan::Vulkan)
+#target_link_libraries(IGLVulkan PUBLIC Vulkan::Vulkan)
 target_link_libraries(IGLVulkan PUBLIC fmt)
 
 target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/fmt/include")

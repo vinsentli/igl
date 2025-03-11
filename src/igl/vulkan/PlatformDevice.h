@@ -12,6 +12,7 @@
 #include <igl/vulkan/Common.h>
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
+#include <igl/android/AHardwareBufferFunctionTable.h>
 struct AHardwareBuffer;
 #endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
@@ -78,6 +79,10 @@ class PlatformDevice : public IPlatformDevice {
   Device& device_;
   std::vector<std::shared_ptr<ITexture>> nativeDrawableTextures_;
   std::shared_ptr<ITexture> nativeDepthTexture_;
+
+#if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
+  std::unique_ptr<AHardwareBufferFunctionTable> funcTable_;
+#endif
 };
 
 } // namespace igl::vulkan

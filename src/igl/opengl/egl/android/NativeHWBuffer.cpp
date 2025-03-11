@@ -51,7 +51,7 @@ NativeHWTextureBuffer::~NativeHWTextureBuffer() {
   if (context) {
     eglDestroyImageKHR(context->display, context->elgImage);
     if (hwBuffer_) {
-      AHardwareBuffer_release(hwBuffer_);
+      funcTable_->AHardwareBuffer_release(hwBuffer_);
     }
     hwBuffer_ = nullptr;
   }
@@ -71,7 +71,7 @@ Result NativeHWTextureBuffer::create(const TextureDesc& desc, bool hasStorageAlr
 
 Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* buffer) {
   AHardwareBuffer_Desc hwbDesc;
-  AHardwareBuffer_describe(buffer, &hwbDesc);
+  funcTable_->AHardwareBuffer_describe(buffer, &hwbDesc);
 
   auto desc = TextureDesc::newNativeHWBufferImage(igl::android::getIglFormat(hwbDesc.format),
                                                   igl::android::getIglBufferUsage(hwbDesc.usage),
@@ -82,7 +82,7 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* buffer) {
     return result;
   }
 
-  EGLClientBuffer clientBuffer = eglGetNativeClientBufferANDROID(buffer);
+  EGLClientBuffer clientBuffer = funcTable_->eglGetNativeClientBufferANDROID(buffer);
   EGLint attribs[] = {EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE, EGL_NONE, EGL_NONE};
 
   EGLDisplay display = ((egl::Context*)&getContext())->getDisplay();

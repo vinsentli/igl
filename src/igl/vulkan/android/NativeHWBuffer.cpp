@@ -37,8 +37,8 @@ uint32_t ivkGetMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties& memProps,
 }
 } // namespace
 
-NativeHWTextureBuffer::NativeHWTextureBuffer(igl::vulkan::Device& device, TextureFormat format) :
-  Super(device, format) {}
+NativeHWTextureBuffer::NativeHWTextureBuffer(igl::vulkan::Device& device, AHardwareBufferFunctionTable *funcTable, TextureFormat format) :
+  Super(device, format), INativeHWTextureBuffer(funcTable) {}
 
 NativeHWTextureBuffer::~NativeHWTextureBuffer() {}
 
@@ -51,7 +51,7 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
     return Result(Result::Code::RuntimeError, "null buffer passed to create texture");
   }
   AHardwareBuffer_Desc hwbDesc;
-  AHardwareBuffer_describe(hwBuffer, &hwbDesc);
+  funcTable_->AHardwareBuffer_describe(hwBuffer, &hwbDesc);
 
   auto& ctx = device_.getVulkanContext();
   auto device = device_.getVulkanContext().getVkDevice();

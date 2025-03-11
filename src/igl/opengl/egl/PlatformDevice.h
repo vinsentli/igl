@@ -13,6 +13,7 @@
 #include <igl/opengl/PlatformDevice.h>
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
+#include <igl/android/AHardwareBufferFunctionTable.h>
 struct AHardwareBuffer;
 #endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
@@ -81,6 +82,9 @@ class PlatformDevice : public opengl::PlatformDevice {
  private:
   std::shared_ptr<ViewTextureTarget> drawableTexture_;
   std::shared_ptr<ViewTextureTarget> depthTexture_;
+#if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
+  std::unique_ptr<AHardwareBufferFunctionTable> funcTable_;
+#endif
 
   std::pair<EGLint, EGLint> getSurfaceDimensions(const Context& context, Result* outResult);
 };

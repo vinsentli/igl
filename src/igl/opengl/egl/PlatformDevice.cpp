@@ -18,7 +18,11 @@
 
 namespace igl::opengl::egl {
 
-PlatformDevice::PlatformDevice(Device& owner) : opengl::PlatformDevice(owner) {}
+PlatformDevice::PlatformDevice(Device& owner) : opengl::PlatformDevice(owner) {
+#if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
+    funcTable_ = AHardwareBufferFunctionTable::create();
+#endif
+}
 
 std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
     TextureFormat colorTextureFormat,
@@ -160,6 +164,10 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(
 /// this texture allows CPU and GPU to both read/write memory
 std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const TextureDesc& desc,
                                                                         Result* outResult) const {
+  if (!funcTable_) {
+      return nullptr;
+  }
+
   auto context = static_cast<Context*>(getSharedContext().get());
   if (context == nullptr) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "No EGL context found!");
@@ -169,7 +177,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const Te
 
   Result subResult;
 
-  auto texture = std::make_shared<android::NativeHWTextureBuffer>(getContext(), desc.format);
+  auto texture = std::make_shared<android::NativeHWTextureBuffer>(getContext(), funcTable_.get(),  desc.format);
   subResult = texture->createHWBuffer(desc, false, false);
   texture->setTextureUsage(desc.usage);
   Result::setResult(outResult, subResult.code, subResult.message);
@@ -187,6 +195,10 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const Te
 
 std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(AHardwareBuffer* buffer,
                                                                         Result* outResult) const {
+  if (!funcTable_) {
+      return nullptr;
+  }
+
   auto context = static_cast<Context*>(getSharedContext().get());
   if (context == nullptr) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "No EGL context found!");
@@ -196,10 +208,10 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(AHardwar
   Result subResult;
 
   AHardwareBuffer_Desc hwbDesc;
-  AHardwareBuffer_describe(buffer, &hwbDesc);
+  funcTable_->AHardwareBuffer_describe(buffer, &hwbDesc);
 
   auto texture = std::make_shared<android::NativeHWTextureBuffer>(
-      getContext(), igl::android::getIglFormat(hwbDesc.format));
+      getContext(), funcTable_.get(), igl::android::getIglFormat(hwbDesc.format));
   subResult = texture->createWithHWBuffer(buffer);
   Result::setResult(outResult, subResult.code, subResult.message);
   if (!subResult.isOk()) {
