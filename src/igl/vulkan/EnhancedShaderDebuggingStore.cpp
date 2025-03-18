@@ -222,7 +222,7 @@ std::shared_ptr<IRenderPipelineState> EnhancedShaderDebuggingStore::pipeline(
 
   const auto max = std::max_element(attachments.begin(), attachments.end());
 
-  desc.targetDesc.colorAttachments.resize(*max + 1);
+  desc.targetDesc.colorAttachments.resize(*max + 1);//NOCA:INVALIDATE_ITERATOR(设计如此)
 
   for (size_t index = 0; index <= *max; ++index) {
     if (!framebuffer->getColorAttachment(index)) {

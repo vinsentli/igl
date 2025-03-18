@@ -180,6 +180,7 @@ void ResourcesBinder::bindStorageImage(uint32_t index, Texture* tex) {
       ((newTexture->image_.samples_ & VK_SAMPLE_COUNT_1_BIT) == VK_SAMPLE_COUNT_1_BIT);
   const bool isStorageImage = isTextureAvailable && newTexture->image_.isStorageImage();
 
+  //NOCA:NullPointer(误报)
   VkImageView imageView = isStorageImage ? newTexture->imageView_.vkImageView_ : VK_NULL_HANDLE;
 
   if (bindingsStorageImages_.images[index] != imageView) {
