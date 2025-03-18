@@ -105,7 +105,7 @@ class RenderCommandEncoder final : public IRenderCommandEncoder {
 
   MTLPrimitiveType metalPrimitive_ = MTLPrimitiveTypeTriangle;
 
-  igl::metal::Device& device_;
+  Device& device_;
 };
 
 } // namespace igl::metal

@@ -712,7 +712,7 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
   }
   // ... and check whether they are available in the physical device (they should be)
   {
-    const auto featureCheckResult = features_.checkSelectedFeatures(availableFeatures);
+    auto featureCheckResult = features_.checkSelectedFeatures(availableFeatures);
     if (!featureCheckResult.isOk()) {
       return featureCheckResult;
     }
@@ -921,7 +921,7 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
     const uint32_t pixel = 0xFF000000;
 
     const VkImageAspectFlags imageAspectFlags =
-        (*textures_.get(pimpl_->dummyTexture_))->image_.getImageAspectFlags();
+        (*textures_.get(pimpl_->dummyTexture_))->imageView_.getVkImageAspectFlags();
     stagingDevice_->imageData(
         (*textures_.get(pimpl_->dummyTexture_))->image_,
         TextureType::TwoD,
