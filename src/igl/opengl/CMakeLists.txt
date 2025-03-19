@@ -65,6 +65,13 @@ add_library(IGLOpenGL OBJECT ${SRC_FILES} ${HEADER_FILES})
 
 # target_link_libraries(IGLOpenGL PRIVATE IGLLibrary)
 
+if(IGL_WITH_TRACY)
+  add_definitions("-DIGL_WITH_TRACY=1")
+  #  if(IGL_WITH_TRACY_GPU)
+  #    add_definitions("-DIGL_WITH_TRACY_GPU=1")
+  #  endif()
+endif()
+
 if(ANDROID)
   add_definitions("-DSUPPORT_ES31_IGL_OPENGL_ANDROID")
   add_definitions("-DGL_GLEXT_PROTOTYPES")

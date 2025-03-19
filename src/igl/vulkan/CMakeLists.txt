@@ -48,6 +48,12 @@ target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/sr
 #target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/glslang")
 target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/../../vendors/tracy/src")
 
+if(IGL_WITH_TRACY)
+  add_definitions("-DIGL_WITH_TRACY=1")
+  #  if(IGL_WITH_TRACY_GPU)
+  #    add_definitions("-DIGL_WITH_TRACY_GPU=1")
+  #  endif()
+endif()
 
 if(WIN32)
   add_definitions("-DVK_USE_PLATFORM_WIN32_KHR=1")
