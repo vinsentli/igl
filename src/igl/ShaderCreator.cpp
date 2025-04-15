@@ -300,9 +300,13 @@ std::unique_ptr<IShaderStages> ShaderStagesCreator::fromRenderModules(
     const IDevice& device,
     std::shared_ptr<IShaderModule> vertexModule,
     std::shared_ptr<IShaderModule> fragmentModule,
+    uint32_t programBinaryFormat,
+    std::shared_ptr<std::vector<uint8_t>> programBinary,
     Result* IGL_NULLABLE outResult) {
-  const auto desc =
+  auto desc =
       ShaderStagesDesc::fromRenderModules(std::move(vertexModule), std::move(fragmentModule));
+  desc.programBinaryFormat = programBinaryFormat;
+  desc.programBinary = programBinary;
   return device.createShaderStages(desc, outResult);
 }
 
@@ -342,7 +346,7 @@ std::unique_ptr<IShaderStages> fromLibraryDesc(const IDevice& device,
   }
 
   return ShaderStagesCreator::fromRenderModules(
-      device, std::move(vertexModule), std::move(fragmentModule), result);
+      device, std::move(vertexModule), std::move(fragmentModule), 0, nullptr, result);
 }
 } // namespace
 } // namespace igl

@@ -420,31 +420,31 @@ EGLConfig Context::getConfig() const {
 }
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
-EGLImageKHR Context::createImageFromAndroidHardwareBuffer(AHardwareBuffer* hwb) const {
-  EGLClientBuffer clientBuffer = eglGetNativeClientBufferANDROID(hwb);
-  EGLint attribs[] = {EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE, EGL_NONE, EGL_NONE};
+// EGLImageKHR Context::createImageFromAndroidHardwareBuffer(AHardwareBuffer* hwb) const {
+//   EGLClientBuffer clientBuffer = eglGetNativeClientBufferANDROID(hwb);
+//   EGLint attribs[] = {EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE, EGL_NONE, EGL_NONE};
 
-  EGLDisplay display = this->getDisplay();
-  // eglCreateImageKHR will add a ref to the AHardwareBuffer
-  EGLImageKHR eglImage =
-      eglCreateImageKHR(display, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID, clientBuffer, attribs);
-  IGL_LOG_DEBUG("eglCreateImageKHR(%p, %x, %x, %p, {%d, %d, %d, %d, %d})\n",
-                display,
-                EGL_NO_CONTEXT,
-                EGL_NATIVE_BUFFER_ANDROID,
-                clientBuffer,
-                attribs[0],
-                attribs[1],
-                attribs[2],
-                attribs[3],
-                attribs[4]);
+//   EGLDisplay display = this->getDisplay();
+//   // eglCreateImageKHR will add a ref to the AHardwareBuffer
+//   EGLImageKHR eglImage =
+//       eglCreateImageKHR(display, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID, clientBuffer, attribs);
+//   IGL_LOG_DEBUG("eglCreateImageKHR(%p, %x, %x, %p, {%d, %d, %d, %d, %d})\n",
+//                 display,
+//                 EGL_NO_CONTEXT,
+//                 EGL_NATIVE_BUFFER_ANDROID,
+//                 clientBuffer,
+//                 attribs[0],
+//                 attribs[1],
+//                 attribs[2],
+//                 attribs[3],
+//                 attribs[4]);
 
-  this->checkForErrors(__FUNCTION__, __LINE__);
+//   this->checkForErrors(__FUNCTION__, __LINE__);
 
-  IGL_SOFT_ASSERT(this->isCurrentContext() || this->isCurrentSharegroup());
+//   IGL_SOFT_ASSERT(this->isCurrentContext() || this->isCurrentSharegroup());
 
-  return eglImage;
-}
+//   return eglImage;
+// }
 
 void Context::imageTargetTexture(EGLImageKHR eglImage, GLenum target) const {
   glEGLImageTargetTexture2DOES(target, static_cast<GLeglImageOES>(eglImage));

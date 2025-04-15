@@ -206,6 +206,8 @@ bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
     return false;
   case DeviceFeatures::PushConstants:
     return false;
+  case DeviceFeatures::ProgramBinary:
+    return false;
   }
   return false;
 }

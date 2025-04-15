@@ -265,6 +265,8 @@ class IContext {
                                            GLenum pname,
                                            GLint* params) const;
   void getIntegerv(GLenum pname, GLint* params) const;
+  void programBinary(GLuint program, GLenum binaryFormat, const GLvoid* binary, GLsizei length);
+  void getProgramBinary(GLuint program, GLsizei bufSize, GLsizei* length, GLenum* binaryFormat, GLvoid* binary);
   void getProgramiv(GLuint program, GLenum pname, GLint* params) const;
   void getProgramInterfaceiv(GLuint program,
                              GLenum programInterface,

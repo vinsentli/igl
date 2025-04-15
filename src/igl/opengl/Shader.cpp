@@ -45,6 +45,10 @@ void ShaderStages::createRenderProgram(Result* result) {
     return;
   }
 
+  // check support program binary
+  GLint programBinayFormats = 0;
+  getContext().getIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &programBinayFormats);
+
   const auto& vertexShader = static_cast<ShaderModule&>(*getVertexModule());
   const auto& fragmentShader = static_cast<ShaderModule&>(*getFragmentModule());
   const GLuint vertexShaderID = vertexShader.getShaderID();
@@ -63,6 +67,28 @@ void ShaderStages::createRenderProgram(Result* result) {
   if (programID == 0) {
     Result::setResult(result, Result::Code::RuntimeError, "Failed to create GL program");
     return;
+  }
+
+  if (programBinayFormats && desc_.programBinary && !desc_.programBinary->empty()) {
+    getContext().programBinary(programID,
+                               desc_.programBinaryFormat,
+                               desc_.programBinary->data(),
+                               desc_.programBinary->size());
+    GLint status = 0;
+    getContext().getProgramiv(programID, GL_LINK_STATUS, &status);
+    if (status) {
+      // now that the program successfully linked, set the program
+      if (programID_ != 0) {
+        getContext().deleteProgram(programID_);
+      }
+      programID_ = programID;
+
+      Result::setResult(result, Result::Code::Ok);
+      return;
+    } else {
+      auto error = getProgramInfoLog(programID);
+      IGL_DEBUG_ASSERT(false, "%s", error.c_str());
+    }
   }
 
   // attach the shaders and link them
@@ -102,6 +128,22 @@ void ShaderStages::createRenderProgram(Result* result) {
   programID_ = programID;
 
   Result::setResult(result, Result::Code::Ok);
+
+  if (programBinayFormats) {
+    GLint length = 0;
+    getContext().getProgramiv(programID, GL_PROGRAM_BINARY_LENGTH, &length);
+
+    programBinary_.resize(length);
+    GLint newLength = 0;
+    getContext().getProgramBinary(
+        programID, length, &newLength, &programBinaryFormat_, programBinary_.data());
+    IGL_DEBUG_ASSERT(length == newLength);
+    if (newLength == 0 || programBinaryFormat_ == 0) {
+      // failed
+      programBinary_.clear();
+      programBinaryFormat_ = 0;
+    }
+  }
 }
 
 void ShaderStages::createComputeProgram(Result* result) {

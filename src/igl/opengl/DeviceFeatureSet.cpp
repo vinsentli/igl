@@ -296,7 +296,7 @@ bool DeviceFeatureSet::isFeatureSupported(DeviceFeatures feature) const {
 
   case DeviceFeatures::TextureFormatRGB:
     return true;
-          
+
   case DeviceFeatures::TextureCompressionAstc:
     return isTextureFeatureSupported(TextureFeatures::TextureCompressionAstc);
 
@@ -436,6 +436,12 @@ bool DeviceFeatureSet::isFeatureSupported(DeviceFeatures feature) const {
 
   case DeviceFeatures::ValidationLayersEnabled:
     return false;
+
+  case DeviceFeatures::ProgramBinary:
+    if (programBinayFormats_ < 0) {
+      glContext_.getIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, (GLint*)&programBinayFormats_);
+    }
+    return programBinayFormats_ > 0;
 
   case DeviceFeatures::Indices8Bit:
     return true;

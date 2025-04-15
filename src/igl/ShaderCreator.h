@@ -250,6 +250,8 @@ class ShaderStagesCreator {
       const IDevice& device,
       std::shared_ptr<IShaderModule> vertexModule,
       std::shared_ptr<IShaderModule> fragmentModule,
+      uint32_t programBinaryFormat,
+      std::shared_ptr<std::vector<uint8_t>> programBinary,
       Result* IGL_NULLABLE outResult);
 
   /**

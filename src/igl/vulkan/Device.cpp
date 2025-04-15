@@ -642,6 +642,8 @@ bool Device::hasFeature(DeviceFeatures feature) const {
     return true;
   case DeviceFeatures::DrawIndexedIndirect:
     return true;
+  case DeviceFeatures::ProgramBinary:
+    return false;
   case DeviceFeatures::Indices8Bit:
     return ctx_->extensions_.has8BitIndices;
   case DeviceFeatures::ValidationLayersEnabled:

@@ -716,8 +716,7 @@ IContext::IContext() : deviceFeatureSet_(*this) {
 }
 
 IContext::~IContext() {
-  IGL_SOFT_ASSERT(refCount_ == 0,
-                  "Dangling IContext reference left behind."
+  IGL_SOFT_ASSERT(refCount_ == 0, "Dangling IContext reference left behind."
                   // @fb-only
   );
   // Clear the zombie guard explicitly so our "secret" stays secret.
@@ -774,7 +773,8 @@ bool IContext::shouldQueueAPI() const {
 }
 
 void IContext::activeTexture(GLenum texture) {
-  if (activeTexture_ == texture) return;
+  if (activeTexture_ == texture)
+    return;
   activeTexture_ = texture;
   GLCALL(ActiveTexture)(texture);
   APILOG("glActiveTexture(%s)\n", GL_ENUM_TO_STRING(texture));
@@ -788,7 +788,8 @@ void IContext::attachShader(GLuint program, GLuint shader) {
 }
 
 void IContext::bindBuffer(GLenum target, GLuint buffer) {
-  if (bindBufferIndexs_.count(target) && bindBufferIndexs_[target] == buffer) return;
+  if (bindBufferIndexs_.count(target) && bindBufferIndexs_[target] == buffer)
+    return;
   bindBufferIndexs_[target] = buffer;
   GLCALL(BindBuffer)(target, buffer);
   APILOG("glBindBuffer(%s, %u)\n", GL_ENUM_TO_STRING(target), buffer);
@@ -887,7 +888,8 @@ void IContext::blendEquation(GLenum mode) {
 }
 
 void IContext::blendEquationSeparate(GLenum modeRGB, GLenum modeAlpha) {
-  if (blendEquationSeparateRGB_ == modeRGB && blendEquationSeparateAlpha_ == modeAlpha) return;
+  if (blendEquationSeparateRGB_ == modeRGB && blendEquationSeparateAlpha_ == modeAlpha)
+    return;
   blendEquationSeparateRGB_ = modeRGB;
   blendEquationSeparateAlpha_ = modeAlpha;
   GLCALL(BlendEquationSeparate)(modeRGB, modeAlpha);
@@ -904,11 +906,13 @@ void IContext::blendFunc(GLenum sfactor, GLenum dfactor) {
 }
 
 void IContext::blendFuncSeparate(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha) {
-  if (blendFuncSeparate_[0] == srcRGB && blendFuncSeparate_[1] == dstRGB && blendFuncSeparate_[2] == srcAlpha && blendFuncSeparate_[3] == dstAlpha) return;
-  blendFuncSeparate_[0] = srcRGB ;
-  blendFuncSeparate_[1] = dstRGB ;
-  blendFuncSeparate_[2] = srcAlpha ;
-  blendFuncSeparate_[3] = dstAlpha ;
+  if (blendFuncSeparate_[0] == srcRGB && blendFuncSeparate_[1] == dstRGB &&
+      blendFuncSeparate_[2] == srcAlpha && blendFuncSeparate_[3] == dstAlpha)
+    return;
+  blendFuncSeparate_[0] = srcRGB;
+  blendFuncSeparate_[1] = dstRGB;
+  blendFuncSeparate_[2] = srcAlpha;
+  blendFuncSeparate_[3] = dstAlpha;
   GLCALL(BlendFuncSeparate)(srcRGB, dstRGB, srcAlpha, dstAlpha);
   APILOG("glBlendFuncSeparate(%s, %s, %s, %s)\n",
          GL_ENUM_TO_STRING(srcRGB),
@@ -1017,7 +1021,9 @@ void IContext::clearStencil(GLint s) {
 }
 
 void IContext::colorMask(GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha) {
-  if (colorMask_[0] == red && colorMask_[1] == green && colorMask_[2] == blue && colorMask_[3] == alpha) return;
+  if (colorMask_[0] == red && colorMask_[1] == green && colorMask_[2] == blue &&
+      colorMask_[3] == alpha)
+    return;
   colorMask_[0] = red;
   colorMask_[1] = green;
   colorMask_[2] = blue;
@@ -1246,7 +1252,8 @@ GLuint IContext::createShader(GLenum shaderType) {
 }
 
 void IContext::cullFace(GLint mode) {
-  if (cullFaceMode_ == mode) return;
+  if (cullFaceMode_ == mode)
+    return;
   cullFaceMode_ = mode;
   GLCALL(CullFace)(mode);
   APILOG("glCullFace(%s)\n", GL_ENUM_TO_STRING(mode));
@@ -1432,7 +1439,8 @@ void IContext::deleteTextures(const std::vector<GLuint>& textures) {
 }
 
 void IContext::depthFunc(GLenum func) {
-  if (depthFunc_ == func) return;
+  if (depthFunc_ == func)
+    return;
   depthFunc_ = func;
   GLCALL(DepthFunc)(func);
   APILOG("glDepthFunc(%s)\n", GL_ENUM_TO_STRING(func));
@@ -1440,7 +1448,8 @@ void IContext::depthFunc(GLenum func) {
 }
 
 void IContext::depthMask(GLboolean flag) {
-  if (depthMask_ == flag) return;
+  if (depthMask_ == flag)
+    return;
   depthMask_ = flag;
   GLCALL(DepthMask)(flag);
   APILOG("glDepthMask(%s)\n", GL_BOOL_TO_STRING(flag));
@@ -1460,15 +1469,17 @@ void IContext::detachShader(GLuint program, GLuint shader) {
 }
 
 void IContext::disable(GLenum cap) {
-  if (enableGLFeatures_.count(cap) && !enableGLFeatures_[cap]) return;
-  enableGLFeatures_[cap] =  false;
+  if (enableGLFeatures_.count(cap) && !enableGLFeatures_[cap])
+    return;
+  enableGLFeatures_[cap] = false;
   GLCALL(Disable)(cap);
   APILOG("glDisable(%s)\n", GL_ENUM_TO_STRING(cap));
   GLCHECK_ERRORS();
 }
 
 void IContext::disableVertexAttribArray(GLuint index) {
-  if (!enableVertexAttribArray_[index]) return;
+  if (!enableVertexAttribArray_[index])
+    return;
   enableVertexAttribArray_[index] = false;
   GLCALL(DisableVertexAttribArray)(index);
   APILOG("glDisableVertexAttribArray(%u)\n", index);
@@ -1584,7 +1595,8 @@ void IContext::drawElementsIndirect(GLenum mode, GLenum type, const GLvoid* indi
 }
 
 void IContext::enable(GLenum cap) {
-  if (enableGLFeatures_.count(cap) && enableGLFeatures_[cap]) return;
+  if (enableGLFeatures_.count(cap) && enableGLFeatures_[cap])
+    return;
   enableGLFeatures_[cap] = true;
   GLCALL(Enable)(cap);
   APILOG("glEnable(%s)\n", GL_ENUM_TO_STRING(cap));
@@ -1592,7 +1604,8 @@ void IContext::enable(GLenum cap) {
 }
 
 void IContext::enableVertexAttribArray(GLuint index) {
-  if (enableVertexAttribArray_[index]) return;
+  if (enableVertexAttribArray_[index])
+    return;
   enableVertexAttribArray_[index] = true;
   GLCALL(EnableVertexAttribArray)(index);
   APILOG("glEnableVertexAttribArray(%u)\n", index);
@@ -1733,7 +1746,8 @@ void IContext::framebufferTextureLayer(GLenum target,
 }
 
 void IContext::frontFace(GLenum mode) {
-  if (frontFaceMode_ == mode) return;
+  if (frontFaceMode_ == mode)
+    return;
   frontFaceMode_ = mode;
   GLCALL(FrontFace)(mode);
   APILOG("glFrontFace(%s)\n", GL_ENUM_TO_STRING(mode));
@@ -2003,6 +2017,26 @@ void IContext::getIntegerv(GLenum pname, GLint* params) const {
          GL_ENUM_TO_STRING(pname),
          params,
          params == nullptr ? 0 : *params);
+  GLCHECK_ERRORS();
+}
+
+void IContext::programBinary(GLuint program,
+                             GLenum binaryFormat,
+                             const GLvoid* binary,
+                             GLsizei length) {
+  GLCALL(ProgramBinary)(program, binaryFormat, binary, length);
+  APILOG("glProgramBinary(%u, %u, %p, %d)\n", program, binaryFormat, binary, length);
+  GLCHECK_ERRORS();
+}
+
+void IContext::getProgramBinary(GLuint program,
+                                GLsizei bufSize,
+                                GLsizei* length,
+                                GLenum* binaryFormat,
+                                GLvoid* binary) {
+  GLCALL(GetProgramBinary)(program, bufSize, length, binaryFormat, binary);
+  APILOG(
+      "glGetProgramBinary(%u, %d, %p, %p, %p)\n", program, bufSize, length, binaryFormat, binary);
   GLCHECK_ERRORS();
 }
 
@@ -2374,7 +2408,7 @@ void IContext::popDebugGroup() {
     --debugStackSize_;
     GLCALL_PROC(popDebugGroupProc_);
     APILOG("glPopDebugGroup()\n");
-    //GLCHECK_ERRORS();
+    // GLCHECK_ERRORS();
   } else if (debugStackSize_ >= maxDebugStackSize_) {
     --debugStackSize_;
     IGL_LOG_ERROR_ONCE("Debug group stack size was exceeded, ignoring pop\n");
@@ -2806,9 +2840,9 @@ void IContext::uniform1fv(GLint location, GLsizei count, const GLfloat* v) {
 }
 
 void IContext::uniform1i(GLint location, GLint x) {
-//  auto iter = samplerLocations_.find(location);
-//  if (iter != samplerLocations_.end() && iter->second == x) return;
-//  samplerLocations_[location] = x;
+  //  auto iter = samplerLocations_.find(location);
+  //  if (iter != samplerLocations_.end() && iter->second == x) return;
+  //  samplerLocations_[location] = x;
   GLCALL(Uniform1i)(location, x);
   APILOG("glUniform1i(%d, %d)\n", location, x);
   GLCHECK_ERRORS();
@@ -3024,7 +3058,8 @@ void IContext::unmapBuffer(GLenum target) {
 }
 
 void IContext::useProgram(GLuint program) {
-  if (programID_ == program) return;
+  if (programID_ == program)
+    return;
   programID_ = program;
   IGL_PROFILER_ZONE_GPU_OGL("glUseProgram");
   GLCALL(UseProgram)(program);
@@ -3145,7 +3180,8 @@ void IContext::vertexAttribDivisor(GLuint index, GLuint divisor) {
     IGL_DEBUG_ASSERT(vertexAttribDivisorProc_, "No supported function for glVertexAttribDivisor\n");
   }
 
-  if (vertexAttribDivisors_[index] == divisor) return;
+  if (vertexAttribDivisors_[index] == divisor)
+    return;
   vertexAttribDivisors_[index] = divisor;
   GLCALL_PROC(vertexAttribDivisorProc_, index, divisor);
   APILOG("glVertexAttribDivisor(%u, %u)\n", index, divisor);
@@ -3462,22 +3498,23 @@ void IContext::SynchronizedDeletionQueues::queueDeleteTextures(
   texturesQueue_.insert(std::end(texturesQueue_), std::begin(textures), std::end(textures));
 }
 
-void IContext::clearCacheState(){
-    programID_ = 0;
-    enableVertexAttribArray_.fill(false);
-    vertexAttribDivisors_.fill(-1);
-    bindBufferIndexs_.clear();
-    samplerLocations_.clear();
-    enableGLFeatures_.clear();
-    activeTexture_ = 0;
-    cullFaceMode_ = 0;
-    frontFaceMode_ = 0;
-    depthFunc_ = 0;
-    depthMask_ = -1;
-    std::fill(std::begin(colorMask_), std::end(colorMask_), -1);
-    std::fill(std::begin(blendFuncSeparate_), std::end(blendFuncSeparate_), 0);
-    blendEquationSeparateRGB_ = 0;
-    blendEquationSeparateAlpha_ = 0;
+void IContext::clearCacheState() {
+  glGetError();
+  programID_ = 0;
+  enableVertexAttribArray_.fill(false);
+  vertexAttribDivisors_.fill(-1);
+  bindBufferIndexs_.clear();
+  samplerLocations_.clear();
+  enableGLFeatures_.clear();
+  activeTexture_ = 0;
+  cullFaceMode_ = 0;
+  frontFaceMode_ = 0;
+  depthFunc_ = 0;
+  depthMask_ = -1;
+  std::fill(std::begin(colorMask_), std::end(colorMask_), -1);
+  std::fill(std::begin(blendFuncSeparate_), std::end(blendFuncSeparate_), 0);
+  blendEquationSeparateRGB_ = 0;
+  blendEquationSeparateAlpha_ = 0;
 }
 
 } // namespace igl::opengl

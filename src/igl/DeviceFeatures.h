@@ -91,6 +91,7 @@ enum class DeviceFeatures {
   MultiSampleResolve,
   Multiview,
   MultiViewMultisample,
+  ProgramBinary,
   PushConstants,
   ReadWriteFramebuffer,
   SamplerMinMaxLod,

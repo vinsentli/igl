@@ -46,7 +46,7 @@ struct ShaderModuleInfo {
   ShaderStage stage = ShaderStage::Fragment;
   /** @brief The module's entry point. */
   std::string entryPoint;
-    
+
   std::string debugName;
 
   bool operator==(const ShaderModuleInfo& other) const;
@@ -263,6 +263,9 @@ struct ShaderStagesDesc {
   std::shared_ptr<IShaderModule> fragmentModule;
   /** @brief The fragment shader module to be used in a compute pipeline state. */
   std::shared_ptr<IShaderModule> computeModule;
+  /** @brief for opengl only.*/
+  uint32_t programBinaryFormat{0};
+  std::shared_ptr<std::vector<uint8_t>> programBinary;
   /** @brief The type of shader stages: render or compute. */
   ShaderStagesType type = ShaderStagesType::Render;
   /** @brief Identifier used for debugging */
@@ -308,7 +311,19 @@ class IShaderStages : public ITrackedResource<IShaderStages> {
    */
   [[nodiscard]] bool isValid() const noexcept;
 
- private:
+  /**
+   * for opengl only
+   */
+  [[nodiscard]] const std::vector<uint8_t>& getProgramBinary() const {
+    return programBinary_;
+  }
+  [[nodiscard]] uint32_t getProgramBinaryFormat() const {
+    return programBinaryFormat_;
+  }
+
+ protected:
+  uint32_t programBinaryFormat_{0};
+  std::vector<uint8_t> programBinary_;
   ShaderStagesDesc desc_;
 };
 } // namespace igl

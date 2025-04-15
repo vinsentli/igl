@@ -237,6 +237,7 @@ class DeviceFeatureSet final {
   mutable uint32_t internalFeatureCacheInitialized_ = 0;
   mutable uint64_t textureFeatureCache_ = 0;
   mutable uint64_t textureFeatureCacheInitialized_ = 0;
+  int32_t programBinayFormats_ = -1;
   IContext& glContext_;
   GLVersion version_ = GLVersion::NotAvailable;
 };

@@ -80,7 +80,7 @@ class Context final : public IContext {
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
   void imageTargetTexture(EGLImageKHR eglImage, GLenum target) const;
-  EGLImageKHR createImageFromAndroidHardwareBuffer(AHardwareBuffer* hwb) const;
+  // EGLImageKHR createImageFromAndroidHardwareBuffer(AHardwareBuffer* hwb) const;//此方法目前没有使用，暂时注释掉
 #endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
   bool eglSupportssRGB() override {
