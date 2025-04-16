@@ -46,8 +46,8 @@ void ShaderStages::createRenderProgram(Result* result) {
   }
 
   // check support program binary
-  GLint programBinayFormats = 0;
-  getContext().getIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &programBinayFormats);
+  GLint numProgramBinayFormats = 0;
+  getContext().getIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &numProgramBinayFormats);
 
   const auto& vertexShader = static_cast<ShaderModule&>(*getVertexModule());
   const auto& fragmentShader = static_cast<ShaderModule&>(*getFragmentModule());
@@ -69,7 +69,7 @@ void ShaderStages::createRenderProgram(Result* result) {
     return;
   }
 
-  if (programBinayFormats && desc_.programBinary && !desc_.programBinary->empty()) {
+  if (numProgramBinayFormats && desc_.programBinary && !desc_.programBinary->empty()) {
     getContext().programBinary(programID,
                                desc_.programBinaryFormat,
                                desc_.programBinary->data(),
@@ -129,7 +129,7 @@ void ShaderStages::createRenderProgram(Result* result) {
 
   Result::setResult(result, Result::Code::Ok);
 
-  if (programBinayFormats) {
+  if (numProgramBinayFormats) {
     GLint length = 0;
     getContext().getProgramiv(programID, GL_PROGRAM_BINARY_LENGTH, &length);
 

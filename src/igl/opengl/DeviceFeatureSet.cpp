@@ -438,10 +438,10 @@ bool DeviceFeatureSet::isFeatureSupported(DeviceFeatures feature) const {
     return false;
 
   case DeviceFeatures::ProgramBinary:
-    if (programBinayFormats_ < 0) {
-      glContext_.getIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, (GLint*)&programBinayFormats_);
+    if (numProgramBinayFormats_ < 0) {
+      glContext_.getIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, (GLint*)&numProgramBinayFormats_);
     }
-    return programBinayFormats_ > 0;
+    return numProgramBinayFormats_ > 0;
 
   case DeviceFeatures::Indices8Bit:
     return true;
