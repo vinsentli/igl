@@ -15,19 +15,19 @@
 #import "RenderSessionController.h"
 #import "View.h"
 
-#import <igl/IGL.h>
 #import <shell/shared/input/InputDispatcher.h>
+#import <igl/IGL.h>
 
 #if IGL_BACKEND_METAL
 #import <Metal/Metal.h>
-#import <igl/metal/HWDevice.h>
+#include <igl/metal/HWDevice.h>
 #include <igl/metal/Texture.h>
 #endif
 
 #if IGL_BACKEND_OPENGL
-#import <igl/opengl/ios/Context.h>
-#import <igl/opengl/ios/Device.h>
-#import <igl/opengl/ios/HWDevice.h>
+#include <igl/opengl/ios/Context.h>
+#include <igl/opengl/ios/Device.h>
+#include <igl/opengl/ios/HWDevice.h>
 #endif
 
 // @fb-only
@@ -36,10 +36,10 @@
 // @fb-only
 // @fb-only
 
-#include <igl/DeviceFeatures.h>
 #include <memory>
 #include <shell/shared/platform/ios/PlatformIos.h>
 #include <shell/shared/renderSession/RenderSession.h>
+#include <igl/DeviceFeatures.h>
 
 // @fb-only
 // @fb-only

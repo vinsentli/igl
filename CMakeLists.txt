@@ -47,6 +47,13 @@ if(NOT APPLE)
   set(IGL_WITH_METAL OFF)
 endif()
 
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  # disable for all targets due to warnings in third-party code
+  add_definitions(-Wno-nullability-completeness)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-volatile>)
+endif()
+
 if(ANDROID)
   if(IGL_WITH_OPENGL)
     set(IGL_WITH_OPENGLES ON)
@@ -54,12 +61,9 @@ if(ANDROID)
   set(IGL_WITH_OPENGL OFF)
   set(IGL_WITH_VULKAN ON)
   set(IGL_WITH_WEBGL OFF)
-  # disable for all targets due to warnings in third-party code
-  add_definitions(-Wno-nullability-completeness)
-  add_definitions(-Wno-deprecated-volatile)
 elseif(UNIX)
   # disable for all targets due to warnings in third-party code
-  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-volatile>)
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-volatile>)
   add_definitions(-Wno-attributes)
 endif()
 
@@ -75,9 +79,16 @@ if(EMSCRIPTEN)
   set(IGL_WITH_SHELL OFF) # shell doesn't supported yet
 endif()
 
-include(cmake/helpers.cmake)
-
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+function(igl_set_folder target folder_name)
+  set_property(TARGET ${target} PROPERTY FOLDER ${folder_name})
+endfunction()
+
+function(igl_set_cxxstd target cpp_version)
+  set_property(TARGET ${target} PROPERTY CXX_STANDARD ${cpp_version})
+  set_property(TARGET ${target} PROPERTY CXX_STANDARD_REQUIRED ON)
+endfunction()
 
 # cmake-format: off
 message(STATUS "IGL_WITH_SAMPLES  = ${IGL_WITH_SAMPLES}")
@@ -133,6 +144,13 @@ set(IGL_DEPS_CACHE_FILE "${IGL_ROOT_DIR}/third-party/.bootstrap-deps.json")
 find_package(Python3 COMPONENTS Interpreter)
 
 message(STATUS "IGL_ROOT_DIR = " ${IGL_ROOT_DIR})
+
+# Enable local "in-tree" builds
+if(${CMAKE_CURRENT_SOURCE_DIR} MATCHES "^.*fbsource.*")
+  get_filename_component(REPO_ROOT_DIR "../../../.." ABSOLUTE)
+  message(STATUS "REPO_ROOT_DIR = " ${REPO_ROOT_DIR})
+  include_directories(${REPO_ROOT_DIR})
+endif()
 
 # Enables multithreaded compilation and a conformant preprocessor on visual studio
 if(MSVC)

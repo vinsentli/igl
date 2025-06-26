@@ -9,10 +9,9 @@
 
 #include <shell/renderSessions/HelloWorldSession.h>
 
+#include <shell/shared/renderSession/ShellParams.h>
 #include <igl/NameHandle.h>
 #include <igl/ShaderCreator.h>
-#include <igl/opengl/GLIncludes.h>
-#include <shell/shared/renderSession/ShellParams.h>
 
 namespace igl::shell {
 
@@ -117,6 +116,7 @@ std::string getVulkanFragmentShaderSource() {
 std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
+  case igl::BackendType::Custom:
     IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
   case igl::BackendType::Vulkan:
@@ -163,10 +163,10 @@ void HelloWorldSession::initialize() noexcept {
 
   VertexInputStateDesc inputDesc;
   inputDesc.numAttributes = 2;
-  inputDesc.attributes[0] = VertexAttribute(
-      1, VertexAttributeFormat::Float3, offsetof(VertexPosColor, position), "position", 0);
-  inputDesc.attributes[1] = VertexAttribute(
-      1, VertexAttributeFormat::Float4, offsetof(VertexPosColor, color), "color_in", 1);
+  inputDesc.attributes[0] = VertexAttribute{
+      1, VertexAttributeFormat::Float3, offsetof(VertexPosColor, position), "position", 0};
+  inputDesc.attributes[1] = VertexAttribute{
+      1, VertexAttributeFormat::Float4, offsetof(VertexPosColor, color), "color_in", 1};
   inputDesc.numInputBindings = 1;
   inputDesc.inputBindings[1].stride = sizeof(VertexPosColor);
   vertexInput0_ = device.createVertexInputState(inputDesc, nullptr);

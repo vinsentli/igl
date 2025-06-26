@@ -8,7 +8,6 @@
 #include <igl/metal/PlatformDevice.h>
 
 #include "../util/Common.h"
-#include "../util/TestDevice.h"
 
 #include <gtest/gtest.h>
 #include <igl/IGL.h>
@@ -30,7 +29,7 @@ class PlatformDeviceMetalTest : public ::testing::Test {
   }
   void TearDown() override {}
 
- public:
+ protected:
   std::shared_ptr<IDevice> iglDev_;
   std::shared_ptr<ICommandQueue> cmdQueue_;
 };

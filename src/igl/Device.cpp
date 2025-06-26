@@ -12,19 +12,9 @@
 
 namespace igl {
 
-void IDevice::beginScope() {
-  ++scopeDepth_;
-}
-
-void IDevice::endScope() {
-  --scopeDepth_;
-}
-
 bool IDevice::defaultVerifyScope() {
   return scopeDepth_ > 0;
 }
-
-void IDevice::updateSurface(void* nativeWindowType) {}
 
 TextureDesc IDevice::sanitize(const TextureDesc& desc) const {
   TextureDesc sanitized = desc;
@@ -62,6 +52,8 @@ Color IDevice::backendDebugColor() const noexcept {
     return {0.f, 1.f, 1.f, 1.f};
   // @fb-only
     // @fb-only
+  case BackendType::Custom:
+    return {0.f, 0.f, 1.f, 1.f};
   }
   IGL_UNREACHABLE_RETURN(Color(0.f, 0.f, 0.f, 0.f))
 }

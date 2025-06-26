@@ -17,7 +17,6 @@
 #include "util/Color.h"
 #include "util/Common.h"
 #include "util/Half.h"
-#include "util/TestDevice.h"
 #include "util/TextureValidationHelpers.h"
 
 #include <IGLU/managedUniformBuffer/ManagedUniformBuffer.h>
@@ -25,8 +24,8 @@
 #include <cstring>
 #include <glm/gtc/color_space.hpp>
 #include <gtest/gtest.h>
-#include <igl/NameHandle.h>
 #include <string>
+#include <igl/NameHandle.h>
 
 namespace igl::tests {
 
@@ -135,7 +134,7 @@ class TextureArrayFloatTest : public ::testing::Test {
     std::unique_ptr<IShaderStages> stages;
     if (iglDev_->getBackendType() == BackendType::OpenGL) {
 #if IGL_BACKEND_OPENGL
-      if (opengl::DeviceFeatureSet::usesOpenGLES()) {
+      if (iglDev_->getBackendVersion().flavor == BackendFlavor::OpenGL_ES) {
         util::createShaderStages(iglDev_,
                                  igl::tests::data::shader::OGL_SIMPLE_VERT_SHADER_TEXARRAY_ES3,
                                  igl::tests::data::shader::shaderFunc,
@@ -259,7 +258,7 @@ class TextureArrayFloatTest : public ::testing::Test {
   void TearDown() override {}
 
   // Member variables
- public:
+ protected:
   std::shared_ptr<IDevice> iglDev_;
   std::shared_ptr<ICommandQueue> cmdQueue_;
   std::shared_ptr<ICommandBuffer> cmdBuf_;

@@ -7,8 +7,8 @@
 
 #include "VulkanImmediateCommands.h"
 
-#include <igl/vulkan/Common.h>
 #include <utility>
+#include <igl/vulkan/Common.h>
 
 namespace igl::vulkan {
 
@@ -27,6 +27,27 @@ VulkanImmediateCommands::VulkanImmediateCommands(const VulkanFunctionTable& vf,
                queueFamilyIndex,
                debugName),
   debugName_(debugName),
+  lastSubmitSemaphore_({
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+      .semaphore = VK_NULL_HANDLE,
+      .value = 0ull,
+      .stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      .deviceIndex = 0ul,
+  }),
+  waitSemaphore_({
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+      .semaphore = VK_NULL_HANDLE,
+      .value = 0ull,
+      .stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      .deviceIndex = 0ul,
+  }),
+  signalSemaphore_({
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+      .semaphore = VK_NULL_HANDLE,
+      .value = 0ull,
+      .stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      .deviceIndex = 0ul,
+  }),
   useTimelineSemaphoreAndSynchronization2_(useTimelineSemaphoreAndSynchronization2) {
   IGL_PROFILER_FUNCTION();
 
@@ -122,6 +143,7 @@ const VulkanImmediateCommands::CommandBufferWrapper& VulkanImmediateCommands::ac
 
   current->cmdBuf_ = current->cmdBufAllocated_;
   current->isEncoding_ = true;
+  current->fd = -1;
 
   const VkCommandBufferBeginInfo bi = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -148,6 +170,10 @@ VkResult VulkanImmediateCommands::wait(const SubmitHandle handle, uint64_t timeo
 
   const VkResult fenceResult = vf_.vkWaitForFences(
       device_, 1, &buffers_[handle.bufferIndex_].fence_.vkFence_, VK_TRUE, timeoutNanoseconds);
+
+  if (fenceResult == VK_TIMEOUT) {
+    return VK_TIMEOUT;
+  }
 
   if (fenceResult != VK_SUCCESS) {
     IGL_LOG_ERROR_ONCE(
@@ -344,6 +370,16 @@ VkFence VulkanImmediateCommands::getVkFenceFromSubmitHandle(SubmitHandle handle)
   }
 
   return buffers_[handle.bufferIndex_].fence_.vkFence_;
+}
+
+void VulkanImmediateCommands::storeFDInSubmitHandle(SubmitHandle handle, int fd) noexcept {
+  IGL_DEBUG_ASSERT(handle.bufferIndex_ < buffers_.size());
+  buffers_[handle.bufferIndex_].fd = fd;
+}
+
+int VulkanImmediateCommands::cachedFDFromSubmitHandle(SubmitHandle handle) const noexcept {
+  IGL_DEBUG_ASSERT(handle.bufferIndex_ < buffers_.size());
+  return buffers_[handle.bufferIndex_].fd;
 }
 
 } // namespace igl::vulkan

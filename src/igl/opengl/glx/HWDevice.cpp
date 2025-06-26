@@ -10,19 +10,21 @@
 #include <igl/opengl/glx/Context.h>
 #include <igl/opengl/glx/Device.h>
 
-namespace igl {
-namespace opengl {
-namespace glx {
+namespace igl::opengl::glx {
 
-std::unique_ptr<IContext> HWDevice::createContext(RenderingAPI /* api */,
-                                                  EGLNativeWindowType /* nativeWindow */,
-                                                  Result* outResult) const {
+std::unique_ptr<IContext> HWDevice::createContext(Result* outResult) const {
   Result::setOk(outResult);
   return std::make_unique<Context>(nullptr /* module */);
 }
 
-std::unique_ptr<IContext> HWDevice::createOffscreenContext(RenderingAPI /* api */,
-                                                           size_t width,
+std::unique_ptr<IContext> HWDevice::createContext([[maybe_unused]] BackendVersion backendVersion,
+                                                  EGLNativeWindowType /* nativeWindow */,
+                                                  Result* outResult) const {
+  IGL_DEBUG_ASSERT(backendVersion.flavor == BackendFlavor::OpenGL);
+  return createContext(outResult);
+}
+
+std::unique_ptr<IContext> HWDevice::createOffscreenContext(size_t width,
                                                            size_t height,
                                                            Result* outResult) const {
   Result::setOk(outResult);
@@ -44,6 +46,4 @@ std::unique_ptr<opengl::Device> HWDevice::createWithContext(std::unique_ptr<ICon
   }
 }
 
-} // namespace glx
-} // namespace opengl
-} // namespace igl
+} // namespace igl::opengl::glx

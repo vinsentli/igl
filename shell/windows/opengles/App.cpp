@@ -22,13 +22,12 @@
 #include <shell/windows/common/GlfwShell.h>
 
 #include <GLFW/glfw3.h>
-#include <GLFW/glfw3native.h>
 
 using namespace igl;
 namespace igl::shell {
 namespace {
 class OpenGlEsShell final : public GlfwShell {
-  igl::SurfaceTextures createSurfaceTextures() noexcept final;
+  SurfaceTextures createSurfaceTextures() noexcept final;
   std::shared_ptr<Platform> createPlatform() noexcept final;
 
   void willCreateWindow() noexcept final;
@@ -40,15 +39,15 @@ class OpenGlEsShell final : public GlfwShell {
 class EGLDevice final : public ::igl::opengl::Device {
  public:
   explicit EGLDevice(std::unique_ptr<::igl::opengl::IContext> context) :
-    Device(std::move(context)), platformDevice_(*this) {
+    Device(std::move(context)), platformDevice(*this) {
     {}
   }
 
-  const igl::opengl::PlatformDevice& getPlatformDevice() const noexcept override {
-    return platformDevice_;
+  [[nodiscard]] const igl::opengl::PlatformDevice& getPlatformDevice() const noexcept override {
+    return platformDevice;
   }
 
-  ::igl::opengl::PlatformDevice platformDevice_;
+  ::igl::opengl::PlatformDevice platformDevice;
 };
 
 void OpenGlEsShell::willCreateWindow() noexcept {
@@ -60,9 +59,9 @@ void OpenGlEsShell::willCreateWindow() noexcept {
 }
 
 void OpenGlEsShell::didCreateWindow() noexcept {
-  [[maybe_unused]] int result = glfwGetWindowAttrib(&window(), GLFW_CLIENT_API);
+  [[maybe_unused]] int result = glfwGetWindowAttrib(window(), GLFW_CLIENT_API);
 
-  glfwMakeContextCurrent(&window());
+  glfwMakeContextCurrent(window());
   glfwSwapInterval(1);
 
   IGL_LOG_INFO("Renderer: %s\n", (const char*)glGetString(GL_RENDERER));
@@ -70,7 +69,7 @@ void OpenGlEsShell::didCreateWindow() noexcept {
   IGL_LOG_INFO("WindowAttrib: 0x%x\n", result);
 }
 
-igl::SurfaceTextures OpenGlEsShell::createSurfaceTextures() noexcept {
+SurfaceTextures OpenGlEsShell::createSurfaceTextures() noexcept {
 #if IGL_ANGLE
   auto& device = platform().getDevice();
   if (IGL_DEBUG_VERIFY(device.getBackendType() == igl::BackendType::OpenGL)) {
@@ -84,16 +83,16 @@ igl::SurfaceTextures OpenGlEsShell::createSurfaceTextures() noexcept {
     }
   }
 #endif // IGL_ANGLE
-  return igl::SurfaceTextures{};
+  return SurfaceTextures{};
 }
 
 std::shared_ptr<Platform> OpenGlEsShell::createPlatform() noexcept {
 #if IGL_ANGLE
   auto glesDevice = std::make_unique</*EGLDevice*/ igl::opengl::egl::Device>(
       std::make_unique<::igl::opengl::egl::Context>(glfwGetEGLDisplay(),
-                                                    glfwGetEGLContext(&window()),
-                                                    glfwGetEGLSurface(&window()),
-                                                    glfwGetEGLSurface(&window())));
+                                                    glfwGetEGLContext(window()),
+                                                    glfwGetEGLSurface(window()),
+                                                    glfwGetEGLSurface(window())));
 
   return std::make_shared<igl::shell::PlatformWin>(std::move(glesDevice));
 #endif // IGL_ANGLE
@@ -101,7 +100,7 @@ std::shared_ptr<Platform> OpenGlEsShell::createPlatform() noexcept {
 }
 
 void OpenGlEsShell::willTick() noexcept {
-  glfwMakeContextCurrent(&window());
+  glfwMakeContextCurrent(window());
 }
 
 } // namespace
@@ -130,7 +129,7 @@ int main(int argc, char* argv[]) {
       .swapchainColorTextureFormat = TextureFormat::RGBA_UNorm8,
   };
 
-  if (!shell.initialize(argc, argv, suggestedWindowConfig, std::move(suggestedConfig))) {
+  if (!shell.initialize(argc, argv, suggestedWindowConfig, suggestedConfig)) {
     shell.teardown();
     return -1;
   }

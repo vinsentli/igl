@@ -7,14 +7,13 @@
 
 #include "../data/ShaderData.h"
 #include "../util/Common.h"
-#include "../util/TestDevice.h"
 
 #include <IGLU/state_pool/RenderPipelineStatePool.h>
 #include <gtest/gtest.h>
+#include <string>
 #include <igl/CommandBuffer.h>
 #include <igl/NameHandle.h>
 #include <igl/VertexInputState.h>
-#include <string>
 
 namespace igl::tests {
 
@@ -102,7 +101,7 @@ class StatePoolTest : public ::testing::Test {
   void TearDown() override {}
 
   // Member variables
- public:
+ protected:
   std::shared_ptr<IDevice> iglDev_;
   std::shared_ptr<ICommandQueue> cmdQueue_;
   std::shared_ptr<ICommandBuffer> cmdBuf_;

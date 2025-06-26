@@ -8,18 +8,17 @@
 #include "data/ShaderData.h"
 #include "data/VertexIndexData.h"
 #include "util/Common.h"
-#include "util/TestDevice.h"
 
 #include <cstddef>
 #include <cstring>
 #include <gtest/gtest.h>
+#include <string>
 #include <igl/CommandBuffer.h>
 #include <igl/NameHandle.h>
 #include <igl/RenderPass.h>
 #include <igl/RenderPipelineState.h>
 #include <igl/SamplerState.h>
 #include <igl/VertexInputState.h>
-#include <string>
 
 namespace igl::tests {
 
@@ -165,7 +164,7 @@ class TextureTest : public ::testing::Test {
   void TearDown() override {}
 
   // Member variables
- public:
+ protected:
   std::shared_ptr<IDevice> iglDev_;
   std::shared_ptr<ICommandQueue> cmdQueue_;
   std::shared_ptr<ICommandBuffer> cmdBuf_;

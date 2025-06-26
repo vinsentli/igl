@@ -7,13 +7,11 @@
 
 #pragma once
 
+#include <memory>
 #include <igl/Common.h>
 #include <igl/IResourceTracker.h>
-#include <memory>
 
 namespace igl {
-
-class IResourceTracker;
 
 /**
  * @brief ITrackedResource enables resources to be tracked by IResourceTracker

@@ -118,7 +118,7 @@ void* Buffer::map(const BufferRange& range, Result* outResult) {
     return static_cast<uint8_t*>(my_buffer_.contents) + range.offset;
 }
 
-void Buffer::unmap() {};
+void Buffer::unmap() {}
 
 BufferDesc::BufferAPIHint Buffer::requestedApiHints() const noexcept {
   return requestedApiHints_;

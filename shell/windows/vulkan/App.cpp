@@ -7,20 +7,20 @@
 
 // @fb-only
 
+#include <memory>
+#include <shell/shared/platform/win/PlatformWin.h>
+#include <shell/windows/common/GlfwShell.h>
 #include <igl/Core.h>
 #include <igl/IGL.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/HWDevice.h>
 #include <igl/vulkan/VulkanContext.h>
-#include <memory>
-#include <shell/shared/platform/win/PlatformWin.h>
-#include <shell/windows/common/GlfwShell.h>
 
 using namespace igl;
 namespace igl::shell {
 namespace {
 class VulkanShell final : public GlfwShell {
-  igl::SurfaceTextures createSurfaceTextures() noexcept final;
+  SurfaceTextures createSurfaceTextures() noexcept final;
   std::shared_ptr<Platform> createPlatform() noexcept final;
 
   void willCreateWindow() noexcept final;
@@ -32,27 +32,34 @@ void VulkanShell::willCreateWindow() noexcept {
 
 std::shared_ptr<Platform> VulkanShell::createPlatform() noexcept {
   igl::vulkan::VulkanContextConfig cfg = igl::vulkan::VulkanContextConfig();
+  cfg.headless = shellParams().isHeadless;
   cfg.requestedSwapChainTextureFormat = sessionConfig().swapchainColorTextureFormat;
 #if defined(_MSC_VER) && !IGL_DEBUG
   cfg.enableValidation = false;
 #endif
-  auto ctx = vulkan::HWDevice::createContext(cfg,
+  auto ctx =
+      vulkan::HWDevice::createContext(cfg,
 #if defined(_WIN32)
-                                             (void*)glfwGetWin32Window(&window())
+                                      window() ? (void*)glfwGetWin32Window(window()) : nullptr
 #else
-                                             (void*)glfwGetX11Window(&window()),
-                                             0,
-                                             nullptr,
-                                             (void*)glfwGetX11Display()
+                                      window() ? (void*)glfwGetX11Window(window()) : nullptr,
+                                      0,
+                                      nullptr,
+                                      (void*)glfwGetX11Display()
 #endif
-  );
+      );
 
   // Prioritize discrete GPUs. If not found, use any that is available.
-  std::vector<HWDeviceDesc> devices = vulkan::HWDevice::queryDevices(
-      *ctx.get(), HWDeviceQueryDesc(HWDeviceType::DiscreteGpu), nullptr);
+  std::vector<HWDeviceDesc> devices =
+      vulkan::HWDevice::queryDevices(*ctx, HWDeviceQueryDesc(HWDeviceType::DiscreteGpu), nullptr);
   if (devices.empty()) {
     devices = vulkan::HWDevice::queryDevices(
-        *ctx.get(), HWDeviceQueryDesc(HWDeviceType::Unknown), nullptr);
+        *ctx, HWDeviceQueryDesc(HWDeviceType::IntegratedGpu), nullptr);
+  }
+  if (devices.empty()) {
+    // Lavapipe etc
+    devices =
+        vulkan::HWDevice::queryDevices(*ctx, HWDeviceQueryDesc(HWDeviceType::SoftwareGpu), nullptr);
   }
   IGL_DEBUG_ASSERT(devices.size() > 0, "Could not find Vulkan device with requested capabilities");
 
@@ -61,10 +68,10 @@ std::shared_ptr<Platform> VulkanShell::createPlatform() noexcept {
                                                (uint32_t)shellParams().viewportSize.x,
                                                (uint32_t)shellParams().viewportSize.y);
 
-  return std::make_shared<igl::shell::PlatformWin>(std::move(vulkanDevice));
+  return std::make_shared<PlatformWin>(std::move(vulkanDevice));
 }
 
-igl::SurfaceTextures VulkanShell::createSurfaceTextures() noexcept {
+SurfaceTextures VulkanShell::createSurfaceTextures() noexcept {
   IGL_PROFILER_FUNCTION();
   auto& device = platform().getDevice();
   const auto& vkPlatformDevice = device.getPlatformDevice<igl::vulkan::PlatformDevice>();
@@ -78,7 +85,7 @@ igl::SurfaceTextures VulkanShell::createSurfaceTextures() noexcept {
       shellParams().viewportSize.x, shellParams().viewportSize.y, &ret);
   IGL_DEBUG_ASSERT(ret.isOk());
 
-  return igl::SurfaceTextures{std::move(color), std::move(depth)};
+  return SurfaceTextures{std::move(color), std::move(depth)};
 }
 } // namespace
 
@@ -98,7 +105,7 @@ int main(int argc, char* argv[]) {
       .swapchainColorTextureFormat = TextureFormat::BGRA_SRGB,
   };
 
-  if (!shell.initialize(argc, argv, suggestedWindowConfig, std::move(suggestedConfig))) {
+  if (!shell.initialize(argc, argv, suggestedWindowConfig, suggestedConfig)) {
     shell.teardown();
     return -1;
   }

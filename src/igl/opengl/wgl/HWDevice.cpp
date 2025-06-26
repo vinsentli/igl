@@ -10,23 +10,25 @@
 #include <igl/opengl/wgl/Context.h>
 #include <igl/opengl/wgl/Device.h>
 
-namespace igl {
-namespace opengl {
-namespace wgl {
+namespace igl::opengl::wgl {
 
-std::unique_ptr<IContext> HWDevice::createContext(RenderingAPI api,
-                                                  EGLNativeWindowType nativeWindow,
-                                                  Result* outResult) const {
+std::unique_ptr<IContext> HWDevice::createContext(Result* outResult) const {
   Result::setOk(outResult);
-  return std::make_unique<Context>(api);
+  return std::make_unique<Context>();
 }
 
-std::unique_ptr<IContext> HWDevice::createOffscreenContext(RenderingAPI api,
-                                                           size_t width,
+std::unique_ptr<IContext> HWDevice::createContext([[maybe_unused]] BackendVersion backendVersion,
+                                                  EGLNativeWindowType /*nativeWindow*/,
+                                                  Result* outResult) const {
+  IGL_DEBUG_ASSERT(backendVersion.flavor == BackendFlavor::OpenGL);
+  return createContext(outResult);
+}
+
+std::unique_ptr<IContext> HWDevice::createOffscreenContext(size_t width,
                                                            size_t height,
                                                            Result* outResult) const {
   Result::setOk(outResult);
-  return std::make_unique<Context>(api);
+  return std::make_unique<Context>();
 }
 
 std::unique_ptr<opengl::Device> HWDevice::createWithContext(std::unique_ptr<IContext> context,
@@ -40,6 +42,4 @@ std::unique_ptr<opengl::Device> HWDevice::createWithContext(std::unique_ptr<ICon
   }
 }
 
-} // namespace wgl
-} // namespace opengl
-} // namespace igl
+} // namespace igl::opengl::wgl

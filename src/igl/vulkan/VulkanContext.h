@@ -16,7 +16,6 @@
 #include <igl/HWDevice.h>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanDevice.h>
-#include <igl/vulkan/VulkanExtensions.h>
 #include <igl/vulkan/VulkanFeatures.h>
 #include <igl/vulkan/VulkanHelpers.h>
 #include <igl/vulkan/VulkanImmediateCommands.h>
@@ -43,12 +42,9 @@ class CommandQueue;
 class ComputeCommandEncoder;
 class RenderCommandEncoder;
 class VulkanBuffer;
-class VulkanDevice;
 class VulkanDescriptorSetLayout;
 class VulkanImage;
 class VulkanImageView;
-class VulkanPipelineLayout;
-class VulkanSemaphore;
 class VulkanSwapchain;
 class VulkanTexture;
 
@@ -58,7 +54,6 @@ struct BindingsStorageImages;
 struct VulkanContextImpl;
 struct VulkanImageCreateInfo;
 struct VulkanImageViewCreateInfo;
-struct VulkanSampler;
 
 /*
  * Descriptor sets:
@@ -94,14 +89,14 @@ class VulkanContext final {
                 void* IGL_NULLABLE display = nullptr);
   ~VulkanContext();
 
-  igl::Result queryDevices(const HWDeviceQueryDesc& desc, std::vector<HWDeviceDesc>& outDevices);
-  igl::Result initContext(const HWDeviceDesc& desc,
-                          size_t numExtraDeviceExtensions = 0,
-                          const char* IGL_NULLABLE* IGL_NULLABLE extraDeviceExtensions = nullptr,
-                          const VulkanFeatures* IGL_NULLABLE requestedFeatures = nullptr,
-                          const char* IGL_NULLABLE debugName = nullptr);
+  Result queryDevices(const HWDeviceQueryDesc& desc, std::vector<HWDeviceDesc>& outDevices);
+  Result initContext(const HWDeviceDesc& desc,
+                     size_t numExtraDeviceExtensions = 0,
+                     const char* IGL_NULLABLE* IGL_NULLABLE extraDeviceExtensions = nullptr,
+                     const VulkanFeatures* IGL_NULLABLE requestedFeatures = nullptr,
+                     const char* IGL_NULLABLE debugName = nullptr);
 
-  igl::Result initSwapchain(uint32_t width, uint32_t height);
+  Result initSwapchain(uint32_t width, uint32_t height);
   VkExtent2D getSwapchainExtent() const;
 
   VulkanImage createImage(VkImageType imageType,
@@ -114,7 +109,7 @@ class VulkanContext final {
                           VkMemoryPropertyFlags memFlags,
                           VkImageCreateFlags flags,
                           VkSampleCountFlagBits samples,
-                          igl::Result* IGL_NULLABLE outResult,
+                          Result* IGL_NULLABLE outResult,
                           const char* IGL_NULLABLE debugName = nullptr) const;
 
 // @fb-only
@@ -146,12 +141,12 @@ class VulkanContext final {
       VkImageUsageFlags usageFlags,
       VkImageCreateFlags flags,
       VkSampleCountFlagBits samples,
-      igl::Result* IGL_NULLABLE outResult,
+      Result* IGL_NULLABLE outResult,
       const char* IGL_NULLABLE debugName = nullptr) const;
   std::unique_ptr<VulkanBuffer> createBuffer(VkDeviceSize bufferSize,
                                              VkBufferUsageFlags usageFlags,
                                              VkMemoryPropertyFlags memFlags,
-                                             igl::Result* IGL_NULLABLE outResult,
+                                             Result* IGL_NULLABLE outResult,
                                              const char* IGL_NULLABLE debugName = nullptr) const;
   std::shared_ptr<VulkanTexture> createTexture(VulkanImage&& image,
                                                VulkanImageView&& imageView,
@@ -164,7 +159,7 @@ class VulkanContext final {
 
   SamplerHandle createSampler(const VkSamplerCreateInfo& ci,
                               VkFormat yuvVkFormat,
-                              igl::Result* IGL_NULLABLE outResult,
+                              Result* IGL_NULLABLE outResult,
                               const char* IGL_NULLABLE debugName = nullptr) const;
 
   void createSurface(void* IGL_NULLABLE window, void* IGL_NULLABLE display);
@@ -189,7 +184,7 @@ class VulkanContext final {
     return vkPhysicalDeviceProperties2_.properties;
   }
 
-  VkFormat getClosestDepthStencilFormat(igl::TextureFormat desiredFormat) const;
+  VkFormat getClosestDepthStencilFormat(TextureFormat desiredFormat) const;
 
   struct RenderPassHandle {
     VkRenderPass IGL_NULLABLE pass = VK_NULL_HANDLE;
@@ -247,6 +242,15 @@ class VulkanContext final {
 
   void waitDeferredTasks();
 
+  /// @param handle The handle to the GPU Fence
+  /// @return The Vulkan fence associated with the handle
+  [[nodiscard]] VkFence getVkFenceFromSubmitHandle(igl::SubmitHandle handle) const noexcept;
+
+  /// Android only for now - Creates the file descriptor for the underlying VkFence
+  /// @param handle The handle to the GPU Fence
+  /// @return The fd for the Vulkan Fence associated with the handleint
+  [[nodiscard]] int getFenceFdFromSubmitHandle(igl::SubmitHandle handle) const noexcept;
+
  private:
   void createInstance(size_t numExtraExtensions,
                       const char* IGL_NULLABLE* IGL_NULLABLE extraExtensions);
@@ -255,28 +259,28 @@ class VulkanContext final {
   void querySurfaceCapabilities();
   void processDeferredTasks() const;
   void growBindlessDescriptorPool(uint32_t newMaxTextures, uint32_t newMaxSamplers);
-  igl::BindGroupTextureHandle createBindGroup(const BindGroupTextureDesc& desc,
-                                              const IRenderPipelineState* IGL_NULLABLE
-                                                  compatiblePipeline,
-                                              Result* IGL_NULLABLE outResult);
-  igl::BindGroupBufferHandle createBindGroup(const BindGroupBufferDesc& desc,
-                                             Result* IGL_NULLABLE outResult);
-  void destroy(igl::BindGroupTextureHandle handle);
-  void destroy(igl::BindGroupBufferHandle handle);
-  void destroy(igl::SamplerHandle handle);
-  void destroy(igl::TextureHandle handle);
-  VkDescriptorSet IGL_NULLABLE getBindGroupDescriptorSet(igl::BindGroupTextureHandle handle) const;
-  VkDescriptorSet IGL_NULLABLE getBindGroupDescriptorSet(igl::BindGroupBufferHandle handle) const;
-  uint32_t getBindGroupUsageMask(igl::BindGroupTextureHandle handle) const;
-  uint32_t getBindGroupUsageMask(igl::BindGroupBufferHandle handle) const;
+  BindGroupTextureHandle createBindGroup(const BindGroupTextureDesc& desc,
+                                         const IRenderPipelineState* IGL_NULLABLE
+                                             compatiblePipeline,
+                                         Result* IGL_NULLABLE outResult);
+  BindGroupBufferHandle createBindGroup(const BindGroupBufferDesc& desc,
+                                        Result* IGL_NULLABLE outResult);
+  void destroy(BindGroupTextureHandle handle);
+  void destroy(BindGroupBufferHandle handle);
+  void destroy(SamplerHandle handle);
+  void destroy(TextureHandle handle);
+  VkDescriptorSet getBindGroupDescriptorSet(BindGroupTextureHandle handle) const;
+  VkDescriptorSet getBindGroupDescriptorSet(BindGroupBufferHandle handle) const;
+  uint32_t getBindGroupUsageMask(BindGroupTextureHandle handle) const;
+  uint32_t getBindGroupUsageMask(BindGroupBufferHandle handle) const;
 
  private:
-  friend class igl::vulkan::Device;
-  friend class igl::vulkan::VulkanStagingDevice;
-  friend class igl::vulkan::VulkanSwapchain;
-  friend class igl::vulkan::CommandQueue;
-  friend class igl::vulkan::ComputeCommandEncoder;
-  friend class igl::vulkan::RenderCommandEncoder;
+  friend class Device;
+  friend class VulkanStagingDevice;
+  friend class VulkanSwapchain;
+  friend class CommandQueue;
+  friend class ComputeCommandEncoder;
+  friend class RenderCommandEncoder;
 
   // should be kept on the heap, otherwise global Vulkan functions can cause arbitrary crashes.
   std::unique_ptr<VulkanFunctionTable> tableImpl_;
@@ -285,27 +289,16 @@ class VulkanContext final {
   VkDebugUtilsMessengerEXT IGL_NULLABLE vkDebugUtilsMessenger_ = VK_NULL_HANDLE;
   VkSurfaceKHR IGL_NULLABLE vkSurface_ = VK_NULL_HANDLE;
   VkPhysicalDevice IGL_NULLABLE vkPhysicalDevice_ = VK_NULL_HANDLE;
-  VkPhysicalDeviceDescriptorIndexingPropertiesEXT vkPhysicalDeviceDescriptorIndexingProperties_ = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES_EXT,
-      .pNext = nullptr,
-  };
-
+  VkPhysicalDeviceDescriptorIndexingPropertiesEXT vkPhysicalDeviceDescriptorIndexingProperties_{};
   // Provided by VK_KHR_driver_properties
-  VkPhysicalDeviceDriverPropertiesKHR vkPhysicalDeviceDriverProperties_ = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES_KHR,
-      .pNext = &vkPhysicalDeviceDescriptorIndexingProperties_,
-  };
+  VkPhysicalDeviceDriverPropertiesKHR vkPhysicalDeviceDriverProperties_{};
+  // Provided by VK_VERSION_1_1
+  VkPhysicalDeviceProperties2 vkPhysicalDeviceProperties2_{};
 
   std::vector<VkFormat> deviceDepthFormats_;
   std::vector<VkSurfaceFormatKHR> deviceSurfaceFormats_;
   VkSurfaceCapabilitiesKHR deviceSurfaceCaps_{};
   std::vector<VkPresentModeKHR> devicePresentModes_;
-
-  // Provided by VK_VERSION_1_1
-  VkPhysicalDeviceProperties2 vkPhysicalDeviceProperties2_ = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-      .pNext = &vkPhysicalDeviceDriverProperties_,
-  };
 
   VulkanFeatures features_;
 
@@ -347,7 +340,6 @@ class VulkanContext final {
           renderPassesHash_;
   mutable std::vector<VkRenderPass> renderPasses_;
 
-  VulkanExtensions extensions_;
   VulkanContextConfig config_;
 
   // Enhanced shader debug: line drawing

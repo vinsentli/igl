@@ -11,22 +11,16 @@
 
 namespace igl::opengl {
 
-std::vector<HWDeviceDesc> HWDevice::queryDevices(const HWDeviceQueryDesc& /*desc*/,
-                                                 Result* outResult) {
-  std::vector<HWDeviceDesc> devices;
-
-  const HWDeviceDesc defaultDevice(1L, HWDeviceType::DiscreteGpu, 0, "Default");
-  devices.push_back(defaultDevice);
-
-  Result::setOk(outResult);
-  return devices;
+std::unique_ptr<Device> HWDevice::create(Result* outResult) const {
+  auto context = createContext(outResult);
+  if (context == nullptr) {
+    return nullptr;
+  }
+  return createWithContext(std::move(context), outResult);
 }
 
-std::unique_ptr<IDevice> HWDevice::create(const HWDeviceDesc& /*desc*/,
-                                          RenderingAPI api,
-                                          EGLNativeWindowType nativeWindow,
-                                          Result* outResult) {
-  auto context = createContext(api, nativeWindow, outResult);
+std::unique_ptr<Device> HWDevice::create(BackendVersion backendVersion, Result* outResult) {
+  auto context = createContext(backendVersion, IGL_EGL_NULL_WINDOW, outResult);
   if (!context) {
     Result::setResult(outResult, Result::Code::RuntimeError, "context is null");
     return nullptr;

@@ -11,14 +11,14 @@
 #include <igl/NameHandle.h>
 
 #include <IGLU/simdtypes/SimdTypes.h>
+#include <shell/renderSessions/MRTSession.h>
+#include <shell/shared/renderSession/ShellParams.h>
 #include <igl/CommandBuffer.h>
 #include <igl/RenderPipelineState.h>
 #include <igl/SamplerState.h>
 #include <igl/ShaderCreator.h>
 #include <igl/VertexInputState.h>
 #include <igl/opengl/Device.h>
-#include <shell/renderSessions/MRTSession.h>
-#include <shell/shared/renderSession/ShellParams.h>
 
 namespace igl::shell {
 struct VertexPosUv {
@@ -251,6 +251,9 @@ static std::unique_ptr<IShaderStages> createShaderStagesForBackend(const IDevice
         "main",
         "",
         nullptr);
+  case igl::BackendType::Custom:
+    IGL_DEBUG_ABORT("No Custom shader available");
+    return nullptr;
   // @fb-only
     // @fb-only
     // @fb-only
@@ -299,10 +302,10 @@ void MRTSession::initialize() noexcept {
 
   VertexInputStateDesc inputDesc;
   inputDesc.numAttributes = 2;
-  inputDesc.attributes[0] = VertexAttribute(
-      0, VertexAttributeFormat::Float3, offsetof(VertexPosUv, position), "position", 0);
+  inputDesc.attributes[0] = VertexAttribute{
+      0, VertexAttributeFormat::Float3, offsetof(VertexPosUv, position), "position", 0};
   inputDesc.attributes[1] =
-      VertexAttribute(0, VertexAttributeFormat::Float2, offsetof(VertexPosUv, uv), "uv_in", 1);
+      VertexAttribute{0, VertexAttributeFormat::Float2, offsetof(VertexPosUv, uv), "uv_in", 1};
   inputDesc.numInputBindings = 1;
   inputDesc.inputBindings[0].stride = sizeof(VertexPosUv);
   vertexInput_ = device.createVertexInputState(inputDesc, nullptr);

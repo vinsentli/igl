@@ -14,7 +14,8 @@ namespace igl::opengl::ios {
 
 class HWDevice final : public ::igl::opengl::HWDevice {
  public:
-  std::unique_ptr<IContext> createContext(RenderingAPI api,
+  std::unique_ptr<IContext> createContext(Result* outResult) const override;
+  std::unique_ptr<IContext> createContext(BackendVersion backendVersion,
                                           EGLNativeWindowType nativeWindow,
                                           Result* outResult) const override;
 

@@ -17,8 +17,8 @@
 
 namespace igl::metal {
 
-CommandBuffer::CommandBuffer(Device& device, id<MTLCommandBuffer> value) :
-  device_(device), value_(value) {}
+CommandBuffer::CommandBuffer(Device& device, id<MTLCommandBuffer> value, CommandBufferDesc desc) :
+  ICommandBuffer(std::move(desc)), device_(device), value_(value) {}
 
 std::unique_ptr<IComputeCommandEncoder> CommandBuffer::createComputeCommandEncoder() {
   return std::make_unique<ComputeCommandEncoder>(value_);
@@ -67,6 +67,22 @@ void CommandBuffer::copyBuffer(IBuffer& src,
                    destinationOffset:dstOffset
                                 size:size];
   [blitCommandEncoder endEncoding];
+}
+
+void CommandBuffer::copyTextureToBuffer(ITexture& src,
+                                        IBuffer& dst,
+                                        uint64_t dstOffset,
+                                        uint32_t level,
+                                        uint32_t layer) {
+  (void)src;
+  (void)dst;
+  (void)dstOffset;
+  (void)level;
+  (void)layer;
+
+  // TODO:
+  // https://developer.apple.com/documentation/metal/mtlblitcommandencoder#Copying-Texture-Data-to-a-Buffer
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
 }
 
 void CommandBuffer::waitUntilScheduled() {

@@ -14,17 +14,17 @@
 #import "RenderSessionFactoryAdapterInternal.hpp"
 #import <QuartzCore/CADisplayLink.h>
 #import <UIKit/UIKit.h>
-#import <igl/IGL.h>
 #import <shell/shared/input/InputDispatcher.h>
+#import <igl/IGL.h>
 
 #if IGL_BACKEND_METAL
 #import <Metal/Metal.h>
 #import <igl/metal/HWDevice.h>
 #endif
 #if IGL_BACKEND_OPENGL
-#import <igl/opengl/ios/Context.h>
-#import <igl/opengl/ios/Device.h>
-#import <igl/opengl/ios/HWDevice.h>
+#include <igl/opengl/ios/Context.h>
+#include <igl/opengl/ios/Device.h>
+#include <igl/opengl/ios/HWDevice.h>
 #endif
 // @fb-only
 // @fb-only
@@ -82,10 +82,7 @@
   }
   case igl::BackendFlavor::OpenGL_ES: {
 #if IGL_BACKEND_OPENGL
-    auto hwDevices = igl::opengl::ios::HWDevice().queryDevices(queryDesc, nullptr);
-    const auto renderingApi = backendVersion_.majorVersion == 2 ? igl::opengl::RenderingAPI::GLES2
-                                                                : igl::opengl::RenderingAPI::GLES3;
-    device = igl::opengl::ios::HWDevice().create(hwDevices[0], renderingApi, nullptr);
+    device = igl::opengl::ios::HWDevice().create(backendVersion_, nullptr);
 #endif
     break;
   }

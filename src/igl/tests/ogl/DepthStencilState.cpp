@@ -10,12 +10,12 @@
 #include "../util/Common.h"
 
 #include <gtest/gtest.h>
+#include <string>
 #include <igl/CommandBuffer.h>
 #include <igl/RenderPass.h>
 #include <igl/RenderPipelineState.h>
 #include <igl/VertexInputState.h>
 #include <igl/opengl/DepthStencilState.h>
-#include <string>
 
 namespace igl::tests {
 
@@ -126,7 +126,7 @@ class DepthStencilStateTest : public ::testing::Test {
   void TearDown() override {}
 
   // Member variables
- public:
+ protected:
   std::shared_ptr<IDevice> iglDev_;
   std::shared_ptr<ICommandQueue> cmdQueue_;
   std::shared_ptr<ICommandBuffer> cmdBuf_;
@@ -325,7 +325,7 @@ TEST_F(DepthStencilStateTest, SetStencilReferenceValueAndCheck) {
   newDsDesc.frontFaceStencil.depthStencilPassOperation = StencilOperation::IncrementWrap;
 
   // GLES stencil is limited to 8 bits (0xFF), at least on Adreno GPUs
-  if (opengl::DeviceFeatureSet::usesOpenGLES()) {
+  if (iglDev_->getBackendVersion().flavor == BackendFlavor::OpenGL_ES) {
     newDsDesc.backFaceStencil.writeMask = 0xad;
     newDsDesc.frontFaceStencil.writeMask = 0xef;
   } else {
@@ -416,7 +416,7 @@ TEST_F(DepthStencilStateTest, SetStencilReferenceValueAndCheck) {
 #else
   // GLES stencil mask is limited to 8 bits (0xFF), at least on Adreno GPUs
 #if IGL_PLATFORM_ANDROID
-  if (opengl::DeviceFeatureSet::usesOpenGLES()) {
+  if (iglDev_->getBackendVersion().flavor == BackendFlavor::OpenGL_ES) {
     GLuint origExpectedStencilValue = 0xffffffff;
 
     // GLES stencil mask is limited to 8 bits (0xFF) on Adreno GPUs

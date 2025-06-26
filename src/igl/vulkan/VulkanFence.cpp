@@ -7,8 +7,8 @@
 
 #include "VulkanFence.h"
 
-#include <igl/vulkan/Common.h>
 #include <utility> // std::swap
+#include <igl/vulkan/Common.h>
 
 namespace igl::vulkan {
 
@@ -80,6 +80,10 @@ bool VulkanFence::signal(VkQueue queue) {
 
   const VkResult result = vf_->vkQueueSubmit(queue, 0, nullptr, vkFence_);
   return result == VK_SUCCESS;
+}
+
+bool VulkanFence::exportable() const noexcept {
+  return exportable_;
 }
 
 } // namespace igl::vulkan

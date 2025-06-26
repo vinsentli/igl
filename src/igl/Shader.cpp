@@ -8,8 +8,8 @@
 #include <igl/Shader.h>
 
 #include <cstring>
-#include <igl/Common.h>
 #include <type_traits>
+#include <igl/Common.h>
 
 namespace {
 
@@ -19,6 +19,11 @@ bool safeDataCompare(const void* IGL_NULLABLE a,
                      size_t lengthB) {
   if (lengthA != lengthB) {
     return false;
+  }
+  // Handle null pointers;
+  if (a == nullptr || b == nullptr) {
+    // If both are null, consider them equal. If only ond is null, they are not equal
+    return a == b;
   }
   return (memcmp(a, b, lengthA) == 0);
 }

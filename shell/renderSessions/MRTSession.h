@@ -9,9 +9,9 @@
 
 #pragma once
 
-#include <igl/RenderPass.h>
 #include <shell/shared/platform/Platform.h>
 #include <shell/shared/renderSession/RenderSession.h>
+#include <igl/RenderPass.h>
 
 namespace igl::shell {
 
@@ -19,7 +19,7 @@ class MRTSession : public RenderSession {
  public:
   explicit MRTSession(std::shared_ptr<Platform> platform) : RenderSession(std::move(platform)) {}
   void initialize() noexcept override;
-  void update(igl::SurfaceTextures surfaceTextures) noexcept override;
+  void update(SurfaceTextures surfaceTextures) noexcept override;
 
  private:
   std::shared_ptr<ITexture> createTexture2D(const std::shared_ptr<ITexture>& tex);
@@ -38,7 +38,7 @@ class MRTSession : public RenderSession {
   // for last display pass
   RenderPassDesc renderPassDisplayLast_;
   std::shared_ptr<IFramebuffer> framebufferDisplayLast_;
-  std::shared_ptr<igl::IRenderPipelineState> pipelineStateLastDisplay_;
+  std::shared_ptr<IRenderPipelineState> pipelineStateLastDisplay_;
   std::shared_ptr<IShaderStages> shaderStagesDisplayLast_;
 
   std::shared_ptr<IVertexInputState> vertexInput_;

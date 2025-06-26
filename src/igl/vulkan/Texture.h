@@ -18,7 +18,6 @@
 namespace igl::vulkan {
 
 class Device;
-class VulkanImage;
 class VulkanTexture;
 class PlatformDevice;
 
@@ -30,10 +29,10 @@ class Texture : public ITexture {
  public:
   /// @brief Initializes an instance of the class, but does not create the resource on the device
   /// until `create()` is called
-  Texture(igl::vulkan::Device& device, TextureFormat format);
+  Texture(Device& device, TextureFormat format);
 
   /// @brief Initializes an instance of the class with an existing VulkanTexture object.
-  Texture(igl::vulkan::Device& device, std::shared_ptr<VulkanTexture> vkTexture, TextureDesc desc) :
+  Texture(Device& device, std::shared_ptr<VulkanTexture> vkTexture, TextureDesc desc) :
     Texture(device, desc.format) {
     texture_ = std::move(vkTexture);
     desc_ = std::move(desc);
@@ -83,7 +82,7 @@ class Texture : public ITexture {
   void clearColorTexture(const igl::Color& rgba);
 
  protected:
-  igl::vulkan::Device& device_;
+  Device& device_;
   TextureDesc desc_;
 
   std::shared_ptr<VulkanTexture> texture_;
@@ -93,6 +92,7 @@ class Texture : public ITexture {
   /// @brief Creates the resource on the device given the properties in `desc`. This function should
   /// only be called by the `Device` class, from its `vulkan::Device::createTexture()`
   virtual Result create(const TextureDesc& desc);
+  virtual Result createView(const Texture& baseTexture, const TextureViewDesc& desc);
 };
 
 } // namespace igl::vulkan

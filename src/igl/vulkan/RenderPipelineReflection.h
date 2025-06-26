@@ -7,9 +7,9 @@
 
 #pragma once
 
+#include <unordered_map>
 #include <igl/RenderPipelineReflection.h>
 #include <igl/vulkan/ShaderModule.h>
-#include <unordered_map>
 
 namespace igl::vulkan {
 

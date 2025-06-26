@@ -10,12 +10,12 @@
 #include <array>
 #include <bitset>
 #include <functional>
+#include <unordered_map>
 #include <igl/Buffer.h>
 #include <igl/Common.h>
 #include <igl/opengl/UnbindPolicy.h>
 #include <igl/opengl/UniformAdapter.h>
 #include <igl/opengl/WithContext.h>
-#include <unordered_map>
 
 namespace igl {
 

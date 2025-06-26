@@ -9,10 +9,10 @@
 #include "../data/TextureData.h"
 #include "../data/VertexIndexData.h"
 #include "../util/Common.h"
-#include "../util/TestDevice.h"
 
 #include <array>
 #include <gtest/gtest.h>
+#include <string>
 #include <igl/CommandBuffer.h>
 #include <igl/NameHandle.h>
 #include <igl/RenderPass.h>
@@ -20,8 +20,6 @@
 #include <igl/SamplerState.h>
 #include <igl/Shader.h>
 #include <igl/VertexInputState.h>
-#include <igl/opengl/PlatformDevice.h>
-#include <string>
 
 // to not use extra curly braces in initializer lists
 // This is needed to get tests working on Android
@@ -32,8 +30,8 @@
 namespace igl::tests {
 
 // Use a 4x4 texture for this test
-constexpr size_t OFFSCREEN_TEX_WIDTH = 4;
-constexpr size_t OFFSCREEN_TEX_HEIGHT = 4;
+constexpr size_t kOffscreenTexWidth = 4;
+constexpr size_t kOffscreenTexHeight = 4;
 #if IGL_OPENGL_ES
 #define FLOATING_POINT_TOLERANCE 0.0001
 #else
@@ -43,7 +41,7 @@ constexpr size_t OFFSCREEN_TEX_HEIGHT = 4;
 // clang-format off
 #if !defined(OGL_UNIFORM_BUFFER_FRAG_COMMON)
 #define OGL_UNIFORM_BUFFER_FRAG_COMMON \
-               PROLOG \
+               LEGACY_VERSION PROLOG \
                const float expectedFloat = 0.1; \
                const vec2 expectedVec2 = vec2(0.2, 0.2); \
                const vec3 expectedVec3 = vec3(0.3, 0.3, 0.3); \
@@ -111,7 +109,7 @@ constexpr size_t OFFSCREEN_TEX_HEIGHT = 4;
 #endif
 
 // Uniform Buffer Testing Shader
-const char OGL_UNIFORM_BUFFER_FRAG_SHADER[] =
+const char kOglUniformBufferFragShader[] =
     IGL_TO_STRING(OGL_UNIFORM_BUFFER_FRAG_COMMON
 
                uniform float testFloat;
@@ -239,7 +237,7 @@ const char OGL_UNIFORM_BUFFER_FRAG_SHADER[] =
                });
 
 // Uniform Array Testing Shader
-const char OGL_UNIFORM_ARRAY_FRAG_SHADER[] =
+const char kOglUniformArrayFragShader[] =
     IGL_TO_STRING(OGL_UNIFORM_BUFFER_FRAG_COMMON
 
                uniform float testFloat[3];
@@ -400,8 +398,8 @@ class UniformBufferTest : public ::testing::Test {
 
     // Create an offscreen texture to render to
     TextureDesc texDesc = TextureDesc::new2D(TextureFormat::RGBA_UNorm8,
-                                             OFFSCREEN_TEX_WIDTH,
-                                             OFFSCREEN_TEX_HEIGHT,
+                                             kOffscreenTexWidth,
+                                             kOffscreenTexHeight,
                                              TextureDesc::TextureUsageBits::Sampled |
                                                  TextureDesc::TextureUsageBits::Attachment);
 
@@ -412,8 +410,8 @@ class UniformBufferTest : public ::testing::Test {
 
     // Create input texture
     texDesc = TextureDesc::new2D(TextureFormat::RGBA_UNorm8,
-                                 OFFSCREEN_TEX_WIDTH,
-                                 OFFSCREEN_TEX_HEIGHT,
+                                 kOffscreenTexWidth,
+                                 kOffscreenTexHeight,
                                  TextureDesc::TextureUsageBits::Sampled);
     inputTexture_ = iglDev_->createTexture(texDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -505,7 +503,7 @@ class UniformBufferTest : public ::testing::Test {
   void TearDown() override {}
 
   // Member variables
- public:
+ protected:
   std::shared_ptr<IDevice> iglDev_;
   std::shared_ptr<ICommandQueue> cmdQueue_;
   std::shared_ptr<ICommandBuffer> cmdBuf_;
@@ -541,7 +539,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
   Result ret;
   std::shared_ptr<IRenderPipelineState> pipelineState;
   const simd::float4 clearColor = {0.0, 0.0, 1.0, 1.0};
-  const auto rangeDesc = TextureRangeDesc::new2D(0, 0, OFFSCREEN_TEX_WIDTH, OFFSCREEN_TEX_HEIGHT);
+  const auto rangeDesc = TextureRangeDesc::new2D(0, 0, kOffscreenTexWidth, kOffscreenTexHeight);
   struct FragmentParameters {
     simd::float1 testFloat{};
     simd::float2 testVec2{};
@@ -563,7 +561,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
     simd::float1 unsetFloat{};
     bool unsetBool{};
     simd::int1 unsetInt{};
-  } fragmentParameters_;
+  } fragmentParameters;
 
   //-------------------------------------
   // Upload the texture
@@ -578,7 +576,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
   igl::tests::util::createShaderStages(iglDev_,
                                        data::shader::OGL_SIMPLE_VERT_SHADER,
                                        data::shader::simpleVertFunc,
-                                       OGL_UNIFORM_BUFFER_FRAG_SHADER,
+                                       kOglUniformBufferFragShader,
                                        data::shader::simpleFragFunc,
                                        stages);
   shaderStages_ = std::move(stages);
@@ -596,13 +594,12 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
   // Create Uniforms Buffer
   //-------------------------------------
   // Make sure there are more texture pixels than our test cases
-  ASSERT_TRUE(uniformTypesCount_ + failureCasesCount_ <=
-              OFFSCREEN_TEX_WIDTH * OFFSCREEN_TEX_HEIGHT);
+  ASSERT_TRUE(uniformTypesCount_ + failureCasesCount_ <= kOffscreenTexWidth * kOffscreenTexHeight);
 
   BufferDesc fpDesc;
   fpDesc.type = BufferDesc::BufferTypeBits::Uniform;
-  fpDesc.data = &fragmentParameters_;
-  fpDesc.length = sizeof(fragmentParameters_);
+  fpDesc.data = &fragmentParameters;
+  fpDesc.length = sizeof(fragmentParameters);
   fpDesc.storage = ResourceStorage::Shared;
 
   std::vector<UniformDesc> fragmentUniformDescriptors;
@@ -613,7 +610,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
       pipelineState->getIndexByName(igl::genNameHandle("testFloat"), igl::ShaderStage::Fragment);
   fragmentUniformDescriptors.back().type = UniformType::Float;
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testFloat);
-  fragmentParameters_.testFloat = {0.1f};
+  fragmentParameters.testFloat = {0.1f};
 
   // "testVec2"
   fragmentUniformDescriptors.emplace_back();
@@ -621,7 +618,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
       pipelineState->getIndexByName(igl::genNameHandle("testVec2"), igl::ShaderStage::Fragment);
   fragmentUniformDescriptors.back().type = UniformType::Float2;
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testVec2);
-  fragmentParameters_.testVec2 = {0.2f, 0.2f};
+  fragmentParameters.testVec2 = {0.2f, 0.2f};
 
   // "testVec3"
   fragmentUniformDescriptors.emplace_back();
@@ -629,7 +626,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
       pipelineState->getIndexByName(igl::genNameHandle("testVec3"), igl::ShaderStage::Fragment);
   fragmentUniformDescriptors.back().type = UniformType::Float3;
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testVec3);
-  fragmentParameters_.testVec3 = {0.3f, 0.3f, 0.3f};
+  fragmentParameters.testVec3 = {0.3f, 0.3f, 0.3f};
 
   // "testVec4"
   fragmentUniformDescriptors.emplace_back();
@@ -637,7 +634,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
       pipelineState->getIndexByName(igl::genNameHandle("testVec4"), igl::ShaderStage::Fragment);
   fragmentUniformDescriptors.back().type = UniformType::Float4;
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testVec4);
-  fragmentParameters_.testVec4 = {0.4f, 0.4f, 0.4f, 0.4f};
+  fragmentParameters.testVec4 = {0.4f, 0.4f, 0.4f, 0.4f};
 
   // "testBool"
   fragmentUniformDescriptors.emplace_back();
@@ -645,7 +642,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
       pipelineState->getIndexByName(igl::genNameHandle("testBool"), igl::ShaderStage::Fragment);
   fragmentUniformDescriptors.back().type = UniformType::Boolean;
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testBool);
-  fragmentParameters_.testBool = true;
+  fragmentParameters.testBool = true;
 
   // "testInt"
   fragmentUniformDescriptors.emplace_back();
@@ -653,7 +650,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
       pipelineState->getIndexByName(igl::genNameHandle("testInt"), igl::ShaderStage::Fragment);
   fragmentUniformDescriptors.back().type = UniformType::Int;
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testInt);
-  fragmentParameters_.testInt = {42};
+  fragmentParameters.testInt = {42};
 
   // "testiVec2"
   fragmentUniformDescriptors.emplace_back();
@@ -661,7 +658,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
       pipelineState->getIndexByName(igl::genNameHandle("testiVec2"), igl::ShaderStage::Fragment);
   fragmentUniformDescriptors.back().type = UniformType::Int2;
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testiVec2);
-  fragmentParameters_.testiVec2 = {2, 2};
+  fragmentParameters.testiVec2 = {2, 2};
 
   // "testiVec3"
   fragmentUniformDescriptors.emplace_back();
@@ -669,7 +666,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
       pipelineState->getIndexByName(igl::genNameHandle("testiVec3"), igl::ShaderStage::Fragment);
   fragmentUniformDescriptors.back().type = UniformType::Int3;
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testiVec3);
-  fragmentParameters_.testiVec3 = {3, 3, 3};
+  fragmentParameters.testiVec3 = {3, 3, 3};
 
   // "testiVec4"
   fragmentUniformDescriptors.emplace_back();
@@ -677,7 +674,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
       pipelineState->getIndexByName(igl::genNameHandle("testiVec4"), igl::ShaderStage::Fragment);
   fragmentUniformDescriptors.back().type = UniformType::Int4;
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testiVec4);
-  fragmentParameters_.testiVec4 = {4, 4, 4, 4};
+  fragmentParameters.testiVec4 = {4, 4, 4, 4};
 
   // "testMat2"
   fragmentUniformDescriptors.emplace_back();
@@ -686,7 +683,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
   fragmentUniformDescriptors.back().type = UniformType::Mat2x2;
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testMat2);
   simd::float2 firstCol2 = {1.0, 2.0}, secondCol2 = {3.0, 4.0};
-  fragmentParameters_.testMat2 = {firstCol2, secondCol2};
+  fragmentParameters.testMat2 = {firstCol2, secondCol2};
 
   // "testMat3"
   fragmentUniformDescriptors.emplace_back();
@@ -697,7 +694,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
   fragmentUniformDescriptors.back().elementStride = sizeof(simd::float3x3);
   simd::float3 firstCol3 = {1.0, 2.0, 3.0}, secondCol3 = {4.0, 5.0, 6.0},
                thirdCol3 = {7.0, 8.0, 9.0};
-  fragmentParameters_.testMat3 = {firstCol3, secondCol3, thirdCol3};
+  fragmentParameters.testMat3 = {firstCol3, secondCol3, thirdCol3};
 
   // "testMat4"
   fragmentUniformDescriptors.emplace_back();
@@ -707,7 +704,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testMat4);
   simd::float4 firstCol4 = {1.0, 2.0, 3.0, 4.0}, secondCol4 = {5.0, 6.0, 7.0, 8.0},
                thirdCol4 = {9.0, 10.0, 11.0, 12.0}, fourthCol4 = {13.0, 14.0, 15.0, 16.0};
-  fragmentParameters_.testMat4 = {firstCol4, secondCol4, thirdCol4, fourthCol4};
+  fragmentParameters.testMat4 = {firstCol4, secondCol4, thirdCol4, fourthCol4};
 
   // "backgroundColor"
   fragmentUniformDescriptors.emplace_back();
@@ -715,7 +712,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
       igl::genNameHandle("backgroundColor"), igl::ShaderStage::Fragment);
   fragmentUniformDescriptors.back().type = UniformType::Float4;
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, backgroundColor);
-  fragmentParameters_.backgroundColor = clearColor;
+  fragmentParameters.backgroundColor = clearColor;
 
   // "unsetFloat1"
   fragmentUniformDescriptors.emplace_back();
@@ -723,7 +720,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
       pipelineState->getIndexByName(igl::genNameHandle("unsetFloat1"), igl::ShaderStage::Fragment);
   fragmentUniformDescriptors.back().type = UniformType::Float;
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, unsetFloat);
-  fragmentParameters_.unsetFloat = {0.1f};
+  fragmentParameters.unsetFloat = {0.1f};
 
   // "unsetBool1"
   fragmentUniformDescriptors.emplace_back();
@@ -731,7 +728,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
       pipelineState->getIndexByName(igl::genNameHandle("unsetBool1"), igl::ShaderStage::Fragment);
   fragmentUniformDescriptors.back().type = UniformType::Boolean;
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, unsetBool);
-  fragmentParameters_.unsetBool = true;
+  fragmentParameters.unsetBool = true;
 
   // "unsetInt1"
   fragmentUniformDescriptors.emplace_back();
@@ -739,7 +736,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
       pipelineState->getIndexByName(igl::genNameHandle("unsetInt1"), igl::ShaderStage::Fragment);
   fragmentUniformDescriptors.back().type = UniformType::Int;
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, unsetInt);
-  fragmentParameters_.unsetInt = {42};
+  fragmentParameters.unsetInt = {42};
 
   fragmentParamBuffer_ = iglDev_->createBuffer(fpDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -768,7 +765,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
   //----------------------
   // Read back framebuffer
   //----------------------
-  auto pixels = std::vector<uint32_t>(OFFSCREEN_TEX_WIDTH * OFFSCREEN_TEX_HEIGHT);
+  auto pixels = std::vector<uint32_t>(kOffscreenTexWidth * kOffscreenTexHeight);
 
   framebuffer_->copyBytesColorAttachment(*cmdQueue_, 0, pixels.data(), rangeDesc);
 
@@ -776,7 +773,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
   // Verify against original texture
   // Pixels are supposed to be 0xFF000000 since the uniform buffer is not bound
   //--------------------------------
-  for (size_t i = 0; i < OFFSCREEN_TEX_WIDTH * OFFSCREEN_TEX_HEIGHT; i++) {
+  for (size_t i = 0; i < kOffscreenTexWidth * kOffscreenTexHeight; i++) {
     ASSERT_EQ(pixels[i], 0xFF000000);
   }
 
@@ -795,7 +792,7 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
 
   // The Uniform Buffer is binded here:
   for (const auto& uniformDesc : fragmentUniformDescriptors) {
-    cmds->bindUniform(uniformDesc, &fragmentParameters_);
+    cmds->bindUniform(uniformDesc, &fragmentParameters);
   }
 
   cmds->bindTexture(textureUnit_, BindTarget::kFragment, inputTexture_.get());
@@ -837,7 +834,7 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   Result ret;
   std::shared_ptr<IRenderPipelineState> pipelineState;
   const simd::float4 clearColor = {0.0, 0.0, 1.0, 1.0};
-  const auto rangeDesc = TextureRangeDesc::new2D(0, 0, OFFSCREEN_TEX_WIDTH, OFFSCREEN_TEX_HEIGHT);
+  const auto rangeDesc = TextureRangeDesc::new2D(0, 0, kOffscreenTexWidth, kOffscreenTexHeight);
 
   // We are purposely creating an unpacked structure to trigger the
   // manual packing path in UniformBuffer::bindUniformArray.
@@ -906,7 +903,7 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
     std::array<simd::float1, 3> unsetFloat{};
     std::array<bool, 3> unsetBool{};
     std::array<simd::int1, 3> unsetInt{};
-  } fragmentParameters_;
+  } fragmentParameters;
 
   //-------------------------------------
   // Upload the texture
@@ -921,7 +918,7 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   igl::tests::util::createShaderStages(iglDev_,
                                        data::shader::OGL_SIMPLE_VERT_SHADER,
                                        data::shader::simpleVertFunc,
-                                       OGL_UNIFORM_ARRAY_FRAG_SHADER,
+                                       kOglUniformArrayFragShader,
                                        data::shader::simpleFragFunc,
                                        stages);
   shaderStages_ = std::move(stages);
@@ -939,13 +936,12 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   // Create Uniforms Buffer
   //-------------------------------------
   // Make sure there are more texture pixels than our test cases
-  ASSERT_TRUE(uniformTypesCount_ + failureCasesCount_ <=
-              OFFSCREEN_TEX_WIDTH * OFFSCREEN_TEX_HEIGHT);
+  ASSERT_TRUE(uniformTypesCount_ + failureCasesCount_ <= kOffscreenTexWidth * kOffscreenTexHeight);
 
   BufferDesc fpDesc;
   fpDesc.type = BufferDesc::BufferTypeBits::Uniform;
-  fpDesc.data = &fragmentParameters_;
-  fpDesc.length = sizeof(fragmentParameters_);
+  fpDesc.data = &fragmentParameters;
+  fpDesc.length = sizeof(fragmentParameters);
   fpDesc.storage = ResourceStorage::Shared;
 
   std::vector<UniformDesc> fragmentUniformDescriptors;
@@ -958,9 +954,9 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testFloat);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(Float1UnpackedData);
-  fragmentParameters_.testFloat[0] = {0.0f, {true, false, true}};
-  fragmentParameters_.testFloat[1] = {0.1f, {true, true, true}};
-  fragmentParameters_.testFloat[2] = {0.0f, {false, false, false}};
+  fragmentParameters.testFloat[0] = {0.0f, {true, false, true}};
+  fragmentParameters.testFloat[1] = {0.1f, {true, true, true}};
+  fragmentParameters.testFloat[2] = {0.0f, {false, false, false}};
 
   // "testVec2"
   fragmentUniformDescriptors.emplace_back();
@@ -970,9 +966,9 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testVec2);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(Float2UnpackedData);
-  fragmentParameters_.testVec2[0] = {{0.0f, 0.0f}, {true, false, true}};
-  fragmentParameters_.testVec2[1] = {{0.2f, 0.2f}, {true, true, true}};
-  fragmentParameters_.testVec2[2] = {{0.0f, 0.0f}, {false, false, false}};
+  fragmentParameters.testVec2[0] = {{0.0f, 0.0f}, {true, false, true}};
+  fragmentParameters.testVec2[1] = {{0.2f, 0.2f}, {true, true, true}};
+  fragmentParameters.testVec2[2] = {{0.0f, 0.0f}, {false, false, false}};
 
   // "testVec3"
   fragmentUniformDescriptors.emplace_back();
@@ -983,9 +979,9 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(simd::float3);
 
-  fragmentParameters_.testVec3[0] = {0.0f, 0.0f, 0.0f};
-  fragmentParameters_.testVec3[1] = {0.3f, 0.3f, 0.3f};
-  fragmentParameters_.testVec3[2] = {0.0f, 0.0f, 0.0f};
+  fragmentParameters.testVec3[0] = {0.0f, 0.0f, 0.0f};
+  fragmentParameters.testVec3[1] = {0.3f, 0.3f, 0.3f};
+  fragmentParameters.testVec3[2] = {0.0f, 0.0f, 0.0f};
 
   // "testVec4"
   fragmentUniformDescriptors.emplace_back();
@@ -995,9 +991,9 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testVec4);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(Float4UnpackedData);
-  fragmentParameters_.testVec4[0] = {{0.0f, 0.0f, 0.0f, 0.0f}, {true, false, true}};
-  fragmentParameters_.testVec4[1] = {{0.4f, 0.4f, 0.4f, 0.4f}, {true, true, true}};
-  fragmentParameters_.testVec4[2] = {{0.0f, 0.0f, 0.0f, 0.0f}, {false, false, false}};
+  fragmentParameters.testVec4[0] = {{0.0f, 0.0f, 0.0f, 0.0f}, {true, false, true}};
+  fragmentParameters.testVec4[1] = {{0.4f, 0.4f, 0.4f, 0.4f}, {true, true, true}};
+  fragmentParameters.testVec4[2] = {{0.0f, 0.0f, 0.0f, 0.0f}, {false, false, false}};
 
   // "testBool"
   fragmentUniformDescriptors.emplace_back();
@@ -1007,9 +1003,9 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testBool);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(BooleanUnpackedData);
-  fragmentParameters_.testBool[0] = {false, {false, false, true}, {0.0f, 0.1f, 0.2f}};
-  fragmentParameters_.testBool[1] = {true, {false, false, true}, {0.3f, 0.4f, 0.5f}};
-  fragmentParameters_.testBool[2] = {false, {true, true, true}, {0.6f, 0.7f, 0.8f}};
+  fragmentParameters.testBool[0] = {false, {false, false, true}, {0.0f, 0.1f, 0.2f}};
+  fragmentParameters.testBool[1] = {true, {false, false, true}, {0.3f, 0.4f, 0.5f}};
+  fragmentParameters.testBool[2] = {false, {true, true, true}, {0.6f, 0.7f, 0.8f}};
 
   // "testInt"
   fragmentUniformDescriptors.emplace_back();
@@ -1019,9 +1015,9 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testInt);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(Int1UnpackedData);
-  fragmentParameters_.testInt[0] = {0, {true, false, true}};
-  fragmentParameters_.testInt[1] = {42, {true, true, true}};
-  fragmentParameters_.testInt[2] = {0, {false, false, false}};
+  fragmentParameters.testInt[0] = {0, {true, false, true}};
+  fragmentParameters.testInt[1] = {42, {true, true, true}};
+  fragmentParameters.testInt[2] = {0, {false, false, false}};
 
   // "testiVec2"
   fragmentUniformDescriptors.emplace_back();
@@ -1031,9 +1027,9 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testiVec2);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(Int2UnpackedData);
-  fragmentParameters_.testiVec2[0] = {{0, 0}, {true, false, true}};
-  fragmentParameters_.testiVec2[1] = {{2, 2}, {true, true, true}};
-  fragmentParameters_.testiVec2[2] = {{0, 0}, {false, false, false}};
+  fragmentParameters.testiVec2[0] = {{0, 0}, {true, false, true}};
+  fragmentParameters.testiVec2[1] = {{2, 2}, {true, true, true}};
+  fragmentParameters.testiVec2[2] = {{0, 0}, {false, false, false}};
 
   // "testiVec3"
   fragmentUniformDescriptors.emplace_back();
@@ -1043,9 +1039,9 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testiVec3);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(simd::int3);
-  fragmentParameters_.testiVec3[0] = {0, 0, 0};
-  fragmentParameters_.testiVec3[1] = {3, 3, 3};
-  fragmentParameters_.testiVec3[2] = {0, 0, 0};
+  fragmentParameters.testiVec3[0] = {0, 0, 0};
+  fragmentParameters.testiVec3[1] = {3, 3, 3};
+  fragmentParameters.testiVec3[2] = {0, 0, 0};
 
   // "testiVec4"
   fragmentUniformDescriptors.emplace_back();
@@ -1055,9 +1051,9 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testiVec4);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(Int4UnpackedData);
-  fragmentParameters_.testiVec4[0] = {{0, 0, 0, 0}, {true, false, true}};
-  fragmentParameters_.testiVec4[1] = {{4, 4, 4, 4}, {true, true, true}};
-  fragmentParameters_.testiVec4[2] = {{0, 0, 0, 0}, {false, false, false}};
+  fragmentParameters.testiVec4[0] = {{0, 0, 0, 0}, {true, false, true}};
+  fragmentParameters.testiVec4[1] = {{4, 4, 4, 4}, {true, true, true}};
+  fragmentParameters.testiVec4[2] = {{0, 0, 0, 0}, {false, false, false}};
 
   // "testMat2"
   fragmentUniformDescriptors.emplace_back();
@@ -1067,10 +1063,10 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testMat2);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(simd::float2x2);
-  simd::float2 firstCol2 = {1.0, 2.0}, secondCol2 = {3.0, 4.0}, col2_0 = {0.0, 0.0};
-  fragmentParameters_.testMat2[0] = {col2_0, col2_0};
-  fragmentParameters_.testMat2[1] = {firstCol2, secondCol2};
-  fragmentParameters_.testMat2[2] = {col2_0, col2_0};
+  simd::float2 firstCol2 = {1.0, 2.0}, secondCol2 = {3.0, 4.0}, col20 = {0.0, 0.0};
+  fragmentParameters.testMat2[0] = {col20, col20};
+  fragmentParameters.testMat2[1] = {firstCol2, secondCol2};
+  fragmentParameters.testMat2[2] = {col20, col20};
 
   // "testMat3"
   fragmentUniformDescriptors.emplace_back();
@@ -1082,10 +1078,10 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(simd::float3x3);
   simd::float3 firstCol3 = {1.0, 2.0, 3.0}, secondCol3 = {4.0, 5.0, 6.0},
-               thirdCol3 = {7.0, 8.0, 9.0}, col3_0 = {0.0, 0.0, 0.0};
-  fragmentParameters_.testMat3[0] = {col3_0, col3_0, col3_0};
-  fragmentParameters_.testMat3[1] = {firstCol3, secondCol3, thirdCol3};
-  fragmentParameters_.testMat3[2] = {col3_0, col3_0, col3_0};
+               thirdCol3 = {7.0, 8.0, 9.0}, col30 = {0.0, 0.0, 0.0};
+  fragmentParameters.testMat3[0] = {col30, col30, col30};
+  fragmentParameters.testMat3[1] = {firstCol3, secondCol3, thirdCol3};
+  fragmentParameters.testMat3[2] = {col30, col30, col30};
 
   // "testMat4"
   fragmentUniformDescriptors.emplace_back();
@@ -1097,10 +1093,10 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().elementStride = sizeof(simd::float4x4);
   simd::float4 firstCol4 = {1.0, 2.0, 3.0, 4.0}, secondCol4 = {5.0, 6.0, 7.0, 8.0},
                thirdCol4 = {9.0, 10.0, 11.0, 12.0}, fourthCol4 = {13.0, 14.0, 15.0, 16.0},
-               col4_0 = {0.0, 0.0, 0.0, 0.0};
-  fragmentParameters_.testMat4[0] = {col4_0, col4_0, col4_0, col4_0};
-  fragmentParameters_.testMat4[1] = {firstCol4, secondCol4, thirdCol4, fourthCol4};
-  fragmentParameters_.testMat4[2] = {col4_0, col4_0, col4_0, col4_0};
+               col40 = {0.0, 0.0, 0.0, 0.0};
+  fragmentParameters.testMat4[0] = {col40, col40, col40, col40};
+  fragmentParameters.testMat4[1] = {firstCol4, secondCol4, thirdCol4, fourthCol4};
+  fragmentParameters.testMat4[2] = {col40, col40, col40, col40};
 
   // "backgroundColor"
   fragmentUniformDescriptors.emplace_back();
@@ -1108,7 +1104,7 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().location = pipelineState->getIndexByName(
       igl::genNameHandle("backgroundColor"), igl::ShaderStage::Fragment);
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, backgroundColor);
-  fragmentParameters_.backgroundColor = clearColor;
+  fragmentParameters.backgroundColor = clearColor;
 
   // "unsetFloat3"
   fragmentUniformDescriptors.emplace_back();
@@ -1118,7 +1114,7 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, unsetFloat);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(simd::float1);
-  fragmentParameters_.unsetFloat = {0.0f, 0.1f, 0.0f};
+  fragmentParameters.unsetFloat = {0.0f, 0.1f, 0.0f};
 
   // "unsetBool3"
   fragmentUniformDescriptors.emplace_back();
@@ -1128,9 +1124,9 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, unsetBool);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(bool);
-  fragmentParameters_.unsetBool[0] = false;
-  fragmentParameters_.unsetBool[1] = true;
-  fragmentParameters_.unsetBool[2] = false;
+  fragmentParameters.unsetBool[0] = false;
+  fragmentParameters.unsetBool[1] = true;
+  fragmentParameters.unsetBool[2] = false;
 
   // "unsetInt3"
   fragmentUniformDescriptors.emplace_back();
@@ -1140,9 +1136,9 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, unsetInt);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(simd::int1);
-  fragmentParameters_.unsetInt[0] = {0};
-  fragmentParameters_.unsetInt[1] = {42};
-  fragmentParameters_.unsetInt[2] = {0};
+  fragmentParameters.unsetInt[0] = {0};
+  fragmentParameters.unsetInt[1] = {42};
+  fragmentParameters.unsetInt[2] = {0};
 
   fragmentParamBuffer_ = iglDev_->createBuffer(fpDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -1171,7 +1167,7 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   //----------------------
   // Read back framebuffer
   //----------------------
-  auto pixels = std::vector<uint32_t>(OFFSCREEN_TEX_WIDTH * OFFSCREEN_TEX_HEIGHT);
+  auto pixels = std::vector<uint32_t>(kOffscreenTexWidth * kOffscreenTexHeight);
 
   framebuffer_->copyBytesColorAttachment(*cmdQueue_, 0, pixels.data(), rangeDesc);
 
@@ -1179,7 +1175,7 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   // Verify against original texture
   // Pixels are supposed to be 0xFF000000 since the uniform buffer is not bound
   //--------------------------------
-  for (size_t i = 0; i < OFFSCREEN_TEX_WIDTH * OFFSCREEN_TEX_HEIGHT; i++) {
+  for (size_t i = 0; i < kOffscreenTexWidth * kOffscreenTexHeight; i++) {
     ASSERT_EQ(pixels[i], 0xFF000000);
   }
 
@@ -1198,7 +1194,7 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
 
   // The Uniform Buffer is binded here:
   for (const auto& uniformDesc : fragmentUniformDescriptors) {
-    cmds->bindUniform(uniformDesc, &fragmentParameters_);
+    cmds->bindUniform(uniformDesc, &fragmentParameters);
   }
 
   cmds->bindTexture(textureUnit_, BindTarget::kFragment, inputTexture_.get());

@@ -9,9 +9,9 @@
 
 #include <filesystem>
 #include <fstream>
-#include <igl/Common.h>
 #include <iterator>
 #include <string>
+#include <igl/Common.h>
 // @fb-only
 // @fb-only
 // @fb-only
@@ -85,6 +85,9 @@ std::string FileLoaderLinux::fullPath(const std::string& fileName) const {
       "samples/resources/models/",
       "samples/resources/fonts/",
       "samples/resources/fonts/optimistic",
+      // @fb-only
+      // @fb-only
+      // @fb-only
       // @fb-only
       // @fb-only
       // @fb-only

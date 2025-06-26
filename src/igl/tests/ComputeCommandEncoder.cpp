@@ -5,18 +5,18 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "data/ShaderData.h"
+#include "util/Common.h"
+
 #include <gtest/gtest.h>
+#include <memory>
+#include <vector>
+#include <igl/Buffer.h>
 #include <igl/CommandBuffer.h>
 #include <igl/ComputeCommandEncoder.h>
 #include <igl/ComputePipelineState.h>
 #include <igl/Shader.h>
 #include <igl/ShaderCreator.h>
-#include <memory>
-#include <vector>
-
-#include "data/ShaderData.h"
-#include "igl/Buffer.h"
-#include "util/Common.h"
 
 namespace igl::tests {
 
@@ -120,7 +120,7 @@ class ComputeCommandEncoderTest : public ::testing::Test {
 
   void TearDown() override {}
 
- public:
+ protected:
   std::shared_ptr<IDevice> iglDev_;
   std::shared_ptr<ICommandQueue> cmdQueue_;
 
@@ -232,6 +232,67 @@ TEST_F(ComputeCommandEncoderTest, canUseOutputBufferFromOnePassAsInputToNext) {
     ASSERT_EQ(dataIn[i] * 2.0f * 2.0f * 2.0f, bytes[i]);
   }
   bufferOut2_->unmap();
+}
+
+TEST_F(ComputeCommandEncoderTest, bindSamplerState) {
+  if (!iglDev_->hasFeature(DeviceFeatures::Compute)) {
+    return;
+  }
+
+  auto cmdBuffer = cmdQueue_->createCommandBuffer({}, nullptr);
+  ASSERT_TRUE(cmdBuffer != nullptr);
+
+  auto computeCommandEncoder = cmdBuffer->createComputeCommandEncoder();
+  computeCommandEncoder->bindSamplerState(0, nullptr);
+  computeCommandEncoder->endEncoding();
+  cmdQueue_->submit(*cmdBuffer);
+  cmdBuffer->waitUntilCompleted();
+}
+
+TEST_F(ComputeCommandEncoderTest, copyBuffer) {
+  if (!iglDev_->hasFeature(DeviceFeatures::CopyBuffer)) {
+    return;
+  }
+
+  ASSERT_TRUE(cmdQueue_ != nullptr);
+
+  std::vector<uint8_t> dataIn2 = {0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 10};
+
+  auto bufferSrc = iglDev_->createBuffer(BufferDesc(BufferDesc::BufferTypeBits::Storage,
+                                                    dataIn2.data(),
+                                                    dataIn2.size(),
+                                                    ResourceStorage::Private,
+                                                    0,
+                                                    "bufferSrc"),
+                                         nullptr);
+
+  auto bufferDst = iglDev_->createBuffer(BufferDesc(BufferDesc::BufferTypeBits::Storage,
+                                                    nullptr,
+                                                    dataIn2.size(),
+                                                    ResourceStorage::Shared,
+                                                    0,
+                                                    "bufferDst"),
+                                         nullptr);
+
+  {
+    auto cmdBuffer = cmdQueue_->createCommandBuffer({}, nullptr);
+    ASSERT_TRUE(cmdBuffer != nullptr);
+
+    cmdBuffer->copyBuffer(*bufferSrc, *bufferDst, 0, 0, dataIn2.size());
+
+    cmdQueue_->submit(*cmdBuffer);
+    cmdBuffer->waitUntilCompleted();
+  }
+
+  Result ret;
+  const uint8_t* dataOut =
+      static_cast<const uint8_t*>(bufferDst->map(BufferRange(dataIn2.size(), 0), &ret));
+  ASSERT_TRUE(dataOut != nullptr);
+  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+  for (int i = 0; i < dataIn2.size(); i++) {
+    ASSERT_EQ(dataIn2[i], dataOut[i]);
+  }
+  bufferDst->unmap();
 }
 
 } // namespace igl::tests

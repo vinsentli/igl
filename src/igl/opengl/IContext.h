@@ -7,6 +7,11 @@
 
 #pragma once
 
+#include <memory>
+#include <mutex>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 #include <igl/CommandEncoder.h>
 #include <igl/Common.h>
 #include <igl/DeviceFeatures.h>
@@ -19,18 +24,8 @@
 #include <igl/opengl/UnbindPolicy.h>
 #include <igl/opengl/Version.h>
 #include <igl/opengl/WithContext.h>
-#include <memory>
-#include <mutex>
-#include <map>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
 
 namespace igl::opengl {
-
-// We might extend this to other enums presenting API versions on desktops, etc.
-// For the time being, we only need to differentiate gles2 and gles3
-enum class RenderingAPI { GLES2, GLES3, GL };
 
 ///
 /// Represents an pure abstract class that encapsulates in it an OpenGL context.

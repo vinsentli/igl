@@ -9,15 +9,14 @@
 #include "data/TextureData.h"
 #include "data/VertexIndexData.h"
 #include "util/Common.h"
-#include "util/TestDevice.h"
 #include "util/TextureValidationHelpers.h"
 
 #include <IGLU/managedUniformBuffer/ManagedUniformBuffer.h>
 #include <array>
 #include <glm/glm.hpp>
 #include <gtest/gtest.h>
-#include <igl/NameHandle.h>
 #include <string>
+#include <igl/NameHandle.h>
 
 namespace igl::tests {
 
@@ -210,7 +209,7 @@ class TextureCubeTest : public ::testing::Test {
   void TearDown() override {}
 
   // Member variables
- public:
+ protected:
   std::shared_ptr<IDevice> iglDev_;
   std::shared_ptr<ICommandQueue> cmdQueue_;
   std::shared_ptr<ICommandBuffer> cmdBuf_;
@@ -726,7 +725,6 @@ TEST_F(TextureCubeTest, GetRange) {
   ASSERT_TRUE(rangesAreEqual(getCubeFaceRangeNum(16, 16, format, 5, 1, 1, 1),
                              range.atFace(1).atMipLevel(1)));
 
-  // All mip levels
   ASSERT_TRUE(rangesAreEqual(getFullMipRange(16, 16, format, 5), range.withNumMipLevels(5)));
 }
 

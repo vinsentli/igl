@@ -7,9 +7,9 @@
 
 #pragma once
 
-#include <igl/Common.h>
 #include <string>
 #include <utility>
+#include <igl/Common.h>
 
 namespace igl {
 
@@ -98,24 +98,14 @@ enum class VertexSampleFunction {
  */
 struct VertexAttribute {
   /** @brief A buffer which contains this attribute stream */
-  size_t bufferIndex;
+  size_t bufferIndex = 0;
   /** @brief Per-element format */
-  VertexAttributeFormat format;
+  VertexAttributeFormat format = VertexAttributeFormat::Float1;
   /** @brief An offset where the first element of this attribute stream starts */
-  uintptr_t offset;
+  uintptr_t offset = 0;
   std::string name; // GLES Only
-  int location; // Metal only
+  int location = -1; // Metal only
 
-  VertexAttribute(size_t bufferIndex = 0,
-                  VertexAttributeFormat format = VertexAttributeFormat::Float1,
-                  uintptr_t offset = 0,
-                  std::string name = std::string(),
-                  int location = -1) :
-    bufferIndex(bufferIndex),
-    format(format),
-    offset(offset),
-    name(std::move(name)),
-    location(location) {}
   bool operator==(const VertexAttribute& other) const;
   bool operator!=(const VertexAttribute& other) const;
 };
@@ -128,7 +118,6 @@ struct VertexInputBinding {
   VertexSampleFunction sampleFunction = VertexSampleFunction::PerVertex;
   size_t sampleRate = 1;
 
-  VertexInputBinding() = default;
   bool operator==(const VertexInputBinding& other) const;
   bool operator!=(const VertexInputBinding& other) const;
 };
@@ -144,7 +133,6 @@ struct VertexInputStateDesc {
   static size_t sizeForVertexAttributeFormat(VertexAttributeFormat format);
 
   bool operator==(const VertexInputStateDesc& other) const;
-  bool operator!=(const VertexInputStateDesc& other) const;
 };
 
 /**

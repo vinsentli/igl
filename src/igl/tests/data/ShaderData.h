@@ -49,9 +49,19 @@ const size_t simpleComputeOutputIndex = 1;
 #define VERSION(ver) HASH()version ver\n
 #define REQUIRE_EXTENSION(ext) HASH()extension ext : require\n
 
+#if IGL_BACKEND_OPENGL && !IGL_OPENGL_ES
+#if IGL_PLATFORM_APPLE
+#define LEGACY_VERSION VERSION(100) precision mediump float;
+#else
+#define LEGACY_VERSION
+#endif
+#else
+#define LEGACY_VERSION
+#endif
+
 // Simple OGL Vertex shader
 const char OGL_SIMPLE_VERT_SHADER[] =
-    IGL_TO_STRING( attribute vec4 position_in; attribute vec2 uv_in; varying vec2 uv;
+    IGL_TO_STRING(LEGACY_VERSION attribute vec4 position_in; attribute vec2 uv_in; varying vec2 uv;
 
                void main() {
                  gl_Position = position_in;
@@ -62,7 +72,7 @@ const char OGL_SIMPLE_VERT_SHADER[] =
 
 // Simple OGL Fragment shader
 const char OGL_SIMPLE_FRAG_SHADER[] =
-    IGL_TO_STRING(PROLOG uniform sampler2D inputImage; varying vec2 uv;
+    IGL_TO_STRING(LEGACY_VERSION PROLOG uniform sampler2D inputImage; varying vec2 uv;
 
                void main() {
                  gl_FragColor = texture2D(inputImage, uv);
@@ -197,7 +207,7 @@ IGL_TO_STRING(VERSION(300 es)
 
 // Simple OGL Vertex shader for textureCube and texture3D
 const char OGL_SIMPLE_VERT_SHADER_CUBE[] =
-    IGL_TO_STRING(attribute vec4 position_in; uniform vec4 view; varying vec3 uv;
+    IGL_TO_STRING(LEGACY_VERSION attribute vec4 position_in; uniform vec4 view; varying vec3 uv;
 
                void main() {
                  gl_Position = position_in;
@@ -206,7 +216,7 @@ const char OGL_SIMPLE_VERT_SHADER_CUBE[] =
 
 // Simple OGL Fragment shader
 const char OGL_SIMPLE_FRAG_SHADER_CUBE[] =
-    IGL_TO_STRING(PROLOG uniform samplerCube inputImage; varying vec3 uv;
+    IGL_TO_STRING(LEGACY_VERSION PROLOG uniform samplerCube inputImage; varying vec3 uv;
 
                void main() { gl_FragColor = textureCube(inputImage, uv); });
 
@@ -483,6 +493,34 @@ const char VULKAN_SIMPLE_FRAG_SHADER_FLOAT4[] = VULKAN_SIMPLE_FRAG_SHADER_DEF(ve
 const char VULKAN_SIMPLE_FRAG_SHADER_UINT[] = VULKAN_SIMPLE_FRAG_SHADER_DEF(uint, r);
 const char VULKAN_SIMPLE_FRAG_SHADER_UINT2[] = VULKAN_SIMPLE_FRAG_SHADER_DEF(uvec2, rg);
 const char VULKAN_SIMPLE_FRAG_SHADER_UINT4[] = VULKAN_SIMPLE_FRAG_SHADER_DEF(uvec4, rgba);
+
+const char VULKAN_PUSH_CONSTANT_VERT_SHADER[] =
+    IGL_TO_STRING(
+      layout (location=0) in vec4 position_in;
+      layout (location=1) in vec2 uv_in;
+      layout (location=0) out vec2 uv;
+
+      void main() {
+        gl_Position = position_in;
+        gl_PointSize = 1.0;
+        uv = uv_in;
+      });
+
+const char VULKAN_PUSH_CONSTANT_FRAG_SHADER[] =
+    IGL_TO_STRING(
+      layout (location=0) in vec2 uv;
+      layout (location=0) out vec4 out_FragColor;
+      
+      layout (set = 0, binding = 0) uniform sampler2D uTex;
+      
+      layout (push_constant) uniform PushConstants {
+        vec4 colorMultiplier;
+      } pushConstants;
+
+      void main() {
+        vec4 tex = texture(uTex, uv);
+        out_FragColor = tex * pushConstants.colorMultiplier;
+      });
 
 const char VULKAN_SIMPLE_VERT_SHADER_TEX_2DARRAY[] =
 IGL_TO_STRING(

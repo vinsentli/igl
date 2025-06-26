@@ -25,19 +25,10 @@
 #include <igl/ColorSpace.h>
 #include <igl/Common.h>
 #include <igl/DepthStencilState.h>
+#include <igl/Format.h>
 #include <igl/Texture.h>
 #include <igl/VertexInputState.h>
 #include <igl/vulkan/VulkanHelpers.h>
-
-// libc++'s implementation of std::format has a large binary size impact
-// (https://github.com/llvm/llvm-project/issues/64180), so avoid it on Android.
-#if defined(__cpp_lib_format) && !defined(__ANDROID__)
-#include <format>
-#define IGL_FORMAT std::format
-#else
-#include <fmt/core.h>
-#define IGL_FORMAT fmt::format
-#endif // __cpp_lib_format
 
 // Enable to use VulkanMemoryAllocator (VMA)
 #define IGL_VULKAN_USE_VMA 1
@@ -113,6 +104,7 @@ namespace igl::vulkan {
 #define kColorGenerateMipmaps igl::Color(1.f, 0.75f, 0.f)
 #define kColorUploadImage igl::Color(1.f, 0.2f, 0.78f)
 #define kColorDebugLines igl::Color(0.f, 1.f, 1.f)
+#define kColorCommandBufferSubmissionWithFence igl::Color(0.878f, 0.69f, 1.0f) // Mauve
 
 // The VulkanContextConfig provides a way to override some of the the default behaviors of the
 // VulkanContext
@@ -126,8 +118,6 @@ struct VulkanContextConfig {
 
   bool enableValidation = true;
   bool enableGPUAssistedValidation = true;
-  bool enableSynchronizationValidation = false;
-  bool enableBufferDeviceAddress = false;
   bool enableExtraLogs = true;
   bool enableDescriptorIndexing = false;
   // @fb-only
@@ -135,6 +125,8 @@ struct VulkanContextConfig {
   bool enableShaderDrawParameters = true;
   bool enableStorageBuffer16BitAccess = true;
   bool enableDualSrcBlend = true;
+  bool enableGfxReconstruct = false;
+  bool enableMultiviewPerViewViewports = false;
 
   ColorSpace swapChainColorSpace = igl::ColorSpace::SRGB_NONLINEAR;
   TextureFormat requestedSwapChainTextureFormat = igl::TextureFormat::RGBA_UNorm8;
@@ -196,6 +188,8 @@ VkSampleCountFlagBits getVulkanSampleCountFlags(size_t numSamples);
 VkSurfaceFormatKHR colorSpaceToVkSurfaceFormat(ColorSpace colorSpace, bool isBGR);
 uint32_t getVkLayer(TextureType type, uint32_t face, uint32_t layer);
 TextureRangeDesc atVkLayer(TextureType type, const TextureRangeDesc& range, uint32_t vkLayer);
+VkColorSpaceKHR colorSpaceToVkColorSpace(ColorSpace colorSpace);
+ColorSpace vkColorSpaceToColorSpace(VkColorSpaceKHR colorSpace);
 
 /// @brief Transition from the current layout to VK_IMAGE_LAYOUT_GENERAL
 void transitionToGeneral(VkCommandBuffer cmdBuf, ITexture* texture);

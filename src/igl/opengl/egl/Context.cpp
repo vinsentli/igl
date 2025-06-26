@@ -14,12 +14,16 @@
 
 #include <array>
 #include <cassert>
+#include <tuple>
 #include <igl/Macros.h>
 #include <igl/opengl/Errors.h>
 #include <igl/opengl/Texture.h>
-#include <tuple>
 
 #define CHECK_EGL_ERRORS() error_checking::checkForEGLErrors(__FILE__, __FUNCTION__, __LINE__)
+
+#ifndef EGL_OPENGL_ES3_BIT
+#define EGL_OPENGL_ES3_BIT 0x00000040
+#endif
 
 namespace error_checking {
 
@@ -79,28 +83,49 @@ EGLDisplay getDefaultEGLDisplay() {
 }
 
 // typical high-quality attrib list
-constexpr std::array attribs{EGLint{EGL_RED_SIZE},
-                             EGLint{8},
-                             EGLint{EGL_GREEN_SIZE},
-                             EGLint{8},
-                             EGLint{EGL_BLUE_SIZE},
-                             EGLint{8},
-                             EGLint{EGL_ALPHA_SIZE},
-                             EGLint{8},
-                             EGLint{EGL_DEPTH_SIZE},
-                             EGLint{16},
-                             EGLint{EGL_SURFACE_TYPE},
-                             EGLint{EGL_PBUFFER_BIT},
-                             EGLint{EGL_RENDERABLE_TYPE},
-                             EGLint{EGL_OPENGL_ES2_BIT},
-                             EGLint{EGL_NONE}};
-constexpr std::array contextAttribs{EGLint{EGL_CONTEXT_CLIENT_VERSION},
-                                    EGLint{2},
-                                    EGLint{EGL_NONE}};
+constexpr std::array attribsOpenGLES2{EGLint{EGL_RED_SIZE},
+                                      EGLint{8},
+                                      EGLint{EGL_GREEN_SIZE},
+                                      EGLint{8},
+                                      EGLint{EGL_BLUE_SIZE},
+                                      EGLint{8},
+                                      EGLint{EGL_ALPHA_SIZE},
+                                      EGLint{8},
+                                      EGLint{EGL_DEPTH_SIZE},
+                                      EGLint{16},
+                                      EGLint{EGL_SURFACE_TYPE},
+                                      EGLint{EGL_PBUFFER_BIT},
+                                      EGLint{EGL_RENDERABLE_TYPE},
+                                      EGLint{EGL_OPENGL_ES2_BIT},
+                                      EGLint{EGL_NONE}};
+constexpr std::array contextAttribsOpenGLES2{EGLint{EGL_CONTEXT_CLIENT_VERSION},
+                                             EGLint{2},
+                                             EGLint{EGL_NONE}};
 
-std::pair<EGLDisplay, EGLContext> newEGLContext(EGLDisplay display,
+constexpr std::array attribsOpenGLES3{EGLint{EGL_RED_SIZE},
+                                      EGLint{8},
+                                      EGLint{EGL_GREEN_SIZE},
+                                      EGLint{8},
+                                      EGLint{EGL_BLUE_SIZE},
+                                      EGLint{8},
+                                      EGLint{EGL_ALPHA_SIZE},
+                                      EGLint{8},
+                                      EGLint{EGL_DEPTH_SIZE},
+                                      EGLint{16},
+                                      EGLint{EGL_SURFACE_TYPE},
+                                      EGLint{EGL_PBUFFER_BIT},
+                                      EGLint{EGL_RENDERABLE_TYPE},
+                                      EGLint{EGL_OPENGL_ES3_BIT},
+                                      EGLint{EGL_NONE}};
+constexpr std::array contextAttribsOpenGLES3{EGLint{EGL_CONTEXT_CLIENT_VERSION},
+                                             EGLint{3},
+                                             EGLint{EGL_NONE}};
+
+std::pair<EGLDisplay, EGLContext> newEGLContext(uint8_t contextMajorVersion,
+                                                EGLDisplay display,
                                                 EGLContext shareContext,
                                                 EGLConfig* config) {
+  IGL_DEBUG_ASSERT(contextMajorVersion == 2 || contextMajorVersion == 3);
   if (display == EGL_NO_DISPLAY || !eglInitialize(display, nullptr, nullptr)) {
     CHECK_EGL_ERRORS();
     // TODO: Handle error
@@ -113,6 +138,9 @@ std::pair<EGLDisplay, EGLContext> newEGLContext(EGLDisplay display,
   }
 
   EGLint numConfigs = 0;
+  const auto& attribs = contextMajorVersion == 2 ? attribsOpenGLES2 : attribsOpenGLES3;
+  const auto& contextAttribs = contextMajorVersion == 2 ? contextAttribsOpenGLES2
+                                                        : contextAttribsOpenGLES3;
   if (!eglChooseConfig(display, attribs.data(), config, 1, &numConfigs)) {
     CHECK_EGL_ERRORS();
   }
@@ -123,7 +151,9 @@ std::pair<EGLDisplay, EGLContext> newEGLContext(EGLDisplay display,
   return res;
 }
 
-EGLConfig chooseConfig(EGLDisplay display) {
+EGLConfig chooseConfig(uint8_t contextMajorVersion, EGLDisplay display) {
+  IGL_DEBUG_ASSERT(contextMajorVersion == 2 || contextMajorVersion == 3);
+  const auto& attribs = contextMajorVersion == 2 ? attribsOpenGLES2 : attribsOpenGLES3;
   EGLConfig config{nullptr};
   EGLint numConfigs{0};
   const EGLBoolean status = eglChooseConfig(display, attribs.data(), &config, 1, &numConfigs);
@@ -168,11 +198,14 @@ EGLConfig chooseConfig(EGLDisplay display) {
   return context;
 }
 
-Context::Context(RenderingAPI api, EGLNativeWindowType window) :
-  Context(api, EGL_NO_CONTEXT, nullptr, false, window, {0, 0}) {}
+Context::Context(EGLNativeWindowType window) :
+  Context(kDefaultEGLBackendVersion, EGL_NO_CONTEXT, nullptr, false, window, {0, 0}) {}
 
-Context::Context(RenderingAPI api, size_t width, size_t height) :
-  Context(api,
+Context::Context(BackendVersion backendVersion, EGLNativeWindowType window) :
+  Context(backendVersion, EGL_NO_CONTEXT, nullptr, false, window, {0, 0}) {}
+
+Context::Context(size_t width, size_t height) :
+  Context(kDefaultEGLBackendVersion,
           EGL_NO_CONTEXT,
           nullptr,
           true,
@@ -180,30 +213,32 @@ Context::Context(RenderingAPI api, size_t width, size_t height) :
           {static_cast<EGLint>(width), static_cast<EGLint>(height)}) {}
 
 Context::Context(const Context& sharedContext) :
-  Context(sharedContext.api_,
+  Context(sharedContext.backendVersion_,
           sharedContext.context_,
           sharedContext.sharegroup_,
           true,
           IGL_EGL_NULL_WINDOW,
           sharedContext.getDrawSurfaceDimensions(nullptr)) {}
 
-Context::Context(RenderingAPI api,
+Context::Context(BackendVersion backendVersion,
                  EGLContext shareContext,
                  std::shared_ptr<std::vector<EGLContext>> sharegroup,
                  bool offscreen,
                  EGLNativeWindowType window,
-                 std::pair<EGLint, EGLint> dimensions) {
+                 std::pair<EGLint, EGLint> dimensions) :
+  backendVersion_(backendVersion) {
+  IGL_DEBUG_ASSERT(backendVersion.flavor == BackendFlavor::OpenGL_ES);
   IGL_DEBUG_ASSERT(
       (shareContext == EGL_NO_CONTEXT && sharegroup == nullptr) ||
           (shareContext != EGL_NO_CONTEXT && sharegroup != nullptr &&
            std::find(sharegroup->begin(), sharegroup->end(), shareContext) != sharegroup->end()),
       "shareContext and sharegroup values must be consistent");
   EGLConfig config{nullptr};
-  auto contextDisplay = newEGLContext(getDefaultEGLDisplay(), shareContext, &config);
+  auto contextDisplay =
+      newEGLContext(backendVersion.majorVersion, getDefaultEGLDisplay(), shareContext, &config);
   IGL_DEBUG_ASSERT(contextDisplay.second != EGL_NO_CONTEXT, "newEGLContext failed");
 
   contextOwned_ = true;
-  api_ = api;
   display_ = contextDisplay.first;
   context_ = contextDisplay.second;
   IContext::registerContext((void*)context_, this);
@@ -263,7 +298,8 @@ Context::Context(EGLDisplay display,
   context_(context),
   readSurface_(readSurface),
   drawSurface_(drawSurface),
-  config_(config) {
+  config_(config),
+  backendVersion_(kDefaultEGLBackendVersion) {
   IContext::registerContext((void*)context_, this);
   initialize();
   sharegroup_ = std::make_shared<std::vector<EGLContext>>();
@@ -271,7 +307,8 @@ Context::Context(EGLDisplay display,
 }
 
 void Context::updateSurface(NativeWindowType window) {
-  surface_ = eglCreateWindowSurface(display_, chooseConfig(display_), window, nullptr);
+  surface_ = eglCreateWindowSurface(
+      display_, chooseConfig(backendVersion_.majorVersion, display_), window, nullptr);
   CHECK_EGL_ERRORS();
   readSurface_ = surface_;
   drawSurface_ = surface_;
@@ -380,7 +417,8 @@ void Context::updateSurfaces(EGLSurface readSurface, EGLSurface drawSurface) {
 }
 
 EGLSurface Context::createSurface(NativeWindowType window) {
-  auto* surface = eglCreateWindowSurface(display_, chooseConfig(display_), window, nullptr);
+  auto* surface = eglCreateWindowSurface(
+      display_, chooseConfig(backendVersion_.majorVersion, display_), window, nullptr);
   CHECK_EGL_ERRORS();
   return surface;
 }
@@ -422,31 +460,33 @@ EGLConfig Context::getConfig() const {
 }
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
-// EGLImageKHR Context::createImageFromAndroidHardwareBuffer(AHardwareBuffer* hwb) const {
-//   EGLClientBuffer clientBuffer = eglGetNativeClientBufferANDROID(hwb);
-//   EGLint attribs[] = {EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE, EGL_NONE, EGL_NONE};
+#if 0
+EGLImageKHR Context::createImageFromAndroidHardwareBuffer(AHardwareBuffer* hwb) const {
+  EGLClientBuffer clientBuffer = eglGetNativeClientBufferANDROID(hwb);
+  EGLint hwBufferAttribs[] = {EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE, EGL_NONE, EGL_NONE};
 
-//   EGLDisplay display = this->getDisplay();
-//   // eglCreateImageKHR will add a ref to the AHardwareBuffer
-//   EGLImageKHR eglImage =
-//       eglCreateImageKHR(display, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID, clientBuffer, attribs);
-//   IGL_LOG_DEBUG("eglCreateImageKHR(%p, %x, %x, %p, {%d, %d, %d, %d, %d})\n",
-//                 display,
-//                 EGL_NO_CONTEXT,
-//                 EGL_NATIVE_BUFFER_ANDROID,
-//                 clientBuffer,
-//                 attribs[0],
-//                 attribs[1],
-//                 attribs[2],
-//                 attribs[3],
-//                 attribs[4]);
+  EGLDisplay display = this->getDisplay();
+  // eglCreateImageKHR will add a ref to the AHardwareBuffer
+  EGLImageKHR eglImage = eglCreateImageKHR(
+      display, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID, clientBuffer, hwBufferAttribs);
+  IGL_LOG_DEBUG("eglCreateImageKHR(%p, %x, %x, %p, {%d, %d, %d, %d, %d})\n",
+                display,
+                EGL_NO_CONTEXT,
+                EGL_NATIVE_BUFFER_ANDROID,
+                clientBuffer,
+                hwBufferAttribs[0],
+                hwBufferAttribs[1],
+                hwBufferAttribs[2],
+                hwBufferAttribs[3],
+                hwBufferAttribs[4]);
 
-//   this->checkForErrors(__FUNCTION__, __LINE__);
+  this->checkForErrors(__FUNCTION__, __LINE__);
 
-//   IGL_SOFT_ASSERT(this->isCurrentContext() || this->isCurrentSharegroup());
+  IGL_SOFT_ASSERT(this->isCurrentContext() || this->isCurrentSharegroup());
 
-//   return eglImage;
-// }
+  return eglImage;
+}
+#endif
 
 void Context::imageTargetTexture(EGLImageKHR eglImage, GLenum target) const {
   glEGLImageTargetTexture2DOES(target, static_cast<GLeglImageOES>(eglImage));

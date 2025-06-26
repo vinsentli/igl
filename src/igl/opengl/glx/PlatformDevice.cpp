@@ -5,22 +5,22 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <igl/opengl/TextureBuffer.h>
+// @fb-only
+// @fb-only
+
 #include <igl/opengl/ViewTextureTarget.h>
 #include <igl/opengl/glx/Context.h>
 #include <igl/opengl/glx/Device.h>
 #include <igl/opengl/glx/PlatformDevice.h>
 
-namespace igl {
-namespace opengl {
-namespace glx {
+namespace igl::opengl::glx {
 
 PlatformDevice::PlatformDevice(Device& owner) : opengl::PlatformDevice(owner) {}
 
 std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(uint32_t width,
                                                                           uint32_t height,
                                                                           Result* outResult) {
-  auto context = static_cast<Context*>(getSharedContext().get());
+  auto* context = static_cast<Context*>(getSharedContext().get());
   if (context == nullptr) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "No GLX context found!");
     return nullptr;
@@ -59,7 +59,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(uint32_t 
                                                                        uint32_t height,
                                                                        Result* outResult) {
   // generate depth with new width and height
-  auto context = static_cast<Context*>(getSharedContext().get());
+  auto* context = static_cast<Context*>(getSharedContext().get());
   if (!context) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "No GLXs context found!");
     return nullptr;
@@ -99,6 +99,4 @@ bool PlatformDevice::isType(PlatformDeviceType t) const noexcept {
   return t == Type || opengl::PlatformDevice::isType(t);
 }
 
-} // namespace glx
-} // namespace opengl
-} // namespace igl
+} // namespace igl::opengl::glx

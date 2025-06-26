@@ -9,24 +9,18 @@
 
 #include <cstring>
 
-#include <IGLU/simdtypes/SimdTypes.h>
 #include <glm/gtc/color_space.hpp>
-#include <igl/NameHandle.h>
-#include <igl/ShaderCreator.h>
-#include <igl/opengl/GLIncludes.h>
 #include <shell/renderSessions/ColorSession.h>
 #include <shell/shared/imageLoader/ImageLoader.h>
 #include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/RenderSession.h>
 #include <shell/shared/renderSession/ShellParams.h>
+#include <igl/NameHandle.h>
+#include <igl/ShaderCreator.h>
 
 namespace igl::shell {
 
 namespace {
-const glm::vec3 kLinearOrangeColor = glm::convertSRGBToLinear(glm::dvec3{1.0, 0.5, 0.0});
-const iglu::simdtypes::float3 kGPULinearOrangeColor = {static_cast<float>(kLinearOrangeColor.x),
-                                                       static_cast<float>(kLinearOrangeColor.y),
-                                                       static_cast<float>(kLinearOrangeColor.z)};
 
 struct VertexPosUv {
   iglu::simdtypes::float3 position;
@@ -157,6 +151,7 @@ std::string getVulkanFragmentShaderSource() {
 std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
+  case igl::BackendType::Custom:
     IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
   case igl::BackendType::Vulkan: {
@@ -203,9 +198,12 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
 }
 } // namespace
 
-// clang-tidy off
 void ColorSession::initialize() noexcept {
-  // clang-tidy on
+  static const glm::vec3 kLinearOrangeColor = glm::convertSRGBToLinear(glm::dvec3{1.0, 0.5, 0.0});
+  const iglu::simdtypes::float3 kGPULinearOrangeColor = {static_cast<float>(kLinearOrangeColor.x),
+                                                         static_cast<float>(kLinearOrangeColor.y),
+                                                         static_cast<float>(kLinearOrangeColor.z)};
+
   auto& device = getPlatform().getDevice();
 
   // Vertex & Index buffer
@@ -220,10 +218,10 @@ void ColorSession::initialize() noexcept {
 
   VertexInputStateDesc inputDesc;
   inputDesc.numAttributes = 2;
-  inputDesc.attributes[0] = VertexAttribute(
-      1, VertexAttributeFormat::Float3, offsetof(VertexPosUv, position), "position", 0);
+  inputDesc.attributes[0] = VertexAttribute{
+      1, VertexAttributeFormat::Float3, offsetof(VertexPosUv, position), "position", 0};
   inputDesc.attributes[1] =
-      VertexAttribute(1, VertexAttributeFormat::Float2, offsetof(VertexPosUv, uv), "uv_in", 1);
+      VertexAttribute{1, VertexAttributeFormat::Float2, offsetof(VertexPosUv, uv), "uv_in", 1};
   inputDesc.numInputBindings = 1;
   inputDesc.inputBindings[1].stride = sizeof(VertexPosUv);
   vertexInput0_ = device.createVertexInputState(inputDesc, nullptr);
@@ -364,7 +362,14 @@ void ColorSession::update(SurfaceTextures surfaceTextures) noexcept {
         commands->bindUniform(uniformDesc, &fragmentParameters_);
       }
     } else if (getPlatform().getDevice().hasFeature(DeviceFeatures::UniformBlocks)) {
-      commands->bindBuffer(0, fragmentParamBuffer_.get());
+      // @fb-only
+        // @fb-only
+                            // @fb-only
+                            // @fb-only
+                            // @fb-only
+      // @fb-only
+        commands->bindBuffer(0, fragmentParamBuffer_.get());
+      // @fb-only
     } else {
       IGL_DEBUG_ASSERT_NOT_REACHED();
     }

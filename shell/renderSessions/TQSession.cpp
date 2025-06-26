@@ -8,11 +8,10 @@
 // @fb-only
 
 #include <IGLU/simdtypes/SimdTypes.h>
-#include <igl/NameHandle.h>
-#include <igl/ShaderCreator.h>
-#include <igl/opengl/GLIncludes.h>
 #include <shell/renderSessions/TQSession.h>
 #include <shell/shared/renderSession/ShellParams.h>
+#include <igl/NameHandle.h>
+#include <igl/ShaderCreator.h>
 
 namespace igl::shell {
 namespace {
@@ -130,6 +129,7 @@ std::string getVulkanFragmentShaderSource() {
 std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
+  case igl::BackendType::Custom:
     IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
   case igl::BackendType::Vulkan:
@@ -197,10 +197,10 @@ void TQSession::initialize() noexcept {
 
   VertexInputStateDesc inputDesc;
   inputDesc.numAttributes = 2;
-  inputDesc.attributes[0] = VertexAttribute(
-      1, VertexAttributeFormat::Float3, offsetof(VertexPosUv, position), "position", 0);
+  inputDesc.attributes[0] = VertexAttribute{
+      1, VertexAttributeFormat::Float3, offsetof(VertexPosUv, position), "position", 0};
   inputDesc.attributes[1] =
-      VertexAttribute(1, VertexAttributeFormat::Float2, offsetof(VertexPosUv, uv), "uv_in", 1);
+      VertexAttribute{1, VertexAttributeFormat::Float2, offsetof(VertexPosUv, uv), "uv_in", 1};
   inputDesc.numInputBindings = 1;
   inputDesc.inputBindings[1].stride = sizeof(VertexPosUv);
   vertexInput0_ = device.createVertexInputState(inputDesc, nullptr);
@@ -318,7 +318,14 @@ void TQSession::update(SurfaceTextures surfaceTextures) noexcept {
         commands->bindUniform(uniformDesc, &fragmentParameters_);
       }
     } else if (getPlatform().getDevice().hasFeature(DeviceFeatures::UniformBlocks)) {
-      commands->bindBuffer(0, fragmentParamBuffer_.get());
+      // @fb-only
+        // @fb-only
+                            // @fb-only
+                            // @fb-only
+                            // @fb-only
+      // @fb-only
+        commands->bindBuffer(0, fragmentParamBuffer_.get());
+      // @fb-only
     } else {
       IGL_DEBUG_ASSERT_NOT_REACHED();
     }

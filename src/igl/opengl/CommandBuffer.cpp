@@ -15,7 +15,8 @@
 
 namespace igl::opengl {
 
-CommandBuffer::CommandBuffer(std::shared_ptr<IContext> context) : context_(std::move(context)) {}
+CommandBuffer::CommandBuffer(std::shared_ptr<IContext> context, CommandBufferDesc desc) :
+  ICommandBuffer(std::move(desc)), context_(std::move(context)) {}
 
 CommandBuffer::~CommandBuffer() = default;
 
@@ -81,6 +82,19 @@ void CommandBuffer::copyBuffer(IBuffer& src,
   ctx.copyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, srcOffset, dstOffset, size);
   ctx.bindBuffer(GL_COPY_READ_BUFFER, 0);
   ctx.bindBuffer(GL_COPY_WRITE_BUFFER, 0);
+}
+
+void CommandBuffer::copyTextureToBuffer(ITexture& src,
+                                        IBuffer& dst,
+                                        uint64_t dstOffset,
+                                        uint32_t level,
+                                        uint32_t layer) {
+  (void)src;
+  (void)dst;
+  (void)dstOffset;
+  (void)level;
+  (void)layer;
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
 }
 
 IContext& CommandBuffer::getContext() const {

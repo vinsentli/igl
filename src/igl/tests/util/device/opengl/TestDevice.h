@@ -7,24 +7,19 @@
 
 #pragma once
 
-#include <igl/opengl/IContext.h>
 #include <memory>
-#include <string>
+#include <optional>
+#include <igl/DeviceFeatures.h>
 
 namespace igl {
 class IDevice;
-namespace tests::util::device::opengl {
+}
 
-/**
- Returns the OpenGL Rendering API.
- "2.0" -> GLES2, anything else: GLES3
- */
-igl::opengl::RenderingAPI getOpenGLRenderingAPI(const std::string& backendApi = "");
+namespace igl::tests::util::device::opengl {
 
 /**
  Create and return an igl::Device that is suitable for running tests against.
  */
-std::shared_ptr<IDevice> createTestDevice(const std::string& backendApi = "");
+std::shared_ptr<IDevice> createTestDevice(std::optional<BackendVersion> requestedVersion = {});
 
-} // namespace tests::util::device::opengl
-} // namespace igl
+} // namespace igl::tests::util::device::opengl

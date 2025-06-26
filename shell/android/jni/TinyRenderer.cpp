@@ -33,31 +33,31 @@ namespace {
 struct ContextGuard {
   ContextGuard(const igl::IDevice& device) {
 #if IGL_BACKEND_OPENGL
-    backend = device.getBackendType();
-    if (backend == igl::BackendType::OpenGL) {
-      display = eglGetCurrentDisplay();
-      context = eglGetCurrentContext();
-      readSurface = eglGetCurrentSurface(EGL_READ);
-      drawSurface = eglGetCurrentSurface(EGL_DRAW);
+    backend_ = device.getBackendType();
+    if (backend_ == igl::BackendType::OpenGL) {
+      display_ = eglGetCurrentDisplay();
+      context_ = eglGetCurrentContext();
+      readSurface_ = eglGetCurrentSurface(EGL_READ);
+      drawSurface_ = eglGetCurrentSurface(EGL_DRAW);
     }
 #endif
   }
 
   ~ContextGuard() {
 #if IGL_BACKEND_OPENGL
-    if (backend == igl::BackendType::OpenGL) {
-      eglMakeCurrent(display, readSurface, drawSurface, context);
+    if (backend_ == igl::BackendType::OpenGL) {
+      eglMakeCurrent(display_, readSurface_, drawSurface_, context_);
     }
 #endif
   }
 
  private:
 #if IGL_BACKEND_OPENGL
-  igl::BackendType backend;
-  EGLDisplay display;
-  EGLContext context;
-  EGLSurface readSurface;
-  EGLSurface drawSurface;
+  igl::BackendType backend_;
+  EGLDisplay display_;
+  EGLContext context_;
+  EGLSurface readSurface_;
+  EGLSurface drawSurface_;
 #endif
 };
 
@@ -82,12 +82,8 @@ void TinyRenderer::init(AAssetManager* mgr,
 #if IGL_BACKEND_OPENGL
   case igl::BackendFlavor::OpenGL_ES: {
     auto hwDevice = opengl::egl::HWDevice();
-    auto hwDevices = hwDevice.queryDevices(queryDesc, &result);
-    IGL_DEBUG_ASSERT(result.isOk());
     // Decide which backend api to use, default as GLES3
-    auto backendType = (backendVersion_.majorVersion == 3) ? igl::opengl::RenderingAPI::GLES3
-                                                           : igl::opengl::RenderingAPI::GLES2;
-    d = hwDevice.create(hwDevices[0], backendType, nullptr, &result);
+    d = hwDevice.create(backendVersion_, &result);
     shellParams_.shouldPresent = false;
 
     if (swapchainColorTextureFormat == TextureFormat::Invalid) {
@@ -125,9 +121,8 @@ void TinyRenderer::init(AAssetManager* mgr,
     // Android devices that do not support dualSrcBlend primarily use ARM, ImgTec, and Qualcomm
     // GPUs.
     // https://vulkan.gpuinfo.org/listdevicescoverage.php?feature=dualSrcBlend&platform=android&option=not
-    igl::vulkan::VulkanFeatures vulkanFeatures(VK_API_VERSION_1_1, config);
-    vulkanFeatures.enableDefaultFeatures1_1();
-    vulkanFeatures.VkPhysicalDeviceFeatures2_.features.dualSrcBlend = VK_FALSE;
+    igl::vulkan::VulkanFeatures vulkanFeatures(config);
+    vulkanFeatures.vkPhysicalDeviceFeatures2.features.dualSrcBlend = VK_FALSE;
 
     d = vulkan::HWDevice::create(std::move(ctx),
                                  devices[0],

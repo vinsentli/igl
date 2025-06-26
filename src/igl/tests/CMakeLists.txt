@@ -57,7 +57,7 @@ if(WIN32)
   endif()
 
   target_compile_definitions(IGLTests PRIVATE -DNOMINMAX)
-  target_compile_definitions(IGLTests PRIVATE -DIGL_UNIT_TESTS_GLES_VERSION="3.0")
+  target_compile_definitions(IGLTests PRIVATE -DIGL_UNIT_TESTS_GLES_VERSION=3)
   target_include_directories(IGLTests PRIVATE "${IGL_ROOT_DIR}/third-party/deps/src/glew/include")
   # IGL tests use EGL, here's a stub for Windows
   add_library(
@@ -114,6 +114,6 @@ endif()
 
 if(UNIX)
   if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(IGLTests PUBLIC "-Wno-volatile")
+    target_compile_options(IGLTests PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-Wno-volatile>)
   endif()
 endif()

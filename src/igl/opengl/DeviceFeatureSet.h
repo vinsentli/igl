@@ -7,12 +7,12 @@
 
 #pragma once
 
-#include <igl/DeviceFeatures.h>
-#include <igl/Texture.h>
-#include <igl/opengl/Version.h>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <igl/DeviceFeatures.h>
+#include <igl/Texture.h>
+#include <igl/opengl/Version.h>
 
 namespace igl::opengl {
 
@@ -87,8 +87,6 @@ enum class InternalFeatures {
   VertexAttribDivisor,       // glVertexAttribDivisor is supported
   DrawArraysIndirect,        // glDrawArraysIndirect is supported
   PackRowLength,             // GL_PACK_ROW_LENGTH is supported with glPixelStorei
-  DrawElementsInstanced,     // glDrawElementsInstanced is supported
-  DrawArraysInstanced,       // glDrawArraysInstanced is supported
 };
 // clang-format on
 

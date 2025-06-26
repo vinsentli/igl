@@ -6,7 +6,6 @@
  */
 
 #include "util/Common.h"
-#include "util/TestDevice.h"
 #if IGL_BACKEND_OPENGL
 #include <igl/opengl/IContext.h>
 #include <igl/opengl/PlatformDevice.h>
@@ -33,7 +32,7 @@ class DeviceFeatureSetTest : public ::testing::Test {
   void TearDown() override {}
 
   // Member variables
- public:
+ protected:
   std::shared_ptr<IDevice> iglDev_;
   std::shared_ptr<ICommandQueue> cmdQueue_;
 };

@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <igl/tests/util/device/TestDevice.h>
 #include <memory>
 #include <shell/shared/imageLoader/ImageLoader.h>
 #include <shell/shared/platform/android/PlatformAndroid.h>
@@ -15,6 +14,7 @@
 #include <shell/shared/platform/win/PlatformWin.h>
 #include <shell/shared/renderSession/ShellParams.h>
 #include <shell/shared/testShell/TestShell.h>
+#include <igl/tests/util/device/TestDevice.h>
 
 namespace igl::shell {
 
@@ -25,11 +25,13 @@ std::shared_ptr<::igl::IDevice> createTestDevice() {
 
   if (backend == "ogl") {
 #ifdef IGL_UNIT_TESTS_GLES_VERSION
-    std::string backendApi(IGL_UNIT_TESTS_GLES_VERSION);
+    return tests::util::device::createTestDevice(::igl::BackendType::OpenGL,
+                                                 {.flavor = BackendFlavor::OpenGL_ES,
+                                                  .majorVersion = IGL_UNIT_TESTS_GLES_VERSION,
+                                                  .minorVersion = 0});
 #else
-    const std::string backendApi("3.0es");
+    return tests::util::device::createTestDevice(::igl::BackendType::OpenGL);
 #endif
-    return tests::util::device::createTestDevice(::igl::BackendType::OpenGL, backendApi);
   } else if (backend == "metal") {
     return tests::util::device::createTestDevice(::igl::BackendType::Metal);
   } else if (backend == "vulkan") {
@@ -46,12 +48,12 @@ void ensureCommandLineArgsInitialized() {
   // Only do it once, otherwise it triggers an internal assert.
 
 #if IGL_PLATFORM_ANDROID
-  static bool s_initialized = true; // Android prohibids initialization of command line args
+  static bool sInitialized = true; // Android prohibits initialization of command line args
 #else
-  static bool s_initialized = false;
+  static bool sInitialized = false;
 #endif
-  if (!s_initialized) {
-    s_initialized = true;
+  if (!sInitialized) {
+    sInitialized = true;
     igl::shell::Platform::initializeCommandLineArgs(0, nullptr);
   }
 }

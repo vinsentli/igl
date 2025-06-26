@@ -7,26 +7,29 @@
 
 #include <gtest/gtest.h>
 
-#include <igl/NameHandle.h>
 #include <set>
+#include <igl/NameHandle.h>
 
 namespace igl::tests {
 namespace {
 NameHandle a = IGL_NAMEHANDLE("a");
 NameHandle b = IGL_NAMEHANDLE("b");
 NameHandle c = IGL_NAMEHANDLE("c");
+NameHandle someLongerString = IGL_NAMEHANDLE("someLongerString");
 } // namespace
 
 TEST(NameHandleTests, string) {
   EXPECT_EQ(a.toString(), "a");
   EXPECT_EQ(b.toString(), "b");
   EXPECT_EQ(c.toString(), "c");
+  EXPECT_EQ(someLongerString.toString(), "someLongerString");
 }
 
 TEST(NameHandleTests, crc32) {
   EXPECT_EQ(a.getCrc32(), 3904355907);
   EXPECT_EQ(b.getCrc32(), 1908338681);
   EXPECT_EQ(c.getCrc32(), 112844655);
+  EXPECT_EQ(someLongerString.getCrc32(), 3994903871);
 }
 
 TEST(NameHandleTests, equality) {

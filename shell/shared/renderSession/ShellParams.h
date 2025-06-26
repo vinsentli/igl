@@ -11,12 +11,12 @@
 #include <optional>
 #include <vector>
 
-#include <igl/ColorSpace.h>
-#include <igl/Common.h>
-#include <igl/TextureFormat.h>
 #include <shell/shared/renderSession/Hands.h>
 #include <shell/shared/renderSession/RenderMode.h>
 #include <shell/shared/renderSession/ViewParams.h>
+#include <igl/ColorSpace.h>
+#include <igl/Common.h>
+#include <igl/TextureFormat.h>
 
 namespace igl::shell {
 struct ShellParams {
@@ -31,5 +31,7 @@ struct ShellParams {
   std::optional<Color> clearColorValue = {};
   std::array<HandMesh, 2> handMeshes = {};
   std::array<HandTracking, 2> handTracking = {};
+  const char* screenshotFileName = "screenshot.png";
+  bool isHeadless = false;
 };
 } // namespace igl::shell

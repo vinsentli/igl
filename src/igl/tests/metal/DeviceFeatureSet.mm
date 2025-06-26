@@ -8,7 +8,6 @@
 #include <igl/metal/DeviceFeatureSet.h>
 
 #include "../util/Common.h"
-#include "../util/TestDevice.h"
 
 #include <gtest/gtest.h>
 #include <igl/IGL.h>
@@ -29,7 +28,7 @@ class DeviceFeatureSetMTLTest : public ::testing::Test {
 
   void TearDown() override {}
 
- public:
+ protected:
   id<MTLDevice> mtlDevice_;
 };
 

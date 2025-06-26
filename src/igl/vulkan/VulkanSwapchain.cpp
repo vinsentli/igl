@@ -7,7 +7,6 @@
 
 #include "VulkanSwapchain.h"
 
-#include <igl/vulkan/ColorSpace.h>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/VulkanContext.h>
@@ -73,7 +72,7 @@ VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>
 
   IGL_LOG_INFO(
       "The system could not find a native swap chain format that matched our designed swapchain "
-      "format. Defaulting to first supported format.");
+      "format. Defaulting to first supported format.\n");
   // fall back to first supported device color format. On Quest 2 it'll be VK_FORMAT_R8G8B8A8_UNORM
   return formats[0];
 }
@@ -106,7 +105,7 @@ VkImageUsageFlags chooseUsageFlags(const VulkanFunctionTable& vf,
   vf.vkGetPhysicalDeviceFormatProperties(pd, format, &props);
 
   const bool isTilingOptimalSupported =
-      (props.optimalTilingFeatures & VK_IMAGE_USAGE_STORAGE_BIT) > 0;
+      (props.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) > 0;
 
   if (isStorageSupported && isTilingOptimalSupported) {
     usageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
@@ -140,18 +139,14 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
       "create an offscreen rendering context? If so, set 'width' and 'height' to 0 when you "
       "create your igl::IDevice");
 
-#if defined(VK_KHR_surface)
-  if (ctx.extensions_.enabled(VK_KHR_SURFACE_EXTENSION_NAME)) {
-    VkBool32 queueFamilySupportsPresentation = VK_FALSE;
-    VK_ASSERT(
-        ctx_.vf_.vkGetPhysicalDeviceSurfaceSupportKHR(ctx.getVkPhysicalDevice(),
-                                                      ctx.deviceQueues_.graphicsQueueFamilyIndex,
-                                                      ctx.vkSurface_,
-                                                      &queueFamilySupportsPresentation));
-    IGL_DEBUG_ASSERT(queueFamilySupportsPresentation == VK_TRUE,
-                     "The queue family used with the swapchain does not support presentation");
-  }
-#endif
+  VkBool32 queueFamilySupportsPresentation = VK_FALSE;
+  VK_ASSERT(
+      ctx_.vf_.vkGetPhysicalDeviceSurfaceSupportKHR(ctx.getVkPhysicalDevice(),
+                                                    ctx.deviceQueues_.graphicsQueueFamilyIndex,
+                                                    ctx.vkSurface_,
+                                                    &queueFamilySupportsPresentation));
+  IGL_DEBUG_ASSERT(queueFamilySupportsPresentation == VK_TRUE,
+                   "The queue family used with the swapchain does not support presentation");
 
   const VkImageUsageFlags usageFlags = chooseUsageFlags(ctx.vf_,
                                                         ctx.getVkPhysicalDevice(),
@@ -193,6 +188,7 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
   for (uint32_t i = 0; i < numSwapchainImages_; i++) {
     auto image = VulkanImage(
         ctx_, device_, swapchainImages[i], IGL_FORMAT("Image: swapchain #{}", i).c_str());
+    image.extent_ = {width, height, 1};
     // set usage flags for retrieved images
     image.usageFlags_ = usageFlags;
     image.imageFormat_ = surfaceFormat_.format;
@@ -347,13 +343,21 @@ Result VulkanSwapchain::acquireNextImage() {
 Result VulkanSwapchain::present(VkSemaphore waitSemaphore) {
   IGL_PROFILER_FUNCTION();
 
-  IGL_PROFILER_ZONE("vkQueuePresent()", IGL_PROFILER_COLOR_PRESENT);
-  const auto presentResult =
-      ivkQueuePresent(&ctx_.vf_, graphicsQueue_, waitSemaphore, swapchain_, currentImageIndex_);
+  IGL_PROFILER_ZONE("vkQueuePresentKHR()", IGL_PROFILER_COLOR_PRESENT);
+  const VkPresentInfoKHR pi = {
+      .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+      .waitSemaphoreCount = 1u,
+      .pWaitSemaphores = &waitSemaphore,
+      .swapchainCount = 1u,
+      .pSwapchains = &swapchain_,
+      .pImageIndices = &currentImageIndex_,
+  };
+  const VkResult presentResult = ctx_.vf_.vkQueuePresentKHR(graphicsQueue_, &pi);
+
   if (presentResult == VK_SUBOPTIMAL_KHR) {
     IGL_LOG_INFO_ONCE(
-        "vkQueuePresent returned VK_SUBOPTIMAL_KHR. The Vulkan swapchain is no longer compatible "
-        "with the surface");
+        "vkQueuePresentKHR() returned VK_SUBOPTIMAL_KHR. The Vulkan swapchain is no longer "
+        "compatible with the surface");
   } else {
     VK_ASSERT_RETURN(presentResult);
   }

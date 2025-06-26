@@ -11,11 +11,13 @@
 
 #include <igl/CommandBuffer.h>
 #if IGL_PLATFORM_WINDOWS || IGL_PLATFORM_ANDROID || IGL_PLATFORM_MACOSX || IGL_PLATFORM_LINUX
+#include <igl/vulkan/Buffer.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/HWDevice.h>
 #include <igl/vulkan/PlatformDevice.h>
 #include <igl/vulkan/SamplerState.h>
 #include <igl/vulkan/Texture.h>
+#include <igl/vulkan/VulkanBuffer.h>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanFeatures.h>
 #include <igl/vulkan/VulkanTexture.h>
@@ -40,7 +42,7 @@ class DeviceVulkanTest : public ::testing::Test {
   void TearDown() override {}
 
   // Member variables
- public:
+ protected:
   std::shared_ptr<IDevice> iglDev_;
 };
 
@@ -75,6 +77,7 @@ TEST_F(DeviceVulkanTest, PlatformDevice) {
   auto cmdBuf = cmdQueue->createCommandBuffer(CommandBufferDesc(), &ret);
   auto submitHandle = cmdQueue->submit(*cmdBuf);
 
+  // NOLINTNEXTLINE(readability-qualified-auto)
   auto fence1 = vulkanPlatformDevice.getVkFenceFromSubmitHandle(submitHandle);
   ASSERT_NE(fence1, VK_NULL_HANDLE);
 
@@ -174,11 +177,11 @@ TEST_F(DeviceVulkanTest, StagingDeviceLargeBufferTest) {
 }
 
 TEST_F(DeviceVulkanTest, DestroyEmptyHandles) {
-  igl::destroy(iglDev_.get(), igl::BindGroupTextureHandle{});
-  igl::destroy(iglDev_.get(), igl::BindGroupBufferHandle{});
-  igl::destroy(iglDev_.get(), igl::TextureHandle{});
-  igl::destroy(iglDev_.get(), igl::SamplerHandle{});
-  igl::destroy(iglDev_.get(), igl::DepthStencilStateHandle{});
+  igl::destroy(iglDev_.get(), BindGroupTextureHandle{});
+  igl::destroy(iglDev_.get(), BindGroupBufferHandle{});
+  igl::destroy(iglDev_.get(), TextureHandle{});
+  igl::destroy(iglDev_.get(), SamplerHandle{});
+  igl::destroy(iglDev_.get(), DepthStencilStateHandle{});
 }
 
 TEST_F(DeviceVulkanTest, CurrentThreadIdTest) {
@@ -242,7 +245,7 @@ TEST_F(DeviceVulkanTest, UpdateGlslangResource) {
 }
 
 GTEST_TEST(VulkanContext, BufferDeviceAddress) {
-  std::shared_ptr<igl::IDevice> iglDev = nullptr;
+  std::shared_ptr<IDevice> iglDev = nullptr;
 
   igl::vulkan::VulkanContextConfig config;
 #if IGL_PLATFORM_MACOSX
@@ -259,9 +262,10 @@ GTEST_TEST(VulkanContext, BufferDeviceAddress) {
   config.terminateOnValidationError = false;
 #endif
   config.enableExtraLogs = true;
-  config.enableBufferDeviceAddress = true;
 
   auto ctx = igl::vulkan::HWDevice::createContext(config, nullptr);
+
+  ASSERT_NE(ctx, nullptr);
 
   Result ret;
 
@@ -271,36 +275,23 @@ GTEST_TEST(VulkanContext, BufferDeviceAddress) {
   ASSERT_TRUE(!devices.empty());
 
   if (ret.isOk()) {
-    igl::vulkan::VulkanFeatures features(VK_API_VERSION_1_1, config);
-    features.populateWithAvailablePhysicalDeviceFeatures(*ctx, (VkPhysicalDevice)devices[0].guid);
-
-    const VkPhysicalDeviceBufferDeviceAddressFeaturesKHR& bdaFeatures =
-        features.VkPhysicalDeviceBufferDeviceAddressFeaturesKHR_;
-    if (!bdaFeatures.bufferDeviceAddress) {
+    if (!ctx->features().has_VK_KHR_buffer_device_address) {
       return;
     }
 
-    const std::vector<const char*> extraDeviceExtensions;
     iglDev = igl::vulkan::HWDevice::create(std::move(ctx),
                                            devices[0],
                                            0, // width
                                            0, // height,
                                            0,
                                            nullptr,
-                                           &features,
+                                           nullptr,
                                            "DeviceVulkanTest",
                                            &ret);
 
     if (!ret.isOk()) {
       iglDev = nullptr;
     }
-  }
-
-  const bool deviceSupportsBufferDeviceAddress =
-      ret.message.empty() ||
-      ret.message.find("VK_KHR_buffer_device_address is not supported") == std::string::npos;
-  if (!deviceSupportsBufferDeviceAddress) {
-    return;
   }
 
   EXPECT_TRUE(ret.isOk());
@@ -324,7 +315,7 @@ GTEST_TEST(VulkanContext, BufferDeviceAddress) {
 }
 
 GTEST_TEST(VulkanContext, DescriptorIndexing) {
-  std::shared_ptr<igl::IDevice> iglDev = nullptr;
+  std::shared_ptr<IDevice> iglDev = nullptr;
 
   igl::vulkan::VulkanContextConfig config;
 #if IGL_PLATFORM_MACOSX
@@ -353,18 +344,17 @@ GTEST_TEST(VulkanContext, DescriptorIndexing) {
   ASSERT_TRUE(!devices.empty());
 
   if (ret.isOk()) {
-    igl::vulkan::VulkanFeatures features(VK_API_VERSION_1_1, config);
+    igl::vulkan::VulkanFeatures features(config);
     features.populateWithAvailablePhysicalDeviceFeatures(*ctx, (VkPhysicalDevice)devices[0].guid);
 
-    const VkPhysicalDeviceDescriptorIndexingFeaturesEXT& diFeatures =
-        features.VkPhysicalDeviceDescriptorIndexingFeaturesEXT_;
-    if (!diFeatures.shaderSampledImageArrayNonUniformIndexing ||
-        !diFeatures.descriptorBindingUniformBufferUpdateAfterBind ||
-        !diFeatures.descriptorBindingSampledImageUpdateAfterBind ||
-        !diFeatures.descriptorBindingStorageImageUpdateAfterBind ||
-        !diFeatures.descriptorBindingStorageBufferUpdateAfterBind ||
-        !diFeatures.descriptorBindingUpdateUnusedWhilePending ||
-        !diFeatures.descriptorBindingPartiallyBound || !diFeatures.runtimeDescriptorArray) {
+    const VkPhysicalDeviceDescriptorIndexingFeaturesEXT& dif = features.featuresDescriptorIndexing;
+    if (!dif.shaderSampledImageArrayNonUniformIndexing ||
+        !dif.descriptorBindingUniformBufferUpdateAfterBind ||
+        !dif.descriptorBindingSampledImageUpdateAfterBind ||
+        !dif.descriptorBindingStorageImageUpdateAfterBind ||
+        !dif.descriptorBindingStorageBufferUpdateAfterBind ||
+        !dif.descriptorBindingUpdateUnusedWhilePending || !dif.descriptorBindingPartiallyBound ||
+        !dif.runtimeDescriptorArray) {
       return;
     }
 
@@ -406,6 +396,59 @@ GTEST_TEST(VulkanContext, DescriptorIndexing) {
   }
 
   ASSERT_NE(texture->getTextureId(), 0u);
+}
+
+TEST_F(DeviceVulkanTest, UniformBlockRingBufferTest) {
+  Result ret;
+
+  // Create uniform buffer with ring buffer hint
+  const size_t bufferSize = 256;
+  BufferDesc bufferDesc;
+  bufferDesc.type = BufferDesc::BufferTypeBits::Uniform;
+  bufferDesc.length = bufferSize;
+  bufferDesc.storage = ResourceStorage::Shared;
+  bufferDesc.hint =
+      BufferDesc::BufferAPIHintBits::Ring | BufferDesc::BufferAPIHintBits::UniformBlock;
+
+  auto buffer = iglDev_->createBuffer(bufferDesc, &ret);
+  ASSERT_TRUE(ret.isOk());
+  ASSERT_NE(buffer, nullptr);
+
+  // Upload and verify data
+  std::vector<uint32_t> testData(bufferSize / sizeof(uint32_t));
+  for (unsigned int& i : testData) {
+    i = rand();
+  }
+
+  ret = buffer->upload(testData.data(), BufferRange(bufferSize, 0));
+  ASSERT_TRUE(ret.isOk());
+
+  // Create and submit multiple command buffers
+  CommandQueueDesc queueDesc{};
+  auto cmdQueue = iglDev_->createCommandQueue(queueDesc, &ret);
+  ASSERT_TRUE(ret.isOk());
+
+  std::vector<VkBuffer> bufferHandles;
+  // By default the VulkanContextConfig.maxResourceCount is 3, so we should create at most 3 unique
+  // VkBuffers
+  for (int i = 0; i < 4; i++) {
+    auto cmdBuf = cmdQueue->createCommandBuffer(CommandBufferDesc(), &ret);
+    ASSERT_TRUE(ret.isOk());
+
+    auto* vulkanBufferCast = static_cast<vulkan::Buffer*>(buffer.get());
+    const auto& vulkanBuffer = vulkanBufferCast->currentVulkanBuffer();
+    bufferHandles.push_back(vulkanBuffer->getVkBuffer());
+    ASSERT_EQ(vulkanBuffer->getSize(), bufferSize);
+
+    cmdQueue->submit(*cmdBuf);
+  }
+
+  // Verify different buffer handles were used for the first 3
+  for (size_t i = 1; i < 3; i++) {
+    ASSERT_NE(bufferHandles[i], bufferHandles[i - 1]);
+  }
+  // First and last handles should be the same
+  ASSERT_EQ(bufferHandles[3], bufferHandles[0]);
 }
 #endif
 

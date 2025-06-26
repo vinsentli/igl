@@ -13,14 +13,16 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstdint>
-#include <igl/Color.h>
-#include <igl/Core.h>
 #include <limits>
 #include <memory>
 #include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <igl/Color.h>
+#include <igl/Core.h>
+
+#define IGL_ARRAY_NUM_ELEMENTS(x) (sizeof(x) / sizeof((x)[0]))
 
 namespace igl {
 
@@ -138,6 +140,7 @@ enum class BackendType {
   Metal,
   Vulkan,
   // @fb-only
+  Custom,
 };
 
 enum class BackendFlavor : uint8_t {
@@ -152,28 +155,17 @@ enum class BackendFlavor : uint8_t {
 std::string BackendTypeToString(BackendType backendType);
 
 ///--------------------------------------
-/// MARK: - Rect<T>
+/// MARK: - ScissorRect
 
-/// Use value-initialization (i.e. braces) to 0-initialize: `Rect<float> myRect{};`
-template<typename T>
-struct Rect {
- private:
-  static constexpr T kNullValue = std::numeric_limits<T>::has_infinity
-                                      ? std::numeric_limits<T>::infinity()
-                                      : std::numeric_limits<T>::max();
-
- public:
-  T x = kNullValue;
-  T y = kNullValue;
-  T width{}; // zero-initialize
-  T height{}; // zero-initialize
-
+struct ScissorRect {
+  uint32_t x = 0;
+  uint32_t y = 0;
+  uint32_t width = 0;
+  uint32_t height = 0;
   [[nodiscard]] bool isNull() const {
-    return kNullValue == x && kNullValue == y;
+    return width == 0 && height == 0;
   }
 };
-
-using ScissorRect = Rect<uint32_t>;
 
 ///--------------------------------------
 /// MARK: - Size
@@ -232,7 +224,7 @@ inline bool operator!=(const Viewport& lhs, const Viewport& rhs) {
   return !operator==(lhs, rhs);
 }
 
-const Viewport kInvalidViewport = {-1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f};
+constexpr Viewport kInvalidViewport = {-1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f};
 
 ///--------------------------------------
 /// MARK: - Enum utilities

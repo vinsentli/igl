@@ -9,7 +9,6 @@
 
 #include <cstdint>
 #include <igl/IGLAssert.h>
-#include <igl/Log.h>
 #include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/Macros.h>
 

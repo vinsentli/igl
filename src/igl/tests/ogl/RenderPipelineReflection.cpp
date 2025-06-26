@@ -97,7 +97,7 @@ class RenderPipelineReflectionTest : public ::testing::Test {
 
   void TearDown() override {}
 
- public:
+ protected:
   std::shared_ptr<IDevice> iglDev_;
   std::shared_ptr<ICommandQueue> cmdQueue_;
   const std::string backend_ = IGL_BACKEND_TYPE;
@@ -138,23 +138,21 @@ TEST_F(RenderPipelineReflectionTest, VerifyBuffers) {
 TEST_F(RenderPipelineReflectionTest, VerifyTextures) {
   auto textures = pipeRef_->allTextures();
   ASSERT_EQ(textures.size(), 1);
-  auto theOneTexture = textures.front();
+  const auto& theOneTexture = textures.front();
   ASSERT_EQ(theOneTexture.name, "inputImage");
 }
 
 TEST_F(RenderPipelineReflectionTest, VerifySamplers) {
   auto samplers = pipeRef_->allSamplers();
   ASSERT_EQ(samplers.size(), 1);
-  auto theOneSampler = samplers.front();
+  const auto& theOneSampler = samplers.front();
   ASSERT_EQ(theOneSampler.name, "inputImage");
 }
 
 TEST_F(RenderPipelineReflectionTest, UniformBlocks) {
-  auto* context = &static_cast<opengl::Device&>(*iglDev_).getContext();
-  bool useBlocks = context->deviceFeatures().hasFeature(DeviceFeatures::UniformBlocks);
-  const bool isGles3 =
-      (opengl::DeviceFeatureSet::usesOpenGLES() &&
-       context->deviceFeatures().getGLVersion() >= igl::opengl::GLVersion::v3_0_ES);
+  bool useBlocks = iglDev_->hasFeature(DeviceFeatures::UniformBlocks);
+  const bool isGles3 = iglDev_->getBackendVersion().flavor == igl::BackendFlavor::OpenGL_ES &&
+                       iglDev_->getBackendVersion().majorVersion >= 3;
 
 #if defined(IGL_PLATFORM_LINUX) && IGL_PLATFORM_LINUX
   useBlocks = !isGles3;

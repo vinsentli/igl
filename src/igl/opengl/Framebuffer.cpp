@@ -71,7 +71,7 @@ Result checkFramebufferStatus(IContext& context, bool read) {
   return Result(code, message);
 }
 
-Texture::AttachmentParams toAttachmentParams(const RenderPassDesc::BaseAttachmentDesc& attachment,
+Texture::AttachmentParams toAttachmentParams(const RenderPassDesc::AttachmentDesc& attachment,
                                              FramebufferMode mode) {
   Texture::AttachmentParams params{};
   params.face = attachment.face;
@@ -108,12 +108,7 @@ Texture::AttachmentParams toReadAttachmentParams(const TextureRangeDesc& range,
 }
 } // namespace
 
-FramebufferBindingGuard::FramebufferBindingGuard(IContext& context) :
-  context_(context),
-  currentRenderbuffer_(0),
-  currentFramebuffer_(0),
-  currentReadFramebuffer_(0),
-  currentDrawFramebuffer_(0) {
+FramebufferBindingGuard::FramebufferBindingGuard(IContext& context) : context_(context) {
   context_.getIntegerv(GL_RENDERBUFFER_BINDING, reinterpret_cast<GLint*>(&currentRenderbuffer_));
 
   // Only restore currently bound framebuffer if it's valid

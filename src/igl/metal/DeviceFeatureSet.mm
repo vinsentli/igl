@@ -14,7 +14,7 @@
 static size_t getGPUFamily(id<MTLDevice> device) {
   // the new supportsFamily API is applicable to both iOS and macOS
   if (@available(macOS 10.15, iOS 13.0, *)) {
-    typedef std::pair<MTLGPUFamily, size_t> GPUFamilyPair;
+    using GPUFamilyPair = std::pair<MTLGPUFamily, size_t>;
     const std::vector<GPUFamilyPair> gpuFamilies = {
         // @fb-only
         // @fb-only
@@ -35,7 +35,7 @@ static size_t getGPUFamily(id<MTLDevice> device) {
     }
   } else {
     // resort to the old deprecated API supportsFeatureSet for older OS versions
-    typedef std::pair<MTLFeatureSet, size_t> FeatureSetPair;
+    using FeatureSetPair = std::pair<MTLFeatureSet, size_t>;
     std::vector<FeatureSetPair> featureSets;
 
 #if IGL_PLATFORM_IOS
@@ -144,6 +144,8 @@ bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
   case DeviceFeatures::DrawFirstIndexFirstVertex:
   case DeviceFeatures::DrawIndexedIndirect:
     return true;
+  case DeviceFeatures::DrawInstanced:
+    return gpuFamily_ >= 3;
   case DeviceFeatures::CopyBuffer:
     return false; // not implemented (yet)
   case DeviceFeatures::Indices8Bit:
@@ -207,6 +209,8 @@ bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
   case DeviceFeatures::PushConstants:
     return false;
   case DeviceFeatures::ProgramBinary:
+    return false;
+  case DeviceFeatures::TextureViews:
     return false;
   }
   return false;

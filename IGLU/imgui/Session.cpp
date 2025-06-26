@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-// @MARK:COVERAGE_EXCLUDE_FILE
+// @fb-only
 
 #include "Session.h"
 
@@ -148,6 +148,9 @@ static std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevic
   // @fb-only
     // @fb-only
     // @fb-only
+  case igl::BackendType::Custom:
+    IGL_DEBUG_ABORT("IGLSamples not set up for Custom");
+    return nullptr;
   case igl::BackendType::Metal: {
     return igl::ShaderStagesCreator::fromLibraryStringInput(
         device, metalShaderStr(), "vertex_main", "fragment_main", "", &result);
@@ -165,6 +168,7 @@ static std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevic
   IGL_UNREACHABLE_RETURN(nullptr)
 }
 
+namespace {
 struct DrawableData {
   std::shared_ptr<iglu::vertexdata::VertexData> vertexData;
   std::shared_ptr<iglu::drawable::Drawable> drawable;
@@ -200,6 +204,7 @@ struct DrawableData {
     drawable = std::make_shared<iglu::drawable::Drawable>(vertexData, material);
   }
 };
+} // namespace
 
 class Session::Renderer {
  public:
@@ -246,12 +251,27 @@ Session::Renderer::Renderer(igl::IDevice& device) {
   {
     igl::VertexInputStateDesc inputDesc;
     inputDesc.numAttributes = 3;
-    inputDesc.attributes[0] = igl::VertexAttribute(
-        0, igl::VertexAttributeFormat::Float2, offsetof(ImDrawVert, pos), "position", 0);
-    inputDesc.attributes[1] = igl::VertexAttribute(
-        0, igl::VertexAttributeFormat::Float2, offsetof(ImDrawVert, uv), "texCoords", 1);
-    inputDesc.attributes[2] = igl::VertexAttribute(
-        0, igl::VertexAttributeFormat::UByte4Norm, offsetof(ImDrawVert, col), "color", 2);
+    inputDesc.attributes[0] = igl::VertexAttribute{
+        .bufferIndex = 0,
+        .format = igl::VertexAttributeFormat::Float2,
+        .offset = offsetof(ImDrawVert, pos),
+        .name = "position",
+        .location = 0,
+    };
+    inputDesc.attributes[1] = igl::VertexAttribute{
+        .bufferIndex = 0,
+        .format = igl::VertexAttributeFormat::Float2,
+        .offset = offsetof(ImDrawVert, uv),
+        .name = "texCoords",
+        .location = 1,
+    };
+    inputDesc.attributes[2] = igl::VertexAttribute{
+        .bufferIndex = 0,
+        .format = igl::VertexAttributeFormat::UByte4Norm,
+        .offset = offsetof(ImDrawVert, col),
+        .name = "color",
+        .location = 2,
+    };
     inputDesc.numInputBindings = 1;
     inputDesc.inputBindings[0].stride = sizeof(ImDrawVert);
     _vertexInputState = device.createVertexInputState(inputDesc, nullptr);

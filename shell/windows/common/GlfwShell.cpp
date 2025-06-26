@@ -7,12 +7,17 @@
 
 // @fb-only
 
+#include <cmath>
+#include <string.h>
+
 #include <shell/windows/common/GlfwShell.h>
 
+#include "shell/shared/renderSession/ScreenshotTestRenderSessionHelper.h"
 #include <shell/shared/input/InputDispatcher.h>
 #include <shell/shared/renderSession/AppParams.h>
 #include <shell/shared/renderSession/DefaultRenderSessionFactory.h>
 #include <shell/shared/renderSession/IRenderSessionFactory.h>
+#include <igl/Framebuffer.h>
 
 namespace igl::shell {
 namespace {
@@ -20,12 +25,14 @@ void glfwErrorHandler(int error, const char* description) {
   IGL_LOG_ERROR("GLFW Error: %s\n", description);
 }
 
-igl::shell::MouseButton getIGLMouseButton(int button) {
-  if (button == GLFW_MOUSE_BUTTON_LEFT)
+MouseButton getIGLMouseButton(int button) {
+  if (button == GLFW_MOUSE_BUTTON_LEFT) {
     return igl::shell::MouseButton::Left;
+  }
 
-  if (button == GLFW_MOUSE_BUTTON_RIGHT)
+  if (button == GLFW_MOUSE_BUTTON_RIGHT) {
     return igl::shell::MouseButton::Right;
+  }
 
   return igl::shell::MouseButton::Middle;
 }
@@ -41,12 +48,12 @@ const ShellParams& GlfwShell::shellParams() const noexcept {
   return shellParams_;
 }
 
-GLFWwindow& GlfwShell::window() noexcept {
-  return *window_;
+GLFWwindow* GlfwShell::window() noexcept {
+  return window_.get();
 }
 
-const GLFWwindow& GlfwShell::window() const noexcept {
-  return *window_;
+const GLFWwindow* GlfwShell::window() const noexcept {
+  return window_.get();
 }
 
 Platform& GlfwShell::platform() noexcept {
@@ -66,6 +73,10 @@ const RenderSessionConfig& GlfwShell::sessionConfig() const noexcept {
 }
 
 bool GlfwShell::createWindow() noexcept {
+  if (shellParams_.isHeadless) {
+    return true;
+  }
+
   glfwSetErrorCallback(glfwErrorHandler);
 
   if (!glfwInit()) {
@@ -119,23 +130,23 @@ bool GlfwShell::createWindow() noexcept {
   glfwSetCursorPosCallback(windowHandle, [](GLFWwindow* window, double xpos, double ypos) {
     auto* shell = static_cast<GlfwShell*>(glfwGetWindowUserPointer(window));
     shell->platform_->getInputDispatcher().queueEvent(
-        igl::shell::MouseMotionEvent((float)xpos, (float)ypos, 0, 0));
+        MouseMotionEvent((float)xpos, (float)ypos, 0, 0));
   });
 
   glfwSetScrollCallback(windowHandle, [](GLFWwindow* window, double xoffset, double yoffset) {
     auto* shell = static_cast<GlfwShell*>(glfwGetWindowUserPointer(window));
     shell->platform_->getInputDispatcher().queueEvent(
-        igl::shell::MouseWheelEvent((float)xoffset, (float)yoffset));
+        MouseWheelEvent((float)xoffset, (float)yoffset));
   });
 
   glfwSetMouseButtonCallback(
       windowHandle, [](GLFWwindow* window, int button, int action, int mods) {
         auto* shell = static_cast<GlfwShell*>(glfwGetWindowUserPointer(window));
-        igl::shell::MouseButton iglButton = getIGLMouseButton(button);
-        double xpos, ypos;
+        MouseButton iglButton = getIGLMouseButton(button);
+        double xpos = NAN, ypos = NAN;
         glfwGetCursorPos(window, &xpos, &ypos);
-        shell->platform_->getInputDispatcher().queueEvent(igl::shell::MouseButtonEvent(
-            iglButton, action == GLFW_PRESS, (float)xpos, (float)ypos));
+        shell->platform_->getInputDispatcher().queueEvent(
+            MouseButtonEvent(iglButton, action == GLFW_PRESS, (float)xpos, (float)ypos));
       });
 
   glfwSetKeyCallback(windowHandle, [](GLFWwindow* window, int key, int, int action, int mods) {
@@ -160,7 +171,7 @@ bool GlfwShell::createWindow() noexcept {
       modifiers |= igl::shell::KeyEventModifierNumLock;
     }
     shell->platform_->getInputDispatcher().queueEvent(
-        igl::shell::KeyEvent(action == GLFW_PRESS, key, modifiers));
+        KeyEvent(action == GLFW_PRESS, key, modifiers));
     shell->platform_->getInputDispatcher().queueEvent(key <= 256 ? CharEvent{static_cast<char>(key)}
                                                                  : CharEvent{});
   });
@@ -174,14 +185,20 @@ bool GlfwShell::createWindow() noexcept {
 
   didCreateWindow();
 
-  return windowHandle;
+  return windowHandle != nullptr;
 }
 
 bool GlfwShell::initialize(int argc,
                            char* argv[],
                            RenderSessionWindowConfig suggestedWindowConfig,
-                           RenderSessionConfig suggestedSessionConfig) noexcept {
+                           const RenderSessionConfig& suggestedSessionConfig) noexcept {
   igl::shell::Platform::initializeCommandLineArgs(argc, argv);
+
+  for (int i = 1; i < argc; i++) {
+    if (!strcmp(argv[i], "--headless")) {
+      shellParams_.isHeadless = true;
+    }
+  }
 
   auto factory = igl::shell::createDefaultRenderSessionFactory();
 
@@ -217,14 +234,29 @@ bool GlfwShell::initialize(int argc,
 }
 
 void GlfwShell::run() noexcept {
-  while (!glfwWindowShouldClose(window_.get()) && !session_->appParams().exitRequested) {
+  while ((!window_ || !glfwWindowShouldClose(window_.get())) &&
+         !session_->appParams().exitRequested) {
     willTick();
     auto surfaceTextures = createSurfaceTextures();
     IGL_DEBUG_ASSERT(surfaceTextures.color != nullptr && surfaceTextures.depth != nullptr);
 
+    std::shared_ptr<ITexture> colorTexture = surfaceTextures.color;
+
     platform_->getInputDispatcher().processEvents();
     session_->update(std::move(surfaceTextures));
-    glfwPollEvents();
+    if (window_) {
+      glfwPollEvents();
+    } else {
+      IGL_LOG_INFO("\nWe are running headless - breaking after 1 frame\n");
+      const char* screenshotFileName = session_->shellParams().screenshotFileName;
+      if (screenshotFileName && *screenshotFileName) {
+        SaveFrameBufferToPng(screenshotFileName,
+                             platform_->getDevice().createFramebuffer(
+                                 {.colorAttachments = {{.texture = colorTexture}}}, nullptr),
+                             *platform_);
+      }
+      break;
+    }
   }
 }
 
@@ -237,7 +269,9 @@ void GlfwShell::teardown() noexcept {
   platform_.reset();
   window_.reset();
 
-  glfwTerminate();
+  if (!shellParams_.isHeadless) {
+    glfwTerminate();
+  }
 }
 
 } // namespace igl::shell

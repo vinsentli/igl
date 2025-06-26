@@ -7,9 +7,9 @@
 
 #include <IGLU/texture_loader/ktx/TextureLoaderFactory.h>
 
-#include <igl/IGLSafeC.h>
 #include <ktx.h>
 #include <numeric>
+#include <igl/IGLSafeC.h>
 
 namespace iglu::textureloader::ktx {
 namespace {
@@ -112,6 +112,19 @@ void TextureLoader::loadToExternalMemoryInternal(uint8_t* IGL_NONNULL data,
     }
 
     auto mipLevelLength = ktxTexture_GetImageSize(ktxTexture(texture_.get()), mipLevel);
+
+    // Naively, we could just check mipmapLength > length - offset. However,
+    // if offset is very large, e.g. size_t(-1), then destination_size - offset
+    // will overflow `size_t` and hence act additive to destination_size.
+    //
+    // To avoid this, we properly compute the available_size and then check that.
+    const size_t availableSize = offset > length ? 0 : length - offset;
+    if (mipLevelLength > availableSize) {
+      igl::Result::setResult(
+          outResult, igl::Result::Code::InvalidOperation, "data length is too small.");
+      return;
+    }
+
     checked_memcpy_offset(data, length, offset, texture_->pData + offset, mipLevelLength);
     offset += mipLevelLength;
   }

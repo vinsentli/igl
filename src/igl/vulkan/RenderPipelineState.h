@@ -7,11 +7,11 @@
 
 #pragma once
 
+#include <unordered_map>
 #include <igl/RenderPipelineState.h>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/PipelineState.h>
 #include <igl/vulkan/RenderPipelineReflection.h>
-#include <unordered_map>
 
 namespace igl::vulkan {
 

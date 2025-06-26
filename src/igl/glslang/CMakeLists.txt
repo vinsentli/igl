@@ -34,4 +34,5 @@ target_link_libraries(IGLGlslang PUBLIC SPIRV)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   target_compile_options(IGLGlslang PRIVATE "-Wno-nullability-completeness")
+  target_compile_options(MachineIndependent PRIVATE "-Wno-unused-but-set-variable")
 endif()

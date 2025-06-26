@@ -87,16 +87,16 @@ class RenderPipelineReflectionMTLTest : public ::testing::Test {
     metalDesc.stencilAttachmentPixelFormat = MTLPixelFormatDepth32Float_Stencil8;
 
     MTLRenderPipelineReflection* reflection = nil;
-    auto device_ = MTLCreateSystemDefaultDevice();
+    auto device = MTLCreateSystemDefaultDevice();
 
 // Suppress warnings about MTLPipelineOptionArgumentInfo being deprecated
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     // Create reflection for use later in binding, etc.
-    [device_ newRenderPipelineStateWithDescriptor:metalDesc
-                                          options:MTLPipelineOptionArgumentInfo
-                                       reflection:&reflection
-                                            error:&error];
+    [device newRenderPipelineStateWithDescriptor:metalDesc
+                                         options:MTLPipelineOptionArgumentInfo
+                                      reflection:&reflection
+                                           error:&error];
 #pragma GCC diagnostic pop
 
     pipeRef_ = std::make_shared<metal::RenderPipelineReflection>(reflection);
@@ -139,14 +139,14 @@ TEST_F(RenderPipelineReflectionMTLTest, VerifyBuffers) {
 TEST_F(RenderPipelineReflectionMTLTest, VerifyTextures) {
   auto textures = pipeRef_->allTextures();
   ASSERT_EQ(textures.size(), 1);
-  auto theOneTexture = textures.front();
+  const auto& theOneTexture = textures.front();
   ASSERT_EQ(theOneTexture.name, "diffuseTex");
 }
 
 TEST_F(RenderPipelineReflectionMTLTest, VerifySamplers) {
   auto samplers = pipeRef_->allSamplers();
   ASSERT_EQ(samplers.size(), 1);
-  auto theOneSampler = samplers.front();
+  const auto& theOneSampler = samplers.front();
   ASSERT_EQ(theOneSampler.name, "linearSampler");
 }
 

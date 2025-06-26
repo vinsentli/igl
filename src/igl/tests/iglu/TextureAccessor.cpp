@@ -7,12 +7,10 @@
 
 #include "../data/TextureData.h"
 #include "../util/Common.h"
-#include "../util/TestDevice.h"
 #include <IGLU/texture_accessor/ITextureAccessor.h>
 #include <IGLU/texture_accessor/TextureAccessorFactory.h>
 #include <gtest/gtest.h>
 #include <igl/Common.h>
-#include <string>
 
 #define OFFSCREEN_TEX_HEIGHT 2
 #define OFFSCREEN_TEX_WIDTH 2
@@ -60,7 +58,7 @@ class TextureAccessorTest : public ::testing::Test {
   void TearDown() override {}
 
   // Member variables
- public:
+ protected:
   std::shared_ptr<IDevice> iglDev_;
   std::shared_ptr<ICommandQueue> cmdQueue_;
   std::shared_ptr<ITexture> texture_;

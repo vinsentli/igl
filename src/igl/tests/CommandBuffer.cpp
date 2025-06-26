@@ -6,11 +6,14 @@
  */
 
 #include "util/Common.h"
-#include "util/TestDevice.h"
 
 #include <igl/CommandBuffer.h>
 
 namespace igl::tests {
+
+namespace {
+const char* kDebugName = "CommandBufferTest";
+}
 
 //
 // CommandBufferTest
@@ -29,7 +32,8 @@ class CommandBufferTest : public ::testing::Test {
 
     util::createDeviceAndQueue(iglDev_, cmdQueue_);
     Result result;
-    cmdBuf_ = cmdQueue_->createCommandBuffer(CommandBufferDesc(), &result);
+    CommandBufferDesc desc{.debugName = kDebugName};
+    cmdBuf_ = cmdQueue_->createCommandBuffer(desc, &result);
     ASSERT_EQ(result.code, Result::Code::Ok);
     ASSERT_TRUE(cmdBuf_ != nullptr);
   }
@@ -37,7 +41,7 @@ class CommandBufferTest : public ::testing::Test {
   void TearDown() override {}
 
   // Member variables
- public:
+ protected:
   std::shared_ptr<IDevice> iglDev_;
   std::shared_ptr<ICommandQueue> cmdQueue_;
   std::shared_ptr<ICommandBuffer> cmdBuf_;
@@ -53,6 +57,10 @@ TEST_F(CommandBufferTest, pushPopDebugGroupLabel) {
   // API Logging can't be tested in it's current state, so we just check that it worked.
   cmdBuf_->pushDebugGroupLabel("TEST");
   cmdBuf_->popDebugGroupLabel();
+}
+
+TEST_F(CommandBufferTest, debugName) {
+  ASSERT_EQ(cmdBuf_->desc.debugName, kDebugName);
 }
 
 } // namespace igl::tests

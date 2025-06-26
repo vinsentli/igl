@@ -7,9 +7,9 @@
 
 #pragma once
 
+#include <vector>
 #include <igl/Shader.h>
 #include <igl/vulkan/Common.h>
-#include <vector>
 
 namespace igl::vulkan {
 

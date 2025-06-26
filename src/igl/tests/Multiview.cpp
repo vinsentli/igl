@@ -8,7 +8,6 @@
 #include "data/ShaderData.h"
 #include "data/VertexIndexData.h"
 #include "util/Common.h"
-#include "util/TestDevice.h"
 
 #include <IGLU/managedUniformBuffer/ManagedUniformBuffer.h>
 #include <glm/glm.hpp>
@@ -181,7 +180,7 @@ class MultiviewTest : public ::testing::Test {
   void TearDown() override {}
 
   // Member variables
- public:
+ protected:
   std::shared_ptr<IDevice> iglDev_;
   std::shared_ptr<ICommandQueue> cmdQueue_;
   std::shared_ptr<ICommandBuffer> cmdBuf_;

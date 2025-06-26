@@ -15,10 +15,10 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
+#include <samples/wasm/Common.h>
 #include <igl/IGL.h>
 #include <igl/opengl/webgl/Context.h>
 #include <igl/opengl/webgl/Device.h>
-#include <samples/wasm/Common.h>
 
 constexpr const char* codeVS = R"(#version 300 es
 
@@ -111,8 +111,7 @@ static bool initWindow(GLFWwindow** outWindow) {
 static void initIGL() {
   // create a device
   {
-    auto ctx =
-        std::make_unique<igl::opengl::webgl::Context>(igl::opengl::RenderingAPI::GLES3, "#canvas");
+    auto ctx = std::make_unique<igl::opengl::webgl::Context>("#canvas");
     device_ = std::make_unique<igl::opengl::webgl::Device>(std::move(ctx));
 
     IGL_DEBUG_ASSERT(device_);

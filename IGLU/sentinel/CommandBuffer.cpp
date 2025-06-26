@@ -14,7 +14,8 @@
 
 namespace iglu::sentinel {
 
-CommandBuffer::CommandBuffer(bool shouldAssert) : shouldAssert_(shouldAssert) {}
+CommandBuffer::CommandBuffer(bool shouldAssert) :
+  igl::ICommandBuffer({.debugName = "SentinelCommandBuffer"}), shouldAssert_(shouldAssert) {}
 
 std::unique_ptr<igl::IRenderCommandEncoder> CommandBuffer::createRenderCommandEncoder(
     const igl::RenderPassDesc& /*renderPass*/,
@@ -55,6 +56,14 @@ void CommandBuffer::copyBuffer(igl::IBuffer& src,
                                uint64_t srcOffset,
                                uint64_t dstOffset,
                                uint64_t size) {
+  IGLU_SENTINEL_ASSERT_IF_NOT(shouldAssert_);
+}
+
+void CommandBuffer::copyTextureToBuffer(igl::ITexture& src,
+                                        igl::IBuffer& dst,
+                                        uint64_t dstOffset,
+                                        uint32_t level,
+                                        uint32_t layer) {
   IGLU_SENTINEL_ASSERT_IF_NOT(shouldAssert_);
 }
 

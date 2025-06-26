@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <utility>
 #include <igl/vulkan/ComputePipelineState.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/ShaderModule.h>
@@ -12,7 +13,6 @@
 #include <igl/vulkan/VulkanDescriptorSetLayout.h>
 #include <igl/vulkan/VulkanDevice.h>
 #include <igl/vulkan/VulkanPipelineBuilder.h>
-#include <utility>
 
 namespace igl::vulkan {
 
@@ -73,6 +73,7 @@ VkPipeline ComputePipelineState::getVkPipeline() const {
 
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
+  // NOLINTBEGIN(readability-identifier-naming)
   // @fb-only
   const VkDescriptorSetLayout DSLs[] = {
       dslCombinedImageSamplers_->getVkDescriptorSetLayout(),
@@ -80,6 +81,7 @@ VkPipeline ComputePipelineState::getVkPipeline() const {
       dslStorageImages_->getVkDescriptorSetLayout(),
       ctx.getBindlessVkDescriptorSetLayout(),
   };
+  // NOLINTEND(readability-identifier-naming)
 
   const VkPipelineLayoutCreateInfo ci =
       ivkGetPipelineLayoutCreateInfo(static_cast<uint32_t>(ctx.config_.enableDescriptorIndexing

@@ -33,7 +33,7 @@ class ShaderLibraryTest : public ::testing::Test {
 
   void TearDown() override {}
 
- public:
+ protected:
   std::shared_ptr<IDevice> iglDev_;
   std::shared_ptr<ICommandQueue> cmdQueue_;
 };
@@ -52,6 +52,12 @@ TEST_F(ShaderLibraryTest, CreateFromSource) {
     source = data::shader::VULKAN_SIMPLE_VERT_SHADER;
   } else {
     IGL_DEBUG_ASSERT_NOT_REACHED();
+  }
+
+  // Check if source is null before passing it to fromStringInput
+  if (source == nullptr) {
+    GTEST_SKIP() << "No shader source available for this backend.";
+    return;
   }
 
   auto shaderLibrary = ShaderLibraryCreator::fromStringInput(
@@ -90,6 +96,13 @@ TEST_F(ShaderLibraryTest, CreateFromSourceMultipleModules) {
     GTEST_SKIP() << "Vulkan does not support multiple modules from the same source code.";
     return;
   }
+
+  // Check if source is null before passing it to fromStringInput
+  if (source == nullptr) {
+    GTEST_SKIP() << "No shader source available for this backend.";
+    return;
+  }
+
   auto shaderLibrary =
       ShaderLibraryCreator::fromStringInput(*iglDev_,
                                             source,
@@ -123,6 +136,12 @@ TEST_F(ShaderLibraryTest, CreateFromSourceNoResult) {
     source = data::shader::VULKAN_SIMPLE_VERT_SHADER;
   } else {
     IGL_DEBUG_ASSERT_NOT_REACHED();
+  }
+
+  // Check if source is null before passing it to fromStringInput
+  if (source == nullptr) {
+    GTEST_SKIP() << "No shader source available for this backend.";
+    return;
   }
 
   auto shaderLibrary = ShaderLibraryCreator::fromStringInput(

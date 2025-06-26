@@ -36,6 +36,7 @@ namespace igl::tests::util::device {
 bool isBackendTypeSupported(BackendType backendType) {
   switch (backendType) {
   case ::igl::BackendType::Invalid:
+  case ::igl::BackendType::Custom:
     IGL_DEBUG_ASSERT_NOT_REACHED();
     return false;
   case ::igl::BackendType::Metal:
@@ -50,9 +51,7 @@ bool isBackendTypeSupported(BackendType backendType) {
   IGL_UNREACHABLE_RETURN(false)
 }
 
-std::shared_ptr<IDevice> createTestDevice(BackendType backendType,
-                                          const std::string& backendApi,
-                                          bool enableValidation) {
+std::shared_ptr<IDevice> createTestDevice(BackendType backendType, const TestDeviceConfig& config) {
   if (backendType == ::igl::BackendType::Metal) {
 #if IGL_METAL_SUPPORTED
     return metal::createTestDevice();
@@ -62,14 +61,14 @@ std::shared_ptr<IDevice> createTestDevice(BackendType backendType,
   }
   if (backendType == ::igl::BackendType::OpenGL) {
 #if IGL_OPENGL_SUPPORTED
-    return opengl::createTestDevice(backendApi);
+    return opengl::createTestDevice(config.requestedOpenGLBackendVersion);
 #else
     return nullptr;
 #endif
   }
   if (backendType == ::igl::BackendType::Vulkan) {
 #if IGL_VULKAN_SUPPORTED
-    return vulkan::createTestDevice(enableValidation);
+    return vulkan::createTestDevice(config.enableVulkanValidationLayers);
 #else
     return nullptr;
 #endif

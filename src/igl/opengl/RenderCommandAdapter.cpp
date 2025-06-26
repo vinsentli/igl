@@ -56,6 +56,10 @@ void RenderCommandAdapter::initialize(const RenderPassDesc& renderPass,
     return;
   }
   if (activeVAO_) {
+    if (!IGL_DEBUG_VERIFY(activeVAO_->isValid())) {
+      Result::setResult(outResult, Result::Code::RuntimeError, "Vertex array object is invalid");
+      return;
+    }
     activeVAO_->bind();
   }
   const auto& openglFramebuffer = static_cast<const Framebuffer&>(*framebuffer);
@@ -269,7 +273,7 @@ void RenderCommandAdapter::drawArraysInstanced(GLenum mode,
                                                GLsizei count,
                                                GLsizei instancecount) {
   willDraw();
-  if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DrawArraysInstanced)) {
+  if (getContext().deviceFeatures().hasFeature(DeviceFeatures::DrawInstanced)) {
     getContext().drawArraysInstanced(toMockWireframeMode(mode), first, count, instancecount);
   } else {
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
@@ -292,8 +296,10 @@ void RenderCommandAdapter::drawElementsInstanced(GLenum mode,
                                                  const GLvoid* indexOffset,
                                                  GLsizei instancecount) {
   willDraw();
-  getContext().drawElementsInstanced(
+  if (getContext().deviceFeatures().hasFeature(DeviceFeatures::DrawInstanced)) {
+    getContext().drawElementsInstanced(
         toMockWireframeMode(mode), indexCount, indexType, indexOffset, instancecount);
+  }
   didDraw();
 }
 

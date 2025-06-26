@@ -17,7 +17,7 @@ class Device;
 class CommandBuffer final : public ICommandBuffer,
                             public std::enable_shared_from_this<CommandBuffer> {
  public:
-  CommandBuffer(Device& device, id<MTLCommandBuffer> value);
+  CommandBuffer(Device& device, id<MTLCommandBuffer> value, CommandBufferDesc desc);
   ~CommandBuffer() override = default;
 
   std::unique_ptr<IComputeCommandEncoder> createComputeCommandEncoder() override;
@@ -39,6 +39,11 @@ class CommandBuffer final : public ICommandBuffer,
                   uint64_t srcOffset,
                   uint64_t dstOffset,
                   uint64_t size) override;
+  void copyTextureToBuffer(ITexture& src,
+                           IBuffer& dst,
+                           uint64_t dstOffset,
+                           uint32_t level,
+                           uint32_t layer) override;
 
   void waitUntilScheduled() override;
 

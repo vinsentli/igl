@@ -19,8 +19,6 @@
 #include <igl/vulkan/VulkanFunctionTable.h>
 #include <igl/vulkan/VulkanVma.h>
 
-#define IGL_ARRAY_NUM_ELEMENTS(x) (sizeof(x) / sizeof((x)[0]))
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -44,19 +42,6 @@ extern "C" {
 void ivkAddNext(void* node, const void* next);
 
 const char* ivkGetVulkanResultString(VkResult result);
-
-/// @brief Creates a Vulkan instance with the given parameters. For platforms other than Android,
-/// this function will enable the GPU assisted validation and the synchronization validation layers.
-/// The application information is also set up to be "IGL/Vulkan" for application and engine names.
-/// Both the application and engine versions are set to 1.0.0
-VkResult ivkCreateInstance(const struct VulkanFunctionTable* vt,
-                           uint32_t apiVersion,
-                           uint32_t enableValidation,
-                           uint32_t enableGPUAssistedValidation,
-                           uint32_t enableSynchronizationValidation,
-                           size_t numExtensions,
-                           const char** extensions,
-                           VkInstance* outInstance);
 
 /// @brief Creates a Debug Utils Messenger if the VK_EXT_debug_utils extension is available and the
 /// platform is not Android or Mac Catalyst. Otherwise the function is defined as a no-op that
@@ -455,12 +440,6 @@ void ivkCmdBlitImage(const struct VulkanFunctionTable* vt,
                      VkImageSubresourceLayers srcSubresourceRange,
                      VkImageSubresourceLayers dstSubresourceRange,
                      VkFilter filter);
-
-VkResult ivkQueuePresent(const struct VulkanFunctionTable* vt,
-                         VkQueue graphicsQueue,
-                         VkSemaphore waitSemaphore,
-                         VkSwapchainKHR swapchain,
-                         uint32_t currentSwapchainImageIndex);
 
 /// @brief Adds a name for the Vulkan object with handle equals to `handle` and type equals to
 /// `type`. This function is a no-op if `VK_EXT_DEBUG_UTILS_SUPPORTED` is not defined

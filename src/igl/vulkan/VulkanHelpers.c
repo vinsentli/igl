@@ -16,8 +16,6 @@
 
 #include <assert.h>
 
-static const char* kDefaultValidationLayers[] = {"VK_LAYER_KHRONOS_validation"};
-
 const char* ivkGetVulkanResultString(VkResult result) {
 #define RESULT_CASE(res) \
   case res:              \
@@ -101,66 +99,6 @@ const char* ivkGetVulkanResultString(VkResult result) {
     return "Unknown VkResult Value";
   }
 #undef RESULT_CASE
-}
-
-VkResult ivkCreateInstance(const struct VulkanFunctionTable* vt,
-                           uint32_t apiVersion,
-                           uint32_t enableValidation,
-                           uint32_t enableGPUAssistedValidation,
-                           uint32_t enableSynchronizationValidation,
-                           size_t numExtensions,
-                           const char** extensions,
-                           VkInstance* outInstance) {
-  // Validation Features not available on most Android devices
-#if !IGL_PLATFORM_ANDROID && !IGL_PLATFORM_MACOSX
-  VkValidationFeatureEnableEXT validationFeaturesEnabled[2];
-  int validationFeaturesCount = 0;
-  if (enableGPUAssistedValidation) {
-    validationFeaturesEnabled[validationFeaturesCount++] =
-        VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT;
-  }
-  if (enableSynchronizationValidation) {
-    validationFeaturesEnabled[validationFeaturesCount++] =
-        VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
-  }
-
-  const VkValidationFeaturesEXT features = {
-      .sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
-      .pNext = NULL,
-      .enabledValidationFeatureCount = validationFeaturesCount,
-      .pEnabledValidationFeatures = validationFeaturesCount > 0 ? validationFeaturesEnabled : NULL,
-  };
-#endif // !IGL_PLATFORM_ANDROID
-
-  const VkApplicationInfo appInfo = {
-      .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-      .pNext = NULL,
-      .pApplicationName = "IGL/Vulkan",
-      .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-      .pEngineName = "IGL/Vulkan",
-      .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-      .apiVersion = apiVersion,
-  };
-
-  const VkInstanceCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-#if !IGL_PLATFORM_ANDROID && !IGL_PLATFORM_MACOSX
-      .pNext = enableValidation ? &features : NULL,
-#endif
-      .pApplicationInfo = &appInfo,
-#if !IGL_PLATFORM_MACOSX
-      .enabledLayerCount = enableValidation ? IGL_ARRAY_NUM_ELEMENTS(kDefaultValidationLayers) : 0,
-      .ppEnabledLayerNames = enableValidation ? kDefaultValidationLayers : NULL,
-#endif
-      .enabledExtensionCount = (uint32_t)numExtensions,
-      .ppEnabledExtensionNames = extensions,
-#if IGL_PLATFORM_MACOSX || IGL_PLATFORM_MACCATALYST
-      .flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
-#endif
-  };
-  (void)kDefaultValidationLayers; // maybe unused
-
-  return vt->vkCreateInstance(&ci, NULL, outInstance);
 }
 
 VkResult ivkCreateCommandPool(const struct VulkanFunctionTable* vt,
@@ -1201,8 +1139,8 @@ void ivkBufferBarrier(const struct VulkanFunctionTable* vt,
                       VkPipelineStageFlags dstStageMask) {
   VkBufferMemoryBarrier barrier = {
       .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-      .srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+      .srcAccessMask = 0,
+      .dstAccessMask = 0,
       .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .buffer = buffer,
@@ -1216,6 +1154,9 @@ void ivkBufferBarrier(const struct VulkanFunctionTable* vt,
   if (srcStageMask & VK_PIPELINE_STAGE_TRANSFER_BIT) {
     barrier.srcAccessMask |= VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
   }
+  if (srcStageMask & VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) {
+    barrier.srcAccessMask |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+  }
 
   if (dstStageMask & VK_PIPELINE_STAGE_TRANSFER_BIT) {
     barrier.dstAccessMask |= VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -1226,6 +1167,10 @@ void ivkBufferBarrier(const struct VulkanFunctionTable* vt,
   if (dstStageMask & VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT) {
     barrier.dstAccessMask |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
   }
+  if (dstStageMask & VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) {
+    barrier.dstAccessMask |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+  }
+
   if (usageFlags & VK_BUFFER_USAGE_INDEX_BUFFER_BIT) {
     barrier.dstAccessMask |= VK_ACCESS_INDEX_READ_BIT;
   }
@@ -1276,22 +1221,6 @@ void ivkCmdBlitImage(const struct VulkanFunctionTable* vt,
       .dstOffsets = {dstOffsets[0], dstOffsets[1]},
   };
   vt->vkCmdBlitImage(buffer, srcImage, srcImageLayout, dstImage, dstImageLayout, 1, &blit, filter);
-}
-
-VkResult ivkQueuePresent(const struct VulkanFunctionTable* vt,
-                         VkQueue graphicsQueue,
-                         VkSemaphore waitSemaphore,
-                         VkSwapchainKHR swapchain,
-                         uint32_t currentSwapchainImageIndex) {
-  const VkPresentInfoKHR pi = {
-      .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-      .waitSemaphoreCount = 1,
-      .pWaitSemaphores = &waitSemaphore,
-      .swapchainCount = 1,
-      .pSwapchains = &swapchain,
-      .pImageIndices = &currentSwapchainImageIndex,
-  };
-  return vt->vkQueuePresentKHR(graphicsQueue, &pi);
 }
 
 VkResult ivkSetDebugObjectName(const struct VulkanFunctionTable* vt,

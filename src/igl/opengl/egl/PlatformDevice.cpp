@@ -64,7 +64,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
   }
   drawableTexture_ = std::move(texture);
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    drawableTexture_->initResourceTracker(resourceTracker, "TextureFromNativeDrawable");
+    drawableTexture_->initResourceTracker(std::move(resourceTracker), "TextureFromNativeDrawable");
   }
 
   return drawableTexture_;
@@ -106,7 +106,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
   }
   drawableTexture_ = std::move(texture);
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    drawableTexture_->initResourceTracker(resourceTracker, "TextureFromNativeDrawable");
+    drawableTexture_->initResourceTracker(std::move(resourceTracker), "TextureFromNativeDrawable");
   }
 
   return drawableTexture_;
@@ -187,7 +187,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const Te
   }
 
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    texture->initResourceTracker(resourceTracker);
+    texture->initResourceTracker(std::move(resourceTracker));
   }
 
   return texture;
@@ -219,7 +219,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(AHardwar
   }
 
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    texture->initResourceTracker(resourceTracker);
+    texture->initResourceTracker(std::move(resourceTracker));
   }
 
   return texture;

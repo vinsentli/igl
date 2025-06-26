@@ -21,7 +21,7 @@
 namespace igl::vulkan {
 
 CommandBuffer::CommandBuffer(VulkanContext& ctx, CommandBufferDesc desc) :
-  ctx_(ctx), wrapper_(ctx_.immediate_->acquire()), desc_(std::move(desc)) {
+  ICommandBuffer(std::move(desc)), ctx_(ctx), wrapper_(ctx_.immediate_->acquire()) {
   IGL_DEBUG_ASSERT(wrapper_.cmdBuf_ != VK_NULL_HANDLE);
 }
 
@@ -178,6 +178,82 @@ void CommandBuffer::copyBuffer(IBuffer& src,
                    bufDst.getBufferUsageFlags(),
                    VK_PIPELINE_STAGE_TRANSFER_BIT,
                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+}
+
+void CommandBuffer::copyTextureToBuffer(ITexture& src,
+                                        IBuffer& dst,
+                                        uint64_t dstOffset,
+                                        uint32_t level,
+                                        uint32_t layer) {
+  auto& texSrc = static_cast<Texture&>(src);
+  auto& bufDst = static_cast<Buffer&>(dst);
+
+  VulkanImage& image = texSrc.getVulkanTexture().image_;
+
+  const VkImageLayout oldLayout = image.imageLayout_;
+
+  IGL_DEBUG_ASSERT(oldLayout != VK_IMAGE_LAYOUT_UNDEFINED);
+
+  ivkBufferBarrier(&ctx_.vf_,
+                   wrapper_.cmdBuf_,
+                   bufDst.getVkBuffer(),
+                   bufDst.getBufferUsageFlags(),
+                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                   VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+  const VkImageAspectFlags aspectMask =
+      image.isDepthFormat_
+          ? VK_IMAGE_ASPECT_DEPTH_BIT
+          : (image.isStencilFormat_ ? VK_IMAGE_ASPECT_STENCIL_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
+
+  const VkImageSubresourceRange range = {
+      .aspectMask = aspectMask,
+      .baseMipLevel = level,
+      .levelCount = 1u,
+      .baseArrayLayer = layer,
+      .layerCount = texSrc.getNumFaces() == 6 ? 6u : 1u,
+  };
+
+  image.transitionLayout(wrapper_.cmdBuf_,
+                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         range);
+
+  const VkBufferImageCopy region = {
+      .bufferOffset = dstOffset,
+      .bufferRowLength = 0,
+      .bufferImageHeight = 0,
+      .imageSubresource =
+          {
+              .aspectMask = aspectMask,
+              .mipLevel = level,
+              .baseArrayLayer = layer,
+              .layerCount = texSrc.getNumFaces() == 6 ? 6u : 1u,
+          },
+      .imageOffset = {},
+      .imageExtent = image.extent_,
+  };
+
+  ctx_.vf_.vkCmdCopyImageToBuffer(wrapper_.cmdBuf_,
+                                  texSrc.getVkImage(),
+                                  VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                  bufDst.getVkBuffer(),
+                                  1u,
+                                  &region);
+
+  ivkBufferBarrier(&ctx_.vf_,
+                   wrapper_.cmdBuf_,
+                   bufDst.getVkBuffer(),
+                   bufDst.getBufferUsageFlags(),
+                   VK_PIPELINE_STAGE_TRANSFER_BIT,
+                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+  image.transitionLayout(wrapper_.cmdBuf_,
+                         oldLayout,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                         range);
 }
 
 void CommandBuffer::waitUntilCompleted() {

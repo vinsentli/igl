@@ -8,11 +8,11 @@
 #include "TinyRenderable.hpp"
 
 #include <cstring>
+#include <memory>
+#import <simd/simd.h>
 #import <igl/IGL.h>
 #import <igl/NameHandle.h>
 #import <igl/ShaderCreator.h>
-#include <memory>
-#import <simd/simd.h>
 
 namespace {
 
@@ -109,6 +109,9 @@ std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevice& devi
   case igl::BackendType::Vulkan:
     IGL_DEBUG_ABORT("IGLSamples not set up for Vulkan");
     return nullptr;
+  case igl::BackendType::Custom:
+    IGL_DEBUG_ABORT("IGLSamples not set up for Custom");
+    return nullptr;
   // @fb-only
     // @fb-only
     // @fb-only
@@ -145,7 +148,7 @@ const size_t kTextureUnit = 0;
 namespace iglu::kit {
 
 const nlohmann::json& TinyRenderable::getProperties() const {
-  static const nlohmann::json j;
+  static const nlohmann::json kJ;
   //  = {
   //    "name", "tiny",
   //    {"backends", {
@@ -154,7 +157,7 @@ const nlohmann::json& TinyRenderable::getProperties() const {
   //    {"snapshot-test", true},
   //  };
 
-  return j;
+  return kJ;
 }
 
 void TinyRenderable::initialize(igl::IDevice& device, const igl::IFramebuffer& framebuffer) {

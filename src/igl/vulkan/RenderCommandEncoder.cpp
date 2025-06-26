@@ -9,6 +9,7 @@
 
 #include <algorithm>
 
+#include <igl/IGLSafeC.h>
 #include <igl/RenderPass.h>
 #include <igl/vulkan/Buffer.h>
 #include <igl/vulkan/CommandBuffer.h>
@@ -22,8 +23,6 @@
 #include <igl/vulkan/VulkanRenderPassBuilder.h>
 #include <igl/vulkan/VulkanSwapchain.h>
 #include <igl/vulkan/util/SpvReflection.h>
-
-#include <igl/IGLSafeC.h>
 
 namespace {
 
@@ -172,8 +171,8 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
   }
 
   // Process depth attachment
-  const RenderPassDesc::DepthAttachmentDesc descDepth = renderPass.depthAttachment;
-  const RenderPassDesc::StencilAttachmentDesc descStencil = renderPass.stencilAttachment;
+  const RenderPassDesc::AttachmentDesc descDepth = renderPass.depthAttachment;
+  const RenderPassDesc::AttachmentDesc descStencil = renderPass.stencilAttachment;
   hasDepthAttachment_ = false;
 
   if (framebuffer->getDepthAttachment()) {
@@ -499,7 +498,8 @@ void RenderCommandEncoder::bindIndexBuffer(IBuffer& buffer,
     return VK_INDEX_TYPE_UINT16;
   };
 
-  const VkIndexType type = indexFormatToVkIndexType(format, ctx_.extensions_.has8BitIndices);
+  const VkIndexType type =
+      indexFormatToVkIndexType(format, ctx_.features_.has_VK_EXT_index_type_uint8);
 
   ctx_.vf_.vkCmdBindIndexBuffer(cmdBuffer_, buf.getVkBuffer(), bufferOffset, type);
 }
@@ -843,11 +843,10 @@ void RenderCommandEncoder::ensureVertexBuffers() {
 
   IGL_DEBUG_ASSERT(desc.numInputBindings <= IGL_ARRAY_NUM_ELEMENTS(isVertexBufferBound_));
 
-  const size_t numBindings =
-      std::min(desc.numInputBindings, IGL_ARRAY_NUM_ELEMENTS(isVertexBufferBound_));
-
-  for (size_t i = 0; i != numBindings; i++) {
-    if (!isVertexBufferBound_[i]) {
+  for (size_t i = 0; i != desc.numAttributes; i++) {
+    [[maybe_unused]] const size_t index = desc.attributes[i].bufferIndex;
+    IGL_DEBUG_ASSERT(index < IGL_ARRAY_NUM_ELEMENTS(isVertexBufferBound_));
+    if (!isVertexBufferBound_[index]) {
       // TODO: fix client apps and uncomment
       // IGL_DEBUG_ABORT(
       //                "Did you forget to call bindBuffer() for one of your vertex input

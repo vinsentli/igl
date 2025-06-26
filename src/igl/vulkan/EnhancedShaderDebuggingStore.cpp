@@ -38,14 +38,14 @@ void EnhancedShaderDebuggingStore::initialize(Device* device) {
 }
 
 std::string EnhancedShaderDebuggingStore::recordLineShaderCode(bool includeFunctionBody,
-                                                               const VulkanExtensions& extensions) {
+                                                               const VulkanFeatures& extensions) {
   if (!includeFunctionBody) {
     return R"(void drawLine(vec3 v0, vec3 v1, vec4 color0, vec4 color1, mat4 transform) {})";
   }
 
   std::string debugPrintfStatement;
 
-  if (extensions.enabled(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME)) {
+  if (extensions.has_VK_KHR_shader_non_semantic_info) {
     debugPrintfStatement = R"(debugPrintfEXT("Debug draw lines buffer size exceeded.");)";
   }
 
@@ -246,7 +246,8 @@ std::shared_ptr<IRenderPipelineState> EnhancedShaderDebuggingStore::pipeline(
 
   // Create a shader stage, along with a vertex and fragment shader modules, if they haven't been
   // created yet
-  if (shaderStage_ == nullptr && device.getVulkanContext().config_.enableBufferDeviceAddress) {
+  if (shaderStage_ == nullptr &&
+      device.getVulkanContext().features().has_VK_KHR_buffer_device_address) {
     const auto vscode = renderLineVSCode();
     const auto fscode = renderLineFSCode();
 

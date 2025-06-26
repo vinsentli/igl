@@ -6,8 +6,8 @@
  */
 
 #include "util/Common.h"
-#include <igl/VertexInputState.h>
 #include <string>
+#include <igl/VertexInputState.h>
 
 namespace igl::tests {
 
@@ -30,7 +30,7 @@ class VertexInputStateTest : public ::testing::Test {
   void TearDown() override {}
 
   // Member variables
- public:
+ protected:
   const std::string backend_ = IGL_BACKEND_TYPE;
 };
 

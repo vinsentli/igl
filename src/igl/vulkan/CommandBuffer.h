@@ -63,6 +63,11 @@ class CommandBuffer final : public ICommandBuffer,
                   uint64_t srcOffset,
                   uint64_t dstOffset,
                   uint64_t size) override;
+  void copyTextureToBuffer(ITexture& src,
+                           IBuffer& dst,
+                           uint64_t dstOffset,
+                           uint32_t level,
+                           uint32_t layer) override;
 
   /// @brief Waits until the command bufer has been executed by the device.
   void waitUntilCompleted() override;
@@ -91,7 +96,6 @@ class CommandBuffer final : public ICommandBuffer,
 
   VulkanContext& ctx_;
   const VulkanImmediateCommands::CommandBufferWrapper& wrapper_;
-  CommandBufferDesc desc_;
   // was present() called with a swapchain image?
   mutable bool isFromSwapchain_ = false;
 

@@ -13,19 +13,27 @@
 
 namespace igl::opengl::egl {
 
-std::unique_ptr<IContext> HWDevice::createContext(RenderingAPI api,
-                                                  EGLNativeWindowType nativeWindow,
-                                                  Result* outResult) const {
+std::unique_ptr<IContext> HWDevice::createContext(Result* outResult) const {
   Result::setOk(outResult);
-  return std::make_unique<Context>(api, nativeWindow);
+  return std::make_unique<Context>(IGL_EGL_NULL_WINDOW);
 }
 
-std::unique_ptr<IContext> HWDevice::createOffscreenContext(RenderingAPI api,
-                                                           size_t width,
+std::unique_ptr<IContext> HWDevice::createContext(EGLNativeWindowType nativeWindow,
+                                                  Result* outResult) const {
+  return std::make_unique<Context>(nativeWindow);
+}
+
+std::unique_ptr<IContext> HWDevice::createContext(BackendVersion backendVersion,
+                                                  EGLNativeWindowType nativeWindow,
+                                                  Result* outResult) const {
+  return std::make_unique<Context>(backendVersion, nativeWindow);
+}
+
+std::unique_ptr<IContext> HWDevice::createOffscreenContext(size_t width,
                                                            size_t height,
                                                            Result* outResult) const {
   Result::setOk(outResult);
-  return std::make_unique<Context>(api, width, height);
+  return std::make_unique<Context>(width, height);
 }
 
 std::unique_ptr<opengl::Device> HWDevice::createWithContext(std::unique_ptr<IContext> context,
@@ -36,6 +44,15 @@ std::unique_ptr<opengl::Device> HWDevice::createWithContext(std::unique_ptr<ICon
     return nullptr;
   }
   return std::make_unique<opengl::egl::Device>(std::move(context));
+}
+
+std::unique_ptr<IDevice> HWDevice::create(EGLNativeWindowType nativeWindow,
+                                          Result* outResult) const {
+  auto context = createContext(nativeWindow, outResult);
+  if (context == nullptr) {
+    return nullptr;
+  }
+  return createWithContext(std::move(context), outResult);
 }
 
 } // namespace igl::opengl::egl

@@ -11,8 +11,8 @@
 #include "../util/TestDevice.h"
 
 #include <gtest/gtest.h>
-#include <igl/IGL.h>
 #include <memory>
+#include <igl/IGL.h>
 
 namespace igl::tests {
 
@@ -38,7 +38,7 @@ class HWDeviceTest : public ::testing::Test {
   void TearDown() override {}
 
   // Member variables
- public:
+ protected:
   std::shared_ptr<metal::HWDevice> iglHWDev_;
   std::shared_ptr<IDevice> iglDev_;
 };

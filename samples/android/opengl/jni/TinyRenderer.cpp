@@ -7,16 +7,16 @@
 
 // @fb-only
 
-#include <igl/samples/android/opengl/TinyRenderer.h>
+#include "TinyRenderer.h"
 
 #include <EGL/egl.h>
 #include <android/log.h>
-#include <igl/ShaderCreator.h>
-#include <igl/opengl/egl/HWDevice.h>
-#include <igl/opengl/egl/PlatformDevice.h>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
+#include <igl/ShaderCreator.h>
+#include <igl/opengl/egl/HWDevice.h>
+#include <igl/opengl/egl/PlatformDevice.h>
 
 #define IGL_SAMPLE_LOG_INFO(...) \
   __android_log_print(ANDROID_LOG_INFO, "libsampleOpenGLJni", __VA_ARGS__)
@@ -67,11 +67,8 @@ const std::string kFragmentShader = R"(
 void TinyRenderer::init() {
   Result result;
   { // Initialize the device
-    const igl::HWDeviceQueryDesc queryDesc(HWDeviceType::IntegratedGpu);
     auto hwDevice = opengl::egl::HWDevice();
-    auto hwDevices = hwDevice.queryDevices(queryDesc, &result);
-    throwOnBadResult(result);
-    device_ = hwDevice.create(hwDevices[0], igl::opengl::RenderingAPI::GLES2, nullptr, &result);
+    device_ = hwDevice.create(&result);
     throwOnBadResult(result);
   }
 

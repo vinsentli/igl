@@ -94,6 +94,15 @@ void ComputeCommandEncoder::bindImageTexture(uint32_t index,
   this->bindTexture(index, texture);
 }
 
+void ComputeCommandEncoder::bindSamplerState(uint32_t index, ISamplerState* samplerState) {
+  IGL_DEBUG_ASSERT(encoder_);
+
+  if (samplerState) {
+    auto& iglSampler = static_cast<SamplerState&>(*samplerState);
+    [encoder_ setSamplerState:iglSampler.get() atIndex:index];
+  }
+}
+
 void ComputeCommandEncoder::bindBuffer(uint32_t index,
                                        IBuffer* buffer,
                                        size_t offset,
@@ -107,7 +116,7 @@ void ComputeCommandEncoder::bindBuffer(uint32_t index,
   }
 }
 
-void ComputeCommandEncoder::bindBytes(size_t index, const void* data, size_t length) {
+void ComputeCommandEncoder::bindBytes(uint32_t index, const void* data, size_t length) {
   IGL_DEBUG_ASSERT(encoder_);
   if (data) {
     if (length > MAX_RECOMMENDED_BYTES) {

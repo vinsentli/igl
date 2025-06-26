@@ -13,12 +13,11 @@
 
 #include <cstdint>
 
-namespace igl {
-namespace opengl {
-
+namespace igl::opengl {
 class ViewTextureTarget;
+}
 
-namespace glx {
+namespace igl::opengl::glx {
 
 class Device;
 class Context;
@@ -27,19 +26,19 @@ class PlatformDevice : public opengl::PlatformDevice {
  public:
   static constexpr igl::PlatformDeviceType Type = igl::PlatformDeviceType::OpenGLx;
 
-  PlatformDevice(Device& owner);
+  explicit PlatformDevice(Device& owner);
   ~PlatformDevice() override = default;
 
   /// Returns a texture representing the GLX Surface associated with this device's context.
-  std::shared_ptr<ITexture> createTextureFromNativeDrawable(uint32_t width,
-                                                            uint32_t height,
-                                                            Result* outResult);
-  std::shared_ptr<ITexture> createTextureFromNativeDepth(uint32_t width,
-                                                         uint32_t height,
-                                                         Result* outResult);
+  [[nodiscard]] std::shared_ptr<ITexture> createTextureFromNativeDrawable(uint32_t width,
+                                                                          uint32_t height,
+                                                                          Result* outResult);
+  [[nodiscard]] std::shared_ptr<ITexture> createTextureFromNativeDepth(uint32_t width,
+                                                                       uint32_t height,
+                                                                       Result* outResult);
 
  protected:
-  bool isType(PlatformDeviceType t) const noexcept override;
+  [[nodiscard]] bool isType(PlatformDeviceType t) const noexcept override;
 
  private:
   uint32_t width_ = 0;
@@ -48,6 +47,4 @@ class PlatformDevice : public opengl::PlatformDevice {
   std::shared_ptr<ViewTextureTarget> depthTexture_;
 };
 
-} // namespace glx
-} // namespace opengl
-} // namespace igl
+} // namespace igl::opengl::glx

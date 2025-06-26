@@ -9,9 +9,9 @@
 
 #include <shell/renderSessions/DrawInstancedSession.h>
 
+#include <shell/shared/renderSession/ShellParams.h>
 #include <igl/opengl/Device.h>
 #include <igl/opengl/RenderCommandEncoder.h>
-#include <shell/shared/renderSession/ShellParams.h>
 
 namespace igl::shell {
 
@@ -48,7 +48,7 @@ const char* getMetalShaderSource() {
             float3(0.0, 1.0, 0.0),
             float3(0.0, 0.0, 1.0)
           };
-        
+
          struct VertexIn{
             float2 offset [[attribute(0)]];
          };
@@ -117,6 +117,7 @@ void main() {
 std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
+  case igl::BackendType::Custom:
     IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
   case igl::BackendType::Vulkan:
@@ -140,8 +141,7 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
     auto glVersion =
         static_cast<igl::opengl::Device&>(device).getContext().deviceFeatures().getGLVersion();
     if (glVersion > igl::opengl::GLVersion::v2_1) {
-      auto usesOpenGLES =
-          static_cast<igl::opengl::Device&>(device).getContext().deviceFeatures().usesOpenGLES();
+      auto usesOpenGLES = igl::opengl::DeviceFeatureSet::usesOpenGLES();
       std::string codeVS(getVulkanVertexShaderSource());
       stringReplaceAll(codeVS, "gl_VertexIndex", "gl_VertexID");
       stringReplaceAll(codeVS, "460", usesOpenGLES ? "300 es" : "410");
@@ -174,22 +174,21 @@ void DrawInstancedSession::initialize() noexcept {
   // Command queue: backed by different types of GPU HW queues
   commandQueue_ = getPlatform().getDevice().createCommandQueue({}, nullptr);
 
-  renderPass_.colorAttachments.resize(1);
-
-  renderPass_.colorAttachments[0] = igl::RenderPassDesc::ColorAttachmentDesc{};
-  renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
-  renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPass_.colorAttachments[0].clearColor = getPreferredClearColor();
-  renderPass_.depthAttachment.loadAction = LoadAction::DontCare;
+  renderPass_.colorAttachments = {{
+      .loadAction = LoadAction::Clear,
+      .storeAction = StoreAction::Store,
+      .clearColor = getPreferredClearColor(),
+  }};
+  renderPass_.depthAttachment = {.loadAction = LoadAction::DontCare};
 
   // Create Index Buffer
   const int16_t indexes[6] = {0, 1, 2, 3, 4, 5};
 
-  BufferDesc buffer_desc;
-  buffer_desc.type = BufferDesc::BufferTypeBits::Index;
-  buffer_desc.length = sizeof(indexes);
-  buffer_desc.data = &indexes;
-  index_buffer_ = getPlatform().getDevice().createBuffer(buffer_desc, nullptr);
+  BufferDesc bufferDesc;
+  bufferDesc.type = BufferDesc::BufferTypeBits::Index;
+  bufferDesc.length = sizeof(indexes);
+  bufferDesc.data = &indexes;
+  index_buffer_ = getPlatform().getDevice().createBuffer(bufferDesc, nullptr);
   IGL_DEBUG_ASSERT(index_buffer_);
 }
 
@@ -204,15 +203,15 @@ void DrawInstancedSession::update(SurfaceTextures surfaceTextures) noexcept {
   if (!renderPipelineState_Triangle_) {
     VertexInputStateDesc inputDesc;
     inputDesc.numAttributes = 1;
-    inputDesc.attributes[0] = VertexAttribute(1, VertexAttributeFormat::Float2, 0, "offset", 0);
+    inputDesc.attributes[0] = VertexAttribute{1, VertexAttributeFormat::Float2, 0, "offset", 0};
     inputDesc.numInputBindings = 1;
     inputDesc.inputBindings[1].stride = sizeof(float) * 2;
     inputDesc.inputBindings[1].sampleFunction = igl::VertexSampleFunction::Instance;
-    auto vertexInput0_ = getPlatform().getDevice().createVertexInputState(inputDesc, nullptr);
-    IGL_DEBUG_ASSERT(vertexInput0_ != nullptr);
+    auto vertexInput0 = getPlatform().getDevice().createVertexInputState(inputDesc, nullptr);
+    IGL_DEBUG_ASSERT(vertexInput0 != nullptr);
 
     RenderPipelineDesc desc;
-    desc.vertexInputState = vertexInput0_;
+    desc.vertexInputState = vertexInput0;
 
     desc.targetDesc.colorAttachments.resize(1);
 

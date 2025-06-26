@@ -10,11 +10,11 @@
 #include "TinyRenderer.h"
 #include <android/asset_manager_jni.h>
 #include <android/native_window_jni.h>
-#include <igl/Common.h>
-#include <igl/TextureFormat.h>
 #include <memory>
 #include <shell/shared/renderSession/DefaultRenderSessionFactory.h>
 #include <shell/shared/renderSession/IRenderSessionFactory.h>
+#include <igl/Common.h>
+#include <igl/TextureFormat.h>
 
 namespace igl::samples {
 
@@ -173,7 +173,7 @@ JNIEXPORT void JNICALL Java_com_facebook_igl_shell_SampleLib_init(JNIEnv* env,
                                                                   jobject obj,
                                                                   jobject jbackendVersion,
                                                                   jint jswapchainColorTextureFormat,
-                                                                  jobject java_asset_manager,
+                                                                  jobject javaAssetManager,
                                                                   jobject surface);
 JNIEXPORT void JNICALL
 Java_com_facebook_igl_shell_SampleLib_setActiveBackendVersion(JNIEnv* env,
@@ -253,15 +253,15 @@ JNIEXPORT void JNICALL Java_com_facebook_igl_shell_SampleLib_init(JNIEnv* env,
                                                                   jobject /*obj*/,
                                                                   jobject jbackendVersion,
                                                                   jint jtextureFormat,
-                                                                  jobject java_asset_manager,
+                                                                  jobject javaAssetManager,
                                                                   jobject surface) {
   const auto backendVersion = toBackendVersion(env, jbackendVersion);
-  const auto swapchainColorTextureFormat = static_cast<igl::TextureFormat>(jtextureFormat);
+  const auto swapchainColorTextureFormat = static_cast<TextureFormat>(jtextureFormat);
   const auto rendererIndex = findRendererIndex(backendVersion);
 
   if (backendVersion && !rendererIndex) {
     auto renderer = std::make_unique<TinyRenderer>();
-    renderer->init(AAssetManager_fromJava(env, java_asset_manager),
+    renderer->init(AAssetManager_fromJava(env, javaAssetManager),
                    surface ? ANativeWindow_fromSurface(env, surface) : nullptr,
                    *factory,
                    *backendVersion,
@@ -278,13 +278,13 @@ JNIEXPORT void JNICALL Java_com_facebook_igl_shell_SampleLib_init(JNIEnv* env,
   activeBackendVersion = backendVersion;
 }
 
+// NOLINTBEGIN(misc-use-internal-linkage)
 JNIEXPORT jboolean JNICALL
 Java_com_facebook_igl_shell_SampleLib_isBackendVersionSupported(JNIEnv* env,
                                                                 jobject /*obj*/,
                                                                 jobject jbackendVersion) {
-  const auto backendVersion = toBackendVersion(env, jbackendVersion);
+  [[maybe_unused]] const auto backendVersion = toBackendVersion(env, jbackendVersion);
   IGL_LOG_INFO("isBackendVersionSupported: %s\n", toString(backendVersion).c_str());
-  (void)backendVersion;
 #if IGL_BACKEND_OPENGL
   if (backendVersion && backendVersion->flavor == BackendFlavor::OpenGL_ES) {
     return JNI_TRUE;
@@ -297,6 +297,7 @@ Java_com_facebook_igl_shell_SampleLib_isBackendVersionSupported(JNIEnv* env,
 #endif
   return JNI_FALSE;
 }
+// NOLINTEND(misc-use-internal-linkage)
 
 JNIEXPORT void JNICALL
 Java_com_facebook_igl_shell_SampleLib_setActiveBackendVersion(JNIEnv* env,

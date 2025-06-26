@@ -10,9 +10,9 @@
 #include <IGLU/texture_loader/ktx2/Header.h>
 #include <IGLU/texture_loader/ktx2/TextureLoaderFactory.h>
 #include <cstring>
-#include <igl/vulkan/util/TextureFormat.h>
 #include <numeric>
 #include <vector>
+#include <igl/vulkan/util/TextureFormat.h>
 
 namespace igl::tests::ktx2 {
 
@@ -83,7 +83,9 @@ uint32_t getTotalDataSize(uint32_t vkFormat,
 void putDfd(std::vector<uint8_t>& buffer, uint32_t vkFormat, uint32_t numMipLevels) {
   const uint32_t dfdMetadataffset = kHeaderSize + numMipLevels * kMipmapMetadataSize;
 
+  // NOLINTNEXTLINE(readability-identifier-naming)
   constexpr uint32_t VK_FORMAT_PVRTC1_2BPP_UNORM_BLOCK_IMG = 1000054000u;
+  // NOLINTNEXTLINE(readability-identifier-naming)
   constexpr uint32_t VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK = 147u;
 
   ASSERT_TRUE(vkFormat == VK_FORMAT_PVRTC1_2BPP_UNORM_BLOCK_IMG ||
@@ -236,6 +238,7 @@ class Ktx2TextureLoaderTest : public ::testing::Test {
 
   void TearDown() override {}
 
+ protected:
   iglu::textureloader::ktx2::TextureLoaderFactory factory_;
 };
 

@@ -23,43 +23,43 @@ class SamplerStateMTLTest : public ::testing::Test {
   }
   void TearDown() override {}
 
- public:
+ protected:
   std::shared_ptr<igl::metal::SamplerState> samplerState_;
 };
 
 TEST_F(SamplerStateMTLTest, ConvertMinMagFilter) {
   MTLSamplerMinMagFilter res;
 
-  res = samplerState_->convertMinMagFilter(SamplerMinMagFilter::Linear);
+  res = igl::metal::SamplerState::convertMinMagFilter(SamplerMinMagFilter::Linear);
   ASSERT_EQ(res, MTLSamplerMinMagFilterLinear);
 
-  res = samplerState_->convertMinMagFilter(SamplerMinMagFilter::Nearest);
+  res = igl::metal::SamplerState::convertMinMagFilter(SamplerMinMagFilter::Nearest);
   ASSERT_EQ(res, MTLSamplerMinMagFilterNearest);
 }
 
 TEST_F(SamplerStateMTLTest, ConvertMipFilter) {
   MTLSamplerMipFilter res;
 
-  res = samplerState_->convertMipFilter(SamplerMipFilter::Disabled);
+  res = igl::metal::SamplerState::convertMipFilter(SamplerMipFilter::Disabled);
   ASSERT_EQ(res, MTLSamplerMipFilterNotMipmapped);
 
-  res = samplerState_->convertMipFilter(SamplerMipFilter::Nearest);
+  res = igl::metal::SamplerState::convertMipFilter(SamplerMipFilter::Nearest);
   ASSERT_EQ(res, MTLSamplerMipFilterNearest);
 
-  res = samplerState_->convertMipFilter(SamplerMipFilter::Linear);
+  res = igl::metal::SamplerState::convertMipFilter(SamplerMipFilter::Linear);
   ASSERT_EQ(res, MTLSamplerMipFilterLinear);
 }
 
 TEST_F(SamplerStateMTLTest, ConvertAddressMode) {
   MTLSamplerAddressMode res;
 
-  res = samplerState_->convertAddressMode(SamplerAddressMode::Repeat);
+  res = igl::metal::SamplerState::convertAddressMode(SamplerAddressMode::Repeat);
   ASSERT_EQ(res, MTLSamplerAddressModeRepeat);
 
-  res = samplerState_->convertAddressMode(SamplerAddressMode::Clamp);
+  res = igl::metal::SamplerState::convertAddressMode(SamplerAddressMode::Clamp);
   ASSERT_EQ(res, MTLSamplerAddressModeClampToEdge);
 
-  res = samplerState_->convertAddressMode(SamplerAddressMode::MirrorRepeat);
+  res = igl::metal::SamplerState::convertAddressMode(SamplerAddressMode::MirrorRepeat);
   ASSERT_EQ(res, MTLSamplerAddressModeMirrorRepeat);
 }
 

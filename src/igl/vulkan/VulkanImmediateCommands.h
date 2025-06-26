@@ -109,6 +109,9 @@ class VulkanImmediateCommands final {
     /// execution.
     VulkanSemaphore semaphore_;
     bool isEncoding_ = false;
+    /// @brief The file descriptor for the underlying VkFence. It's only populated if an FD is set
+    /// explicitly using VulkanImmediateCommands::storeFDInSubmitHandle(). It's reset in `acquire()`
+    int fd = -1;
   };
 
   /// @brief Returns a `CommandBufferWrapper` object with the current command buffer (creates one if
@@ -161,6 +164,14 @@ class VulkanImmediateCommands final {
   VkFence getVkFenceFromSubmitHandle(SubmitHandle handle);
 
   VulkanCommandPool & getCommandPool() { return  commandPool_; }
+  /// @brief Stores the file descriptor in the `CommandBufferWrapper` object associated with the
+  /// handle. Chceks for bounds, but does not check for validity.
+  void storeFDInSubmitHandle(SubmitHandle handle, int fd) noexcept;
+
+  /// @brief Returns the file descriptor associated with the handle and its underlying VkFence. If
+  /// the FD has not been explicitly set with `storeFDInSubmitHandle()`, it returns -1. This
+  /// function DOES NOT retrieve the FD from the Vulkan implementation
+  [[nodiscard]] int cachedFDFromSubmitHandle(SubmitHandle handle) const noexcept;
 
  private:
   /// @brief Resets all commands buffers and their associated fences that are valid, are not being
@@ -185,22 +196,12 @@ class VulkanImmediateCommands final {
   SubmitHandle nextSubmitHandle_ = SubmitHandle();
 
   /// @brief The semaphore submitted with the last command buffer. Updated on `submit()`
-  VkSemaphoreSubmitInfo lastSubmitSemaphore_ = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-      .stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-  };
-
+  VkSemaphoreSubmitInfo lastSubmitSemaphore_{};
   /// @brief A semaphore to be associated with the next command buffer to be submitted. Can be used
   /// with command buffers that present swapchain images.
-  VkSemaphoreSubmitInfo waitSemaphore_ = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-      .stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-  };
+  VkSemaphoreSubmitInfo waitSemaphore_{};
   // an extra "signal" timeline semaphore
-  VkSemaphoreSubmitInfo signalSemaphore_ = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-      .stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-  };
+  VkSemaphoreSubmitInfo signalSemaphore_{};
 
   uint32_t numAvailableCommandBuffers_ = kMaxCommandBuffers;
 

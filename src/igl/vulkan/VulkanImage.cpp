@@ -23,7 +23,7 @@
 namespace {
 uint32_t ivkGetMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties& memProps,
                                const uint32_t typeBits,
-                               const VkMemoryPropertyFlags requiredProperties) {
+                               VkMemoryPropertyFlags requiredProperties) {
   // Search memory types to find the index with the requested properties.
   for (uint32_t type = 0; type < memProps.memoryTypeCount; type++) {
     if ((typeBits & (1 << type)) != 0) {
@@ -31,6 +31,19 @@ uint32_t ivkGetMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties& memProps,
       const VkFlags propertyFlags = memProps.memoryTypes[type].propertyFlags;
       if ((propertyFlags & requiredProperties) == requiredProperties) {
         return type;
+      }
+    }
+  }
+  if (requiredProperties & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+    // there's no DEVICE_LOCAL memory heap here - look again
+    requiredProperties &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    for (uint32_t type = 0; type < memProps.memoryTypeCount; type++) {
+      if ((typeBits & (1 << type)) != 0) {
+        // Test if this memory type has the required properties.
+        const VkFlags propertyFlags = memProps.memoryTypes[type].propertyFlags;
+        if ((propertyFlags & requiredProperties) == requiredProperties) {
+          return type;
+        }
       }
     }
   }
@@ -81,6 +94,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   setName(debugName);
   VK_ASSERT(ivkSetDebugObjectName(
       &ctx_->vf_, device_, VK_OBJECT_TYPE_IMAGE, (uint64_t)vkImage_, debugName));
+  ctx_->vf_.vkGetPhysicalDeviceFormatProperties(physicalDevice_, imageFormat_, &formatProperties_);
 }
 VulkanImage::VulkanImage(const VulkanContext& ctx,
                          VkDevice device,
@@ -356,6 +370,8 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
 
   VK_ASSERT(ctx_->vf_.vkAllocateMemory(device_, &memoryAllocateInfo, nullptr, &vkMemory_[0]));
   VK_ASSERT(ctx_->vf_.vkBindImageMemory(device_, vkImage_, vkMemory_[0], 0));
+
+  ctx_->vf_.vkGetPhysicalDeviceFormatProperties(physicalDevice_, imageFormat_, &formatProperties_);
 }
 #endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
@@ -441,12 +457,15 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   //  - multiple instances of vk
   //  - same instance from which it was exported
   //  - multiple times into a given vk instance.
-  // in all cases, each import operation must create a distinct vkdevicememory object
+  // in all cases, each import operation must create a distinct VkDeviceMemory object
 
   const VkImageMemoryRequirementsInfo2 memoryRequirementInfo = {
-      VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2, nullptr, vkImage_};
-
-  VkMemoryRequirements2 memoryRequirements = {VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
+      .image = vkImage_,
+  };
+  VkMemoryRequirements2 memoryRequirements = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
+  };
   ctx_->vf_.vkGetImageMemoryRequirements2(device_, &memoryRequirementInfo, &memoryRequirements);
 
   // TODO_VULKAN: Verify the following from the spec:
@@ -485,6 +504,8 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   VK_ASSERT(ctx_->vf_.vkAllocateMemory(device_, &memoryAllocateInfo, nullptr, &vkMemory_[0]));
   VK_ASSERT(ctx_->vf_.vkBindImageMemory(device_, vkImage_, vkMemory_[0], 0));
 // @fb-only
+
+  ctx_->vf_.vkGetPhysicalDeviceFormatProperties(physicalDevice_, imageFormat_, &formatProperties_);
 }
 
 #if IGL_PLATFORM_WINDOWS
@@ -577,6 +598,8 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
 
   VK_ASSERT(ctx_->vf_.vkAllocateMemory(device_, &memoryAllocateInfo, nullptr, &vkMemory_[0]));
   VK_ASSERT(ctx_->vf_.vkBindImageMemory(device_, vkImage_, vkMemory_[0], 0));
+
+  ctx_->vf_.vkGetPhysicalDeviceFormatProperties(physicalDevice_, imageFormat_, &formatProperties_);
 }
 #endif // IGL_PLATFORM_WINDOWS
 
@@ -594,24 +617,26 @@ VulkanImage VulkanImage::createWithExportMemory(const VulkanContext& ctx,
                                                 VkSampleCountFlagBits samples,
                                                 const char* debugName) {
   const VkPhysicalDeviceExternalImageFormatInfo externaInfo = {
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
-      nullptr,
-      kHandleType,
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
+      .handleType = kHandleType,
   };
   const VkPhysicalDeviceImageFormatInfo2 formatInfo2 = {
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
-      &externaInfo,
-      format,
-      VK_IMAGE_TYPE_2D,
-      tiling,
-      usageFlags,
-      createFlags,
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+      .pNext = &externaInfo,
+      .format = format,
+      .type = VK_IMAGE_TYPE_2D,
+      .tiling = tiling,
+      .usage = usageFlags,
+      .flags = createFlags,
   };
 
   VkExternalImageFormatProperties externalImageFormatProperties = {
-      VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES};
-  VkImageFormatProperties2 imageFormatProperties2 = {VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2,
-                                                     &externalImageFormatProperties};
+      .sType = VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES,
+  };
+  VkImageFormatProperties2 imageFormatProperties2 = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2,
+      .pNext = &externalImageFormatProperties,
+  };
   const auto result = ctx.vf_.vkGetPhysicalDeviceImageFormatProperties2(
       ctx.getVkPhysicalDevice(), &formatInfo2, &imageFormatProperties2);
   if (result != VK_SUCCESS) {
@@ -1276,7 +1301,7 @@ VulkanImage& VulkanImage::operator=(VulkanImage&& other) noexcept {
   tiling_ = other.tiling_;
   isCoherentMemory_ = other.isCoherentMemory_;
   extendedFormat_ = other.extendedFormat_;
-
+  samplerYcbcrConversionCreateInfo_ = other.samplerYcbcrConversionCreateInfo_;
   for (size_t i = 0; i != IGL_ARRAY_NUM_ELEMENTS(vkMemory_); i++) {
     vkMemory_[i] = other.vkMemory_[i];
   }

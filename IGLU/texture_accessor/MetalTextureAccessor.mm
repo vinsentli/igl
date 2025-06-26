@@ -7,12 +7,11 @@
 
 #include "MetalTextureAccessor.h"
 #include "ITextureAccessor.h"
-#include "igl/Buffer.h"
-#include "igl/Texture.h"
-#include "igl/metal/Buffer.h"
-#include "igl/metal/CommandBuffer.h"
-#include "igl/metal/Texture.h"
+#include <igl/Buffer.h>
+#include <igl/Texture.h>
 #include <igl/metal/Buffer.h>
+#include <igl/metal/CommandBuffer.h>
+#include <igl/metal/Texture.h>
 
 #if defined(IGL_CMAKE_BUILD)
 #include <igl/IGLSafeC.h>
@@ -82,7 +81,7 @@ void MetalTextureAccessor::requestBytes(igl::ICommandQueue& commandQueue,
   lastRequestCommandBuffer = iglMtlCommandBuffer;
   status_ = RequestStatus::InProgress;
 
-  [metalCmdBuffer addCompletedHandler:^(id<MTLCommandBuffer> _cb) {
+  [metalCmdBuffer addCompletedHandler:^(id<MTLCommandBuffer> cb) {
     checked_memcpy_robust(latestBytesRead_.data(),
                           latestBytesRead_.size(),
                           metalReadBuffer.contents,

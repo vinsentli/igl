@@ -85,8 +85,6 @@ class PlatformDevice : public opengl::PlatformDevice {
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
   std::unique_ptr<AHardwareBufferFunctionTable> funcTable_;
 #endif
-
-  std::pair<EGLint, EGLint> getSurfaceDimensions(const Context& context, Result* outResult);
 };
 
 } // namespace egl

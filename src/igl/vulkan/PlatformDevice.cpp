@@ -173,56 +173,34 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(
 #endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
 VkFence PlatformDevice::getVkFenceFromSubmitHandle(SubmitHandle handle) const {
+  return device_.getVulkanContext().getVkFenceFromSubmitHandle(handle);
+}
+
+bool PlatformDevice::waitOnSubmitHandle(SubmitHandle handle, uint64_t timeoutNanoseconds) const {
   if (handle == 0) {
-    IGL_LOG_ERROR("Invalid submit handle passed to getVkFenceFromSubmitHandle");
-    return VK_NULL_HANDLE;
+    IGL_LOG_ERROR("Invalid submit handle passed to waitOnSubmitHandle");
+    return false;
   }
+
   const auto& ctx = device_.getVulkanContext();
   const auto& immediateCommands = ctx.immediate_;
 
-  VkFence vkFence =
-      immediateCommands->getVkFenceFromSubmitHandle(VulkanImmediateCommands::SubmitHandle(handle));
-
-  return vkFence;
+  return immediateCommands->wait(VulkanImmediateCommands::SubmitHandle(handle),
+                                 timeoutNanoseconds) != VK_TIMEOUT;
 }
 
-void PlatformDevice::waitOnSubmitHandle(SubmitHandle handle, uint64_t timeoutNanoseconds) const {
-  if (handle == 0) {
-    IGL_LOG_ERROR("Invalid submit handle passed to waitOnSubmitHandle");
+void PlatformDevice::deferredTask(std::packaged_task<void()>&& task, SubmitHandle handle) const {
+  if (!handle) {
+    IGL_LOG_ERROR("Invalid submit handle passed to PlatformDevice::deferredTask()");
     return;
   }
 
-  const auto& ctx = device_.getVulkanContext();
-  const auto& immediateCommands = ctx.immediate_;
-
-  immediateCommands->wait(VulkanImmediateCommands::SubmitHandle(handle), timeoutNanoseconds);
+  device_.getVulkanContext().deferredTask(std::move(task),
+                                          VulkanImmediateCommands::SubmitHandle(handle));
 }
 
-#if defined(IGL_PLATFORM_ANDROID) && defined(VK_KHR_external_fence_fd)
 int PlatformDevice::getFenceFdFromSubmitHandle(SubmitHandle handle) const {
-  if (handle == 0) {
-    IGL_LOG_ERROR("Invalid submit handle passed to getFenceFDFromSubmitHandle");
-    return -1;
-  }
-
-  VkFence vkFence = getVkFenceFromSubmitHandle(handle);
-  IGL_DEBUG_ASSERT(vkFence != VK_NULL_HANDLE);
-
-  VkFenceGetFdInfoKHR getFdInfo = {};
-  getFdInfo.sType = VK_STRUCTURE_TYPE_FENCE_GET_FD_INFO_KHR;
-  getFdInfo.fence = vkFence;
-  getFdInfo.handleType = VK_EXTERNAL_FENCE_HANDLE_TYPE_SYNC_FD_BIT;
-
-  int fenceFd = -1;
-  const auto& ctx = device_.getVulkanContext();
-  VkDevice vkDevice = ctx.device_->getVkDevice();
-  const VkResult result = ctx.vf_.vkGetFenceFdKHR(vkDevice, &getFdInfo, &fenceFd);
-  if (result != VK_SUCCESS) {
-    IGL_LOG_ERROR("Unable to get fence fd from submit handle: %lu", handle);
-  }
-
-  return fenceFd;
+  return device_.getVulkanContext().getFenceFdFromSubmitHandle(handle);
 }
-#endif // defined(IGL_PLATFORM_ANDROID)
 
 } // namespace igl::vulkan

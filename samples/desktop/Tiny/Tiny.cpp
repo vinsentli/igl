@@ -66,7 +66,7 @@ static const uint32_t kNumColorAttachments = 4;
 static const uint32_t kNumColorAttachments = 1;
 #endif
 
-#if defined(__cpp_lib_format)
+#if defined(__cpp_lib_format) && !IGL_PLATFORM_APPLE
 #include <format>
 #define IGL_FORMAT std::format
 #else
@@ -74,7 +74,7 @@ static const uint32_t kNumColorAttachments = 1;
 #define IGL_FORMAT fmt::format
 #endif // __cpp_lib_format
 
-std::string codeVS = R"(
+static std::string codeVS = R"(
 #version 460
 layout (location=0) out vec3 color;
 const vec2 pos[3] = vec2[3](
@@ -106,7 +106,7 @@ void main() {
 };
 )";
 #else
-const char* codeFS = R"(
+const static char* codeFS = R"(
 #version 460
 layout (location=0) in vec3 color;
 layout (location=0) out vec4 out_FragColor;
@@ -118,19 +118,19 @@ void main() {
 
 using namespace igl;
 
-GLFWwindow* window_ = nullptr;
-int width_ = 0;
-int height_ = 0;
+static int width_ = 1024;
+static int height_ = 768;
 
-std::unique_ptr<IDevice> device_;
-std::shared_ptr<ICommandQueue> commandQueue_;
-RenderPassDesc renderPass_;
-std::shared_ptr<IFramebuffer> framebuffer_;
-std::shared_ptr<IRenderPipelineState> renderPipelineState_Triangle_;
+static std::unique_ptr<IDevice> device_;
+static std::shared_ptr<ICommandQueue> commandQueue_;
+static RenderPassDesc renderPass_;
+static std::shared_ptr<IFramebuffer> framebuffer_;
+static std::shared_ptr<IRenderPipelineState> renderPipelineState_Triangle_;
 
-static bool initWindow(GLFWwindow** outWindow) {
+static GLFWwindow* initIGL(bool isHeadless) {
   if (!glfwInit()) {
-    return false;
+    printf("glfwInit() failed");
+    return nullptr;
   }
 
 #if USE_OPENGL_BACKEND
@@ -152,72 +152,68 @@ static bool initWindow(GLFWwindow** outWindow) {
   const char* title = "Vulkan Triangle";
 #endif
 
-  GLFWwindow* window = glfwCreateWindow(800, 600, title, nullptr, nullptr);
+  GLFWwindow* window = isHeadless ? nullptr
+                                  : glfwCreateWindow(width_, height_, title, nullptr, nullptr);
 
-  if (!window) {
-    glfwTerminate();
-    return false;
-  }
+  if (window) {
+    glfwSetErrorCallback([](int error, const char* description) {
+      printf("GLFW Error (%i): %s\n", error, description);
+    });
 
-  glfwSetErrorCallback([](int error, const char* description) {
-    printf("GLFW Error (%i): %s\n", error, description);
-  });
+    glfwSetKeyCallback(window, [](GLFWwindow* window, int key, int, int action, int) {
+      if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
+      }
+    });
 
-  glfwSetKeyCallback(window, [](GLFWwindow* window, int key, int, int action, int) {
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-      glfwSetWindowShouldClose(window, GLFW_TRUE);
-    }
-  });
-
-  // @lint-ignore CLANGTIDY
-  glfwSetWindowSizeCallback(window, [](GLFWwindow* /*window*/, int width, int height) {
-    printf("Window resized! width=%d, height=%d\n", width, height);
-    width_ = width;
-    height_ = height;
+    // @lint-ignore CLANGTIDY
+    glfwSetWindowSizeCallback(window, [](GLFWwindow* /*window*/, int width, int height) {
+      printf("Window resized! width=%d, height=%d\n", width, height);
+      width_ = width;
+      height_ = height;
 #if !USE_OPENGL_BACKEND
-    auto* vulkanDevice = static_cast<vulkan::Device*>(device_.get());
-    auto& ctx = vulkanDevice->getVulkanContext();
-    ctx.initSwapchain(width_, height_);
+      auto* vulkanDevice = static_cast<vulkan::Device*>(device_.get());
+      auto& ctx = vulkanDevice->getVulkanContext();
+      ctx.initSwapchain(width_, height_);
 #endif
-  });
+    });
 
-  glfwGetWindowSize(window, &width_, &height_);
-
-  if (outWindow) {
-    *outWindow = window;
+    glfwGetWindowSize(window, &width_, &height_);
   }
 
-  return true;
-}
-
-static void initIGL() {
   // create a device
   {
 #if USE_OPENGL_BACKEND
 #if IGL_PLATFORM_WINDOWS
-    auto ctx = std::make_unique<igl::opengl::wgl::Context>(GetDC(glfwGetWin32Window(window_)),
-                                                           glfwGetWGLContext(window_));
+    auto ctx = std::make_unique<igl::opengl::wgl::Context>(GetDC(glfwGetWin32Window(window)),
+                                                           glfwGetWGLContext(window));
     device_ = std::make_unique<igl::opengl::wgl::Device>(std::move(ctx));
 #elif IGL_PLATFORM_LINUX
     auto ctx = std::make_unique<igl::opengl::glx::Context>(
         nullptr,
         glfwGetX11Display(),
-        (igl::opengl::glx::GLXDrawable)glfwGetX11Window(window_),
-        (igl::opengl::glx::GLXContext)glfwGetGLXContext(window_));
+        (igl::opengl::glx::GLXDrawable)glfwGetX11Window(window),
+        (igl::opengl::glx::GLXContext)glfwGetGLXContext(window));
 
     device_ = std::make_unique<igl::opengl::glx::Device>(std::move(ctx));
 #endif
 #else
     const igl::vulkan::VulkanContextConfig cfg{
         .terminateOnValidationError = true,
+        .headless = isHeadless,
     };
 #ifdef _WIN32
-    auto ctx = vulkan::HWDevice::createContext(cfg, (void*)glfwGetWin32Window(window_));
+    auto ctx =
+        vulkan::HWDevice::createContext(cfg, window ? (void*)glfwGetWin32Window(window) : nullptr);
 #elif __APPLE__
-    auto ctx = vulkan::HWDevice::createContext(cfg, (void*)glfwGetCocoaWindow(window_));
+    auto ctx =
+        vulkan::HWDevice::createContext(cfg, window ? (void*)glfwGetCocoaWindow(window) : nullptr);
 #elif defined(__linux__)
-    auto ctx = vulkan::HWDevice::createContext(
-        cfg, (void*)glfwGetX11Window(window_), 0, nullptr, (void*)glfwGetX11Display());
+    auto ctx = vulkan::HWDevice::createContext(cfg,
+                                               window ? (void*)glfwGetX11Window(window) : nullptr,
+                                               0,
+                                               nullptr,
+                                               (void*)glfwGetX11Display());
 #else
 #error Unsupported OS
 #endif
@@ -228,15 +224,21 @@ static void initIGL() {
       devices = vulkan::HWDevice::queryDevices(
           *ctx, HWDeviceQueryDesc(HWDeviceType::IntegratedGpu), nullptr);
     }
+    if (devices.empty()) {
+      // LavaPipe etc
+      devices = vulkan::HWDevice::queryDevices(
+          *ctx, HWDeviceQueryDesc(HWDeviceType::SoftwareGpu), nullptr);
+    }
+
     device_ =
         vulkan::HWDevice::create(std::move(ctx), devices[0], (uint32_t)width_, (uint32_t)height_);
 #endif
     IGL_DEBUG_ASSERT(device_);
   }
 
-  // Command queue: backed by different types of GPU HW queues
-  const CommandQueueDesc desc{};
-  commandQueue_ = device_->createCommandQueue(desc, nullptr);
+  commandQueue_ = device_->createCommandQueue({}, nullptr);
+
+  renderPass_.colorAttachments.resize(kNumColorAttachments);
 
   // first color attachment
   for (auto i = 0; i < kNumColorAttachments; ++i) {
@@ -244,12 +246,15 @@ static void initIGL() {
     if (i & 0x1) {
       continue;
     }
-    renderPass_.colorAttachments[i] = igl::RenderPassDesc::ColorAttachmentDesc{};
-    renderPass_.colorAttachments[i].loadAction = LoadAction::Clear;
-    renderPass_.colorAttachments[i].storeAction = StoreAction::Store;
-    renderPass_.colorAttachments[i].clearColor = {1.0f, 1.0f, 1.0f, 1.0f};
+    renderPass_.colorAttachments[i] = {
+        .loadAction = LoadAction::Clear,
+        .storeAction = StoreAction::Store,
+        .clearColor = {1.0f, 1.0f, 1.0f, 1.0f},
+    };
   }
   renderPass_.depthAttachment.loadAction = LoadAction::DontCare;
+
+  return window;
 }
 
 static void createRenderPipeline() {
@@ -365,18 +370,23 @@ static void render(const std::shared_ptr<ITexture>& nativeDrawable) {
   commandQueue_->submit(*buffer);
 }
 
-int main(int /*argc*/, char* /*argv*/[]) {
-  renderPass_.colorAttachments.resize(kNumColorAttachments);
-  initWindow(&window_);
-  initIGL();
+int main(int argc, char* argv[]) {
+  const bool isHeadless = argc > 1 && !strcmp(argv[1], "--headless");
+
+  GLFWwindow* window = initIGL(isHeadless);
 
   createFramebuffer(getNativeDrawable());
   createRenderPipeline();
 
   // Main loop
-  while (!glfwWindowShouldClose(window_)) {
+  while (!window || !glfwWindowShouldClose(window)) {
     render(getNativeDrawable());
-    glfwPollEvents();
+    if (window) {
+      glfwPollEvents();
+    } else {
+      printf("We are running headless - breaking after 1 frame\n");
+      break;
+    }
   }
 
   // destroy all the Vulkan stuff before closing the window
@@ -384,7 +394,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
   framebuffer_ = nullptr;
   device_.reset(nullptr);
 
-  glfwDestroyWindow(window_);
+  glfwDestroyWindow(window);
   glfwTerminate();
 
   return 0;

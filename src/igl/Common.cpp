@@ -29,11 +29,19 @@ std::string BackendTypeToString(BackendType backendType) {
     return "Vulkan";
   // @fb-only
     // @fb-only
+  case BackendType::Custom:
+    return "Custom";
   }
   IGL_UNREACHABLE_RETURN(std::string())
 }
 
-void optimizedMemcpy(void* dst, const void* src, size_t size) {
+void optimizedMemcpy(void* IGL_NULLABLE dst, const void* IGL_NULLABLE src, size_t size) {
+  // Add null check for both dst and src
+  IGL_DEBUG_ASSERT(dst != nullptr && src != nullptr, "dst and src must not be null");
+  if (!dst || !src) {
+    return;
+  }
+
   size_t optimizationCase = size;
 
   // There are cases where this function is used on an array of bytes, For

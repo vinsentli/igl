@@ -27,21 +27,20 @@
 
 // clang-format on
 #include "AutoContextReleaseDevice.h"
-#include <igl/Core.h>
-#include <igl/IGL.h>
-#include <igl/opengl/Device.h>
-#include <igl/opengl/PlatformDevice.h>
-#include <igl/opengl/Version.h>
-#include <igl/opengl/ViewTextureTarget.h>
 #include <memory>
 #include <shell/shared/platform/win/PlatformWin.h>
 #include <shell/windows/common/GlfwShell.h>
+#include <igl/Core.h>
+#include <igl/IGL.h>
+#include <igl/opengl/Device.h>
+#include <igl/opengl/Version.h>
+#include <igl/opengl/ViewTextureTarget.h>
 
 using namespace igl;
 namespace igl::shell {
 namespace {
 class OpenGlShell final : public GlfwShell {
-  igl::SurfaceTextures createSurfaceTextures() noexcept final;
+  SurfaceTextures createSurfaceTextures() noexcept final;
   std::shared_ptr<Platform> createPlatform() noexcept final;
 
   void willCreateWindow() noexcept final;
@@ -50,10 +49,10 @@ class OpenGlShell final : public GlfwShell {
   void willTick() noexcept final;
 };
 
-igl::SurfaceTextures OpenGlShell::createSurfaceTextures() noexcept {
+SurfaceTextures OpenGlShell::createSurfaceTextures() noexcept {
   auto& device = platform().getDevice();
   if (IGL_DEBUG_VERIFY(device.getBackendType() == igl::BackendType::OpenGL)) {
-    igl::opengl::Device& oglDevice = static_cast<igl::opengl::Device&>(device);
+    auto& oglDevice = static_cast<igl::opengl::Device&>(device);
     oglDevice.getContext().setCurrent();
     TextureDesc desc = {
         static_cast<uint32_t>(shellParams().viewportSize.x),
@@ -73,10 +72,10 @@ igl::SurfaceTextures OpenGlShell::createSurfaceTextures() noexcept {
     auto depth =
         std::make_shared<igl::opengl::ViewTextureTarget>(oglDevice.getContext(), desc.format);
     depth->create(desc, true);
-    return igl::SurfaceTextures{std::move(color), std::move(depth)};
+    return SurfaceTextures{std::move(color), std::move(depth)};
   }
 
-  return igl::SurfaceTextures{};
+  return SurfaceTextures{};
 }
 
 void OpenGlShell::willCreateWindow() noexcept {
@@ -91,9 +90,9 @@ void OpenGlShell::willCreateWindow() noexcept {
 }
 
 void OpenGlShell::didCreateWindow() noexcept {
-  [[maybe_unused]] int result = glfwGetWindowAttrib(&window(), GLFW_CLIENT_API);
+  [[maybe_unused]] int result = glfwGetWindowAttrib(window(), GLFW_CLIENT_API);
 
-  glfwMakeContextCurrent(&window());
+  glfwMakeContextCurrent(window());
 
 #if defined(_WIN32)
   glewExperimental = GL_TRUE;
@@ -109,8 +108,8 @@ void OpenGlShell::didCreateWindow() noexcept {
 
 std::shared_ptr<Platform> OpenGlShell::createPlatform() noexcept {
 #if defined(_WIN32)
-  auto context = std::make_unique<igl::opengl::wgl::Context>(GetDC(glfwGetWin32Window(&window())),
-                                                             glfwGetWGLContext(&window()));
+  auto context = std::make_unique<igl::opengl::wgl::Context>(GetDC(glfwGetWin32Window(window())),
+                                                             glfwGetWGLContext(window()));
   auto glDevice = std::make_unique<shell::util::WGLDevice>(std::move(context));
 
   return std::make_shared<igl::shell::PlatformWin>(std::move(glDevice));
@@ -118,12 +117,12 @@ std::shared_ptr<Platform> OpenGlShell::createPlatform() noexcept {
   auto context = std::make_unique<igl::opengl::glx::Context>(
       nullptr,
       glfwGetX11Display(),
-      (igl::opengl::glx::GLXDrawable)glfwGetX11Window(&window()),
-      (igl::opengl::glx::GLXContext)glfwGetGLXContext(&window()));
+      (igl::opengl::glx::GLXDrawable)glfwGetX11Window(window()),
+      (igl::opengl::glx::GLXContext)glfwGetGLXContext(window()));
 
   auto glDevice = std::make_unique<igl::opengl::glx::Device>(std::move(context));
 
-  return std::make_shared<igl::shell::PlatformWin>(std::move(glDevice));
+  return std::make_shared<PlatformWin>(std::move(glDevice));
 #endif
 }
 
@@ -160,7 +159,7 @@ int main(int argc, char* argv[]) {
       .swapchainColorTextureFormat = TextureFormat::RGBA_SRGB,
   };
 
-  if (!shell.initialize(argc, argv, suggestedWindowConfig, std::move(suggestedConfig))) {
+  if (!shell.initialize(argc, argv, suggestedWindowConfig, suggestedConfig)) {
     shell.teardown();
     return -1;
   }

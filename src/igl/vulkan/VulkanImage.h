@@ -212,7 +212,7 @@ class VulkanImage final {
 
   ~VulkanImage();
 
-  VulkanImage(const VulkanImage&) = delete;
+  VulkanImage(const VulkanImage&) = default;
   VulkanImage& operator=(const VulkanImage&) = delete;
 
   VulkanImage(VulkanImage&& other) noexcept {
@@ -324,6 +324,7 @@ class VulkanImage final {
   void* exportedMemoryHandle_ = nullptr; // windows handle
   int exportedFd_ = -1; // linux fd
   uint32_t extendedFormat_ = 0; // defined by VkAndroidHardwareBufferFormatPropertiesANDROID
+  VkSamplerYcbcrConversionCreateInfo samplerYcbcrConversionCreateInfo_ = {};
 #if defined(IGL_DEBUG)
   std::string name_;
 #endif

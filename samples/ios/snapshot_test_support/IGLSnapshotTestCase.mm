@@ -13,13 +13,13 @@
 #import <FBServerSnapshotTestCase/FBServerSnapshotTestCase.h>
 #import <FBServerSnapshotTestCase/FBServerSnapshotTestData.h>
 #import <FBServerSnapshotTestCase/FBServerSnapshotTestRecorder.h>
+#import <iglu/kit/Renderable.hpp>
 #import <igl/DebugMacros.h>
 #import <igl/IGL.h>
-#import <igl/metal/HWDevice.h>
-#import <igl/opengl/ios/Context.h>
-#import <igl/opengl/ios/Device.h>
-#import <igl/opengl/ios/HWDevice.h>
-#import <iglu/kit/Renderable.hpp>
+#include <igl/metal/HWDevice.h>
+#include <igl/opengl/ios/Context.h>
+#include <igl/opengl/ios/Device.h>
+#include <igl/opengl/ios/HWDevice.h>
 
 @implementation IGLSnapshotTestCase {
   std::shared_ptr<igl::IDevice> _device;
@@ -45,8 +45,7 @@
     _device = hwDevice.create(hwDevices[0], nullptr);
   } else if (_backendType == igl::BackendType::OpenGL) {
     igl::opengl::ios::HWDevice hwDevice;
-    auto hwDevices = hwDevice.queryDevices(queryDesc, nullptr);
-    _device = hwDevice.create(hwDevices[0], igl::opengl::RenderingAPI::GLES3, nullptr);
+    _device = hwDevice.create(nullptr);
   }
 
   igl::Result result;

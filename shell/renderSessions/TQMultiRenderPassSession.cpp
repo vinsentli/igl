@@ -9,11 +9,10 @@
 
 #include <IGLU/simdtypes/SimdTypes.h>
 #include <cmath>
-#include <igl/NameHandle.h>
-#include <igl/ShaderCreator.h>
-#include <igl/opengl/GLIncludes.h>
 #include <shell/renderSessions/TQMultiRenderPassSession.h>
 #include <shell/shared/renderSession/ShellParams.h>
+#include <igl/NameHandle.h>
+#include <igl/ShaderCreator.h>
 
 namespace igl::shell {
 struct VertexPosUv {
@@ -113,6 +112,9 @@ static std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device)
   case igl::BackendType::Vulkan:
     IGL_DEBUG_ABORT("IGLSamples not set up for Vulkan");
     return nullptr;
+  case igl::BackendType::Custom:
+    IGL_DEBUG_ABORT("IGLSamples not set up for Custom");
+    return nullptr;
   // @fb-only
     // @fb-only
     // @fb-only
@@ -140,7 +142,7 @@ static void render(std::shared_ptr<ICommandBuffer>& buffer,
                    RenderPassDesc& renderPass,
                    std::shared_ptr<ISamplerState>& samplerState,
                    std::shared_ptr<IBuffer>& ib,
-                   size_t textureUnit_,
+                   size_t textureUnit,
                    BackendType& backend,
                    std::shared_ptr<IBuffer>& fragmentParamBuffer,
                    std::vector<UniformDesc>& fragmentUniformDescriptors,
@@ -159,8 +161,8 @@ static void render(std::shared_ptr<ICommandBuffer>& buffer,
       commands->bindUniform(uniformDesc, &fragmentParameters);
     }
   }
-  commands->bindTexture(textureUnit_, BindTarget::kFragment, inputTexture.get());
-  commands->bindSamplerState(textureUnit_, BindTarget::kFragment, samplerState.get());
+  commands->bindTexture(textureUnit, BindTarget::kFragment, inputTexture.get());
+  commands->bindSamplerState(textureUnit, BindTarget::kFragment, samplerState.get());
   commands->bindVertexBuffer(0, *vertexBuffer);
   commands->bindIndexBuffer(*ib, IndexFormat::UInt16);
   commands->drawIndexed(6);
@@ -183,10 +185,10 @@ void TQMultiRenderPassSession::initialize() noexcept {
 
   VertexInputStateDesc inputDesc;
   inputDesc.numAttributes = 2;
-  inputDesc.attributes[0] = VertexAttribute(
-      0, VertexAttributeFormat::Float3, offsetof(VertexPosUv, position), "position", 0);
+  inputDesc.attributes[0] = VertexAttribute{
+      0, VertexAttributeFormat::Float3, offsetof(VertexPosUv, position), "position", 0};
   inputDesc.attributes[1] =
-      VertexAttribute(0, VertexAttributeFormat::Float2, offsetof(VertexPosUv, uv), "uv_in", 1);
+      VertexAttribute{0, VertexAttributeFormat::Float2, offsetof(VertexPosUv, uv), "uv_in", 1};
   inputDesc.numInputBindings = 1;
   inputDesc.inputBindings[0].stride = sizeof(VertexPosUv);
   vertexInputState_ = device.createVertexInputState(inputDesc, nullptr);
@@ -266,7 +268,7 @@ void TQMultiRenderPassSession::update(SurfaceTextures surfaceTextures) noexcept 
     IGL_DEBUG_ASSERT(ret.isOk());
     IGL_DEBUG_ASSERT(framebuffer1_ != nullptr);
   }
-  const size_t _textureUnit = 0;
+  const size_t textureUnit = 0;
 
   // Graphics pipeline
   if (pipelineState0_ == nullptr) {
@@ -277,7 +279,7 @@ void TQMultiRenderPassSession::update(SurfaceTextures surfaceTextures) noexcept 
     graphicsDesc.targetDesc.colorAttachments[0].textureFormat = tex1_->getProperties().format;
     graphicsDesc.targetDesc.depthAttachmentFormat =
         framebuffer0_->getDepthAttachment()->getProperties().format;
-    graphicsDesc.fragmentUnitSamplerMap[_textureUnit] = IGL_NAMEHANDLE("inputImage");
+    graphicsDesc.fragmentUnitSamplerMap[textureUnit] = IGL_NAMEHANDLE("inputImage");
     graphicsDesc.cullMode = igl::CullMode::Back;
     graphicsDesc.frontFaceWinding = igl::WindingMode::Clockwise;
 
@@ -320,7 +322,7 @@ void TQMultiRenderPassSession::update(SurfaceTextures surfaceTextures) noexcept 
          renderPass0_,
          samplerState_,
          ib0_,
-         _textureUnit,
+         textureUnit,
          backendType,
          fragmentParamBuffer_,
          fragmentUniformDescriptors_,
@@ -335,7 +337,7 @@ void TQMultiRenderPassSession::update(SurfaceTextures surfaceTextures) noexcept 
          renderPass1_,
          samplerState_,
          ib0_,
-         _textureUnit,
+         textureUnit,
          backendType,
          fragmentParamBuffer_,
          fragmentUniformDescriptors_,

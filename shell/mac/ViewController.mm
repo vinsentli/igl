@@ -15,19 +15,19 @@
 #import "VulkanView.h"
 // @fb-only
 
+#import <shell/shared/input/InputDispatcher.h>
 #import <igl/Common.h>
 #import <igl/IGL.h>
-#import <shell/shared/input/InputDispatcher.h>
 #if IGL_BACKEND_METAL
-#import <igl/metal/ColorSpace.h>
-#import <igl/metal/HWDevice.h>
-#import <igl/metal/Texture.h>
-#import <igl/metal/macos/Device.h>
+#include <igl/metal/ColorSpace.h>
+#include <igl/metal/HWDevice.h>
+#include <igl/metal/Texture.h>
+#include <igl/metal/macos/Device.h>
 #endif
 #if IGL_BACKEND_OPENGL
-#import <igl/opengl/macos/Context.h>
-#import <igl/opengl/macos/Device.h>
-#import <igl/opengl/macos/HWDevice.h>
+#include <igl/opengl/macos/Context.h>
+#include <igl/opengl/macos/Device.h>
+#include <igl/opengl/macos/HWDevice.h>
 #endif
 #include <shell/shared/platform/mac/PlatformMac.h>
 #include <shell/shared/renderSession/AppParams.h>
@@ -39,9 +39,9 @@
 // @fb-only
 // @fb-only
 #if IGL_BACKEND_VULKAN
-#import <igl/vulkan/Device.h>
-#import <igl/vulkan/HWDevice.h>
-#import <igl/vulkan/VulkanContext.h>
+#include <igl/vulkan/Device.h>
+#include <igl/vulkan/HWDevice.h>
+#include <igl/vulkan/VulkanContext.h>
 #endif
 #import <cmath>
 #import <simd/simd.h>
@@ -300,7 +300,6 @@ using namespace igl;
     igl::vulkan::VulkanContextConfig vulkanContextConfig;
     vulkanContextConfig.terminateOnValidationError = true;
     vulkanContextConfig.enhancedShaderDebugging = false;
-    vulkanContextConfig.enableBufferDeviceAddress = true;
 
     vulkanContextConfig.swapChainColorSpace = config_.swapchainColorSpace;
     vulkanContextConfig.requestedSwapChainTextureFormat = config_.swapchainColorTextureFormat;
