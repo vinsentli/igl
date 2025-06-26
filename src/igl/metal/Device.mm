@@ -155,7 +155,7 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
   };
 
   MTLTextureDescriptor* metalDesc = [MTLTextureDescriptor new];
-  metalDesc.textureType = Texture::convertType(sanitized.type, sanitized.numSamples);
+  metalDesc.textureType = Texture::convertType(sanitized.type, sanitized.numSamples, sanitized.usage);
   metalDesc.pixelFormat = Texture::textureFormatToMTLPixelFormat(sanitized.format);
   if (metalDesc.pixelFormat == MTLPixelFormatInvalid) {
     Result::setResult(
@@ -461,6 +461,28 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipeline(const RenderP
   }
 
   return std::make_shared<RenderPipelineState>(metalObject, reflection, desc);
+}
+
+std::shared_ptr<IRenderPipelineState> Device::createTileRenderPipeline(const TileRenderPipelineDesc& desc,
+                                                                       Result* outResult) const {
+    MTLTileRenderPipelineDescriptor *metalDesc = [MTLTileRenderPipelineDescriptor new];
+    metalDesc.label = @"CustomResolvePipeline";
+    
+    auto* tileFunc = static_cast<ShaderModule*>(desc.tileFunction.get());
+    metalDesc.tileFunction = tileFunc->get();
+    metalDesc.threadgroupSizeMatchesTileSize = YES;
+    metalDesc.colorAttachments[0].pixelFormat = Texture::textureFormatToMTLPixelFormat(desc.textureFormat);
+    metalDesc.rasterSampleCount = desc.sampleCount;
+    
+    MTLRenderPipelineReflection* reflection = nil;
+    NSError* error = nil;
+    id<MTLRenderPipelineState> metalObject = [device_ newRenderPipelineStateWithTileDescriptor:metalDesc
+                                                                                       options:0
+                                                                                    reflection:&reflection
+                                                                                         error:&error];
+    
+    RenderPipelineDesc fake_desc;
+    return std::make_shared<RenderPipelineState>(metalObject, reflection, fake_desc);
 }
 
 std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryDesc& desc,

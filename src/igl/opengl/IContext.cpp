@@ -2020,15 +2020,6 @@ void IContext::getIntegerv(GLenum pname, GLint* params) const {
   GLCHECK_ERRORS();
 }
 
-void IContext::programBinary(GLuint program,
-                             GLenum binaryFormat,
-                             const GLvoid* binary,
-                             GLsizei length) {
-  GLCALL(ProgramBinary)(program, binaryFormat, binary, length);
-  APILOG("glProgramBinary(%u, %u, %p, %d)\n", program, binaryFormat, binary, length);
-  GLCHECK_ERRORS();
-}
-
 void IContext::getProgramBinary(GLuint program,
                                 GLsizei bufSize,
                                 GLsizei* length,
@@ -2318,6 +2309,7 @@ void* IContext::mapBufferRange(GLenum target,
 }
 
 void IContext::objectLabel(GLenum identifier, GLuint name, GLsizei length, const char* label) {
+#ifndef NDEBUG_OPENGL_KHR
   if (objectLabelProc_ == nullptr) {
     if (deviceFeatureSet_.hasInternalRequirement(InternalRequirement::DebugLabelExtReq)) {
       if (deviceFeatureSet_.hasExtension(Extensions::Debug)) {
@@ -2333,11 +2325,27 @@ void IContext::objectLabel(GLenum identifier, GLuint name, GLsizei length, const
   GLCALL_PROC(objectLabelProc_, identifier, name, length, label);
   APILOG("glObjectLabel(%s, %u, %u, %s)\n", GL_ENUM_TO_STRING(identifier), name, length, label);
   GLCHECK_ERRORS();
+#endif
 }
 
 void IContext::pixelStorei(GLenum pname, GLint param) {
   GLCALL(PixelStorei)(pname, param);
   APILOG("glPixelStorei(%s, %d)\n", GL_ENUM_TO_STRING(pname), param);
+  GLCHECK_ERRORS();
+}
+
+void IContext::programBinary(GLuint program,
+                             GLenum binaryFormat,
+                             const GLvoid* binary,
+                             GLsizei length) {
+  GLCALL(ProgramBinary)(program, binaryFormat, binary, length);
+  APILOG("glProgramBinary(%u, %u, %p, %d)\n", program, binaryFormat, binary, length);
+  GLCHECK_ERRORS();
+}
+
+void IContext::programParameteri(GLuint program, GLenum pname, GLint value){
+  GLCALL(ProgramParameteri)(program, pname, value);
+  APILOG("glProgramParameteri(%u, %u, %d)\n", program, pname, value);
   GLCHECK_ERRORS();
 }
 
@@ -2359,6 +2367,7 @@ void IContext::polygonOffsetClamp(GLfloat factor, GLfloat units, float clamp) {
 }
 
 void IContext::pushDebugGroup(GLenum source, GLuint id, GLsizei length, const GLchar* message) {
+  #ifndef NDEBUG_OPENGL_KHR
   if (pushDebugGroupProc_ == nullptr) {
     if (deviceFeatureSet_.hasInternalFeature(InternalFeatures::DebugMessage)) {
       if (deviceFeatureSet_.hasInternalRequirement(InternalRequirement::DebugMessageExtReq)) {
@@ -2386,6 +2395,7 @@ void IContext::pushDebugGroup(GLenum source, GLuint id, GLsizei length, const GL
     IGL_LOG_ERROR_ONCE("Exceeded max debug group stack size of %d, ignoring push\n",
                        maxDebugStackSize_);
   }
+  #endif
 }
 
 void IContext::popDebugGroup() {

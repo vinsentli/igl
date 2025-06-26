@@ -1134,6 +1134,13 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
   case DeviceFeatureLimits::MaxBindBytesBytes:
     result = 0;
     return true;
+  case DeviceFeatureLimits::MaxAnisotropicFiltering:
+    result = 1;
+    if (hasFeature(DeviceFeatures::TextureFilterAnisotropic)) {
+      glContext_.getIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &tsize);
+      result = std::max((size_t)tsize, result);
+    }
+    return true;
   default:
     IGL_DEBUG_ABORT(
         "invalid feature limit query: feature limit query is not implemented or does "

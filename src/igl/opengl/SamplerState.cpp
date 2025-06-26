@@ -97,7 +97,7 @@ void SamplerState::bind(ITexture* t) {
   if (deviceFeatures.hasFeature(DeviceFeatures::TextureFilterAnisotropic)) {
     // @fb-only
     // Disable the anisotropic filter for now, it's causing a crash on some devices
-#if 0
+#if 1
     getContext().texParameteri(target, GL_TEXTURE_MAX_ANISOTROPY, maxAnisotropy_);
 #else
     (void)maxAnisotropy_;

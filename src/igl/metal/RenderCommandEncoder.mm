@@ -239,6 +239,11 @@ void RenderCommandEncoder::bindDepthStencilState(
   }
 }
 
+void RenderCommandEncoder::dispatchThreadsPerTile(const Dimensions& threadsPerTile){
+  IGL_DEBUG_ASSERT(encoder_);
+  [encoder_ dispatchThreadsPerTile:MTLSizeMake(threadsPerTile.width, threadsPerTile.height, threadsPerTile.depth)];
+}
+
 void RenderCommandEncoder::setBlendColor(const Color& color) {
   IGL_DEBUG_ASSERT(encoder_);
   [encoder_ setBlendColorRed:color.r green:color.g blue:color.b alpha:color.a];
@@ -265,10 +270,10 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
 
   if (buffer) {
     auto& metalBuffer = static_cast<Buffer&>(*buffer);
-    [encoder_ setVertexBuffer:metalBuffer.get() offset:offset atIndex:index];
+    //[encoder_ setVertexBuffer:metalBuffer.get() offset:offset atIndex:index];
     [encoder_ setFragmentBuffer:metalBuffer.get() offset:offset atIndex:index];
   } else {
-    [encoder_ setVertexBuffer:nil offset:0 atIndex:index];
+    //[encoder_ setVertexBuffer:nil offset:0 atIndex:index];
     [encoder_ setFragmentBuffer:nil offset:0 atIndex:index];
   }
 }

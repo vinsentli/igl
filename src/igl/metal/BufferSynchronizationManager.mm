@@ -45,7 +45,7 @@ void BufferSynchronizationManager::manageEndOfFrameSync() {
   // Decrement the counting semaphore and
   // if the resulting value is less than zero, block the current thread from executing further
   // until the semaphore's value is >= 0
-  dispatch_semaphore_wait(frameBoundarySemaphore_, DISPATCH_TIME_FOREVER);
+  dispatch_semaphore_wait(frameBoundarySemaphore_, dispatch_walltime(NULL, 1000 / 60 * NSEC_PER_MSEC));
 
   // increment currentInFlightBufferIndex
   currentInFlightBufferIndex_ = (currentInFlightBufferIndex_ + 1) % maxInFlightBuffers_;

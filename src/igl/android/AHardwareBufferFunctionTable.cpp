@@ -14,10 +14,8 @@ AHardwareBufferFunctionTable::~AHardwareBufferFunctionTable() {
 }
 
 std::unique_ptr<AHardwareBufferFunctionTable> AHardwareBufferFunctionTable::create() {
-  // AHardwareBuffer需要 Android 8.0（API 26）或更高版本。
-  if (android_get_device_api_level() < 26) {
+//TODO AHardwareBuffer先关闭,vinsentli大佬后续看下替代,by petertao
     return nullptr;
-  }
 
   void* dll_handle = dlopen("libandroid.so", RTLD_NOW | RTLD_LOCAL);
   if (!dll_handle) {

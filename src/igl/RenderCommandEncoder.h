@@ -79,6 +79,8 @@ class IRenderCommandEncoder : public ICommandEncoder {
   virtual void bindBindGroup(BindGroupBufferHandle handle,
                              uint32_t numDynamicOffsets = 0,
                              const uint32_t* dynamicOffsets = nullptr) = 0;
+    
+  virtual void dispatchThreadsPerTile(const Dimensions& threadsPerTile) {}
 
   virtual void draw(size_t vertexCount,
                     uint32_t instanceCount = 1,

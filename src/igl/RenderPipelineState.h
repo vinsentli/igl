@@ -242,6 +242,12 @@ class IRenderPipelineState {
   const RenderPipelineDesc desc_{};
 };
 
+struct TileRenderPipelineDesc{
+    std::shared_ptr<IShaderModule> tileFunction;
+    size_t sampleCount = 1;
+    TextureFormat textureFormat = TextureFormat::Invalid;
+};
+
 } // namespace igl
 
 /// Hashing function declarations

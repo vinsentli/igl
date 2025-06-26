@@ -131,7 +131,7 @@ Result RenderPipelineState::create() {
       for (const auto& attrib : attribList) {
         const int loc = getIndexByName(igl::genNameHandle(attrib.name), ShaderStage::Vertex);
         if (loc < 0) {
-          IGL_LOG_ERROR("Vertex attribute (%s) not found in shader.", attrib.name.c_str());
+          IGL_LOG_ERROR("Vertex attribute (%s) not found in shader %s.", attrib.name.c_str(), desc_.debugName.c_str());
         }
         IGL_DEBUG_ASSERT(index < IGL_BUFFER_BINDINGS_MAX);
         if (index < IGL_BUFFER_BINDINGS_MAX) {

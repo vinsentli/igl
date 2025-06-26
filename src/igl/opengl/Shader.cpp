@@ -69,7 +69,7 @@ void ShaderStages::createRenderProgram(Result* result) {
     return;
   }
 
-  if (numProgramBinayFormats && desc_.programBinary && !desc_.programBinary->empty()) {
+  if (numProgramBinayFormats && desc_.programBinaryFormat && desc_.programBinary && !desc_.programBinary->empty()) {
     getContext().programBinary(programID,
                                desc_.programBinaryFormat,
                                desc_.programBinary->data(),
@@ -90,10 +90,13 @@ void ShaderStages::createRenderProgram(Result* result) {
       IGL_DEBUG_ASSERT(false, "%s", error.c_str());
     }
   }
-
+    
   // attach the shaders and link them
   getContext().attachShader(programID, vertexShaderID);
   getContext().attachShader(programID, fragmentShaderID);
+  if (numProgramBinayFormats){
+    getContext().programParameteri(programID, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE);
+  }
   getContext().linkProgram(programID);
 
   // detach the shaders now that they've been linked

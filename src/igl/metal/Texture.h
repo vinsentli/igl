@@ -56,7 +56,7 @@ class Texture final : public ITexture {
 
   static MTLPixelFormat textureFormatToMTLPixelFormat(TextureFormat value);
   static TextureFormat mtlPixelFormatToTextureFormat(MTLPixelFormat value);
-  static MTLTextureType convertType(TextureType value, size_t numSamples);
+  static MTLTextureType convertType(TextureType value, size_t numSamples, TextureDesc::TextureUsage usage);
   static TextureType convertType(MTLTextureType value);
   static NSUInteger getMetalSlice(TextureType type, uint32_t face, uint32_t layer);
   static TextureRangeDesc atMetalSlice(TextureType type,

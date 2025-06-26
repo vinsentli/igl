@@ -74,6 +74,7 @@ class Framebuffer : public WithContext, public IFramebuffer {
   [[nodiscard]] bool isSwapchainBound() const override;
 
  protected:
+  virtual bool isCustomFrameBuffer() const { return false; }
   void attachAsColor(igl::ITexture& texture,
                      uint32_t index,
                      const Texture::AttachmentParams& params) const;
@@ -144,6 +145,7 @@ class CustomFramebuffer final : public Framebuffer {
   void unbind() const override;
 
  private:
+  bool isCustomFrameBuffer() const override { return true; }
   void prepareResource(const std::string& debugName, Result* outResult);
   void updateDrawableInternal(SurfaceTextures surfaceTextures, bool updateDepthStencil);
 
@@ -178,6 +180,7 @@ class CurrentFramebuffer final : public Framebuffer {
 
  private:
   Viewport viewport_;
+  FramebufferDesc renderTarget_; // attachments
   std::shared_ptr<ITexture> colorAttachment_;
 };
 

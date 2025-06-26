@@ -266,7 +266,7 @@ MTLTextureUsage Texture::toMTLTextureUsage(TextureDesc::TextureUsage usage) {
   return result;
 }
 
-MTLTextureType Texture::convertType(TextureType value, size_t numSamples) {
+MTLTextureType Texture::convertType(TextureType value, size_t numSamples, TextureDesc::TextureUsage usage) {
   IGL_DEBUG_ASSERT(value != TextureType::Invalid && value != TextureType::ExternalImage);
 
   switch (value) {
@@ -274,7 +274,7 @@ MTLTextureType Texture::convertType(TextureType value, size_t numSamples) {
   case TextureType::Invalid:
     return MTLTextureType1D; // Use 1D texture as fallback for invalid
   case TextureType::TwoD:
-    return numSamples > 1 ? MTLTextureType2DMultisample : MTLTextureType2D;
+    return numSamples > 1  ? MTLTextureType2DMultisample : MTLTextureType2D;
   case TextureType::TwoDArray:
     if (@available(macOS 10.14, iOS 14.0, *)) {
       return numSamples > 1 ? MTLTextureType2DMultisampleArray : MTLTextureType2DArray;

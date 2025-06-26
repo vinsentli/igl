@@ -222,15 +222,17 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* unused */,
 
   auto& texture = static_cast<igl::opengl::Texture&>(*itexture);
 
-  Result ret;
-  FramebufferDesc desc;
-  desc.colorAttachments[0].texture = itexture;
-  extraFramebuffer.initialize(desc, &ret);
-  IGL_DEBUG_ASSERT(ret.isOk(), ret.message.c_str());
-
-  extraFramebuffer.bindBufferForRead();
-  attachAsColor(*itexture, 0, toReadAttachmentParams(range, FramebufferMode::Mono));
-  checkFramebufferStatus(getContext(), true);
+  if (isCustomFrameBuffer()){
+    Result ret;
+    FramebufferDesc desc;
+    desc.colorAttachments[0].texture = itexture;
+    extraFramebuffer.initialize(desc, &ret);
+    IGL_DEBUG_ASSERT(ret.isOk(), ret.message.c_str());
+    
+    extraFramebuffer.bindBufferForRead();
+    attachAsColor(*itexture, 0, toReadAttachmentParams(range, FramebufferMode::Mono));
+    checkFramebufferStatus(getContext(), true);
+  }
 
   const bool packRowLengthSupported =
       getContext().deviceFeatures().hasInternalFeature(InternalFeatures::PackRowLength);
@@ -818,6 +820,8 @@ CurrentFramebuffer::CurrentFramebuffer(IContext& context) : Super(context) {
   viewport_.height = static_cast<float>(viewport[3]);
 
   colorAttachment_ = std::make_shared<DummyTexture>(Size(viewport_.width, viewport_.height));
+  depthCachedState_.layer_ = -1;
+  stencilCachedState_.layer_ = -1;
 }
 
 std::vector<size_t> CurrentFramebuffer::getColorAttachmentIndices() const {
@@ -854,12 +858,14 @@ void CurrentFramebuffer::updateDrawable(std::shared_ptr<ITexture> /*texture*/) {
   //IGL_DEBUG_ASSERT_NOT_REACHED();
 }
 
-void CurrentFramebuffer::updateDrawable(SurfaceTextures /*surfaceTextures*/) {
-  IGL_DEBUG_ASSERT_NOT_REACHED();
+void CurrentFramebuffer::updateDrawable(SurfaceTextures surfaceTextures) {
+  //IGL_DEBUG_ASSERT_NOT_REACHED();
+  renderTarget_.depthAttachment.texture = surfaceTextures.depth;
+  renderTarget_.stencilAttachment.texture = surfaceTextures.depth;
 }
 
 void CurrentFramebuffer::updateResolveAttachment(std::shared_ptr<ITexture> /*texture*/) {
-  IGL_DEBUG_ASSERT_NOT_REACHED();
+  //IGL_DEBUG_ASSERT_NOT_REACHED();
 }
 
 Viewport CurrentFramebuffer::getViewport() const {
@@ -868,6 +874,28 @@ Viewport CurrentFramebuffer::getViewport() const {
 
 void CurrentFramebuffer::bind(const RenderPassDesc& renderPass) const {
   bindBuffer();
+    
+  if (renderTarget_.depthAttachment.texture) {
+    const auto& renderPassAttachment = renderPass.depthAttachment;
+    if (depthCachedState_.needsUpdate(renderTarget_.mode,
+                                      renderPassAttachment.layer,
+                                      renderPassAttachment.face,
+                                      renderPassAttachment.mipLevel)) {
+      attachAsDepth(*renderTarget_.depthAttachment.texture,
+                    toAttachmentParams(renderPassAttachment, renderTarget_.mode));
+    }
+  }
+  if (renderTarget_.stencilAttachment.texture) {
+    const auto& renderPassAttachment = renderPass.stencilAttachment;
+    if (stencilCachedState_.needsUpdate(renderTarget_.mode,
+                                        renderPassAttachment.layer,
+                                        renderPassAttachment.face,
+                                        renderPassAttachment.mipLevel)) {
+      attachAsStencil(*renderTarget_.stencilAttachment.texture,
+                      toAttachmentParams(renderPassAttachment, renderTarget_.mode));
+    }
+  }
+    
 #if !IGL_OPENGL_ES
   // OpenGL ES doesn't need to call glEnable. All it needs is an sRGB framebuffer.
   auto colorAttach = getResolveColorAttachment(getColorAttachmentIndices()[0]);

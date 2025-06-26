@@ -24,6 +24,7 @@ struct ComputePipelineDesc;
 struct DepthStencilStateDesc;
 struct FramebufferDesc;
 struct RenderPipelineDesc;
+struct TileRenderPipelineDesc;
 struct SamplerStateDesc;
 struct ShaderLibraryDesc;
 struct ShaderModuleDesc;
@@ -184,6 +185,18 @@ class IDevice : public ICapabilities {
   virtual std::shared_ptr<IRenderPipelineState> createRenderPipeline(const RenderPipelineDesc& desc,
                                                                      Result* IGL_NULLABLE
                                                                          outResult) const = 0;
+  /**
+   * @brief Creates a tile render pipeline state.
+   * @see igl::TileRenderPipelineDesc
+   * @param desc Description for the desired resource.
+   * @param outResult Pointer to where the result (success, failure, etc) is written. Can be null if
+   * no reporting is desired.
+   * @return Shared pointer to the created render pipeline state.
+   */
+  virtual std::shared_ptr<IRenderPipelineState> createTileRenderPipeline(const TileRenderPipelineDesc& desc,
+                                                                         Result* IGL_NULLABLE outResult) const {
+      return nullptr;
+  }
 
   /**
    * @brief Creates a shader module from either source code or pre-compiled data.

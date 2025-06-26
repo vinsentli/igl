@@ -729,6 +729,9 @@ bool Device::getFeatureLimits(DeviceFeatureLimits featureLimits, size_t& result)
   case DeviceFeatureLimits::MaxBindBytesBytes:
     result = 0;
     return true;
+  case DeviceFeatureLimits::MaxAnisotropicFiltering:
+    result = limits.maxSamplerAnisotropy;
+    return true;
   }
 
   IGL_DEBUG_ABORT("DeviceFeatureLimits value not handled: %d", (int)featureLimits);

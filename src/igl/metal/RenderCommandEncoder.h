@@ -53,6 +53,8 @@ class RenderCommandEncoder final : public IRenderCommandEncoder {
   void bindBindGroup(BindGroupBufferHandle handle,
                      uint32_t numDynamicOffsets,
                      const uint32_t* dynamicOffsets) override;
+    
+  void dispatchThreadsPerTile(const Dimensions& threadsPerTile) override;
 
   void draw(size_t vertexCount,
             uint32_t instanceCount,

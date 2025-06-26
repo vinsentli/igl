@@ -152,6 +152,7 @@ enum class DeviceRequirement {
  *
  * BufferAlignment              Required byte alignment for buffer data
  * BufferNoCopyAlignment        Required byte alignment for no copy buffer data
+ * MaxAnisotropicFiltering      Maximum number of samples for anisotropic filtering
  * MaxBindBytesBytes            Maximum number of bytes that can be bound with bindBytes
  * MaxCubeMapDimension          Maximum cube map dimensions
  * MaxFragmentUniformVectors    Maximum fragment uniform vectors
@@ -166,6 +167,7 @@ enum class DeviceRequirement {
 enum class DeviceFeatureLimits {
   BufferAlignment = 0,
   BufferNoCopyAlignment,
+  MaxAnisotropicFiltering,
   MaxBindBytesBytes,
   MaxCubeMapDimension,
   MaxFragmentUniformVectors,

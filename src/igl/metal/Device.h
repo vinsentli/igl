@@ -61,7 +61,9 @@ class Device : public IDevice {
   std::shared_ptr<IRenderPipelineState> createRenderPipeline(const RenderPipelineDesc& desc,
                                                              Result* IGL_NULLABLE
                                                                  outResult) const override;
-
+  std::shared_ptr<IRenderPipelineState> createTileRenderPipeline(const TileRenderPipelineDesc& desc,
+                                                                 Result* IGL_NULLABLE
+                                                                 outResult) const override;
   // Shaders
   std::unique_ptr<IShaderLibrary> createShaderLibrary(const ShaderLibraryDesc& desc,
                                                       Result* IGL_NULLABLE

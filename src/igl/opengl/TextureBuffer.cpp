@@ -454,6 +454,12 @@ Result TextureBuffer::uploadInternal(GLenum target,
                                   ? static_cast<int>(bytesPerRow / getProperties().bytesPerBlock)
                                   : 0;
 
+  GLint prevUnpackRowLength = -1;
+  getContext().getIntegerv(GL_UNPACK_ROW_LENGTH, &prevUnpackRowLength);
+  
+  GLint prevUnpackAlignment = -1;
+  getContext().getIntegerv(GL_UNPACK_ALIGNMENT, &prevUnpackAlignment);
+
   if (unpackRowLength > 0) {
     getContext().pixelStorei(GL_UNPACK_ROW_LENGTH, unpackRowLength);
     getContext().pixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -464,6 +470,11 @@ Result TextureBuffer::uploadInternal(GLenum target,
     getContext().pixelStorei(GL_UNPACK_ALIGNMENT,
                              this->getAlignment(bytesPerRow, range.mipLevel, range.width));
   }
+    
+ auto stateReset = [&](){
+     getContext().pixelStorei(GL_UNPACK_ROW_LENGTH, prevUnpackRowLength);
+     getContext().pixelStorei(GL_UNPACK_ALIGNMENT, prevUnpackAlignment);
+ };
 
   Result result;
   for (auto mipLevel = range.mipLevel; mipLevel < range.mipLevel + range.numMipLevels; ++mipLevel) {
@@ -486,9 +497,11 @@ Result TextureBuffer::uploadInternal(GLenum target,
         result = upload2D(kCubeFaceTargets[faceRange.face], faceRange, texImage, faceData);
         break;
       default:
+        stateReset();
         return Result{Result::Code::InvalidOperation, "Unknown texture type"};
       }
       if (!result.isOk()) {
+        stateReset();
         return result;
       }
     }
@@ -496,6 +509,8 @@ Result TextureBuffer::uploadInternal(GLenum target,
       break;
     }
   }
+    
+  stateReset();
   return result;
 }
 
