@@ -61,7 +61,7 @@ if(IGL_WITH_WEBGL)
   list(APPEND HEADER_FILES ${WEBGL_HEADER_FILES})
 endif()
 
-add_library(IGLOpenGL OBJECT ${SRC_FILES} ${HEADER_FILES})
+add_library(IGLOpenGL ${IGLBuildType} ${SRC_FILES} ${HEADER_FILES})
 
 # target_link_libraries(IGLOpenGL PRIVATE IGLLibrary)
 

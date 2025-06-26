@@ -20,7 +20,7 @@ else()
   list(APPEND HEADER_FILES macos/Device.h macos/Framebuffer.h)
 endif()
 
-add_library(IGLMetal ${SRC_FILES} ${HEADER_FILES})
+add_library(IGLMetal ${IGLBuildType} ${SRC_FILES} ${HEADER_FILES})
 
 target_link_libraries(IGLMetal PRIVATE IGLLibrary "-framework Metal" "-framework QuartzCore")
 

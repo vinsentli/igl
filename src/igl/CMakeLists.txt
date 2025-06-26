@@ -26,7 +26,11 @@ if(ANDROID)
   list(APPEND HEADER_FILES android/AHardwareBufferFunctionTable.h)
 endif()
 
-add_library(IGLLibrary OBJECT ${SRC_FILES} ${HEADER_FILES})
+set(IGLBuildType OBJECT)
+if (OS_MACOS)
+  set(IGLBuildType STATIC)
+endif()
+add_library(IGLLibrary ${IGLBuildType} ${SRC_FILES} ${HEADER_FILES})
 
 target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/src")
 target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/glm")
