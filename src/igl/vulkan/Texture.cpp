@@ -296,7 +296,7 @@ Result Texture::createView(const Texture& baseTexture, const TextureViewDesc& de
     if (flags == ImageAspectBits_None) {
       IGL_SOFT_ERROR(
           "Image aspect None is not supported in this Vulkan version (requires Vulkan 1.3)");
-      return VK_IMAGE_ASPECT_NONE;
+      return VK_IMAGE_ASPECT_NONE_KHR;
     }
     VkImageAspectFlags aspect = 0;
     if (flags & ImageAspectBits_Color) {

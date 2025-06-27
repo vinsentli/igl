@@ -176,7 +176,7 @@ std::unique_ptr<IShaderStages> ShaderStagesCreator::fromModuleStringInput(
   }
 
   return (result && result->isOk())
-             ? fromRenderModules(device, std::move(vertexModule), std::move(fragmentModule), result)
+             ? fromRenderModules(device, std::move(vertexModule), std::move(fragmentModule), 0, nullptr, result)
              : nullptr;
 }
 
@@ -214,7 +214,7 @@ std::unique_ptr<IShaderStages> ShaderStagesCreator::fromModuleBinaryInput(
   }
 
   return (result && result->isOk())
-             ? fromRenderModules(device, std::move(vertexModule), std::move(fragmentModule), result)
+             ? fromRenderModules(device, std::move(vertexModule), std::move(fragmentModule), 0, nullptr, result)
              : nullptr;
 }
 
