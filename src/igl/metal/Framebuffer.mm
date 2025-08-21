@@ -68,9 +68,9 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& cmdQueue,
   IGL_DEBUG_ASSERT(range.numLayers == 1, "range.numLayers MUST be 1");
   IGL_DEBUG_ASSERT(range.numMipLevels == 1, "range.numMipLevels MUST be 1");
   const auto& colorAttachment = value_.colorAttachments[index];
+  auto texture = colorAttachment.resolveTexture ? colorAttachment.resolveTexture : colorAttachment.texture;
 
-  if (IGL_DEBUG_VERIFY(colorAttachment.texture != nullptr)) {
-    auto texture = colorAttachment.texture;
+  if (IGL_DEBUG_VERIFY(texture != nullptr)) {
     copyBytes(cmdQueue, texture, pixelBytes, range, bytesPerRow);
   }
 }

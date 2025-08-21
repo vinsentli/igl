@@ -131,7 +131,13 @@ void ComputeCommandEncoder::bindBuffer(uint32_t index,
 
   if (IGL_DEBUG_VERIFY(adapter_) && buffer) {
     auto* glBuffer = static_cast<Buffer*>(buffer);
-    adapter_->setBuffer(glBuffer, offset, static_cast<int>(index));
+    auto bufferType = glBuffer->getType();
+
+    if (bufferType == Buffer::Type::UniformBlock){
+      adapter_->setBlockUniform(glBuffer, offset, bufferSize, index, nullptr);
+    } else {
+      adapter_->setBuffer(glBuffer, offset, static_cast<int>(index));
+    }
   }
 }
 

@@ -87,7 +87,7 @@ void ShaderStages::createRenderProgram(Result* result) {
       return;
     } else {
       auto error = getProgramInfoLog(programID);
-      IGL_DEBUG_ASSERT(false, "%s", error.c_str());
+      IGL_DEBUG_ASSERT(true, "%s", error.c_str());
     }
   }
     

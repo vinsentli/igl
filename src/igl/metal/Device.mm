@@ -393,7 +393,8 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipeline(const RenderP
   metalDesc.label = [NSString stringWithUTF8String:desc.debugName.c_str()];
 
   metalDesc.sampleCount = desc.sampleCount;
-
+  metalDesc.rasterSampleCount = desc.sampleCount;
+        
   // (optional, can be null) Vertex input
   auto vertexInput = desc.vertexInputState;
   auto metalVertexInput = vertexInput ? static_cast<VertexInputState*>(vertexInput.get())->get()

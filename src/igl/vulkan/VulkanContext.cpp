@@ -597,7 +597,7 @@ void VulkanContext::createInstance(const size_t numExtraExtensions,
 
   std::vector<const char*> layers;
   // @fb-only
-#if !IGL_PLATFORM_ANDROID && !IGL_PLATFORM_MACOSX
+#if !IGL_PLATFORM_MACOSX
   if (config_.enableValidation) {
     layers.emplace_back(kValidationLayerName);
   }
@@ -675,7 +675,7 @@ void VulkanContext::createInstance(const size_t numExtraExtensions,
 #endif
   const bool enableExtDebugUtils =
       features_.enable(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VulkanFeatures::ExtensionType::Instance);
-  vulkan::functions::loadInstanceFunctions(*tableImpl_, vkInstance_, enableExtDebugUtils);
+  vulkan::functions::loadInstanceFunctions(*tableImpl_, vkInstance_, true);
 
 #if defined(VK_EXT_debug_utils) && IGL_PLATFORM_WINDOWS
   if (features_.enabled(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)) {

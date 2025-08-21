@@ -187,7 +187,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const Te
   }
 
   if (auto resourceTracker = owner_.getResourceTracker()) {
-    texture->initResourceTracker(std::move(resourceTracker));
+    texture->initResourceTracker(std::move(resourceTracker), desc.debugName);
   }
 
   return texture;
