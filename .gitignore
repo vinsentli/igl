@@ -3,3 +3,8 @@
 /build/android/.idea/*
 .idea
 .vscode
+build_cmake/
+build_ios/
+build_mac/
+cmake-build-debug/
+src/igl/tests/build/
