@@ -42,8 +42,6 @@ endif()
 igl_set_cxxstd(IGLLibrary 17)
 igl_set_folder(IGLLibrary "IGL")
 
-#add_subdirectory(glslang)
-
 if(IGL_WITH_OPENGL OR IGL_WITH_OPENGLES OR IGL_WITH_WEBGL)
   add_subdirectory(opengl)
   target_link_libraries(IGLLibrary PUBLIC IGLOpenGL)
@@ -51,7 +49,9 @@ endif()
 
 if(IGL_WITH_VULKAN)
   add_subdirectory(vulkan)
-  target_link_libraries(IGLLibrary PUBLIC IGLVulkan)
+  if (IGL_USE_GLSLANG)
+    add_subdirectory(glslang)
+  endif ()
 endif()
 
 if(IGL_WITH_METAL)

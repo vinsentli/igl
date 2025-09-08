@@ -993,6 +993,12 @@ void IContext::clear(GLbitfield mask) {
   GLCHECK_ERRORS();
 }
 
+void IContext::clearBufferfv(GLenum buffer, GLint drawBuffer, const GLfloat* value) {
+  GLCALL(ClearBufferfv)(buffer, drawBuffer, value);
+  APILOG("glClearBufferfv(%s, %d, %f)\n", GL_ENUM_TO_STRING(buffer), drawBuffer, *value);
+  GLCHECK_ERRORS();
+}
+
 void IContext::clearColor(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) {
   GLCALL(ClearColor)(red, green, blue, alpha);
   APILOG("glClearColor(%f, %f, %f, %f)\n", red, green, blue, alpha);
@@ -1604,8 +1610,8 @@ void IContext::enable(GLenum cap) {
 }
 
 void IContext::enableVertexAttribArray(GLuint index) {
-  if (enableVertexAttribArray_[index])
-    return;
+//  if (enableVertexAttribArray_[index])
+//    return;
   enableVertexAttribArray_[index] = true;
   GLCALL(EnableVertexAttribArray)(index);
   APILOG("glEnableVertexAttribArray(%u)\n", index);

@@ -8,7 +8,11 @@ cmake_minimum_required(VERSION 3.16)
 
 project(IGLVulkan CXX C)
 
-add_definitions("-DIGL_USE_GLSLANG=0")
+if (IGL_USE_GLSLANG)
+  add_definitions("-DIGL_USE_GLSLANG=1")
+else ()
+  add_definitions("-DIGL_USE_GLSLANG=0")
+endif ()
 
 file(GLOB SRC_FILES LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.cpp *.c util/*.cpp)
 file(GLOB HEADER_FILES LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.h util/*.h)
@@ -29,7 +33,6 @@ endif()
 
 add_library(IGLVulkan OBJECT ${SRC_FILES} ${HEADER_FILES})
 
-#target_link_libraries(IGLVulkan PRIVATE IGLLibrary IGLGlslang)
 #target_link_libraries(IGLVulkan PRIVATE IGLLibrary)
 
 igl_set_cxxstd(IGLVulkan 17)
@@ -45,8 +48,12 @@ target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/sr
 target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/glm")
 target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/vma/include")
 target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/SPIRV-Headers/include")
-#target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/glslang")
 target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/../../vendors/tracy/src")
+
+if (IGL_USE_GLSLANG)
+  target_include_directories(IGLVulkan PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/glslang")
+#  target_link_libraries(IGLVulkan PRIVATE IGLGlslang)
+endif ()
 
 if(IGL_WITH_TRACY)
   add_definitions("-DIGL_WITH_TRACY=1")

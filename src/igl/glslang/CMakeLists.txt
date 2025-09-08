@@ -3,14 +3,14 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.16)
 
 project(IGLGlslang CXX C)
 
 file(GLOB SRC_FILES LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.cpp *.c)
 file(GLOB HEADER_FILES LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.h)
 
-add_library(IGLGlslang ${SRC_FILES} ${HEADER_FILES})
+add_library(IGLGlslang ${IGLBuildType} ${SRC_FILES} ${HEADER_FILES})
 
 target_link_libraries(IGLGlslang PRIVATE IGLLibrary)
 

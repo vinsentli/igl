@@ -350,7 +350,7 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* unused */,
   // Reset the GL_PACK_ALIGNMENT (default value for GL_PACK_ALIGNMENT is 4)
   getContext().pixelStorei(GL_PACK_ALIGNMENT, 4);
 
-  getContext().checkForErrors(nullptr, 0);
+//  getContext().checkForErrors(nullptr, 0);
   auto error = getContext().getLastError();
   IGL_DEBUG_ASSERT(error.isOk(), error.message.c_str());
 }
@@ -585,17 +585,24 @@ void CustomFramebuffer::prepareResource(const std::string& debugName, Result* ou
 
   const auto attachmentParams = defaultWriteAttachmentParams(renderTarget_.mode);
   // attach the textures and render buffers to the frame buffer
+  bool hasBuffers = false;
   for (size_t i = 0; i != IGL_COLOR_ATTACHMENTS_MAX; i++) {
     const auto& colorAttachment = renderTarget_.colorAttachments[i];
     if (colorAttachment.texture != nullptr) {
       attachAsColor(*colorAttachment.texture, static_cast<uint32_t>(i), attachmentParams);
       drawBuffers.push_back(static_cast<GLenum>(GL_COLOR_ATTACHMENT0 + i));
+      if (i) {
+        // skip attachment 0
+        hasBuffers = true;
+      }
+    } else {
+      drawBuffers.push_back(GL_NONE);
     }
   }
 
-  std::sort(drawBuffers.begin(), drawBuffers.end());
-
-  if (drawBuffers.size() > 1) {
+  if (hasBuffers) {
+    // needs to be called when there's more than one color attachment or if there's a single color
+    // attachment at a non-zero index
     getContext().drawBuffers(static_cast<GLsizei>(drawBuffers.size()), drawBuffers.data());
   }
 
@@ -741,14 +748,15 @@ void CustomFramebuffer::bind(const RenderPassDesc& renderPass) const {
   }
   // clear the buffers if we're not loading previous contents
   GLbitfield clearMask = 0;
-  const auto& colorAttachment0 = renderTarget_.colorAttachments[0];
+  for (size_t index = 0; index != IGL_COLOR_ATTACHMENTS_MAX; index++) {
+    const auto& colorAttachment = renderTarget_.colorAttachments[index];
 
-  if (colorAttachment0.texture != nullptr &&
-      renderPass_.colorAttachments[0].loadAction == LoadAction::Clear) {
-    clearMask |= GL_COLOR_BUFFER_BIT;
-    auto clearColor = renderPass_.colorAttachments[0].clearColor;
-    getContext().colorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    getContext().clearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
+    if (colorAttachment.texture != nullptr &&
+        renderPass_.colorAttachments[index].loadAction == LoadAction::Clear) {
+      auto clearColor = renderPass_.colorAttachments[index].clearColor;
+      getContext().colorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+      getContext().clearBufferfv(GL_COLOR, (GLint)index, clearColor.toFloatPtr());
+    }
   }
   if (renderTarget_.depthAttachment.texture != nullptr) {
     if (renderPass_.depthAttachment.loadAction == LoadAction::Clear) {

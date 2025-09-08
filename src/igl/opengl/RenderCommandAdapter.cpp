@@ -60,7 +60,9 @@ void RenderCommandAdapter::initialize(const RenderPassDesc& renderPass,
       Result::setResult(outResult, Result::Code::RuntimeError, "Vertex array object is invalid");
       return;
     }
+#if IGL_OPENGL
     activeVAO_->bind();
+#endif
   }
   const auto& openglFramebuffer = static_cast<const Framebuffer&>(*framebuffer);
   openglFramebuffer.bind(renderPass);
@@ -258,6 +260,12 @@ void RenderCommandAdapter::drawArrays(GLenum mode, GLint first, GLsizei count) {
 void RenderCommandAdapter::drawArraysIndirect(GLenum mode,
                                               Buffer& indirectBuffer,
                                               const GLvoid* indirectBufferOffset) {
+  if (!activeVAO_) {
+    IGL_DEBUG_ASSERT(false);
+    return;
+  }
+
+  activeVAO_->bind();
   willDraw();
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DrawArraysIndirect)) {
     bindBufferWithShaderStorageBufferOverride(indirectBuffer, GL_DRAW_INDIRECT_BUFFER);
@@ -266,6 +274,7 @@ void RenderCommandAdapter::drawArraysIndirect(GLenum mode,
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   }
   didDraw();
+  activeVAO_->unbind();
 }
 
 void RenderCommandAdapter::drawArraysInstanced(GLenum mode,

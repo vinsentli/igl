@@ -545,7 +545,8 @@ bool DeviceFeatureSet::isInternalFeatureSupported(InternalFeatures feature) cons
     // However, Galaxy S20 also matched that and VAO support caused issues.
     // @fb-only
     // @fb-only
-    return hasDesktopVersionOrExtension(*this, GLVersion::v3_0, "GL_ARB_vertex_array_object");
+    return hasDesktopOrESVersionOrExtension(
+            *this, GLVersion::v3_0, GLVersion::v3_0_ES, "GL_ARB_vertex_array_object");
 
   case InternalFeatures::VertexAttribDivisor:
     return hasDesktopOrESVersion(*this, GLVersion::v3_3, GLVersion::v3_0_ES) ||
