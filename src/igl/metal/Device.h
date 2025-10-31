@@ -98,6 +98,8 @@ class Device : public IDevice {
       TextureFormat format) const override;
   [[nodiscard]] ShaderVersion getShaderVersion() const override;
   [[nodiscard]] BackendVersion getBackendVersion() const override;
+  [[nodiscard]] std::string getDeviceName() const override;
+
 
   // Device Statistics
   [[nodiscard]] size_t getCurrentDrawCount() const override;

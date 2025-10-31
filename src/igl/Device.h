@@ -404,6 +404,11 @@ class IDevice : public ICapabilities {
     }
   }
     
+    
+ /**
+  * @brief Get the name of the GPU chip.
+  */
+ [[nodiscard]] virtual std::string getDeviceName() const = 0;
   
   //@tencent only
   virtual void * IGL_NULLABLE getImpl() { return NULL;}

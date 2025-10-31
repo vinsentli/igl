@@ -439,6 +439,8 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipeline(const RenderP
   // Framebuffer
   for (uint32_t i = 0; i < desc.targetDesc.colorAttachments.size(); ++i) {
     const auto& src = desc.targetDesc.colorAttachments[i];
+    if (igl::TextureFormat::Invalid == src.textureFormat)
+      continue;
     MTLRenderPipelineColorAttachmentDescriptor* dst = metalDesc.colorAttachments[i];
     dst.pixelFormat = Texture::textureFormatToMTLPixelFormat(src.textureFormat);
     dst.writeMask = RenderPipelineState::convertColorWriteMask(src.colorWriteMask);
@@ -693,6 +695,10 @@ BackendVersion Device::getBackendVersion() const {
 #endif
 
   return {BackendFlavor::Metal, 1, 0};
+}
+
+std::string Device::getDeviceName() const{
+  return device_.name.UTF8String;
 }
 
 size_t Device::getCurrentDrawCount() const {

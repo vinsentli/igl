@@ -78,7 +78,7 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
     Result* outResult) {
   auto iglObject = std::make_unique<Texture>(nativeDrawable, device_);
   if (auto resourceTracker = device_.getResourceTracker()) {
-    iglObject->initResourceTracker(resourceTracker, "TextureFromNativeDrawable");
+    iglObject->initResourceTracker(resourceTracker, "TextureFromNativeDrawableTexture");
   }
   Result::setOk(outResult);
   return iglObject;

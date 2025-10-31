@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <functional>
 #include <igl/Buffer.h>
 #include <igl/Common.h>
 #include <igl/Framebuffer.h>
@@ -91,6 +92,11 @@ class ICommandBuffer {
    * CommandBuffer have been scheduled for execution.
    */
   virtual void waitUntilScheduled() = 0;
+  
+  /**
+   * @brief add completed callback for GPU work.
+   */
+  virtual void addCompletedCallback(std::function<void(void)> callback) {}
 
   /**
    * @brief Blocks execution of the current thread until the commands encoded in this CommandBuffer

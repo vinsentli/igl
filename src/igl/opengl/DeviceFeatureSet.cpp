@@ -99,8 +99,10 @@ bool DeviceFeatureSet::usesOpenGLES() noexcept {
 
 DeviceFeatureSet::DeviceFeatureSet(IContext& glContext) : glContext_(glContext) {}
 
-void DeviceFeatureSet::initializeVersion(GLVersion version) {
+void DeviceFeatureSet::initializeVersion(GLVersion version, const std::string& vendor, const std::string& renderer) {
   version_ = version;
+  glVendor_ = vendor;
+  glRenderer_ = renderer;
 }
 
 void DeviceFeatureSet::initializeExtensions(std::string extensions,
@@ -160,6 +162,14 @@ BackendVersion DeviceFeatureSet::getBackendVersion() const {
     return {usesOpenGLES() ? BackendFlavor::OpenGL_ES : BackendFlavor::OpenGL, 2, 0};
   }
   IGL_UNREACHABLE_RETURN({});
+}
+
+std::string DeviceFeatureSet::getGLVendor() const{
+    return glVendor_;
+}
+
+std::string DeviceFeatureSet::getGLRenderer() const{
+    return glRenderer_;
 }
 
 bool DeviceFeatureSet::isSupported(const std::string& extensionName) const {

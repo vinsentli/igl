@@ -44,6 +44,8 @@ class CommandBuffer final : public ICommandBuffer,
                            uint64_t dstOffset,
                            uint32_t level,
                            uint32_t layer) override;
+                                
+  void addCompletedCallback(std::function<void(void)> callback) override;
 
   void waitUntilScheduled() override;
 

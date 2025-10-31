@@ -3231,7 +3231,7 @@ GLenum IContext::checkForErrors(IGL_MAYBE_UNUSED const char* callerName,
       const GLuint count = getDebugMessageLog(
           1, messageLength, &source, &type, &id, &severity, &length, messageBuffer.data());
 
-      if (IGL_DEBUG_VERIFY(count == 1)) {
+      if (count == 1) {
         logDebugMessage(source, type, id, severity, length, messageBuffer.data());
       }
     }
@@ -3309,7 +3309,9 @@ void IContext::initialize(Result* result) {
       Result::setResult(result, Result::Code::RuntimeError, "Unable to get GL version\n");
     }
   }
-  deviceFeatureSet_.initializeVersion(glVersion);
+  const char* vendor = (char*)getString(GL_VENDOR);
+  const char* renderer = (char*)getString(GL_RENDERER);
+  deviceFeatureSet_.initializeVersion(glVersion, vendor, renderer);
 
   std::string extensions;
   std::unordered_set<std::string> supportedExtensions;
@@ -3336,9 +3338,7 @@ void IContext::initialize(Result* result) {
 #if IGL_DEBUG || defined(IGL_FORCE_ENABLE_LOGS)
   IGL_LOG_INFO("GL Context Initialized: %p\n", this);
   IGL_LOG_INFO("GL Version: %s\n", version);
-  const char* vendor = (char*)getString(GL_VENDOR);
   IGL_LOG_INFO("GL Vendor: %s\n", (vendor != nullptr) ? vendor : "(null)");
-  const char* renderer = (char*)getString(GL_RENDERER);
   IGL_LOG_INFO("GL Renderer: %s\n", (renderer != nullptr) ? renderer : "(null)");
   if (!extensions.empty() || supportedExtensions.empty()) {
     IGL_LOG_INFO("GL Extensions: %s\n", extensions.c_str());

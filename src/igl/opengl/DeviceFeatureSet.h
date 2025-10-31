@@ -189,7 +189,7 @@ class DeviceFeatureSet final {
 
   [[nodiscard]] static bool usesOpenGLES() noexcept;
 
-  void initializeVersion(GLVersion version);
+  void initializeVersion(GLVersion version, const std::string& vendor, const std::string& renderer);
   void initializeExtensions(std::string extensions,
                             std::unordered_set<std::string> supportedExtensions);
 
@@ -197,6 +197,8 @@ class DeviceFeatureSet final {
   [[nodiscard]] GLVersion getGLVersion() const noexcept;
   [[nodiscard]] ShaderVersion getShaderVersion() const;
   [[nodiscard]] BackendVersion getBackendVersion() const;
+  [[nodiscard]] std::string getGLVendor() const;
+  [[nodiscard]] std::string getGLRenderer() const;
 
   bool isSupported(const std::string& extensionName) const;
 
@@ -238,6 +240,8 @@ class DeviceFeatureSet final {
   int32_t numProgramBinayFormats_ = -1;
   IContext& glContext_;
   GLVersion version_ = GLVersion::NotAvailable;
+  std::string glVendor_;
+  std::string glRenderer_;
 };
 
 } // namespace igl::opengl

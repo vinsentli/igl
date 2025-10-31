@@ -85,6 +85,13 @@ void CommandBuffer::copyTextureToBuffer(ITexture& src,
   IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
 }
 
+void CommandBuffer::addCompletedCallback(std::function<void(void)> callback){
+  IGL_DEBUG_ASSERT(callback);
+  [value_ addCompletedHandler:^(id<MTLCommandBuffer> _Nonnull) {
+    callback();
+  }];
+}
+
 void CommandBuffer::waitUntilScheduled() {
   [value_ waitUntilScheduled];
 }

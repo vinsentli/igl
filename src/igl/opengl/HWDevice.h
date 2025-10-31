@@ -23,7 +23,11 @@
 #endif
 
 #if IGL_PLATFORM_LINUX
-#define IGL_EGL_NULL_WINDOW 0L
+  #if defined(OS_OHOS)
+  #define IGL_EGL_NULL_WINDOW nullptr
+  #else
+  #define IGL_EGL_NULL_WINDOW 0L
+  #endif
 #else
 #define IGL_EGL_NULL_WINDOW nullptr
 #endif

@@ -306,6 +306,11 @@ BackendVersion Device::getBackendVersion() const {
   return deviceFeatureSet_.getBackendVersion();
 }
 
+std::string Device::getDeviceName() const{
+  IGL_DEBUG_ASSERT(context_);
+  return deviceFeatureSet_.getGLRenderer();
+}
+
 void Device::beginScope() {
   IDevice::beginScope();
 

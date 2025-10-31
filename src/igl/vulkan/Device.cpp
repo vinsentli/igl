@@ -856,6 +856,10 @@ BackendVersion Device::getBackendVersionInternal() const {
           static_cast<uint8_t>(VK_API_VERSION_MINOR(apiVersion))};
 }
 
+std::string Device::getDeviceName() const{
+  return "";
+}
+
 Holder<BindGroupTextureHandle> Device::createBindGroupInternal(
     const igl::BindGroupTextureDesc& desc,
     const IRenderPipelineState* IGL_NULLABLE compatiblePipeline,
