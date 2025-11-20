@@ -50,6 +50,11 @@ struct ShaderModuleInfo {
   ShaderStage stage = ShaderStage::Fragment;
   /** @brief The module's entry point. */
   std::string entryPoint;
+  /** @brief The module's function constant values.
+   * Metal:MTLFunctionConstantValues.
+   * Vulkan:SpecializationInfo.
+   * index:constant_id, value:constant value.*/
+  std::vector<int> functionConstantValues;
 
   std::string debugName;
 

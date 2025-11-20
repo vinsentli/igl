@@ -721,8 +721,14 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
       Result::setResult(outResult, Result::Code::RuntimeError);
       return nullptr;
     }
+      
+    MTLFunctionConstantValues * constValues = [MTLFunctionConstantValues new];
 
-    auto metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint];
+    for (size_t index = 0; index != info.functionConstantValues.size(); ++index){
+      [constValues setConstantValue:&info.functionConstantValues[index] type:MTLDataTypeInt atIndex:index];
+    }
+
+    auto metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint constantValues:constValues error:&error];
     if (!metalFunction) {
       IGL_DEBUG_ABORT("Could not find function '%s' in library\n", info.entryPoint.c_str());
       Result::setResult(
