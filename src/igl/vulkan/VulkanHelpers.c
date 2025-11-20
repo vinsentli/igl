@@ -1030,14 +1030,15 @@ VkPushConstantRange ivkGetPushConstantRange(VkShaderStageFlags stageFlags,
 
 VkPipelineShaderStageCreateInfo ivkGetPipelineShaderStageCreateInfo(VkShaderStageFlagBits stage,
                                                                     VkShaderModule shaderModule,
-                                                                    const char* entryPoint) {
+                                                                    const char* entryPoint,
+                                                                    VkSpecializationInfo* specializationInfo) {
   const VkPipelineShaderStageCreateInfo ci = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
       .flags = 0,
       .stage = stage,
       .module = shaderModule,
       .pName = entryPoint ? entryPoint : "main",
-      .pSpecializationInfo = NULL,
+      .pSpecializationInfo = specializationInfo,
   };
   return ci;
 }

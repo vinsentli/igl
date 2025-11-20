@@ -660,6 +660,35 @@ uint32_t getNumImagePlanes(VkFormat format) {
     return 1;
   }
 }
+
+VkSpecializationInfo createSpecializationInfo(const std::map<uint8_t, int>& constantValues){
+    VkSpecializationInfo specializationInfo = {};
+
+    if (constantValues.empty())
+        return specializationInfo;
+
+    std::vector<int> datas;
+
+    std::vector<VkSpecializationMapEntry> specializationMapEntries;
+    specializationMapEntries.resize(constantValues.size());
+
+    int offset = 0;
+    for (auto& [index, value] : constantValues) {
+        datas.emplace_back(value);
+        specializationMapEntries[index].constantID = index;
+        specializationMapEntries[index].offset = offset;
+        specializationMapEntries[index].size = sizeof(int);
+        offset += sizeof(int);
+    }
+
+    specializationInfo.mapEntryCount = specializationMapEntries.size();
+    specializationInfo.pMapEntries = specializationMapEntries.data();
+    specializationInfo.dataSize = datas.size() * sizeof(int);
+    specializationInfo.pData = datas.data();
+
+    return specializationInfo;
+}
+
 } // namespace igl::vulkan
 
 namespace igl::vulkan::functions {

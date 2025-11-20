@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <map>
 #include <utility>
 #include <vector>
 #include <igl/Common.h>
@@ -46,6 +47,8 @@ struct ShaderModuleInfo {
   ShaderStage stage = ShaderStage::Fragment;
   /** @brief The module's entry point. */
   std::string entryPoint;
+    
+  std::map<uint8_t, int> functionConstantValues;
 
   std::string debugName;
 

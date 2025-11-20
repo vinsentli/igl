@@ -69,7 +69,7 @@ bool ShaderCompilerOptions::operator!=(const ShaderCompilerOptions& other) const
 }
 
 bool ShaderModuleInfo::operator==(const ShaderModuleInfo& other) const {
-  return stage == other.stage && entryPoint == other.entryPoint;
+  return stage == other.stage && entryPoint == other.entryPoint && functionConstantValues == other.functionConstantValues;
 }
 
 bool ShaderModuleInfo::operator!=(const ShaderModuleInfo& other) const {

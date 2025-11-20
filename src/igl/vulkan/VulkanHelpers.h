@@ -384,7 +384,8 @@ VkRect2D ivkGetRect2D(int32_t x, int32_t y, uint32_t width, uint32_t height);
 
 VkPipelineShaderStageCreateInfo ivkGetPipelineShaderStageCreateInfo(VkShaderStageFlagBits stage,
                                                                     VkShaderModule shaderModule,
-                                                                    const char* entryPoint);
+                                                                    const char* entryPoint,
+                                                                    VkSpecializationInfo* specializationInfo);
 
 VkImageCopy ivkGetImageCopy2D(VkOffset2D srcDstOffset,
                               VkImageSubresourceLayers srcImageSubresource,
