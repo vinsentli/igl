@@ -43,6 +43,11 @@ Result Texture::create(const TextureDesc& desc) {
     desc_.numMipLevels = 1;
   }
 
+  //与metal保持一致，当numSamples>1时，在内部强制将numMipLevels设置为1.
+  if (desc.numSamples > 1){
+    desc_.numMipLevels = 1;
+  }
+
   if (desc.numSamples > 1 && desc_.numMipLevels != 1) {
     IGL_DEBUG_ABORT("The number of mip levels for multisampled images should be 1");
     return Result(Result::Code::ArgumentOutOfRange,

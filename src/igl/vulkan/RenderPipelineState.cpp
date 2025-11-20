@@ -463,6 +463,10 @@ VkPipeline RenderPipelineState::getVkPipeline(
 
   const auto& vertexModule = desc_.shaderStages->getVertexModule();
   const auto& fragmentModule = desc_.shaderStages->getFragmentModule();
+
+  VkSpecializationInfo vertexSpecializationInfo = createSpecializationInfo(vertexModule->info().functionConstantValues);
+  VkSpecializationInfo fragmentSpecializationInfo = createSpecializationInfo(fragmentModule->info().functionConstantValues);
+
   VK_ASSERT_RETURN_NULL_HANDLE(
       igl::vulkan::VulkanPipelineBuilder()
           .dynamicStates({
@@ -495,11 +499,13 @@ VkPipeline RenderPipelineState::getVkPipeline(
               ivkGetPipelineShaderStageCreateInfo(
                   VK_SHADER_STAGE_VERTEX_BIT,
                   igl::vulkan::ShaderModule::getVkShaderModule(vertexModule),
-                  vertexModule->info().entryPoint.c_str()),
+                  vertexModule->info().entryPoint.c_str(),
+                  &vertexSpecializationInfo),
               ivkGetPipelineShaderStageCreateInfo(
                   VK_SHADER_STAGE_FRAGMENT_BIT,
                   igl::vulkan::ShaderModule::getVkShaderModule(fragmentModule),
-                  fragmentModule->info().entryPoint.c_str()),
+                  fragmentModule->info().entryPoint.c_str(),
+                  &fragmentSpecializationInfo),
           })
           .cullMode(cullModeToVkCullMode(desc_.cullMode))
           .frontFace(windingModeToVkFrontFace(desc_.frontFaceWinding))

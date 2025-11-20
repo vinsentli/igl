@@ -333,7 +333,10 @@ std::shared_ptr<IDepthStencilState> Device::createDepthStencilState(
   metalDesc.depthCompareFunction = DepthStencilState::convertCompareFunction(desc.compareFunction);
   metalDesc.depthWriteEnabled = desc.isDepthWriteEnabled;
   metalDesc.frontFaceStencil = DepthStencilState::convertStencilDescriptor(desc.frontFaceStencil);
-  metalDesc.backFaceStencil = DepthStencilState::convertStencilDescriptor(desc.backFaceStencil);
+  if ([metalDesc respondsToSelector:@selector(setBackFaceStencil:)]) {
+    //在iOS16.3.1 (20D67)系统上，不支持backFaceStencil。
+    metalDesc.backFaceStencil = DepthStencilState::convertStencilDescriptor(desc.backFaceStencil);
+  }
   id<MTLDepthStencilState> metalObject = [device_ newDepthStencilStateWithDescriptor:metalDesc];
 
   std::shared_ptr<DepthStencilState> iglObject = std::make_shared<DepthStencilState>(metalObject);
@@ -551,8 +554,14 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
       Result::setResult(outResult, Result::Code::RuntimeError);
       return nullptr;
     }
+      
+    MTLFunctionConstantValues * constValues = [MTLFunctionConstantValues new];
 
-    auto metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint];
+    for (auto& [index, value] : info.functionConstantValues){
+      [constValues setConstantValue:&value type:MTLDataTypeInt atIndex:index];
+    }
+
+    auto metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint constantValues:constValues error:nil];
     if (!metalFunction) {
       IGL_DEBUG_ABORT("Could not find function '%s' in library\n", info.entryPoint.c_str());
       Result::setResult(

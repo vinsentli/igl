@@ -100,12 +100,13 @@ VkPipeline ComputePipelineState::getVkPipeline() const {
                             IGL_FORMAT("Pipeline Layout: {}", desc_.debugName.c_str()).c_str()));
 
   const auto& shaderModule = desc_.shaderStages->getComputeModule();
+  VkSpecializationInfo specializationInfo = createSpecializationInfo(shaderModule->info().functionConstantValues);
 
   VulkanComputePipelineBuilder()
       .shaderStage(ivkGetPipelineShaderStageCreateInfo(
           VK_SHADER_STAGE_COMPUTE_BIT,
           igl::vulkan::ShaderModule::getVkShaderModule(shaderModule),
-          shaderModule->info().entryPoint.c_str()))
+          shaderModule->info().entryPoint.c_str(), &specializationInfo))
       .build(ctx.vf_,
              ctx.device_->getVkDevice(),
              ctx.pipelineCache_,

@@ -11,6 +11,7 @@
 #define IGL_VULKAN_COMMON_H
 
 #include <cassert>
+#include <map>
 #include <utility>
 
 // set to 1 to see very verbose debug console logs with Vulkan commands
@@ -190,6 +191,7 @@ uint32_t getVkLayer(TextureType type, uint32_t face, uint32_t layer);
 TextureRangeDesc atVkLayer(TextureType type, const TextureRangeDesc& range, uint32_t vkLayer);
 VkColorSpaceKHR colorSpaceToVkColorSpace(ColorSpace colorSpace);
 ColorSpace vkColorSpaceToColorSpace(VkColorSpaceKHR colorSpace);
+VkSpecializationInfo createSpecializationInfo(const std::map<uint8_t, int>& constantValues);
 
 /// @brief Transition from the current layout to VK_IMAGE_LAYOUT_GENERAL
 void transitionToGeneral(VkCommandBuffer cmdBuf, ITexture* texture);
