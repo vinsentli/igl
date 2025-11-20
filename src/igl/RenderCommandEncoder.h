@@ -22,7 +22,9 @@ class ISamplerState;
 namespace BindTarget {
 const uint8_t kVertex = 0x0001;
 const uint8_t kFragment = 0x0002;
-const uint8_t kAllGraphics = 0x0003;
+const uint8_t kTask = 0x0004;
+const uint8_t kMesh = 0x0008;
+const uint8_t kAllGraphics = 0x00FF;
 } // namespace BindTarget
 
 class IRenderCommandEncoder : public ICommandEncoder {
@@ -48,6 +50,11 @@ class IRenderCommandEncoder : public ICommandEncoder {
   // `bufferOffset` is the offset into the buffer where the data starts
   // `bufferSize` is the size of the buffer to bind used for additional validation (0 means the
   // remaining size starting from `bufferOffset`)
+  virtual void bindBuffer(uint32_t index,
+                          uint8_t target,
+                          IBuffer* buffer,
+                          size_t bufferOffset = 0,
+                          size_t bufferSize = 0) = 0;
   virtual void bindBuffer(uint32_t index,
                           IBuffer* buffer,
                           size_t bufferOffset = 0,
@@ -91,6 +98,9 @@ class IRenderCommandEncoder : public ICommandEncoder {
                            uint32_t firstIndex = 0,
                            int32_t vertexOffset = 0,
                            uint32_t baseInstance = 0) = 0;
+  virtual void drawMesh(const Dimensions& threadgroupsPerGrid,
+                        const Dimensions& threadsPerTaskThreadgroup,
+                        const Dimensions& threadsPerMeshThreadgroup) {}                           
   virtual void multiDrawIndirect(IBuffer& indirectBuffer,
                                  size_t indirectBufferOffset = 0,
                                  uint32_t drawCount = 1,
