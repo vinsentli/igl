@@ -87,6 +87,9 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
                    uint32_t firstIndex,
                    int32_t vertexOffset,
                    uint32_t baseInstance) override;
+  void drawMesh(const Dimensions& threadgroupsPerGrid,
+                const Dimensions& threadsPerTaskThreadgroup,
+                const Dimensions& threadsPerMeshThreadgroup) override;
   void multiDrawIndirect(IBuffer& indirectBuffer,
                          size_t indirectBufferOffset,
                          uint32_t drawCount,

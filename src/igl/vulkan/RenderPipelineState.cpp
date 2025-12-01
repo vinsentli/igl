@@ -461,11 +461,44 @@ VkPipeline RenderPipelineState::getVkPipeline(
         }
       });
 
-  const auto& vertexModule = desc_.shaderStages->getVertexModule();
-  const auto& fragmentModule = desc_.shaderStages->getFragmentModule();
+  std::vector<VkPipelineShaderStageCreateInfo> stages;
 
-  VkSpecializationInfo vertexSpecializationInfo = createSpecializationInfo(vertexModule->info().functionConstantValues);
+  if (desc_.shaderStages->getType() == igl::ShaderStagesType::Render){
+    const auto& vertexModule = desc_.shaderStages->getVertexModule();
+    VkSpecializationInfo vertexSpecializationInfo = createSpecializationInfo(vertexModule->info().functionConstantValues);
+    stages.emplace_back(ivkGetPipelineShaderStageCreateInfo(
+              VK_SHADER_STAGE_VERTEX_BIT,
+              igl::vulkan::ShaderModule::getVkShaderModule(vertexModule),
+              vertexModule->info().entryPoint.c_str(),
+              &vertexSpecializationInfo));
+  } else {
+    const auto& taskModule = desc_.shaderStages->getTaskModule();
+    if (taskModule) {
+        VkSpecializationInfo taskSpecializationInfo = createSpecializationInfo(
+                  taskModule->info().functionConstantValues);
+        stages.emplace_back(ivkGetPipelineShaderStageCreateInfo(
+                  VK_SHADER_STAGE_TASK_BIT_NV,
+                  igl::vulkan::ShaderModule::getVkShaderModule(taskModule),
+                  taskModule->info().entryPoint.c_str(),
+                  &taskSpecializationInfo));
+    }
+
+    const auto& meshModule = desc_.shaderStages->getMeshModule();
+    VkSpecializationInfo meshSpecializationInfo = createSpecializationInfo(meshModule->info().functionConstantValues);
+    stages.emplace_back(ivkGetPipelineShaderStageCreateInfo(
+              VK_SHADER_STAGE_MESH_BIT_NV,
+              igl::vulkan::ShaderModule::getVkShaderModule(meshModule),
+              meshModule->info().entryPoint.c_str(),
+              &meshSpecializationInfo));
+  }
+
+  const auto& fragmentModule = desc_.shaderStages->getFragmentModule();
   VkSpecializationInfo fragmentSpecializationInfo = createSpecializationInfo(fragmentModule->info().functionConstantValues);
+  stages.emplace_back(ivkGetPipelineShaderStageCreateInfo(
+        VK_SHADER_STAGE_FRAGMENT_BIT,
+        igl::vulkan::ShaderModule::getVkShaderModule(fragmentModule),
+        fragmentModule->info().entryPoint.c_str(),
+        &fragmentSpecializationInfo));
 
   VK_ASSERT_RETURN_NULL_HANDLE(
       igl::vulkan::VulkanPipelineBuilder()
@@ -495,18 +528,7 @@ VkPipeline RenderPipelineState::getVkPipeline(
                            dynamicState.getStencilStatePassOp(false),
                            dynamicState.getStencilStateDepthFailOp(false),
                            dynamicState.getStencilStateCompareOp(false))
-          .shaderStages({
-              ivkGetPipelineShaderStageCreateInfo(
-                  VK_SHADER_STAGE_VERTEX_BIT,
-                  igl::vulkan::ShaderModule::getVkShaderModule(vertexModule),
-                  vertexModule->info().entryPoint.c_str(),
-                  &vertexSpecializationInfo),
-              ivkGetPipelineShaderStageCreateInfo(
-                  VK_SHADER_STAGE_FRAGMENT_BIT,
-                  igl::vulkan::ShaderModule::getVkShaderModule(fragmentModule),
-                  fragmentModule->info().entryPoint.c_str(),
-                  &fragmentSpecializationInfo),
-          })
+          .shaderStages(stages)
           .cullMode(cullModeToVkCullMode(desc_.cullMode))
           .frontFace(windingModeToVkFrontFace(desc_.frontFaceWinding))
           .vertexInputState(vertexInputStateCreateInfo_)

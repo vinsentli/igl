@@ -17,12 +17,14 @@ namespace igl::vulkan {
 
 void PipelineState::initializeSpvModuleInfoFromShaderStages(const VulkanContext& ctx,
                                                             IShaderStages* stages) {
-  auto* smComp = static_cast<ShaderModule*>(stages->getComputeModule().get());
+  const ShaderStagesType shaderStagesType = stages->getType();
 
   VkShaderStageFlags pushConstantMask = 0;
 
-  if (smComp) {
+  if (shaderStagesType == igl::ShaderStagesType::Compute) {
     // compute
+    auto* smComp = static_cast<ShaderModule*>(stages->getComputeModule().get());
+
     ensureShaderModule(smComp);
 
     info_ = smComp->getVulkanShaderModule().getSpvModuleInfo();
@@ -32,7 +34,7 @@ void PipelineState::initializeSpvModuleInfoFromShaderStages(const VulkanContext&
     }
 
     stageFlags_ = VK_SHADER_STAGE_COMPUTE_BIT;
-  } else {
+  } else if (shaderStagesType == igl::ShaderStagesType::Render){
     auto* smVert = static_cast<ShaderModule*>(stages->getVertexModule().get());
     auto* smFrag = static_cast<ShaderModule*>(stages->getFragmentModule().get());
 
@@ -53,6 +55,42 @@ void PipelineState::initializeSpvModuleInfoFromShaderStages(const VulkanContext&
     info_ = util::mergeReflectionData(infoVert, infoFrag);
 
     stageFlags_ = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+  } else if (shaderStagesType == igl::ShaderStagesType::MeshRender){
+    auto* smTask = static_cast<ShaderModule*>(stages->getTaskModule().get());
+    auto* smMesh = static_cast<ShaderModule*>(stages->getMeshModule().get());
+    auto* smFrag = static_cast<ShaderModule*>(stages->getFragmentModule().get());
+
+    // task/mesh/fragment
+    ensureShaderModule(smMesh);
+    ensureShaderModule(smFrag);
+
+    const util::SpvModuleInfo& infoMesh = smMesh->getVulkanShaderModule().getSpvModuleInfo();
+    const util::SpvModuleInfo& infoFrag = smFrag->getVulkanShaderModule().getSpvModuleInfo();
+
+    if (infoMesh.hasPushConstants) {
+      pushConstantMask |= VK_SHADER_STAGE_MESH_BIT_NV;
+    }
+    if (infoFrag.hasPushConstants) {
+      pushConstantMask |= VK_SHADER_STAGE_FRAGMENT_BIT;
+    }
+
+    info_ = util::mergeReflectionData(infoMesh, infoFrag);
+
+    stageFlags_ = VK_SHADER_STAGE_MESH_BIT_NV | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    if (smTask) {
+      ensureShaderModule(smTask);
+
+      const util::SpvModuleInfo& infoTask = smTask->getVulkanShaderModule().getSpvModuleInfo();
+
+      if (infoTask.hasPushConstants) {
+        pushConstantMask |= VK_SHADER_STAGE_TASK_BIT_NV;
+      }
+
+      info_ = util::mergeReflectionData(info_, infoTask);
+
+      stageFlags_ |= VK_SHADER_STAGE_TASK_BIT_NV;
+    }
   }
 
   if (pushConstantMask) {
