@@ -18,6 +18,14 @@
 #include <fstream>
 #endif // IGL_SHADER_DUMP
 
+#ifndef GL_MESH_SHADER_EXT
+#define GL_MESH_SHADER_EXT 0x9559
+#endif
+
+#ifndef GL_TASK_SHADER_EXT
+#define GL_TASK_SHADER_EXT 0x955A
+#endif
+
 namespace igl::opengl {
 
 ShaderStages::ShaderStages(const ShaderStagesDesc& desc, IContext& context) :
@@ -219,6 +227,20 @@ Result ShaderModule::create(const ShaderModuleDesc& desc) {
       break;
     } else {
       return Result(Result::Code::Unimplemented, "Compute shader for GL is not implemented");
+    }
+  case ShaderStage::Task:
+    if (getContext().deviceFeatures().hasFeature(DeviceFeatures::MeshShaders)) {
+      shaderType_ = GL_TASK_SHADER_EXT;
+      break;
+    } else {
+      return Result(Result::Code::Unimplemented, "Task shader for GL is not implemented");
+    }
+  case ShaderStage::Mesh:
+    if (getContext().deviceFeatures().hasFeature(DeviceFeatures::MeshShaders)) {
+      shaderType_ = GL_MESH_SHADER_EXT;
+      break;
+    } else {
+      return Result(Result::Code::Unimplemented, "Mesh shader for GL is not implemented");
     }
   default:
     IGL_LOG_ERROR("Shader stage type %u for GL is not supported",
