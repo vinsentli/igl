@@ -9,6 +9,12 @@
 struct ARect;
 struct AHardwareBuffer;
 struct AHardwareBuffer_Desc;
+struct ASurfaceControl;
+struct ASurfaceTransaction;
+struct ASurfaceTransactionStats;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wnullability-completeness"
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,6 +37,20 @@ using PFAHardwareBuffer_sendHandleToUnixSocket = int (*)(const AHardwareBuffer* 
 using PFAHardwareBuffer_unlock = int (*)(AHardwareBuffer* buffer, int32_t* fence);
 
 using PFeglGetNativeClientBufferANDROID = EGLClientBuffer (*)(const struct AHardwareBuffer* buffer);
+
+using PFASurfaceControl_createFromWindow = ASurfaceControl* (*)(ANativeWindow *,const char *);
+using PFASurfaceControl_release = void (*)(ASurfaceControl*);
+using PFASurfaceTransaction_create = ASurfaceTransaction* (*)();
+using PFASurfaceTransaction_delete = void (*)(ASurfaceTransaction*);
+using PFASurfaceTransaction_apply = void (*)(ASurfaceTransaction*);
+using PFASurfaceTransaction_setBuffer = void (*)(ASurfaceTransaction *, ASurfaceControl *, AHardwareBuffer *, int);
+typedef void(* ASurfaceTransaction_OnComplete_Callback)(void *_Null_unspecified context, ASurfaceTransactionStats *_Nonnull stats);
+using PFASurfaceTransaction_setOnComplete = void (*)(
+  ASurfaceTransaction *_Nonnull transaction,
+  void *_Null_unspecified context,
+  ASurfaceTransaction_OnComplete_Callback _Nonnull func
+);
+
 #ifdef __cplusplus
 }
 #endif
@@ -49,6 +69,16 @@ struct AHardwareBufferFunctionTable {
   PFAHardwareBuffer_describe AHardwareBuffer_describe = nullptr;
   PFeglGetNativeClientBufferANDROID eglGetNativeClientBufferANDROID = nullptr;
 
+  PFASurfaceControl_createFromWindow ASurfaceControl_createFromWindow = nullptr;
+  PFASurfaceControl_release ASurfaceControl_release = nullptr;
+  PFASurfaceTransaction_create ASurfaceTransaction_create = nullptr;
+  PFASurfaceTransaction_delete ASurfaceTransaction_delete = nullptr;
+  PFASurfaceTransaction_apply ASurfaceTransaction_apply = nullptr;
+  PFASurfaceTransaction_setBuffer ASurfaceTransaction_setBuffer = nullptr;
+  PFASurfaceTransaction_setOnComplete ASurfaceTransaction_setOnComplete = nullptr;
+
  private:
   void* dll_handle = nullptr;
 };
+
+#pragma GCC diagnostic pop

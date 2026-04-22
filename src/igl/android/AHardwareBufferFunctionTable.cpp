@@ -48,6 +48,21 @@ std::unique_ptr<AHardwareBufferFunctionTable> AHardwareBufferFunctionTable::crea
                                                         "eglGetNativeClientBufferANDROID");
   }
 
+  functionTable->ASurfaceControl_createFromWindow =
+          (PFASurfaceControl_createFromWindow)dlsym(dll_handle, "ASurfaceControl_createFromWindow");
+  functionTable->ASurfaceControl_release =
+          (PFASurfaceControl_release)dlsym(dll_handle, "ASurfaceControl_release");
+  functionTable->ASurfaceTransaction_create =
+          (PFASurfaceTransaction_create)dlsym(dll_handle, "ASurfaceTransaction_create");
+  functionTable->ASurfaceTransaction_delete =
+          (PFASurfaceTransaction_delete)dlsym(dll_handle, "ASurfaceTransaction_delete");
+  functionTable->ASurfaceTransaction_apply =
+          (PFASurfaceTransaction_apply)dlsym(dll_handle, "ASurfaceTransaction_apply");
+  functionTable->ASurfaceTransaction_setBuffer =
+          (PFASurfaceTransaction_setBuffer)dlsym(dll_handle, "ASurfaceTransaction_setBuffer");
+  functionTable->ASurfaceTransaction_setOnComplete =
+          (PFASurfaceTransaction_setOnComplete)dlsym(dll_handle, "ASurfaceTransaction_setOnComplete");
+
   if(!functionTable->AHardwareBuffer_allocate) return nullptr;
   if(!functionTable->AHardwareBuffer_acquire) return nullptr;
   if(!functionTable->AHardwareBuffer_release) return nullptr;
@@ -55,6 +70,14 @@ std::unique_ptr<AHardwareBufferFunctionTable> AHardwareBufferFunctionTable::crea
   if(!functionTable->AHardwareBuffer_unlock) return nullptr;
   if(!functionTable->AHardwareBuffer_describe) return nullptr;
   if(!functionTable->eglGetNativeClientBufferANDROID) return nullptr;
+
+  if(!functionTable->ASurfaceControl_createFromWindow) return nullptr;
+  if(!functionTable->ASurfaceControl_release) return nullptr;
+  if(!functionTable->ASurfaceTransaction_create) return nullptr;
+  if(!functionTable->ASurfaceTransaction_delete) return nullptr;
+  if(!functionTable->ASurfaceTransaction_apply) return nullptr;
+  if(!functionTable->ASurfaceTransaction_setBuffer) return nullptr;
+  if(!functionTable->ASurfaceTransaction_setOnComplete) return nullptr;
 
   return functionTable;
 }
