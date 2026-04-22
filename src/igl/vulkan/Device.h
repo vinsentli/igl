@@ -90,6 +90,13 @@ class Device final : public IDevice {
                                                                 Result* IGL_NULLABLE
                                                                     outResult) override;
 
+#ifndef NOT_USE_UPSCALER
+  // Spatial Scaler (not supported on Vulkan)
+  std::shared_ptr<ISpatialScaler> createSpatialScaler(const SpatialScalerDesc& desc,
+                                                       Result* IGL_NULLABLE outResult) const override;
+  [[nodiscard]] bool supportsSpatialScaler() const override;
+#endif
+
   // Platform-specific extensions
   [[nodiscard]] const PlatformDevice& getPlatformDevice() const noexcept override;
 
@@ -339,5 +346,18 @@ inline bool Device::getFeatureLimits(DeviceFeatureLimits featureLimits, size_t& 
 inline void Device::setCurrentThread() {
   setCurrentThreadInternal();
 }
+
+#ifndef NOT_USE_UPSCALER
+// Spatial Scaler (not supported on Vulkan)
+inline std::shared_ptr<ISpatialScaler> Device::createSpatialScaler(const SpatialScalerDesc& desc,
+                                                                    Result* outResult) const {
+  Result::setResult(outResult, Result::Code::Unsupported, "Spatial scaler not supported on Vulkan");
+  return nullptr;
+}
+
+[[nodiscard]] inline bool Device::supportsSpatialScaler() const {
+  return false;
+}
+#endif
 
 } // namespace igl::vulkan

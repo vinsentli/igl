@@ -88,6 +88,18 @@ class Device : public IDevice {
   std::shared_ptr<IFramebuffer> createFramebuffer(const FramebufferDesc& desc,
                                                   Result* IGL_NULLABLE outResult) override;
 
+#ifndef NOT_USE_UPSCALER
+  // Spatial Scaler (not supported on OpenGL)
+  std::shared_ptr<ISpatialScaler> createSpatialScaler(const SpatialScalerDesc& desc,
+                                                       Result* IGL_NULLABLE outResult) const override {
+    Result::setResult(outResult, Result::Code::Unsupported, "Spatial scaler not supported on OpenGL");
+    return nullptr;
+  }
+  [[nodiscard]] bool supportsSpatialScaler() const override {
+    return false;
+  }
+#endif
+
   // debug markers useful in GPU captures
   void pushMarker(int len, const char* IGL_NULLABLE name) override;
   void popMarker() override;

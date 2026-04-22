@@ -29,6 +29,7 @@ struct SamplerStateDesc;
 struct ShaderLibraryDesc;
 struct ShaderModuleDesc;
 struct ShaderStagesDesc;
+struct SpatialScalerDesc;
 struct VertexInputStateDesc;
 class IBuffer;
 class ICommandBuffer;
@@ -40,6 +41,7 @@ class ISamplerState;
 class IShaderLibrary;
 class IShaderModule;
 class IShaderStages;
+class ISpatialScaler;
 class IVertexInputState;
 
 /**
@@ -233,6 +235,34 @@ class IDevice : public ICapabilities {
    */
   virtual std::shared_ptr<IFramebuffer> createFramebuffer(const FramebufferDesc& desc,
                                                           Result* IGL_NULLABLE outResult) = 0;
+
+#ifndef NOT_USE_UPSCALER
+  /**
+   * @brief Creates a spatial scaler for hardware-accelerated image upscaling.
+   * @see igl::SpatialScalerDesc
+   * @param desc Description for the desired resource.
+   * @param outResult Pointer to where the result (success, failure, etc) is written. Can be null if
+   * no reporting is desired.
+   * @return Shared pointer to the created spatial scaler, or nullptr if not supported.
+   *
+   * @note This is only supported on certain platforms:
+   *   - Metal: iOS 16+/macOS 13+ with A14+/M1+ chips (MetalFX)
+   *   - Other platforms: Returns nullptr (engine should fall back to shader-based solutions)
+   */
+  virtual std::shared_ptr<ISpatialScaler> createSpatialScaler(const SpatialScalerDesc& desc,
+                                                               Result* IGL_NULLABLE outResult) const {
+    Result::setResult(outResult, Result::Code::Unsupported, "Spatial scaler not supported on this platform");
+    return nullptr;
+  }
+
+  /**
+   * @brief Checks if hardware-accelerated spatial scaling is supported on this device.
+   * @return true if hardware spatial scaling is supported.
+   */
+  [[nodiscard]] virtual bool supportsSpatialScaler() const {
+    return false;
+  }
+#endif
 
   /**
    * @brief Returns a platform-specific device. If the requested device type does not match that of

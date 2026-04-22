@@ -80,6 +80,13 @@ class Device : public IDevice {
   std::unique_ptr<IShaderStages> createShaderStages(const ShaderStagesDesc& desc,
                                                     Result* IGL_NULLABLE outResult) const override;
 
+#ifndef NOT_USE_UPSCALER
+  // Spatial Scaler (MetalFX)
+  std::shared_ptr<ISpatialScaler> createSpatialScaler(const SpatialScalerDesc& desc,
+                                                       Result* IGL_NULLABLE outResult) const override;
+  [[nodiscard]] bool supportsSpatialScaler() const override;
+#endif
+
   // Platform-specific extensions
   [[nodiscard]] const PlatformDevice& getPlatformDevice() const noexcept override;
 

@@ -21,6 +21,7 @@
 #include <igl/metal/Result.h>
 #include <igl/metal/SamplerState.h>
 #include <igl/metal/Shader.h>
+#include <igl/metal/SpatialScaler.h>
 #include <igl/metal/Texture.h>
 #include <igl/metal/VertexInputState.h>
 
@@ -917,5 +918,33 @@ void Device::destroy(SamplerHandle handle) {
   (void)handle;
   // IGL/Metal is not using sampler handles
 }
+
+#ifndef NOT_USE_UPSCALER
+std::shared_ptr<ISpatialScaler> Device::createSpatialScaler(const SpatialScalerDesc& desc,
+                                                            Result* outResult) const {
+  if (!supportsSpatialScaler()) {
+    Result::setResult(outResult, Result::Code::Unsupported,
+                      "MetalFX spatial scaler not supported on this device");
+    return nullptr;
+  }
+
+  Result createResult;
+  auto scaler = std::make_shared<SpatialScaler>(device_, desc, &createResult);
+
+  if (!createResult.isOk() || !scaler->isValid()) {
+    Result::setResult(outResult, createResult.isOk()
+                          ? Result(Result::Code::RuntimeError, "Failed to create MetalFX scaler")
+                          : createResult);
+    return nullptr;
+  }
+
+  Result::setOk(outResult);
+  return scaler;
+}
+
+bool Device::supportsSpatialScaler() const {
+  return SpatialScaler::isSupported(device_);
+}
+#endif
 
 } // namespace igl::metal
