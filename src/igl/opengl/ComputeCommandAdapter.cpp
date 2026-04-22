@@ -10,8 +10,11 @@
 #include <algorithm>
 #include <igl/opengl/Buffer.h>
 #include <igl/opengl/ComputePipelineState.h>
+#include <igl/opengl/Device.h>
 #include <igl/opengl/IContext.h>
+#include <igl/opengl/SamplerState.h>
 #include <igl/opengl/Texture.h>
+#include <igl/opengl/UniformBuffer.h>
 #include <igl/opengl/VertexInputState.h>
 
 #define SET_DIRTY(dirtyMap, index) dirtyMap.set(index)
@@ -29,8 +32,30 @@ void ComputeCommandAdapter::setTexture(ITexture* texture, uint32_t index) {
   if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
     return;
   }
-  textureStates_[index] = texture;
+  textureStates_[index].first = texture;
   SET_DIRTY(textureStatesDirty_, index);
+}
+
+void ComputeCommandAdapter::setSamplerState(ISamplerState* samplerState, uint32_t index) {
+  if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
+    return;
+  }
+  textureStates_[index].second = samplerState;
+  SET_DIRTY(textureStatesDirty_, index);
+}
+
+void ComputeCommandAdapter::setImageTexture(ITexture* texture, uint32_t index, TextureFormat format) {
+  if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
+    return;
+  }
+  // For compute image textures, we store them in the same array but mark them specially
+  // The format parameter will be used during binding
+  textureStates_[index].first = texture;
+  textureStates_[index].second = nullptr; // Image textures don't use samplers
+  SET_DIRTY(textureStatesDirty_, index);
+  
+  // Store format information for later use (we'll need to extend the state if needed)
+  (void)format; // For now, format is handled by the pipeline state
 }
 
 void ComputeCommandAdapter::clearBuffers() {
@@ -120,13 +145,35 @@ void ComputeCommandAdapter::willDispatch() {
       continue;
     }
     auto& textureState = textureStates_[index];
-    if (auto* texture = static_cast<Texture*>(textureState)) {
+    if (auto* texture = static_cast<Texture*>(textureState.first)) {
+      // Bind the texture to image unit (for compute shader image2D access)
       ret = pipelineState->bindTextureUnit(index, texture);
-      CLEAR_DIRTY(textureStatesDirty_, index);
+      
       if (!ret.isOk()) {
         IGL_LOG_INFO_ONCE(ret.message.c_str());
+        CLEAR_DIRTY(textureStatesDirty_, index);
         continue;
       }
+      
+      // CRITICAL: Must explicitly activate texture unit before binding texture object
+      // In multi-pass scenarios, texture units may be left in incorrect states from previous passes
+      // This ensures the texture is bound to the correct unit matching the image unit binding
+      getContext().activeTexture(static_cast<GLenum>(GL_TEXTURE0 + index));
+      
+      // Now bind the texture object to the activated texture unit
+      // This is necessary for:
+      // 1. Proper sampler2D access in shaders (if texture is sampled)
+      // 2. RenderDoc and other debugging tools to capture correct texture state
+      // 3. Preventing state pollution from render target bindings in previous render passes
+      texture->bind();
+      
+      // If there's a sampler state, bind it too
+      if (textureState.second) {
+        auto* samplerState = static_cast<SamplerState*>(textureState.second);
+        samplerState->bind(texture);
+      }
+      
+      CLEAR_DIRTY(textureStatesDirty_, index);
     }
   }
 }

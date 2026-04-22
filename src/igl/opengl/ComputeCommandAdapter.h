@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <igl/Buffer.h>
 #include <igl/Common.h>
+#include <igl/Texture.h>
 #include <igl/opengl/UnbindPolicy.h>
 #include <igl/opengl/UniformAdapter.h>
 #include <igl/opengl/WithContext.h>
@@ -36,7 +37,7 @@ class ComputeCommandAdapter final : public WithContext {
     size_t offset = 0;
   };
 
-  using TextureState = ITexture*;
+  using TextureState = std::pair<ITexture*, ISamplerState*>;
   using TextureStates = std::array<TextureState, IGL_TEXTURE_SAMPLERS_MAX>;
 
  public:
@@ -44,6 +45,8 @@ class ComputeCommandAdapter final : public WithContext {
 
   void clearTextures();
   void setTexture(ITexture* texture, uint32_t index);
+  void setSamplerState(ISamplerState* samplerState, uint32_t index);
+  void setImageTexture(ITexture* texture, uint32_t index, TextureFormat format);
 
   void clearBuffers();
   void setBuffer(Buffer* buffer, size_t offset, uint32_t index);
