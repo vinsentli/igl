@@ -31,7 +31,7 @@ namespace igl::android {
 
 class INativeHWTextureBuffer {
  public:
-  INativeHWTextureBuffer(AHardwareBufferFunctionTable* funcTable) : funcTable_(funcTable) {}
+  INativeHWTextureBuffer(std::shared_ptr<AHardwareBufferFunctionTable> funcTable) : funcTable_(funcTable) {}
 
   struct LockGuard {
    public:
@@ -78,7 +78,7 @@ class INativeHWTextureBuffer {
   virtual Result createTextureInternal(AHardwareBuffer* IGL_NULLABLE buffer) = 0;
   AHardwareBuffer* IGL_NULLABLE hwBuffer_ = nullptr;
   TextureDesc textureDesc_;
-  AHardwareBufferFunctionTable* funcTable_ = nullptr;
+    std::shared_ptr<AHardwareBufferFunctionTable> funcTable_ = nullptr;
 };
 
 // utils

@@ -16,11 +16,14 @@
 #include <igl/vulkan/VulkanImageView.h>
 #include <igl/vulkan/VulkanTexture.h>
 
+#define USE_DEFAULT_SWAPCHAIN 0
+
 namespace igl::vulkan {
 
 class VulkanContext;
 class VulkanSemaphore;
 
+#if USE_DEFAULT_SWAPCHAIN
 class VulkanSwapchain final {
  public:
   VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t height);
@@ -51,7 +54,8 @@ class VulkanSwapchain final {
 
   std::shared_ptr<VulkanTexture> getCurrentVulkanTexture() {
     if (getNextImage_) {
-      acquireNextImage();
+      auto result = acquireNextImage();
+      if (!result.isOk()) return nullptr;
       getNextImage_ = false;
     }
 
@@ -105,7 +109,7 @@ class VulkanSwapchain final {
   std::vector<uint64_t> timelineWaitValues_;
 
  private:
-    VulkanContext& ctx_;
+  VulkanContext& ctx_;
   VkDevice device_;
   VkQueue graphicsQueue_;
   uint32_t width_ = 0;
@@ -123,5 +127,7 @@ class VulkanSwapchain final {
   mutable std::shared_ptr<VulkanTexture> depthTexture_;
   VkSurfaceFormatKHR surfaceFormat_{};
 };
-
+#endif
 } // namespace igl::vulkan
+
+#include "VulkanSwapchainAHB.h"

@@ -28,7 +28,7 @@ class NativeHWTextureBuffer : public igl::android::INativeHWTextureBuffer, publi
   using Super = Texture;
 
  public:
-  NativeHWTextureBuffer(igl::vulkan::Device& device, AHardwareBufferFunctionTable *funcTable, TextureFormat format);
+  NativeHWTextureBuffer(igl::vulkan::Device& device, std::shared_ptr<AHardwareBufferFunctionTable> funcTable, TextureFormat format);
   ~NativeHWTextureBuffer() override;
 
  protected:

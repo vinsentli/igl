@@ -127,7 +127,7 @@ class VulkanImmediateCommands final {
    *  Submitting a command buffer also marks the `CommandBufferWrapper::encoding_` variable to
    * `false`
    */
-  SubmitHandle submit(const CommandBufferWrapper& wrapper);
+  SubmitHandle submit(const CommandBufferWrapper& wrapper, VkSemaphore signalSemaphore = VK_NULL_HANDLE, VkFence signalFence = VK_NULL_HANDLE);
 
   /// @brief Stores the semaphore as the current wait semaphore (`waitSemaphore_`)
   void waitSemaphore(VkSemaphore semaphore);
@@ -183,10 +183,13 @@ class VulkanImmediateCommands final {
   /// internally in `VulkanImmediateCommands`. A SubmitHandle handle is also recycled if it's empty
   [[nodiscard]] bool isRecycled(SubmitHandle handle) const;
 
+public:
+  VkQueue queue_ = VK_NULL_HANDLE;
+
  private:
   const VulkanFunctionTable& vf_;
   VkDevice device_ = VK_NULL_HANDLE;
-  VkQueue queue_ = VK_NULL_HANDLE;
+
   VulkanCommandPool commandPool_;
   std::string debugName_;
   std::vector<CommandBufferWrapper> buffers_;

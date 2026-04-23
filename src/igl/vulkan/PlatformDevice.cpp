@@ -21,7 +21,8 @@ namespace igl::vulkan {
 
 PlatformDevice::PlatformDevice(Device& device) : device_(device) {
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
-    funcTable_ = AHardwareBufferFunctionTable::create();
+  funcTable_ = AHardwareBufferFunctionTable::create();
+  IGL_DEBUG_ASSERT(funcTable_);
 #endif
 }
 
@@ -85,9 +86,10 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(Result
 
   const auto& swapChain = ctx.swapchain_;
 
+#if USE_DEFAULT_SWAPCHAIN
   auto vkTex = swapChain->getCurrentVulkanTexture();
 
-  if (!IGL_DEBUG_VERIFY(vkTex != nullptr)) {
+  if (vkTex == nullptr) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "Swapchain has no valid texture");
     return nullptr;
   }
@@ -124,6 +126,9 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(Result
   Result::setResult(outResult, Result::Code::Ok);
 
   return nativeDrawableTextures_[currentImageIndex];
+#else
+  return swapChain->getCurrentVulkanTexture(device_);
+#endif
 }
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
@@ -138,7 +143,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const Te
   Result subResult;
 
   auto texture =
-      std::make_shared<igl::vulkan::android::NativeHWTextureBuffer>(device_, funcTable_.get(),  desc.format);
+      std::make_shared<igl::vulkan::android::NativeHWTextureBuffer>(device_, funcTable_,  desc.format);
   subResult = texture->createHWBuffer(desc, false, false);
   Result::setResult(outResult, subResult.code, subResult.message);
   if (!subResult.isOk()) {
@@ -161,7 +166,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(
   funcTable_->AHardwareBuffer_describe(buffer, &hwbDesc);
 
   auto texture = std::make_shared<igl::vulkan::android::NativeHWTextureBuffer>(
-      device_, funcTable_.get(), igl::android::getIglFormat(hwbDesc.format));
+      device_, funcTable_, igl::android::getIglFormat(hwbDesc.format));
   subResult = texture->createWithHWBuffer(buffer);
   Result::setResult(outResult, subResult.code, subResult.message);
   if (!subResult.isOk()) {

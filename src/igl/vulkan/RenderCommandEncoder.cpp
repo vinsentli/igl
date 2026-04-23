@@ -195,6 +195,21 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
                             initialLayout,
                             VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                             depthTexture.getVulkanTexture().image_.samples_);
+
+      // handle MSAA
+      if (renderPass.depthAttachment.storeAction == StoreAction::MsaaResolve) {
+        IGL_DEBUG_ASSERT(framebuffer->getResolveDepthAttachment(),
+                         "Framebuffer attachment should contain a resolve depth texture");
+        const auto& depthResolveTexture = static_cast<Texture&>(*framebuffer->getResolveDepthAttachment());
+        builder.addDepthStencilResolve(depthResolveTexture.getVkFormat(),
+                                       VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                                       VK_ATTACHMENT_STORE_OP_STORE,
+                                       VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                                       VK_ATTACHMENT_STORE_OP_STORE,
+                                       initialLayout,
+                                       VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+        clearValues.push_back(ivkGetClearDepthStencilValue(descDepth.clearDepth, descStencil.clearStencil));
+      }
   }
 
   const auto& fb = static_cast<Framebuffer&>(*framebuffer);
@@ -315,7 +330,10 @@ void RenderCommandEncoder::endEncoding() {
   // VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL (check VulkanRenderPassBuilder.cpp)
   overrideImageLayout(desc.depthAttachment.texture.get(),
                       VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+  overrideImageLayout(desc.depthAttachment.resolveTexture.get(),
+                      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
   transitionToShaderReadOnly(cmdBuffer_, desc.depthAttachment.texture.get());
+  transitionToShaderReadOnly(cmdBuffer_, desc.depthAttachment.resolveTexture.get());
 
 #if defined(IGL_WITH_TRACY_GPU)
   TracyVkCollect(ctx_.tracyCtx_, cmdBuffer_);
@@ -487,7 +505,8 @@ void RenderCommandEncoder::bindVertexBuffer(uint32_t index, IBuffer& buffer, siz
 
 void RenderCommandEncoder::bindIndexBuffer(IBuffer& buffer,
                                            IndexFormat format,
-                                           size_t bufferOffset) {
+                                           size_t bufferOffset,
+                                           bool /*bindVAO*/) {
   const auto& buf = static_cast<Buffer&>(buffer);
 
   IGL_DEBUG_ASSERT(buf.getBufferUsageFlags() & VK_BUFFER_USAGE_INDEX_BUFFER_BIT,

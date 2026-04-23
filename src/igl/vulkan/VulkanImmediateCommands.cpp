@@ -244,7 +244,7 @@ bool VulkanImmediateCommands::isReady(const SubmitHandle handle) const {
 }
 
 VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
-    const CommandBufferWrapper& wrapper) {
+    const CommandBufferWrapper& wrapper, VkSemaphore signalSemaphore, VkFence signalFence) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_SUBMIT);
 
   IGL_DEBUG_ASSERT(wrapper.isEncoding_);
@@ -308,18 +308,18 @@ VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
                                              numWaitSemaphores,
                                              waitSemaphores,
                                              waitStageMasks,
-                                             &wrapper.semaphore_.vkSemaphore_);
+                                             signalSemaphore ? &signalSemaphore :  &wrapper.semaphore_.vkSemaphore_);
     // @lint-ignore CLANGTIDY
     const VkFence vkFence = wrapper.fence_.vkFence_;
     IGL_PROFILER_ZONE("vkQueueSubmit()", IGL_PROFILER_COLOR_SUBMIT);
 #if IGL_VULKAN_PRINT_COMMANDS
     IGL_LOG_INFO("%p vkQueueSubmit()\n\n", wrapper.cmdBuf_);
 #endif // IGL_VULKAN_PRINT_COMMANDS
-    VK_ASSERT(vf_.vkQueueSubmit(queue_, 1u, &si, vkFence));
+    VK_ASSERT(vf_.vkQueueSubmit(queue_, 1u, &si, signalFence ? signalFence : vkFence));
     IGL_PROFILER_ZONE_END();
   }
 
-  lastSubmitSemaphore_.semaphore = wrapper.semaphore_.vkSemaphore_;
+  lastSubmitSemaphore_.semaphore = signalSemaphore ? VK_NULL_HANDLE : wrapper.semaphore_.vkSemaphore_;
   lastSubmitHandle_ = wrapper.handle_;
   waitSemaphore_.semaphore = VK_NULL_HANDLE;
   signalSemaphore_.semaphore = VK_NULL_HANDLE;

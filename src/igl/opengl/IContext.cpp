@@ -3196,8 +3196,8 @@ void IContext::vertexAttribDivisor(GLuint index, GLuint divisor) {
     IGL_DEBUG_ASSERT(vertexAttribDivisorProc_, "No supported function for glVertexAttribDivisor\n");
   }
 
-  if (vertexAttribDivisors_[index] == divisor)
-    return;
+//  if (vertexAttribDivisors_[index] == divisor)
+//    return;
   vertexAttribDivisors_[index] = divisor;
   GLCALL_PROC(vertexAttribDivisorProc_, index, divisor);
   APILOG("glVertexAttribDivisor(%u, %u)\n", index, divisor);

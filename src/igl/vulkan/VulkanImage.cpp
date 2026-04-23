@@ -165,10 +165,19 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
                                                      samples);
 
   if (IGL_VULKAN_USE_VMA && !isDisjoint) {
-    VmaAllocationCreateInfo ciAlloc = {};
-
-    ciAlloc.usage = memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT ? VMA_MEMORY_USAGE_CPU_TO_GPU
-                                                                   : VMA_MEMORY_USAGE_AUTO;
+    const bool isHostVisible = (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
+    const bool isLazilyAllocated = (memFlags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) != 0;
+    const VmaAllocationCreateInfo ciAlloc = {
+          .flags = 0,
+          .usage = isHostVisible ? VMA_MEMORY_USAGE_CPU_TO_GPU : VMA_MEMORY_USAGE_AUTO,
+          // For lazily allocated (memoryless) images, require the flag so VMA picks GMEM-backed
+          // memory on TBDR GPUs. For other non-host-visible cases, pass memFlags as a preference
+          // to guide VMA without causing hard allocation failures.
+          .requiredFlags = isLazilyAllocated ? memFlags : static_cast<VkMemoryPropertyFlags>(0),
+          .preferredFlags = (!isHostVisible && !isLazilyAllocated)
+                            ? memFlags
+                            : static_cast<VkMemoryPropertyFlags>(0),
+    };
 
     const VkResult result = vmaCreateImage(
         (VmaAllocator)ctx_->getVmaAllocator(), &ci, &ciAlloc, &vkImage_, &vmaAllocation_, nullptr);
@@ -220,9 +229,9 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
       };
       // @fb-only
       const VkImageMemoryRequirementsInfo2 imgRequirements[kMaxImagePlanes] = {
-          ivkGetImageMemoryRequirementsInfo2(numPlanes > 0 ? &planes[0] : nullptr, vkImage_),
-          ivkGetImageMemoryRequirementsInfo2(numPlanes > 1 ? &planes[1] : nullptr, vkImage_),
-          ivkGetImageMemoryRequirementsInfo2(numPlanes > 2 ? &planes[2] : nullptr, vkImage_),
+          ivkGetImageMemoryRequirementsInfo2(isDisjoint && numPlanes > 0 ? &planes[0] : nullptr, vkImage_),
+          ivkGetImageMemoryRequirementsInfo2(isDisjoint && numPlanes > 1 ? &planes[1] : nullptr, vkImage_),
+          ivkGetImageMemoryRequirementsInfo2(isDisjoint && numPlanes > 2 ? &planes[2] : nullptr, vkImage_),
       };
       for (uint32_t p = 0; p != numPlanes; p++) {
         ctx_->vf_.vkGetImageMemoryRequirements2(device, &imgRequirements[p], &memRequirements[p]);
@@ -851,13 +860,21 @@ void VulkanImage::destroy() {
         if (mappedPtr_) {
           ctx_->vf_.vkUnmapMemory(device_, vkMemory_[0]);
         }
-        ctx_->deferredTask(std::packaged_task<void()>(
+        
+        if (isDeferFreeMemory_) {
+          ctx_->deferredTask(std::packaged_task<void()>(
             [vf = &ctx_->vf_, device = device_, image = vkImage_, memory = vkMemory_[0]]() {
               vf->vkDestroyImage(device, image, nullptr);
               if (memory != VK_NULL_HANDLE) {
                 vf->vkFreeMemory(device, memory, nullptr);
               }
             }));
+        } else {
+          ctx_->vf_.vkDestroyImage(device_, vkImage_, nullptr);
+          if (vkMemory_[0] != VK_NULL_HANDLE) {
+            ctx_->vf_.vkFreeMemory(device_, vkMemory_[0], nullptr);
+          }
+        }
       }
     } else {
       // this never uses VMA

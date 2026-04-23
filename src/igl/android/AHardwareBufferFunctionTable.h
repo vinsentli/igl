@@ -50,6 +50,9 @@ using PFASurfaceTransaction_setOnComplete = void (*)(
   void *_Null_unspecified context,
   ASurfaceTransaction_OnComplete_Callback _Nonnull func
 );
+using PFASurfaceTransactionStats_getPresentFenceFd = int (*)(ASurfaceTransactionStats* _Nonnull surface_transaction_stats);
+using PFASurfaceTransactionStats_getPreviousReleaseFenceFd = int (*)(ASurfaceTransactionStats* _Nonnull surface_transaction_stats,
+        ASurfaceControl* _Nonnull surface_control);
 
 #ifdef __cplusplus
 }
@@ -76,6 +79,8 @@ struct AHardwareBufferFunctionTable {
   PFASurfaceTransaction_apply ASurfaceTransaction_apply = nullptr;
   PFASurfaceTransaction_setBuffer ASurfaceTransaction_setBuffer = nullptr;
   PFASurfaceTransaction_setOnComplete ASurfaceTransaction_setOnComplete = nullptr;
+  PFASurfaceTransactionStats_getPresentFenceFd ASurfaceTransactionStats_getPresentFenceFd = nullptr;
+  PFASurfaceTransactionStats_getPreviousReleaseFenceFd ASurfaceTransactionStats_getPreviousReleaseFenceFd = nullptr;
 
  private:
   void* dll_handle = nullptr;

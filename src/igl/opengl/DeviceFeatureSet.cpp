@@ -288,6 +288,9 @@ bool DeviceFeatureSet::isFeatureSupported(DeviceFeatures feature) const {
     return hasDesktopOrESVersion(*this, GLVersion::v3_0, GLVersion::v3_0_ES) ||
            hasDesktopExtension(*this, "GL_ARB_map_buffer_range") ||
            hasExtension(Extensions::MapBufferRange);
+          
+  case DeviceFeatures::MeshShaders:
+    return false;
 
   case DeviceFeatures::MultipleRenderTargets:
     return hasDesktopOrESVersionOrExtension(
@@ -1451,7 +1454,6 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getTextureFormatCapab
     capabilities |= all;
     break;
   case TextureFormat::B5G6R5_UNorm:
-    // capabilities |= sampled | sampledFiltered;
     // Unsupported
     break;
   case TextureFormat::Z_UNorm16:

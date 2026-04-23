@@ -83,7 +83,7 @@ class PlatformDevice : public opengl::PlatformDevice {
   std::shared_ptr<ViewTextureTarget> drawableTexture_;
   std::shared_ptr<ViewTextureTarget> depthTexture_;
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
-  std::unique_ptr<AHardwareBufferFunctionTable> funcTable_;
+  std::shared_ptr<AHardwareBufferFunctionTable> funcTable_;
 #endif
 };
 

@@ -37,7 +37,7 @@ Result Buffer::create(const BufferDesc& desc) {
    */
   VkBufferUsageFlags usageFlags =
       (desc_.storage == ResourceStorage::Private)
-          ? VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+          ? VK_BUFFER_USAGE_TRANSFER_DST_BIT
           : 0;
 
   const VkBufferUsageFlags optionalBDA = ctx.features().has_VK_KHR_buffer_device_address

@@ -72,6 +72,7 @@ uint32_t getNativeHWBufferUsage(TextureDesc::TextureUsage iglUsage) {
   }
   if (iglUsage & TextureDesc::TextureUsageBits::Attachment) {
     bufferUsage |= AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT;
+    bufferUsage |= AHARDWAREBUFFER_USAGE_COMPOSER_OVERLAY;
   }
 
   return bufferUsage;
@@ -233,7 +234,7 @@ Result INativeHWTextureBuffer::createHWBuffer(const TextureDesc& desc,
 
   AHardwareBuffer* buffer = nullptr;
   auto allocationResult =
-      igl::android::allocateNativeHWBuffer(funcTable_, desc, surfaceComposite, &buffer);
+      igl::android::allocateNativeHWBuffer(funcTable_.get(), desc, surfaceComposite, &buffer);
   if (!allocationResult.isOk()) {
     IGL_LOG_ERROR("HW alloc failed");
     return allocationResult;

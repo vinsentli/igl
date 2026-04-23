@@ -69,7 +69,7 @@ const uint32_t kBinding_SamplerShadow = 5;
 const uint32_t kBinding_StorageImages = 6;
 // NOLINTEND(readability-identifier-naming)
 
-#if defined(VK_EXT_debug_utils) && IGL_PLATFORM_WINDOWS
+#if defined(VK_EXT_debug_utils)
 VKAPI_ATTR VkBool32 VKAPI_CALL
 vulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT msgSeverity,
                     [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT msgType,
@@ -246,7 +246,12 @@ class DescriptorPoolsArena final {
     if (!numRemainingDSetsInPool_) {
       switchToNewDescriptorPool(ic, nextSubmitHandle);
     }
-    VK_ASSERT(ivkAllocateDescriptorSet(&ctx_.vf_, device_, pool_, dsl_, &dset));
+    if (isNewPool_) {
+      VK_ASSERT(ivkAllocateDescriptorSet(&ctx_.vf_, device_, pool_, dsl_, &dset));
+      allocedDSet_.emplace_back(dset);
+    } else {
+      dset = allocedDSet_[dsetCursor_++];
+    }
     numRemainingDSetsInPool_--;
     return dset;
   }
@@ -257,7 +262,7 @@ class DescriptorPoolsArena final {
     numRemainingDSetsInPool_ = kNumDSetsPerPool;
 
     if (pool_ != VK_NULL_HANDLE) {
-      extinct_.push_back({pool_, nextSubmitHandle});
+      extinct_.push_back({pool_, nextSubmitHandle, allocedDSet_});
     }
     // first, let's try to reuse the oldest extinct pool (never reuse pools that are tagged with the
     // same SubmitHandle because they have not yet been submitted)
@@ -265,8 +270,10 @@ class DescriptorPoolsArena final {
       const ExtinctDescriptorPool p = extinct_.front();
       if (ic.isReady(p.handle)) {
         pool_ = p.pool;
+        allocedDSet_ = p.allocedDSet;
+        dsetCursor_ = 0;
+        isNewPool_ = false;
         extinct_.pop_front();
-        VK_ASSERT(ctx_.vf_.vkResetDescriptorPool(device_, pool_, VkDescriptorPoolResetFlags{}));
         return;
       }
     }
@@ -285,14 +292,20 @@ class DescriptorPoolsArena final {
                                       &pool_));
     VK_ASSERT(ivkSetDebugObjectName(
         &ctx_.vf_, device_, VK_OBJECT_TYPE_DESCRIPTOR_POOL, (uint64_t)pool_, dpDebugName_.c_str()));
+    allocedDSet_.clear();
+    dsetCursor_ = 0;
+    isNewPool_ = true;
   }
 
  private:
-  static constexpr uint32_t kNumDSetsPerPool = 64;
+  static constexpr uint32_t kNumDSetsPerPool = 32;
 
   const VulkanContext& ctx_;
   VkDevice device_ = VK_NULL_HANDLE;
   VkDescriptorPool pool_ = VK_NULL_HANDLE;
+  uint32_t dsetCursor_ = 0;
+  std::vector<VkDescriptorSet> allocedDSet_;
+  bool isNewPool_ = true; //is a new created pool or an old cached pool
   const uint32_t numTypes_ = 0;
   VkDescriptorType types_[2] = {VK_DESCRIPTOR_TYPE_MAX_ENUM, VK_DESCRIPTOR_TYPE_MAX_ENUM};
   const uint32_t numDescriptorsPerDSet_ = 0;
@@ -304,6 +317,7 @@ class DescriptorPoolsArena final {
   struct ExtinctDescriptorPool {
     VkDescriptorPool pool = VK_NULL_HANDLE;
     VulkanImmediateCommands::SubmitHandle handle = {};
+    std::vector<VkDescriptorSet> allocedDSet;
   };
 
   std::deque<ExtinctDescriptorPool> extinct_;
@@ -428,6 +442,7 @@ VulkanContext::VulkanContext(VulkanContextConfig config,
   }),
   features_(config),
   vf_(*tableImpl_),
+  window_(window),
   config_(config) {
   IGL_PROFILER_THREAD("MainThread");
 
@@ -523,7 +538,7 @@ VulkanContext::~VulkanContext() {
 
   pimpl_->dslBindless.reset(nullptr);
 
-  swapchain_.reset(nullptr); // Swapchain has to be destroyed prior to Surface
+  swapchain_ = nullptr; // Swapchain has to be destroyed prior to Surface
 
   waitDeferredTasks();
 
@@ -555,7 +570,7 @@ VulkanContext::~VulkanContext() {
   }
 
   device_.reset(nullptr); // Device has to be destroyed prior to Instance
-#if defined(VK_EXT_debug_utils) && !IGL_PLATFORM_ANDROID
+#if defined(VK_EXT_debug_utils)
   if (vf_.vkDestroyDebugUtilsMessengerEXT != nullptr) {
     vf_.vkDestroyDebugUtilsMessengerEXT(vkInstance_, vkDebugUtilsMessenger_, nullptr);
   }
@@ -625,7 +640,7 @@ void VulkanContext::createInstance(const size_t numExtraExtensions,
       .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
       .pEngineName = "IGL/Vulkan",
       .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-      .apiVersion = VK_API_VERSION_1_1,
+      .apiVersion = VK_API_VERSION_1_3,
   };
 
   const VkInstanceCreateInfo ci = {
@@ -675,9 +690,9 @@ void VulkanContext::createInstance(const size_t numExtraExtensions,
 #endif
   const bool enableExtDebugUtils =
       features_.enable(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VulkanFeatures::ExtensionType::Instance);
-  vulkan::functions::loadInstanceFunctions(*tableImpl_, vkInstance_, true);
+  vulkan::functions::loadInstanceFunctions(*tableImpl_, vkInstance_, enableExtDebugUtils);
 
-#if defined(VK_EXT_debug_utils) && IGL_PLATFORM_WINDOWS
+#if defined(VK_EXT_debug_utils)
   if (features_.enabled(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
     VK_ASSERT(ivkCreateDebugUtilsMessenger(
         &vf_, vkInstance_, &vulkanDebugCallback, this, &vkDebugUtilsMessenger_));
@@ -1094,6 +1109,15 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
     enhancedShaderDebuggingStore_ = std::make_unique<EnhancedShaderDebuggingStore>();
   }
 
+  supportMemoryLess_ = iFindMemoryType(&vf_, vkPhysicalDevice_, VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT);
+  IGL_LOG_INFO("Vulkan, this device support memory less : %s", supportMemoryLess_ ? "true" : "false");
+
+  bool supportMemoryCoherent = iFindMemoryType(&vf_, vkPhysicalDevice_, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+  IGL_LOG_INFO("Vulkan, this device support Memory Coherent : %s", supportMemoryCoherent ? "true" : "false");
+
+  bool supportMemoryCached= iFindMemoryType(&vf_, vkPhysicalDevice_, VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+  IGL_LOG_INFO("Vulkan, this device support Memory Cached : %s", supportMemoryCached ? "true" : "false");
+
   return Result();
 }
 
@@ -1234,7 +1258,7 @@ igl::Result VulkanContext::initSwapchain(uint32_t width, uint32_t height) {
     return Result();
   }
 
-  swapchain_ = std::make_unique<igl::vulkan::VulkanSwapchain>(*this, width, height);
+  swapchain_ = std::make_shared<igl::vulkan::VulkanSwapchain>(*this, width, height);
 
   if (features_.has_VK_KHR_timeline_semaphore && features_.has_VK_KHR_synchronization2) {
     timelineSemaphore_ = std::make_unique<VulkanSemaphore>(

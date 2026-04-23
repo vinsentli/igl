@@ -127,7 +127,14 @@ void RenderCommandAdapter::setVertexBuffer(Buffer& buffer,
   }
 }
 
-void RenderCommandAdapter::setIndexBuffer(Buffer& buffer) {
+void RenderCommandAdapter::setIndexBuffer(Buffer& buffer, bool bindVAO) {
+  // 确保 VAO 在绑定索引缓冲区之前已经绑定
+  // 索引缓冲区绑定是 VAO 状态的一部分
+  // 只有 DrawElementsIndirect 开启 vao
+  if (bindVAO && activeVAO_) {
+    activeVAO_->bind();
+    vaoBound_ = true;
+  }
   bindBufferWithShaderStorageBufferOverride(buffer, GL_ELEMENT_ARRAY_BUFFER);
 }
 
@@ -316,6 +323,8 @@ void RenderCommandAdapter::drawElementsIndirect(GLenum mode,
                                                 GLenum indexType,
                                                 Buffer& indirectBuffer,
                                                 const GLvoid* indirectBufferOffset) {
+  // VAO 应该在 setIndexBuffer 时已经绑定，这里不需要重复绑定
+  // 重复绑定会导致第一次绘制时索引缓冲区状态丢失
   willDraw();
   if (getContext().deviceFeatures().hasFeature(DeviceFeatures::DrawIndexedIndirect)) {
     bindBufferWithShaderStorageBufferOverride(indirectBuffer, GL_DRAW_INDIRECT_BUFFER);
@@ -331,6 +340,12 @@ void RenderCommandAdapter::endEncoding() {
   // with complex rendering.
   if (pipelineState_) {
     unbindVertexAttributes();
+  }
+
+  // 清理 VAO 状态，避免影响后续渲染
+  if (vaoBound_ && activeVAO_) {
+    activeVAO_->unbind();
+    vaoBound_ = false;
   }
 
   pipelineState_ = nullptr;

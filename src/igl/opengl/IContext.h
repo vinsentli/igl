@@ -646,7 +646,6 @@ class IContext {
 
   static constexpr uint64_t kNotAZombie = 0xdeadc0def3315badLL;
   uint64_t zombieGuard_ = kNotAZombie;
-    
   // @tencent only
   GLuint programID_ = 0;
   std::array<bool, 32> enableVertexAttribArray_{};

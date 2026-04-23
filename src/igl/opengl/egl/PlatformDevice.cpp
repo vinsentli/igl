@@ -177,7 +177,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const Te
 
   Result subResult;
 
-  auto texture = std::make_shared<android::NativeHWTextureBuffer>(getContext(), funcTable_.get(),  desc.format);
+  auto texture = std::make_shared<android::NativeHWTextureBuffer>(getContext(), funcTable_,  desc.format);
   subResult = texture->createHWBuffer(desc, false, false);
   texture->setTextureUsage(desc.usage);
   Result::setResult(outResult, subResult.code, subResult.message);
@@ -211,7 +211,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(AHardwar
   funcTable_->AHardwareBuffer_describe(buffer, &hwbDesc);
 
   auto texture = std::make_shared<android::NativeHWTextureBuffer>(
-      getContext(), funcTable_.get(), igl::android::getIglFormat(hwbDesc.format));
+      getContext(), funcTable_, igl::android::getIglFormat(hwbDesc.format));
   subResult = texture->createWithHWBuffer(buffer);
   Result::setResult(outResult, subResult.code, subResult.message);
   if (!subResult.isOk()) {

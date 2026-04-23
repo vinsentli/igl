@@ -72,7 +72,7 @@ bool VulkanFence::wait(uint64_t timeoutNs) noexcept {
   return result == VK_SUCCESS;
 }
 
-bool VulkanFence::signal(VkQueue queue) {
+bool VulkanFence::signal(VkQueue queue) const{
   if (queue == VK_NULL_HANDLE) {
     // protected against invalid submit
     return false;

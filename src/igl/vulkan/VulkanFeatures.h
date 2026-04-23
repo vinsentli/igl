@@ -74,6 +74,10 @@ class VulkanFeatures final {
   VkPhysicalDeviceBufferDeviceAddressFeaturesKHR featuresBufferDeviceAddress{};
   VkPhysicalDeviceDescriptorIndexingFeaturesEXT featuresDescriptorIndexing{};
   VkPhysicalDevice16BitStorageFeatures features16BitStorage{};
+  VkPhysicalDeviceDeviceMemoryReportFeaturesEXT featuresMemoryReport{};
+#ifndef NDEBUG
+  VkDeviceDeviceMemoryReportCreateInfoEXT deviceMemoryReportCreateInfo{};
+#endif
 
   // Vulkan 1.2
   VkPhysicalDeviceShaderFloat16Int8Features featuresShaderFloat16Int8{};
@@ -130,12 +134,14 @@ class VulkanFeatures final {
   bool has_VK_EXT_fragment_density_map = false;
   bool has_VK_EXT_headless_surface = false;
   bool has_VK_EXT_index_type_uint8 = false;
+  bool has_VK_EXT_device_memory_report = false;
   bool has_VK_EXT_queue_family_foreign = false;
   bool has_VK_KHR_8bit_storage = false;
   bool has_VK_KHR_buffer_device_address = false;
   bool has_VK_KHR_create_renderpass2 = false;
   bool has_VK_KHR_shader_non_semantic_info = false;
   bool has_VK_KHR_synchronization2 = false;
+  bool has_VK_KHR_external_semaphore_fd = false;
   bool has_VK_KHR_timeline_semaphore = false;
   bool has_VK_KHR_uniform_buffer_standard_layout = false;
   bool has_VK_KHR_vulkan_memory_model = false;

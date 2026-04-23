@@ -197,7 +197,7 @@ void ComputeCommandAdapter::didDispatch() {
 
 void ComputeCommandAdapter::endEncoding() {
   pipelineState_ = nullptr;
-  textureStates_ = TextureStates();
+  textureStates_ = TextureStates(); // This will clear all pairs to {nullptr, nullptr}
 
   buffersDirty_.reset();
   textureStatesDirty_.reset();

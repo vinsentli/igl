@@ -23,7 +23,12 @@ struct SwapchainCapabilities {
 };
 
 uint32_t chooseSwapImageCount(const VkSurfaceCapabilitiesKHR& caps) {
-  const uint32_t desired = caps.minImageCount + 1;
+  // 交换链图片数量：
+  // 高通+小米，期望=N，实际创建=N+1；
+  // 高通+华为，期望=N，实际创建=至少4个；
+  // 华为mate60，麒麟，期望=N，实际创建=至少4个.
+  // const uint32_t desired = caps.minImageCount + 1; //推荐用法
+  const uint32_t desired = 3;
   const bool exceeded = caps.maxImageCount > 0 && desired > caps.maxImageCount;
   return exceeded ? caps.maxImageCount : desired;
 }
@@ -108,7 +113,8 @@ VkImageUsageFlags chooseUsageFlags(const VulkanFunctionTable& vf,
       (props.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) > 0;
 
   if (isStorageSupported && isTilingOptimalSupported) {
-    usageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
+    // vinsentli, 关闭VK_IMAGE_USAGE_STORAGE_BIT，否则影响高通UBWC
+    // usageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
   }
 
   return usageFlags;
@@ -117,6 +123,8 @@ VkImageUsageFlags chooseUsageFlags(const VulkanFunctionTable& vf,
 } // namespace
 
 namespace igl::vulkan {
+
+#if USE_DEFAULT_SWAPCHAIN
 
 VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t height) :
   ctx_(ctx),
@@ -154,9 +162,9 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
                                                         surfaceFormat_.format,
                                                         ctx.deviceSurfaceCaps_);
 
-  {
-    const uint32_t requestedSwapchainImageCount = chooseSwapImageCount(ctx.deviceSurfaceCaps_);
+  const uint32_t requestedSwapchainImageCount = chooseSwapImageCount(ctx.deviceSurfaceCaps_);
 
+  {
     VK_ASSERT(ivkCreateSwapchain(&ctx_.vf_,
                                  device_,
                                  ctx.vkSurface_,
@@ -171,6 +179,7 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
                                  &swapchain_));
   }
   VK_ASSERT(ctx.vf_.vkGetSwapchainImagesKHR(device_, swapchain_, &numSwapchainImages_, nullptr));
+  IGL_LOG_INFO("vkGetSwapchainImagesKHR, request min:%d, actual:%d", requestedSwapchainImageCount, numSwapchainImages_);
   std::vector<VkImage> swapchainImages(numSwapchainImages_);
   swapchainImages.resize(numSwapchainImages_);
   VK_ASSERT(ctx.vf_.vkGetSwapchainImagesKHR(
@@ -329,7 +338,9 @@ Result VulkanSwapchain::acquireNextImage() {
                                        &currentImageIndex_);
   }
 
-  if (acquireResult == VK_SUBOPTIMAL_KHR) {
+  if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR) {
+      return Result(Result::Code::RuntimeError);
+  } else if (acquireResult == VK_SUBOPTIMAL_KHR) {
     IGL_LOG_INFO_ONCE(
         "vkAcquireNextImageKHR returned VK_SUBOPTIMAL_KHR. The Vulkan swapchain is no longer "
         "compatible with the surface");
@@ -371,5 +382,5 @@ Result VulkanSwapchain::present(VkSemaphore waitSemaphore) {
 
   return Result();
 }
-
+#endif
 } // namespace igl::vulkan

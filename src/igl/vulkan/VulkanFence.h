@@ -44,7 +44,7 @@ class VulkanFence final {
    * so that the fence is signaled as soon as the queue workload executes
    * on the GPU.
    */
-  bool signal(VkQueue queue);
+  bool signal(VkQueue queue) const;
 
   [[nodiscard]] bool exportable() const noexcept;
 

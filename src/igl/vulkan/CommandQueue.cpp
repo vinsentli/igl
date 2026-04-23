@@ -92,6 +92,7 @@ SubmitHandle CommandQueue::endCommandBuffer(VulkanContext& ctx,
 
   // Submit to the graphics queue.
   const bool shouldPresent = ctx.hasSwapchain() && cmdBuffer->isFromSwapchain() && present;
+#if USE_DEFAULT_SWAPCHAIN
   if (shouldPresent) {
     if (ctx.timelineSemaphore_) {
       // if we are presenting a swapchain image, signal our timeline semaphore
@@ -105,12 +106,26 @@ SubmitHandle CommandQueue::endCommandBuffer(VulkanContext& ctx,
       ctx.immediate_->waitSemaphore(ctx.swapchain_->getSemaphore());
     }
   }
-
   cmdBuffer->lastSubmitHandle_ = ctx.immediate_->submit(cmdBuffer->wrapper_);
+  if (shouldPresent) {
+    ctx.present();
+  }
+#else
+  if (shouldPresent) {
+      ctx.immediate_->waitSemaphore(ctx.swapchain_->getWaitSemaphore());
+  }
+
+  cmdBuffer->lastSubmitHandle_ = ctx.immediate_->submit(cmdBuffer->wrapper_, ctx.swapchain_->getSignalSemaphore(), ctx.swapchain_->getAcquireFence());
+  if (ctx.swapchain_->getAcquireFence()) {
+      //必须要让wrapper_.fence_激活一下，否则会一直处于等待状态，导致画面卡住
+      cmdBuffer->wrapper_.fence_.signal(ctx.immediate_->queue_);
+  }
 
   if (shouldPresent) {
     ctx.present();
   }
+#endif
+
   ctx.syncMarkSubmitted(cmdBuffer->lastSubmitHandle_);
   ctx.processDeferredTasks();
   ctx.stagingDevice_->mergeRegionsAndFreeBuffers();

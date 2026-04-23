@@ -40,10 +40,14 @@ uint32_t ivkGetMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties& memProps,
 }
 } // namespace
 
-NativeHWTextureBuffer::NativeHWTextureBuffer(igl::vulkan::Device& device, AHardwareBufferFunctionTable *funcTable, TextureFormat format) :
-  Super(device, format), INativeHWTextureBuffer(funcTable) {}
+NativeHWTextureBuffer::NativeHWTextureBuffer(igl::vulkan::Device& device, std::shared_ptr<AHardwareBufferFunctionTable> funcTable, TextureFormat format) :
+  Super(device, format), INativeHWTextureBuffer(funcTable) {
+  IGL_LOG_INFO("Create NativeHWTextureBuffer : %s", textureDesc_.debugName.c_str());
+}
 
-NativeHWTextureBuffer::~NativeHWTextureBuffer() {}
+NativeHWTextureBuffer::~NativeHWTextureBuffer() {
+  IGL_LOG_INFO("Destroy NativeHWTextureBuffer : %s", textureDesc_.debugName.c_str());
+}
 
 Result NativeHWTextureBuffer::create(const TextureDesc& desc) {
   return createHWBuffer(desc, false, false);
@@ -69,9 +73,8 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
   }
   if (hwbDesc.usage & AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT) {
     usage_flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    // There is no matching usage flag in AHardwareBuffer to match VK_IMAGE_USAGE_STORAGE_BIT in
-    // Vulkan. So we assume if the the color output flag is set for the buffer, we
-    // enable the storage usage.
+  }
+  if (hwbDesc.usage & AHARDWAREBUFFER_USAGE_GPU_DATA_BUFFER) {
     usage_flags |= VK_IMAGE_USAGE_STORAGE_BIT;
   }
 

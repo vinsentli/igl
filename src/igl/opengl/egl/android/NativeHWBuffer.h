@@ -25,7 +25,7 @@ class NativeHWTextureBuffer : public igl::android::INativeHWTextureBuffer,
   using Super = TextureBufferBase;
 
  public:
-  NativeHWTextureBuffer(IContext& context, AHardwareBufferFunctionTable *funcTable, TextureFormat format) : Super(context, format), INativeHWTextureBuffer(funcTable) {}
+  NativeHWTextureBuffer(IContext& context, std::shared_ptr<AHardwareBufferFunctionTable> funcTable, TextureFormat format) : Super(context, format), INativeHWTextureBuffer(funcTable) {}
   ~NativeHWTextureBuffer() override;
 
   // Texture overrides

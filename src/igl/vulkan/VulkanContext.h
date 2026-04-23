@@ -255,7 +255,9 @@ class VulkanContext final {
   void createInstance(size_t numExtraExtensions,
                       const char* IGL_NULLABLE* IGL_NULLABLE extraExtensions);
   VkResult checkAndUpdateDescriptorSets();
+public:
   void pruneTextures();
+private:
   void querySurfaceCapabilities();
   void processDeferredTasks() const;
   void growBindlessDescriptorPool(uint32_t newMaxTextures, uint32_t newMaxSamplers);
@@ -306,7 +308,7 @@ class VulkanContext final {
   const VulkanFunctionTable& vf_;
   DeviceQueues deviceQueues_;
   std::unique_ptr<VulkanDevice> device_;
-  std::unique_ptr<VulkanSwapchain> swapchain_;
+  std::shared_ptr<VulkanSwapchain> swapchain_;
   std::unique_ptr<VulkanSemaphore> timelineSemaphore_;
   std::unique_ptr<VulkanImmediateCommands> immediate_;
   std::unique_ptr<VulkanStagingDevice> stagingDevice_;
@@ -381,6 +383,9 @@ class VulkanContext final {
   // sync resources
   uint32_t syncCurrentIndex_ = 0u;
   std::vector<SubmitHandle> syncSubmitHandles_;
+  void* window_ = nullptr;
+
+  bool supportMemoryLess_ = false;
 };
 
 } // namespace igl::vulkan

@@ -77,6 +77,8 @@ class PlatformDevice : public IPlatformDevice {
     nativeDepthTexture_ = nullptr;
   }
 
+  std::shared_ptr<AHardwareBufferFunctionTable> getFunctionTable() const { return funcTable_; }
+
  protected:
   [[nodiscard]] bool isType(PlatformDeviceType t) const noexcept override {
     return t == Type;
@@ -88,7 +90,7 @@ class PlatformDevice : public IPlatformDevice {
   std::shared_ptr<ITexture> nativeDepthTexture_;
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
-  std::unique_ptr<AHardwareBufferFunctionTable> funcTable_;
+  std::shared_ptr<AHardwareBufferFunctionTable> funcTable_;
 #endif
 };
 

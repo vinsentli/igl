@@ -307,6 +307,7 @@ class VulkanImage final {
   VkFormatProperties formatProperties_{};
   void* mappedPtr_ = nullptr;
   bool isExternallyManaged_ = false;
+  bool isDeferFreeMemory_ = true;
   VkExtent3D extent_ = {0, 0, 0};
   VkImageType type_ = VK_IMAGE_TYPE_MAX_ENUM;
   VkFormat imageFormat_ = VK_FORMAT_UNDEFINED;

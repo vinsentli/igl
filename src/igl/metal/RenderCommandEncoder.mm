@@ -317,7 +317,8 @@ void RenderCommandEncoder::bindVertexBuffer(uint32_t index, IBuffer& buffer, siz
 
 void RenderCommandEncoder::bindIndexBuffer(IBuffer& buffer,
                                            IndexFormat format,
-                                           size_t bufferOffset) {
+                                           size_t bufferOffset,
+                                           bool /*bindVAO*/) {
   auto& metalBuffer = static_cast<Buffer&>(buffer);
   indexBuffer_ = metalBuffer.get();
   indexType_ = convertIndexType(format);

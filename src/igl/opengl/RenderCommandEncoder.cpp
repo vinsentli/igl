@@ -306,11 +306,12 @@ void RenderCommandEncoder::bindVertexBuffer(uint32_t index, IBuffer& buffer, siz
 
 void RenderCommandEncoder::bindIndexBuffer(IBuffer& buffer,
                                            IndexFormat format,
-                                           size_t bufferOffset) {
+                                           size_t bufferOffset,
+                                           bool bindVAO) {
   if (IGL_DEBUG_VERIFY(adapter_)) {
     indexType_ = toGlType(format);
     indexBufferOffset_ = reinterpret_cast<void*>(bufferOffset);
-    adapter_->setIndexBuffer((Buffer&)buffer);
+    adapter_->setIndexBuffer((Buffer&)buffer, bindVAO);
   }
 }
 

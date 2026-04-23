@@ -10,6 +10,112 @@
 
 namespace igl::vulkan {
 
+static uint64_t g_DeviceMemoryTotal = 0;
+
+std::string VkObjectTypeToString(VkObjectType type){
+    switch (type) {
+        case VK_OBJECT_TYPE_UNKNOWN:
+            return "UNKNOWN";
+        case VK_OBJECT_TYPE_INSTANCE:
+            return "INSTANCE";
+        case VK_OBJECT_TYPE_PHYSICAL_DEVICE:
+            return "PHYSICAL_DEVICE";
+        case VK_OBJECT_TYPE_DEVICE:
+            return "DEVICE";
+        case VK_OBJECT_TYPE_QUEUE:
+            return "QUEUE";
+        case VK_OBJECT_TYPE_SEMAPHORE:
+            return "SEMAPHORE";
+        case VK_OBJECT_TYPE_COMMAND_BUFFER:
+            return "COMMAND_BUFFER";
+        case VK_OBJECT_TYPE_FENCE:
+            return "FENCE";
+        case VK_OBJECT_TYPE_DEVICE_MEMORY:
+            return "DEVICE_MEMORY";
+        case VK_OBJECT_TYPE_BUFFER:
+            return "BUFFER";
+        case VK_OBJECT_TYPE_IMAGE:
+            return "IMAGE";
+        case VK_OBJECT_TYPE_EVENT:
+            return "EVENT";
+        case VK_OBJECT_TYPE_QUERY_POOL:
+            return "QUERY_POOL";
+        case VK_OBJECT_TYPE_BUFFER_VIEW:
+            return "BUFFER_VIEW";
+        case VK_OBJECT_TYPE_IMAGE_VIEW:
+            return "IMAGE_VIEW";
+        case VK_OBJECT_TYPE_SHADER_MODULE:
+            return "SHADER_MODULE";
+        case VK_OBJECT_TYPE_PIPELINE_CACHE:
+            return "PIPELINE_CACHE";
+        case VK_OBJECT_TYPE_PIPELINE_LAYOUT:
+            return "PIPELINE_LAYOUT";
+        case VK_OBJECT_TYPE_RENDER_PASS:
+            return "RENDER_PASS";
+        case VK_OBJECT_TYPE_PIPELINE:
+            return "PIPELINE";
+        case VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT:
+            return "DESCRIPTOR_SET_LAYOUT";
+        case VK_OBJECT_TYPE_SAMPLER:
+            return "SAMPLER";
+        case VK_OBJECT_TYPE_DESCRIPTOR_POOL:
+            return "DESCRIPTOR_POOL";
+        case VK_OBJECT_TYPE_DESCRIPTOR_SET:
+            return "DESCRIPTOR_SET";
+        case VK_OBJECT_TYPE_FRAMEBUFFER:
+            return "FRAMEBUFFER";
+        case VK_OBJECT_TYPE_COMMAND_POOL:
+            return "COMMAND_POOL";
+        default:
+            return "???";
+    }
+    return "???";
+}
+
+void DeviceMemoryReportCallbackEXT(const VkDeviceMemoryReportCallbackDataEXT*  pCallbackData, void* pUserData){
+    std::string memoryAction;
+    bool isPrintError = false;
+    isPrintError = pCallbackData->size >= 1024 * 1024;
+    switch (pCallbackData->type) {
+        case VK_DEVICE_MEMORY_REPORT_EVENT_TYPE_ALLOCATE_EXT:
+            memoryAction = "Alloc";
+            g_DeviceMemoryTotal += pCallbackData->size;
+            break;
+        case VK_DEVICE_MEMORY_REPORT_EVENT_TYPE_FREE_EXT:
+            memoryAction = "Free";
+            g_DeviceMemoryTotal -= pCallbackData->size;
+            break;
+        case VK_DEVICE_MEMORY_REPORT_EVENT_TYPE_IMPORT_EXT:
+            memoryAction = "Import";
+            break;
+        case VK_DEVICE_MEMORY_REPORT_EVENT_TYPE_UNIMPORT_EXT:
+            memoryAction = "UnImport";
+            break;
+        default:
+            break;
+    }
+
+    std::string strSize;
+    if (pCallbackData->size >= 1024 * 1024){
+        strSize = IGL_FORMAT("{}M", pCallbackData->size / 1024 / 1024);
+    } else if (pCallbackData->size >= 1024){
+        strSize = IGL_FORMAT("{}K", pCallbackData->size / 1024);
+    } else {
+        strSize = IGL_FORMAT("{}B", pCallbackData->size);
+    }
+
+    std::string msg = IGL_FORMAT("Vulkan driven {} memory, type:{}[{}], size:{}, total:{}M",
+                                 memoryAction.c_str(),
+                                 VkObjectTypeToString(pCallbackData->objectType).c_str(),
+                                 (int)pCallbackData->objectType, strSize.c_str(), g_DeviceMemoryTotal / 1024 / 1024);
+
+    if (isPrintError) {
+        IGL_LOG_ERROR(msg.c_str());
+    } else {
+        IGL_LOG_INFO(msg.c_str());
+    }
+}
+
 VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
   // Vulkan 1.1
   vkPhysicalDeviceFeatures2({
@@ -78,6 +184,16 @@ VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
       .storagePushConstant16 = VK_FALSE,
       .storageInputOutput16 = VK_FALSE,
   }),
+  featuresMemoryReport({
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEVICE_MEMORY_REPORT_FEATURES_EXT,
+      .deviceMemoryReport = VK_TRUE,
+  }),
+#ifndef NDEBUG
+  deviceMemoryReportCreateInfo({
+      .sType = VK_STRUCTURE_TYPE_DEVICE_DEVICE_MEMORY_REPORT_CREATE_INFO_EXT,
+      .pfnUserCallback = DeviceMemoryReportCallbackEXT,
+  }),
+#endif
   // Vulkan 1.2
   featuresShaderFloat16Int8({
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR,
@@ -254,6 +370,10 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& config) noe
   featuresSamplerYcbcrConversion.pNext = nullptr;
   featuresShaderDrawParameters.pNext = nullptr;
   featuresMultiview.pNext = nullptr;
+  featuresMemoryReport.pNext = nullptr;
+#ifndef NDEBUG
+  deviceMemoryReportCreateInfo.pNext = nullptr;
+#endif
   featuresIndexTypeUint8.pNext = nullptr;
   featuresSynchronization2.pNext = nullptr;
   featuresTimelineSemaphore.pNext = nullptr;
@@ -303,6 +423,13 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& config) noe
   if (hasExtension(VK_KHR_UNIFORM_BUFFER_STANDARD_LAYOUT_EXTENSION_NAME)) {
     ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresUniformBufferStandardLayout);
   }
+#ifndef NDEBUG
+  if (hasExtension(VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME)) {
+    ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresMemoryReport);
+    ivkAddNext(&vkPhysicalDeviceFeatures2, &deviceMemoryReportCreateInfo);
+  }
+#endif
+
   if (config_.enableMultiviewPerViewViewports) {
     if (hasExtension(VK_QCOM_MULTIVIEW_PER_VIEW_VIEWPORTS_EXTENSION_NAME)) {
       ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresMultiviewPerViewViewports);
@@ -466,6 +593,9 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
   enable(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME, ExtensionType::Device);
   enable(VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME, ExtensionType::Device);
   enable(VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME, ExtensionType::Device);
+  enable(VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME, ExtensionType::Device);
+  has_VK_KHR_external_semaphore_fd = enable(VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME, ExtensionType::Device);
+  IGL_DEBUG_ASSERT(has_VK_KHR_external_semaphore_fd);
 #endif // IGL_PLATFORM_ANDROID
 
 #if !IGL_DEBUG
@@ -495,14 +625,15 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
   has_VK_EXT_queue_family_foreign =
       enable(VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME, ExtensionType::Device);
 
-  has_VK_KHR_timeline_semaphore =
-      enable(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME, ExtensionType::Device);
+  //Vinsentli：经过测试，开启timeline_semaphore会导致帧率下降，CPU上升。
+//  has_VK_KHR_timeline_semaphore =
+//      enable(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME, ExtensionType::Device);
 
   has_VK_KHR_uniform_buffer_standard_layout =
       enable(VK_KHR_UNIFORM_BUFFER_STANDARD_LAYOUT_EXTENSION_NAME, ExtensionType::Device);
 
-  has_VK_KHR_synchronization2 =
-      enable(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, ExtensionType::Device);
+//  has_VK_KHR_synchronization2 =
+//      enable(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, ExtensionType::Device);
 
   has_VK_KHR_8bit_storage = enable(VK_KHR_8BIT_STORAGE_EXTENSION_NAME, ExtensionType::Device);
 
@@ -512,6 +643,8 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
   has_VK_KHR_create_renderpass2 =
       enable(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME, ExtensionType::Device);
 
+  enable(VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME, ExtensionType::Device);
+
   has_VK_KHR_vulkan_memory_model =
       enable(VK_KHR_VULKAN_MEMORY_MODEL_EXTENSION_NAME, ExtensionType::Device);
 
@@ -520,6 +653,10 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
 
   has_VK_EXT_fragment_density_map =
       enable(VK_EXT_FRAGMENT_DENSITY_MAP_EXTENSION_NAME, ExtensionType::Device);
+
+#ifndef NDEBUG
+  has_VK_EXT_device_memory_report = enable(VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME, ExtensionType::Device);
+#endif
 
   if (config_.enableMultiviewPerViewViewports) {
     has_VK_QCOM_multiview_per_view_viewports =

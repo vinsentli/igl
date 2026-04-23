@@ -61,7 +61,7 @@ class RenderCommandAdapter final : public WithContext {
 
   void clearVertexBuffers();
   void setVertexBuffer(Buffer& buffer, size_t offset, size_t index, Result* outResult = nullptr);
-  void setIndexBuffer(Buffer& buffer);
+  void setIndexBuffer(Buffer& buffer, bool bindVAO = true);
 
   void clearUniformBuffers();
   void setUniformBuffer(Buffer* buffer,
@@ -159,6 +159,7 @@ class RenderCommandAdapter final : public WithContext {
 
   UnbindPolicy cachedUnbindPolicy_;
   bool useVAO_ = false;
+  bool vaoBound_ = false;
 };
 } // namespace opengl
 } // namespace igl

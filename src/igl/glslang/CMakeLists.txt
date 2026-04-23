@@ -29,7 +29,7 @@ add_subdirectory(${IGL_ROOT_DIR}/third-party/deps/src/glslang "glslang")
 igl_set_folder(SPIRV              "third-party/glslang")
 # cmake-format: on
 
-target_link_libraries(IGLGlslang PUBLIC SPIRV)
+target_link_libraries(IGLGlslang PUBLIC SPIRV glslang-default-resource-limits)
 #target_link_libraries(IGLGlslang PUBLIC glslang SPIRV glslang-default-resource-limits)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
