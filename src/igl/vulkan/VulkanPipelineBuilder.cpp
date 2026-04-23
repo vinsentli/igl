@@ -127,6 +127,7 @@ VulkanPipelineBuilder& VulkanPipelineBuilder::stencilStateOps(VkStencilFaceFlags
 
 VkResult VulkanPipelineBuilder::build(const VulkanFunctionTable& vf,
                                       VkDevice device,
+                                      VkPipelineCreateFlags flags,
                                       VkPipelineCache pipelineCache,
                                       VkPipelineLayout pipelineLayout,
                                       VkRenderPass renderPass,
@@ -144,6 +145,7 @@ VkResult VulkanPipelineBuilder::build(const VulkanFunctionTable& vf,
   const auto result = ivkCreateGraphicsPipeline(&vf,
                                                 device,
                                                 pipelineCache,
+                                                flags,
                                                 (uint32_t)shaderStages_.size(),
                                                 shaderStages_.data(),
                                                 &vertexInputState_,
@@ -178,12 +180,13 @@ VulkanComputePipelineBuilder& VulkanComputePipelineBuilder::shaderStage(
 
 VkResult VulkanComputePipelineBuilder::build(const VulkanFunctionTable& vf,
                                              VkDevice device,
+                                             VkPipelineCreateFlags flags,
                                              VkPipelineCache pipelineCache,
                                              VkPipelineLayout pipelineLayout,
                                              VkPipeline* outPipeline,
                                              const char* debugName) noexcept {
   const VkResult result = ivkCreateComputePipeline(
-      &vf, device, pipelineCache, &shaderStage_, pipelineLayout, outPipeline);
+      &vf, device, pipelineCache, flags, &shaderStage_, pipelineLayout, outPipeline);
 
   if (!IGL_DEBUG_VERIFY(result == VK_SUCCESS)) {
     return result;

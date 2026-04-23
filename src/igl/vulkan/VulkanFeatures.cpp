@@ -234,6 +234,10 @@ VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PER_VIEW_VIEWPORTS_FEATURES_QCOM,
       .multiviewPerViewViewports = VK_TRUE,
   }),
+  featuresDescriptorBuffer({
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
+      .descriptorBuffer = VK_TRUE,
+  }),
   config_(config) {
   extensions_.resize(kNumberOfExtensionTypes);
   enabledExtensions_.resize(kNumberOfExtensionTypes);
@@ -386,6 +390,7 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& config) noe
   featuresFragmentDensityMap.pNext = nullptr;
   features8BitStorage.pNext = nullptr;
   featuresUniformBufferStandardLayout.pNext = nullptr;
+  featuresDescriptorBuffer.pNext = nullptr;
 
   // Add the required and optional features to the VkPhysicalDeviceFetaures2_
   ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresSamplerYcbcrConversion);
@@ -422,6 +427,9 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& config) noe
   }
   if (hasExtension(VK_KHR_UNIFORM_BUFFER_STANDARD_LAYOUT_EXTENSION_NAME)) {
     ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresUniformBufferStandardLayout);
+  }
+  if (hasExtension(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)) {
+    ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresDescriptorBuffer);
   }
 #ifndef NDEBUG
   if (hasExtension(VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME)) {
@@ -647,6 +655,9 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
 
   has_VK_KHR_vulkan_memory_model =
       enable(VK_KHR_VULKAN_MEMORY_MODEL_EXTENSION_NAME, ExtensionType::Device);
+
+  has_VK_EXT_descriptor_buffer =
+      enable(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME, ExtensionType::Device);
 
   has_VK_EXT_descriptor_indexing =
       enable(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, ExtensionType::Device);

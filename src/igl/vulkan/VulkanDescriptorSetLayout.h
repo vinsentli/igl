@@ -39,6 +39,7 @@ class VulkanDescriptorSetLayout final {
  public:
   const VulkanContext& ctx_;
   VkDescriptorSetLayout vkDescriptorSetLayout_ = VK_NULL_HANDLE;
+  VkDeviceSize layoutSize_{};
   uint32_t numBindings_ = 0;
 };
 

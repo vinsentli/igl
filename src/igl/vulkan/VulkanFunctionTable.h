@@ -381,6 +381,21 @@ struct VulkanFunctionTable {
 #else
   PFN_vkVoidFunction __ignore_alignment18[11];
 #endif /* defined(VK_EXT_debug_utils) */
+#if defined(VK_EXT_descriptor_buffer)
+  PFN_vkGetDescriptorSetLayoutSizeEXT vkGetDescriptorSetLayoutSizeEXT;
+  PFN_vkGetDescriptorSetLayoutBindingOffsetEXT vkGetDescriptorSetLayoutBindingOffsetEXT;
+  PFN_vkGetDescriptorEXT vkGetDescriptorEXT;
+  PFN_vkCmdBindDescriptorBuffersEXT vkCmdBindDescriptorBuffersEXT;
+  PFN_vkCmdSetDescriptorBufferOffsetsEXT vkCmdSetDescriptorBufferOffsetsEXT;
+  PFN_vkCmdBindDescriptorBufferEmbeddedSamplersEXT vkCmdBindDescriptorBufferEmbeddedSamplersEXT;
+  PFN_vkGetBufferOpaqueCaptureDescriptorDataEXT vkGetBufferOpaqueCaptureDescriptorDataEXT;
+  PFN_vkGetImageOpaqueCaptureDescriptorDataEXT vkGetImageOpaqueCaptureDescriptorDataEXT;
+  PFN_vkGetImageViewOpaqueCaptureDescriptorDataEXT vkGetImageViewOpaqueCaptureDescriptorDataEXT;
+  PFN_vkGetSamplerOpaqueCaptureDescriptorDataEXT vkGetSamplerOpaqueCaptureDescriptorDataEXT;
+  PFN_vkGetAccelerationStructureOpaqueCaptureDescriptorDataEXT vkGetAccelerationStructureOpaqueCaptureDescriptorDataEXT;
+#else
+  PFN_vkVoidFunction __ignore_alignment18a[11];
+#endif
 #if defined(VK_EXT_direct_mode_display)
   PFN_vkReleaseDisplayEXT vkReleaseDisplayEXT;
 #else
@@ -1130,7 +1145,7 @@ struct VulkanFunctionTable {
 
 #ifdef __cplusplus
 /* IGL_GENERATE_SIZE_CHECK */
-static_assert(sizeof(VulkanFunctionTable) == 543 * sizeof(PFN_vkVoidFunction));
+static_assert(sizeof(VulkanFunctionTable) == 554 * sizeof(PFN_vkVoidFunction));
 /* IGL_GENERATE_SIZE_CHECK */
 #endif
 

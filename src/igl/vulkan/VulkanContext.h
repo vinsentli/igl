@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <array>
 #include <deque>
 #include <future>
 #include <memory>
@@ -78,6 +79,14 @@ struct DeviceQueues {
   VkQueue IGL_NULLABLE computeQueue = VK_NULL_HANDLE;
 
   DeviceQueues() = default;
+};
+
+struct DescriptorBuffer {
+  std::shared_ptr<VulkanBuffer> buffer;
+  void* mappedPtr = nullptr;
+  size_t offset = 0;
+  VulkanImmediateCommands::SubmitHandle handle = {};
+  VkCommandBuffer bindCmdBuffer = VK_NULL_HANDLE;
 };
 
 class VulkanContext final {
@@ -296,6 +305,8 @@ private:
   VkPhysicalDeviceDriverPropertiesKHR vkPhysicalDeviceDriverProperties_{};
   // Provided by VK_VERSION_1_1
   VkPhysicalDeviceProperties2 vkPhysicalDeviceProperties2_{};
+  // Provided by VK_EXT_descriptor_buffer
+  VkPhysicalDeviceDescriptorBufferPropertiesEXT vkPhysicalDeviceDescriptorBufferProperties_{};
 
   std::vector<VkFormat> deviceDepthFormats_;
   std::vector<VkSurfaceFormatKHR> deviceSurfaceFormats_;
@@ -315,6 +326,7 @@ private:
 
   std::unique_ptr<VulkanBuffer> dummyUniformBuffer_;
   std::unique_ptr<VulkanBuffer> dummyStorageBuffer_;
+
   // don't use staging on devices with device-local host-visible memory
   bool useStagingForBuffers_ = true;
 
@@ -368,6 +380,30 @@ private:
                                    const BindingsStorageImages& data,
                                    const VulkanDescriptorSetLayout& dsl,
                                    const util::SpvModuleInfo& info) const;
+  void updateBindingsTexturesByDescriptorBuffer(
+      VkCommandBuffer IGL_NONNULL cmdBuf,
+      VkPipelineLayout IGL_NULLABLE layout,
+      VkPipelineBindPoint bindPoint,
+      VulkanImmediateCommands::SubmitHandle nextSubmitHandle,
+      const BindingsTextures& data,
+      const VulkanDescriptorSetLayout& dsl,
+      const util::SpvModuleInfo& info) const;
+  void updateBindingsBuffersByDescriptorBuffer(
+      VkCommandBuffer IGL_NONNULL cmdBuf,
+      VkPipelineLayout IGL_NULLABLE layout,
+      VkPipelineBindPoint bindPoint,
+      VulkanImmediateCommands::SubmitHandle nextSubmitHandle,
+      BindingsBuffers& data,
+      const VulkanDescriptorSetLayout& dsl,
+      const util::SpvModuleInfo& info);
+  void updateBindingsStorageImagesByDescriptorBuffer(
+      VkCommandBuffer IGL_NONNULL cmdBuf,
+      VkPipelineLayout IGL_NULLABLE layout,
+      VkPipelineBindPoint bindPoint,
+      VulkanImmediateCommands::SubmitHandle nextSubmitHandle,
+      const BindingsStorageImages& data,
+      const VulkanDescriptorSetLayout& dsl,
+      const util::SpvModuleInfo& info) const;
 
   struct DeferredTask {
     DeferredTask(std::packaged_task<void()>&& task, SubmitHandle handle) :

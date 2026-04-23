@@ -90,6 +90,7 @@ VkPipeline ComputePipelineState::getVkPipeline() const {
                                      DSLs,
                                      info_.hasPushConstants ? &pushConstantRange_ : nullptr);
 
+  VkPipelineCreateFlags flags = ctx.features().has_VK_EXT_descriptor_buffer ? VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : VkPipelineCreateFlags{};
   VkDevice device = ctx.device_->getVkDevice();
   VK_ASSERT(ctx.vf_.vkCreatePipelineLayout(device, &ci, nullptr, &pipelineLayout_));
   VK_ASSERT(
@@ -109,6 +110,7 @@ VkPipeline ComputePipelineState::getVkPipeline() const {
           shaderModule->info().entryPoint.c_str(), specializationInfo ? &specializationInfo->info : NULL))
       .build(ctx.vf_,
              ctx.device_->getVkDevice(),
+             flags,
              ctx.pipelineCache_,
              pipelineLayout_,
              &pipeline_,

@@ -160,6 +160,30 @@ void loadVulkanInstanceFunctions(struct VulkanFunctionTable* table,
         (PFN_vkSubmitDebugUtilsMessageEXT)load(context, "vkSubmitDebugUtilsMessageEXT");
   }
 #endif /* defined(VK_EXT_debug_utils) */
+#if defined(VK_EXT_descriptor_buffer)
+  table->vkGetDescriptorSetLayoutSizeEXT =
+      (PFN_vkGetDescriptorSetLayoutSizeEXT)load(context, "vkGetDescriptorSetLayoutSizeEXT");
+  table->vkGetDescriptorSetLayoutBindingOffsetEXT =
+      (PFN_vkGetDescriptorSetLayoutBindingOffsetEXT)load(context, "vkGetDescriptorSetLayoutBindingOffsetEXT");
+  table->vkGetDescriptorEXT =
+      (PFN_vkGetDescriptorEXT)load(context, "vkGetDescriptorEXT");
+  table->vkCmdBindDescriptorBuffersEXT =
+      (PFN_vkCmdBindDescriptorBuffersEXT)load(context, "vkCmdBindDescriptorBuffersEXT");
+  table->vkCmdSetDescriptorBufferOffsetsEXT =
+      (PFN_vkCmdSetDescriptorBufferOffsetsEXT)load(context, "vkCmdSetDescriptorBufferOffsetsEXT");
+  table->vkCmdBindDescriptorBufferEmbeddedSamplersEXT =
+      (PFN_vkCmdBindDescriptorBufferEmbeddedSamplersEXT)load(context, "vkCmdBindDescriptorBufferEmbeddedSamplersEXT");
+  table->vkGetBufferOpaqueCaptureDescriptorDataEXT =
+      (PFN_vkGetBufferOpaqueCaptureDescriptorDataEXT)load(context, "vkGetBufferOpaqueCaptureDescriptorDataEXT");
+  table->vkGetImageOpaqueCaptureDescriptorDataEXT =
+      (PFN_vkGetImageOpaqueCaptureDescriptorDataEXT)load(context, "vkGetImageOpaqueCaptureDescriptorDataEXT");
+  table->vkGetImageViewOpaqueCaptureDescriptorDataEXT =
+      (PFN_vkGetImageViewOpaqueCaptureDescriptorDataEXT)load(context, "vkGetImageViewOpaqueCaptureDescriptorDataEXT");
+  table->vkGetSamplerOpaqueCaptureDescriptorDataEXT =
+      (PFN_vkGetSamplerOpaqueCaptureDescriptorDataEXT)load(context, "vkGetSamplerOpaqueCaptureDescriptorDataEXT");
+  table->vkGetAccelerationStructureOpaqueCaptureDescriptorDataEXT =
+      (PFN_vkGetAccelerationStructureOpaqueCaptureDescriptorDataEXT)load(context, "vkGetAccelerationStructureOpaqueCaptureDescriptorDataEXT");
+#endif /* defined(VK_EXT_descriptor_buffer) */
 #if defined(VK_EXT_direct_mode_display)
   table->vkReleaseDisplayEXT = (PFN_vkReleaseDisplayEXT)load(context, "vkReleaseDisplayEXT");
 #endif /* defined(VK_EXT_direct_mode_display) */
@@ -974,16 +998,16 @@ void loadVulkanDeviceFunctions(struct VulkanFunctionTable* table,
   table->vkCmdNextSubpass2KHR = (PFN_vkCmdNextSubpass2KHR)load(context, "vkCmdNextSubpass2KHR");
   table->vkCreateRenderPass2KHR =
       (PFN_vkCreateRenderPass2KHR)load(context, "vkCreateRenderPass2KHR");
-  if (!table->vkCmdBeginRenderPass2) {
+  if (!table->vkCmdBeginRenderPass2 && table->vkCmdBeginRenderPass2KHR) {
     table->vkCmdBeginRenderPass2 = table->vkCmdBeginRenderPass2KHR;
   }
-  if (!table->vkCmdEndRenderPass2) {
+  if (!table->vkCmdEndRenderPass2 && table->vkCmdEndRenderPass2KHR) {
     table->vkCmdEndRenderPass2 = table->vkCmdEndRenderPass2KHR;
   }
-  if (!table->vkCmdNextSubpass2) {
+  if (!table->vkCmdNextSubpass2 && table->vkCmdNextSubpass2KHR) {
     table->vkCmdNextSubpass2 = table->vkCmdNextSubpass2KHR;
   }
-  if (!table->vkCreateRenderPass2) {
+  if (!table->vkCreateRenderPass2 && table->vkCreateRenderPass2KHR) {
     table->vkCreateRenderPass2 = table->vkCreateRenderPass2KHR;
   }
 #endif /* defined(VK_KHR_create_renderpass2) */
