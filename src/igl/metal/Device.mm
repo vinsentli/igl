@@ -333,7 +333,10 @@ std::shared_ptr<IDepthStencilState> Device::createDepthStencilState(
   metalDesc.depthCompareFunction = DepthStencilState::convertCompareFunction(desc.compareFunction);
   metalDesc.depthWriteEnabled = desc.isDepthWriteEnabled;
   metalDesc.frontFaceStencil = DepthStencilState::convertStencilDescriptor(desc.frontFaceStencil);
-  metalDesc.backFaceStencil = DepthStencilState::convertStencilDescriptor(desc.backFaceStencil);
+  if ([metalDesc respondsToSelector:@selector(setBackFaceStencil:)]) {
+    //在iOS16.3.1 (20D67)系统上，不支持backFaceStencil。
+    metalDesc.backFaceStencil = DepthStencilState::convertStencilDescriptor(desc.backFaceStencil);
+  }
   id<MTLDepthStencilState> metalObject = [device_ newDepthStencilStateWithDescriptor:metalDesc];
 
   std::shared_ptr<DepthStencilState> iglObject = std::make_shared<DepthStencilState>(metalObject);
