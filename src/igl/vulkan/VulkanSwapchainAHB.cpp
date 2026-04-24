@@ -169,7 +169,6 @@ std::shared_ptr<VulkanSemaphore> VulkanSwapchain::CreateSemaphoreFromFD(int fd) 
   VkResult ret = ctx_.vf_.vkImportSemaphoreFdKHR(ctx_.device_->device_, &importInfo);
 
   if (ret == VK_SUCCESS) {
-    IGL_LOG_INFO("VulkanSwapchain::vkImportSemaphoreFdKHR:ret=%d, dup fd=%d", ret, fd);
     return semaphore;
   } else {
     IGL_LOG_ERROR("VulkanSwapchain::vkImportSemaphoreFdKHR:ret=%d, dup fd=%d", ret, fd);
@@ -229,13 +228,8 @@ std::shared_ptr<ITexture> VulkanSwapchain::getCurrentVulkanTexture(Device& devic
     frameId_ = (frameId_ + 1) % kMaxPendingPresents;
 
 #if WAIT_SURFACE_FLINGER
-    IGL_LOG_INFO("VulkanSwapchain------------------------------------------------");
-    IGL_LOG_INFO("VulkanSwapchain::getCurrentVulkanTexture, acquireFence wait");
     frameSync_[frameId_].acquireFence->wait();
-    IGL_LOG_INFO("VulkanSwapchain::getCurrentVulkanTexture, acquireFence wait finish");
-
     frameSync_[frameId_].acquireFence->reset();
-    IGL_LOG_INFO("VulkanSwapchain::getCurrentVulkanTexture, acquireFence reset finish");
 #endif
     frameSync_[frameId_].presentReady = std::make_shared<VulkanSemaphore>(
         ctx_.vf_,
@@ -283,33 +277,16 @@ void VulkanSwapchain::SubmitFrameToSystem(int gpuFenceFd, VkSemaphore waitSemaph
   PrintFileDescriptorCount();
 #endif
 
-  // 1. 初始化 SurfaceControl (通常只需创建一次，建议全局保存)
   if (surfaceControl_ == nullptr) {
-    // 将 ANativeWindow 包装成可受事务控制的 ASurfaceControl
     surfaceControl_ =
         funcTable_->ASurfaceControl_createFromWindow(nativeWindow_, surfaceControlName_.c_str());
     IGL_DEBUG_ASSERT(surfaceControl_);
   }
 
-  // 2. 创建一个原子事务
   ASurfaceTransaction* transaction = funcTable_->ASurfaceTransaction_create();
 
-  // 3. 设置 Buffer 及其同步栅栏
-  // 这里的 gpuFenceFd 告诉系统：请等这个 Fence 信号发出后（GPU画完），再把 Buffer 显示出来
   funcTable_->ASurfaceTransaction_setBuffer(
       transaction, surfaceControl_, texture->getHardwareBuffer(), gpuFenceFd);
-
-  // 4. 配置显示属性 (可选，但常用)
-#if 0 // 不需要设置旋转，效果正常
-    ARect source{
-        .left = 0,
-        .top = 0,
-        .right = (int32_t)width_,
-        .bottom = (int32_t)height_,
-    };
-
-    ASurfaceTransaction_setGeometry(transaction, rootControl_, source, source, transform_);
-#endif
 
   TransactionInFlightData* inFlightData = nullptr;
 #if WAIT_SURFACE_FLINGER
@@ -318,14 +295,9 @@ void VulkanSwapchain::SubmitFrameToSystem(int gpuFenceFd, VkSemaphore waitSemaph
   inFlightData->texture = texture;
 #endif
 
-  // 5. 设置完成回调 (非常重要：用于 Buffer 回收)
-  // 系统显示完这个 Buffer 后，会通过回调告知你，这样你才能把 AHB 放回池子里给 Vulkan 重复使用
   funcTable_->ASurfaceTransaction_setOnComplete(
       transaction, inFlightData, [](void* context, ASurfaceTransactionStats* stats) {
-  // 在这里处理 Buffer 释放或统计逻辑
-  // 注意：这是在另一个线程异步触发的
 #if WAIT_SURFACE_FLINGER
-        IGL_LOG_INFO("VulkanSwapchain::ASurfaceTransaction_setOnComplete");
         auto data = reinterpret_cast<TransactionInFlightData*>(context);
         auto thiz = data->swapchain.lock();
         auto texture = std::move(data->texture);
@@ -338,7 +310,6 @@ void VulkanSwapchain::SubmitFrameToSystem(int gpuFenceFd, VkSemaphore waitSemaph
 
         int releaseFd = thiz->funcTable_->ASurfaceTransactionStats_getPreviousReleaseFenceFd(
             stats, thiz->surfaceControl_);
-        IGL_LOG_INFO("VulkanSwapchain getPreviousReleaseFenceFd:%d", releaseFd);
 
         std::lock_guard<std::mutex> lock(thiz->currentlyDisplayedTextureMutex_);
         auto previous_texture = thiz->currentlyDisplayedTexture_;
@@ -348,11 +319,7 @@ void VulkanSwapchain::SubmitFrameToSystem(int gpuFenceFd, VkSemaphore waitSemaph
 #endif
       });
 
-  // 6. 应用并提交事务
-  // 一旦 apply，系统合成器 SurfaceFlinger 就会接管这个 Buffer
   funcTable_->ASurfaceTransaction_apply(transaction);
-
-  // 7. 清理事务对象 (apply 后即可删除事务描述符，不会影响已提交的 Buffer)
   funcTable_->ASurfaceTransaction_delete(transaction);
 }
 
