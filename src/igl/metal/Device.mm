@@ -706,7 +706,6 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
   }
 
   if (!metalLibrary) {
-    IGL_DEBUG_ASSERT(!error, "%s\n", [error.localizedDescription UTF8String]);
     setResultFrom(outResult, error);
     return nullptr;
   }
