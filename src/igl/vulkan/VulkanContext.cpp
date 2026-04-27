@@ -2107,6 +2107,8 @@ void VulkanContext::updateBindingsBuffersByDescriptorBuffer(
 
   auto uniformBufferDescriptorSize =
       vkPhysicalDeviceDescriptorBufferProperties_.uniformBufferDescriptorSize;
+  auto storageBufferDescriptorSize =
+      vkPhysicalDeviceDescriptorBufferProperties_.storageBufferDescriptorSize;
   auto alignment = vkPhysicalDeviceDescriptorBufferProperties_.descriptorBufferOffsetAlignment;
   auto layoutSize = dsl.layoutSize;
 
@@ -2137,13 +2139,13 @@ void VulkanContext::updateBindingsBuffersByDescriptorBuffer(
 
     VkDescriptorGetInfoEXT getInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
-        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .type = b.isStorage ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .data = {.pUniformBuffer = &addressInfo},
     };
 
     vf_.vkGetDescriptorEXT(getVkDevice(),
                            &getInfo,
-                           uniformBufferDescriptorSize,
+                           b.isStorage ? storageBufferDescriptorSize : uniformBufferDescriptorSize,
                            (char*)mappedPtr + originOffset + bindingOffset);
   }
 
