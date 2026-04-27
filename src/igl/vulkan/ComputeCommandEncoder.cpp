@@ -199,7 +199,11 @@ void ComputeCommandEncoder::bindTexture(uint32_t index, ITexture* texture) {
   restoreLayoutAspectFlags_[numRestoreLayouts_] = vkTex.imageView_.getVkImageAspectFlags();
   numRestoreLayouts_++;
 
-  binder_.bindTexture(index, static_cast<Texture*>(texture));
+  if (vkImage->isStorageImage()){
+    binder_.bindStorageImage(index, static_cast<Texture*>(texture));
+  } else {
+    binder_.bindTexture(index, static_cast<Texture*>(texture));
+  }
 }
 
 void ComputeCommandEncoder::bindImageTexture(uint32_t index,
