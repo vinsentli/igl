@@ -203,7 +203,7 @@ const uint16_t indexData[] = {0,  1,  2,  2,  3,  0,  4,  5,  6,  6,  7,  4,
 UniformsPerFrame perFrame;
 UniformsPerObject perObject[kNumCubes];
 
-GLFWwindow* initIGL(bool isHeadless, bool enableVulkanValidationLayers) {
+GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationLayers) {
   if (!glfwInit()) {
     printf("glfwInit() failed");
     return nullptr;
