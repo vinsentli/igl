@@ -7,10 +7,16 @@
 
 #include <shell/shared/fileLoader/apple/FileLoaderApple.h>
 
-#import <Foundation/NSBundle.h> // @donotremove
-#import <Foundation/NSFileManager.h>
-#import <Foundation/NSString.h>
+#import <Foundation/Foundation.h>
 #include <string>
+
+namespace {
+const char* nonnullUTF8(NSString* s) {
+  const char* utf8 = s.UTF8String;
+  NSCAssert(utf8, @"UTF8String returned nil");
+  return utf8;
+}
+} // namespace
 
 namespace igl::shell {
 namespace {
@@ -73,10 +79,9 @@ std::string FileLoaderApple::basePath() const {
 }
 
 std::string FileLoaderApple::fullPath(const std::string& fileName) const {
-  // NOLINTNEXTLINE(misc-const-correctness)
-  const NSString* nsPath = getBundleFilePath(fileName);
+  NSString* nsPath = getBundleFilePath(fileName);
   if (nsPath != nil) {
-    return {[nsPath UTF8String]};
+    return {nonnullUTF8(nsPath)};
   }
 
   return {};
