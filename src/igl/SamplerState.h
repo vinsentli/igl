@@ -133,11 +133,12 @@ struct SamplerStateDesc {
    * All other parameters have their default value.
    */
   static SamplerStateDesc newLinear() {
-    SamplerStateDesc desc;
-    desc.minFilter = desc.magFilter = SamplerMinMagFilter::Linear;
-    desc.mipFilter = SamplerMipFilter::Disabled;
-    desc.debugName = "newLinear()";
-    return desc;
+    return SamplerStateDesc{
+        .minFilter = SamplerMinMagFilter::Linear,
+        .magFilter = SamplerMinMagFilter::Linear,
+        .mipFilter = SamplerMipFilter::Disabled,
+        .debugName = "newLinear()",
+    };
   }
 
   /**
@@ -149,26 +150,28 @@ struct SamplerStateDesc {
    * All other parameters have their default value.
    */
   static SamplerStateDesc newLinearMipmapped() {
-    SamplerStateDesc desc;
-    desc.minFilter = desc.magFilter = SamplerMinMagFilter::Linear;
-    desc.mipFilter = SamplerMipFilter::Linear;
-    desc.debugName = "newLinearMipmapped()";
-    return desc;
+    return SamplerStateDesc{
+        .minFilter = SamplerMinMagFilter::Linear,
+        .magFilter = SamplerMinMagFilter::Linear,
+        .mipFilter = SamplerMipFilter::Linear,
+        .debugName = "newLinearMipmapped()",
+    };
   }
 
   /**
    * @brief Creates a new SamplerStateDesc instance set up for YUV conversion
    */
   static SamplerStateDesc newYUV(TextureFormat yuvFormat, const char* debugName) {
-    SamplerStateDesc desc;
-    desc.minFilter = desc.magFilter = SamplerMinMagFilter::Linear;
-    desc.mipFilter = SamplerMipFilter::Disabled;
-    desc.addressModeU = SamplerAddressMode::Clamp;
-    desc.addressModeV = SamplerAddressMode::Clamp;
-    desc.addressModeW = SamplerAddressMode::Clamp;
-    desc.debugName = debugName;
-    desc.yuvFormat = yuvFormat;
-    return desc;
+    return SamplerStateDesc{
+        .minFilter = SamplerMinMagFilter::Linear,
+        .magFilter = SamplerMinMagFilter::Linear,
+        .mipFilter = SamplerMipFilter::Disabled,
+        .addressModeU = SamplerAddressMode::Clamp,
+        .addressModeV = SamplerAddressMode::Clamp,
+        .addressModeW = SamplerAddressMode::Clamp,
+        .debugName = debugName,
+        .yuvFormat = yuvFormat,
+    };
   }
 
   /**
