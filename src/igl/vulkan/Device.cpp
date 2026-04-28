@@ -464,7 +464,7 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage
       )" + extraExtensions +
                        bindlessTexturesSource;
     }
-    sourcePatched += source;
+    sourcePatched.append(source, strlen(source));
     source = sourcePatched.c_str();
   }
 
