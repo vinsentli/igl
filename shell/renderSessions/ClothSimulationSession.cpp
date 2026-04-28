@@ -16,6 +16,7 @@
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <vector>
+#include <shell/renderSessions/ClothSimulationShaders.h>
 #include <shell/renderSessions/shaderCode/generated/ClothRenderFragShaderProvider.h>
 #include <shell/renderSessions/shaderCode/generated/ClothRenderVertShaderProvider.h>
 #include <shell/renderSessions/shaderCode/generated/ObstacleRenderFragShaderProvider.h>
@@ -26,6 +27,7 @@
 #include <shell/shared/renderSession/ShaderStagesCreator.h>
 #include <igl/Buffer.h>
 #include <igl/NameHandle.h>
+#include <igl/ShaderCreator.h>
 
 namespace igl::shell {
 
@@ -142,7 +144,7 @@ static bool isDeviceCompatible(IDevice& device) noexcept {
   if (backendtype == BackendType::OpenGL) {
     return device.hasFeature(DeviceFeatures::Compute);
   } else if (backendtype == BackendType::Vulkan) {
-    return false;
+    return true;
   } else if (backendtype == BackendType::Metal) {
     return true;
   }
@@ -157,7 +159,8 @@ void ClothSimulationSession::initialize() noexcept {
   }
 
   auto clothVertexData = getClothVertexData();
-  const BufferDesc clothVertexBufferDesc{.type = BufferDesc::BufferTypeBits::Storage,
+  const BufferDesc clothVertexBufferDesc{.type = BufferDesc::BufferTypeBits::Storage |
+                                                 BufferDesc::BufferTypeBits::Vertex,
                                          .data = clothVertexData.data(),
                                          .length = kNumVertices * sizeof(ClothVertex)};
   clothVertexBuffer_ = device.createBuffer(clothVertexBufferDesc, nullptr);
@@ -165,21 +168,21 @@ void ClothSimulationSession::initialize() noexcept {
 
   auto clothIndexData = getClothIndexData();
   const BufferDesc clothIndexBufferDesc{
-      .type = BufferDesc::BufferTypeBits::Storage,
+      .type = BufferDesc::BufferTypeBits::Storage | BufferDesc::BufferTypeBits::Index,
       .data = clothIndexData.data(),
       .length = static_cast<size_t>(kNumTriangles * 3) * sizeof(uint32_t)};
   clothIndexBuffer_ = device.createBuffer(clothIndexBufferDesc, nullptr);
   IGL_DEBUG_ASSERT(clothIndexBuffer_ != nullptr);
 
   auto obstacleVertexData = getObstacleVertexData();
-  const BufferDesc obstacleVertexBufferDesc{.type = BufferDesc::BufferTypeBits::Storage,
+  const BufferDesc obstacleVertexBufferDesc{.type = BufferDesc::BufferTypeBits::Vertex,
                                             .data = obstacleVertexData.data(),
                                             .length = 4 * sizeof(ObstacleVertex)};
   obstacleVertexBuffer_ = device.createBuffer(obstacleVertexBufferDesc, nullptr);
   IGL_DEBUG_ASSERT(obstacleVertexBuffer_ != nullptr);
 
   auto obstacleIndexData = getObstacleIndexData();
-  const BufferDesc obstacleIndexBufferDesc{.type = BufferDesc::BufferTypeBits::Storage,
+  const BufferDesc obstacleIndexBufferDesc{.type = BufferDesc::BufferTypeBits::Index,
                                            .data = obstacleIndexData.data(),
                                            .length = static_cast<size_t>(2 * 3) * sizeof(uint32_t)};
   obstacleIndexBuffer_ = device.createBuffer(obstacleIndexBufferDesc, nullptr);
@@ -224,37 +227,44 @@ void ClothSimulationSession::initialize() noexcept {
 
   const igl::Result result;
 
-  {
-    auto vertProvider = ClothRenderVertShaderProvider();
-    auto fragProvider = ClothRenderFragShaderProvider();
-    clothShaderStages_ =
-        createRenderPipelineStages(getPlatform().getDevice(), vertProvider, fragProvider);
-    IGL_DEBUG_ASSERT(clothShaderStages_ != nullptr);
-  }
-  {
-    auto vertProvider = ObstacleRenderVertShaderProvider();
-    auto fragProvider = ObstacleRenderFragShaderProvider();
+  // Vulkan needs `layout(set = 1, ...)` on UBOs/SSBOs (IGL's kBindPoint_Buffers),
+  // which the SparkSL providers don't emit. Use inline GLSL for Vulkan only.
+  const bool isVulkan = device.getBackendType() == BackendType::Vulkan;
 
+  if (isVulkan) {
+    using namespace cloth_shaders;
+    clothShaderStages_ = igl::ShaderStagesCreator::fromModuleStringInput(
+        device, kVulkanClothVS, "main", "", kVulkanClothFS, "main", "", nullptr);
+    obstacleShaderStages_ = igl::ShaderStagesCreator::fromModuleStringInput(
+        device, kVulkanObstacleVS, "main", "", kVulkanObstacleFS, "main", "", nullptr);
+    updateVelocityStages_ = igl::ShaderStagesCreator::fromModuleStringInput(
+        device, kVulkanUpdateVelocityCS, "main", "", nullptr);
+    updatePositionStages_ = igl::ShaderStagesCreator::fromModuleStringInput(
+        device, kVulkanUpdatePositionCS, "main", "", nullptr);
+    updateNormalStages_ = igl::ShaderStagesCreator::fromModuleStringInput(
+        device, kVulkanUpdateNormalCS, "main", "", nullptr);
+  } else {
+    auto clothVertProvider = ClothRenderVertShaderProvider();
+    auto clothFragProvider = ClothRenderFragShaderProvider();
+    clothShaderStages_ = createRenderPipelineStages(device, clothVertProvider, clothFragProvider);
+
+    auto obstacleVertProvider = ObstacleRenderVertShaderProvider();
+    auto obstacleFragProvider = ObstacleRenderFragShaderProvider();
     obstacleShaderStages_ =
-        createRenderPipelineStages(getPlatform().getDevice(), vertProvider, fragProvider);
-    IGL_DEBUG_ASSERT(obstacleShaderStages_ != nullptr);
-  }
+        createRenderPipelineStages(device, obstacleVertProvider, obstacleFragProvider);
 
-  {
-    updatePositionStages_ = createComputePipelineStages(getPlatform().getDevice(),
-                                                        UpdateClothPositionCompShaderProvider());
-    IGL_DEBUG_ASSERT(updatePositionStages_ != nullptr);
+    updatePositionStages_ =
+        createComputePipelineStages(device, UpdateClothPositionCompShaderProvider());
+    updateVelocityStages_ =
+        createComputePipelineStages(device, UpdateClothVelocityCompShaderProvider());
+    updateNormalStages_ =
+        createComputePipelineStages(device, UpdateClothNormalCompShaderProvider());
   }
-  {
-    updateVelocityStages_ = createComputePipelineStages(getPlatform().getDevice(),
-                                                        UpdateClothVelocityCompShaderProvider());
-    IGL_DEBUG_ASSERT(updateVelocityStages_ != nullptr);
-  }
-  {
-    updateNormalStages_ = createComputePipelineStages(getPlatform().getDevice(),
-                                                      UpdateClothNormalCompShaderProvider());
-    IGL_DEBUG_ASSERT(updateNormalStages_ != nullptr);
-  }
+  IGL_DEBUG_ASSERT(clothShaderStages_ != nullptr);
+  IGL_DEBUG_ASSERT(obstacleShaderStages_ != nullptr);
+  IGL_DEBUG_ASSERT(updatePositionStages_ != nullptr);
+  IGL_DEBUG_ASSERT(updateVelocityStages_ != nullptr);
+  IGL_DEBUG_ASSERT(updateNormalStages_ != nullptr);
 
   // Command queue: backed by different types of GPU HW queues
   commandQueue_ = device.createCommandQueue(CommandQueueDesc{}, nullptr);
@@ -360,8 +370,12 @@ void ClothSimulationSession::update(SurfaceTextures surfaceTextures) noexcept {
   createOrUpdateDefaultFramebuffer(surfaceTextures);
 
   if (computeEncoder0) {
-    const Dimensions threadgroupSize(16, 16, 1);
-    const Dimensions threadgroupCount(kN / 16, kN / 16, 1);
+    // Vulkan inline GLSL bakes local_size = 1; SparkSL Metal kernels have no
+    // baked local size. Pick the matching dispatch shape per-backend.
+    const bool isVulkan = device.getBackendType() == BackendType::Vulkan;
+    const Dimensions threadgroupSize = isVulkan ? Dimensions(1, 1, 1) : Dimensions(16, 16, 1);
+    const Dimensions threadgroupCount = isVulkan ? Dimensions(kN, kN, 1)
+                                                 : Dimensions(kN / 16, kN / 16, 1);
 
     computeEncoder0->bindBuffer(0, clothVertexBuffer_.get());
     computeEncoder0->bindBuffer(1, uniformBuffer_.get());

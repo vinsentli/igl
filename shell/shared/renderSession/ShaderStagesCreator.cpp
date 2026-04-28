@@ -45,7 +45,7 @@ std::unique_ptr<IShaderStages> createRenderPipelineStages(
   auto backend = device.getBackendType();
   if (backend == igl::BackendType::Vulkan) {
     auto vertWords = vertShaderProvider.getShaderBinary(device);
-    auto fragWords = vertShaderProvider.getShaderBinary(device);
+    auto fragWords = fragShaderProvider.getShaderBinary(device);
     auto vertModule = igl::ShaderModuleCreator::fromBinaryInput(
         device,
         vertWords.data(),
