@@ -25,7 +25,7 @@
 static void* kAssociatedRenderBufferHolderKey = &kAssociatedRenderBufferHolderKey;
 
 /// Object used to hold onto a renderBuffer so we can attach it as an associated object
-@interface _IGLRenderBufferHolder : NSObject {
+@interface IGLRenderBufferHolder : NSObject {
  @public
   std::weak_ptr<igl::opengl::TextureTarget> _renderBuffer;
 }
@@ -38,7 +38,7 @@ namespace {
 /// set renderBuffer.
 // @fb-only
 // @fb-only
-_IGLRenderBufferHolder* getAssociatedRenderBufferHolder(CAEAGLLayer* nativeDrawable);
+IGLRenderBufferHolder* getAssociatedRenderBufferHolder(CAEAGLLayer* nativeDrawable);
 
 } // namespace
 
@@ -67,7 +67,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
   const CGRect resolution = CGRectMake(
       bounds.origin.x, bounds.origin.y, bounds.size.width * scale, bounds.size.height * scale);
 
-  _IGLRenderBufferHolder* renderBufferHolder = getAssociatedRenderBufferHolder(nativeDrawable);
+  IGLRenderBufferHolder* renderBufferHolder = getAssociatedRenderBufferHolder(nativeDrawable);
 
   const auto renderBuffer = renderBufferHolder->_renderBuffer.lock();
 
@@ -295,13 +295,13 @@ CVOpenGLESTextureCacheRef PlatformDevice::getTextureCache() {
 } // namespace igl::opengl::ios
 
 namespace {
-_IGLRenderBufferHolder* getAssociatedRenderBufferHolder(CAEAGLLayer* nativeDrawable) {
-  _IGLRenderBufferHolder* renderBufferHolder =
+IGLRenderBufferHolder* getAssociatedRenderBufferHolder(CAEAGLLayer* nativeDrawable) {
+  IGLRenderBufferHolder* renderBufferHolder =
       objc_getAssociatedObject(nativeDrawable, kAssociatedRenderBufferHolderKey);
   if (renderBufferHolder) {
     return renderBufferHolder;
   }
-  renderBufferHolder = [_IGLRenderBufferHolder new];
+  renderBufferHolder = [IGLRenderBufferHolder new];
   objc_setAssociatedObject(nativeDrawable,
                            kAssociatedRenderBufferHolderKey,
                            renderBufferHolder,
@@ -310,5 +310,5 @@ _IGLRenderBufferHolder* getAssociatedRenderBufferHolder(CAEAGLLayer* nativeDrawa
 }
 } // namespace
 
-@implementation _IGLRenderBufferHolder
+@implementation IGLRenderBufferHolder
 @end
