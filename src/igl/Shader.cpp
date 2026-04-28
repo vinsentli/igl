@@ -98,25 +98,22 @@ bool ShaderInput::operator!=(const ShaderInput& other) const {
 ShaderModuleDesc ShaderModuleDesc::fromStringInput(const char* IGL_NONNULL source,
                                                    ShaderModuleInfo info,
                                                    std::string debugName) {
-  ShaderModuleDesc desc;
-  desc.input.type = ShaderInputType::String;
-  desc.input.source = source;
-  desc.info = std::move(info);
-  desc.debugName = std::move(debugName);
-  return desc;
+  return ShaderModuleDesc{
+      .info = std::move(info),
+      .input = {.source = source, .type = ShaderInputType::String},
+      .debugName = std::move(debugName),
+  };
 }
 
 ShaderModuleDesc ShaderModuleDesc::fromBinaryInput(const void* IGL_NONNULL data,
                                                    size_t dataLength,
                                                    ShaderModuleInfo info,
                                                    std::string debugName) {
-  ShaderModuleDesc desc;
-  desc.input.type = ShaderInputType::Binary;
-  desc.input.data = data;
-  desc.input.length = dataLength;
-  desc.info = std::move(info);
-  desc.debugName = std::move(debugName);
-  return desc;
+  return ShaderModuleDesc{
+      .info = std::move(info),
+      .input = {.data = data, .length = dataLength, .type = ShaderInputType::Binary},
+      .debugName = std::move(debugName),
+  };
 }
 
 bool ShaderModuleDesc::operator==(const ShaderModuleDesc& other) const {
