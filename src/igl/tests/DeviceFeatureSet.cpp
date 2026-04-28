@@ -382,6 +382,39 @@ TEST_F(GpuTimerTierTest, MaliVendorCrossCheck) {
   EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-G52", "Qualcomm"), opengl::GpuTimerTier::Full);
 }
 
+TEST_F(GpuTimerTierTest, MaliTBudget) {
+  // SEV S647462: Mali-T series must be Disabled (broken timer query drivers)
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T720", "ARM"), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T760", "ARM"), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T820", "ARM"), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T860", "ARM"), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T880", "ARM"), opengl::GpuTimerTier::Disabled);
+}
+
+TEST_F(GpuTimerTierTest, MaliTVendorCrossCheck) {
+  // Wrong vendor → falls through to Full (default)
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T880", "Qualcomm"), opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, MaliTWithSuffix) {
+  // Real-world Mali-T renderer strings include MP core count and revision
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T880 MP12", "ARM"), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T860MP2", "ARM"), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T760 r1p0", "ARM"), opengl::GpuTimerTier::Disabled);
+}
+
+TEST_F(GpuTimerTierTest, MaliTMalformed) {
+  // Malformed "Mali-T" without number — sscanf fails, falls through to Full
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T", "ARM"), opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, MaliTArmVendorVariants) {
+  // SEV S647462: ARM ships at least three vendor string variants — accept all
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T880", "ARM Limited"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T760", "Arm"), opengl::GpuTimerTier::Disabled);
+}
+
 TEST_F(GpuTimerTierTest, PowerVRBudget) {
   EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR Rogue GE8320", "Imagination Technologies"),
             opengl::GpuTimerTier::Disabled);
@@ -390,6 +423,42 @@ TEST_F(GpuTimerTierTest, PowerVRBudget) {
 TEST_F(GpuTimerTierTest, PowerVRVendorCrossCheck) {
   EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR Rogue GE8320", "ARM"),
             opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, PowerVRSgxAndRogueGx) {
+  // SGX (legacy MediaTek/TI OMAP) has no hardware timer support; Rogue GX (older
+  // MediaTek/Intel Atom) has worse driver quality than GE8. Both are Disabled.
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR SGX 540", "Imagination Technologies"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR Rogue GX6250", "Imagination Technologies"),
+            opengl::GpuTimerTier::Disabled);
+}
+
+TEST_F(GpuTimerTierTest, PowerVRImaginationVendor) {
+  // Newer Android drivers report vendor as "Imagination" (no "Technologies").
+  // Cover all three renderer families (GE8, GX, SGX) against the short vendor.
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR Rogue GE8320", "Imagination"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR Rogue GX6250", "Imagination"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR SGX 540", "Imagination"),
+            opengl::GpuTimerTier::Disabled);
+}
+
+TEST_F(GpuTimerTierTest, MaliTNonArmVendorFallsThrough) {
+  // Defensive: a Mali-T renderer with a non-ARM vendor string must NOT be
+  // Disabled by the Mali-T block — it should fall through to the Full default.
+  // Catches a future bug where someone OR's vendor checks across blocks.
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T880", "Imagination"), opengl::GpuTimerTier::Full);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T880", "Samsung"), opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, PowerVRNonImaginationVendorFallsThrough) {
+  // Defensive: a PowerVR renderer with a non-Imagination vendor must NOT be
+  // Disabled by the PowerVR block — it should fall through to the Full default.
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR Rogue GE8320", "ARM"),
+            opengl::GpuTimerTier::Full);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR SGX 540", "ARM"), opengl::GpuTimerTier::Full);
 }
 
 TEST_F(GpuTimerTierTest, XclipseConservative) {

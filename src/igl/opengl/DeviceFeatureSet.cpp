@@ -124,9 +124,30 @@ GpuTimerTier classifyGpuTimerTier(const char* renderer, const char* vendor) {
     return GpuTimerTier::Full; // G77+: 64 slots
   }
 
+  // Mali-T series: all are budget GPUs with broken timer query implementations.
+  // Common models: T720, T760, T820, T830, T860, T880.
+  // SEV S647462: these were not covered by the Mali-G pattern and fell through
+  // to the Full tier default, causing SIGSEGV on driver-internal resource overflow.
+  // ARM ships at least three vendor string variants ("ARM", "ARM Limited" on some
+  // Samsung devices, "Arm" with newer branding) — accept all three.
+  int maliTNumber = 0;
+  if (vendor != nullptr &&
+      (std::strcmp(vendor, "ARM") == 0 || std::strcmp(vendor, "ARM Limited") == 0 ||
+       std::strcmp(vendor, "Arm") == 0) &&
+      std::sscanf(renderer, "Mali-T%d", &maliTNumber) == 1) {
+    return GpuTimerTier::Disabled;
+  }
+
   // PowerVR (Imagination Technologies): vendor cross-check + prefix match.
-  if (vendor != nullptr && std::strcmp(vendor, "Imagination Technologies") == 0 &&
-      std::strncmp(renderer, "PowerVR Rogue GE8", 17) == 0) {
+  // Covers GE8 (Rogue, broken), Rogue GX (older, worse), and SGX (legacy, no
+  // hardware timer support). Newer Android drivers report vendor as
+  // "Imagination" (without "Technologies") — accept both spellings.
+  if (vendor != nullptr &&
+      (std::strcmp(vendor, "Imagination Technologies") == 0 ||
+       std::strcmp(vendor, "Imagination") == 0) &&
+      (std::strncmp(renderer, "PowerVR Rogue GE8", 17) == 0 ||
+       std::strncmp(renderer, "PowerVR Rogue GX", 16) == 0 ||
+       std::strncmp(renderer, "PowerVR SGX", 11) == 0)) {
     return GpuTimerTier::Disabled;
   }
 
