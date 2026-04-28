@@ -175,7 +175,7 @@ struct VulkanSampler final {
 // values
 
 Result getResultFromVkResult(VkResult result);
-void setResultFrom(Result* outResult, VkResult result);
+void setResultFrom(Result* IGL_NULLABLE outResult, VkResult result);
 VkFormat textureFormatToVkFormat(TextureFormat format);
 TextureFormat vkFormatToTextureFormat(VkFormat format);
 VkFormat invertRedAndBlue(VkFormat format);

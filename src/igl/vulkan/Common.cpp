@@ -63,7 +63,7 @@ Result getResultFromVkResult(VkResult result) {
   return res;
 }
 
-void setResultFrom(Result* outResult, VkResult result) {
+void setResultFrom(Result* IGL_NULLABLE outResult, VkResult result) {
   if (!outResult) {
     return;
   }
