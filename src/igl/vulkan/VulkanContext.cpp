@@ -2004,7 +2004,8 @@ void VulkanContext::updateBindingsTexturesByDescriptorBuffer(
         getVkDevice(), &getInfo, combinedSize, (char*)mappedPtr + originOffset + bindingOffset);
   }
 
-  if (descriptorBuffer.bindCmdBuffer != cmdBuf) {
+  if (descriptorBuffer.bindCmdBuffer != cmdBuf ||
+      descriptorBuffer.handle != nextSubmitHandle) {
     VkDescriptorBufferBindingInfoEXT bindingInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
         .address = descriptorBuffer.buffer->getVkDeviceAddress(),
@@ -2013,6 +2014,7 @@ void VulkanContext::updateBindingsTexturesByDescriptorBuffer(
     };
     vf_.vkCmdBindDescriptorBuffersEXT(cmdBuf, 1, &bindingInfo);
     descriptorBuffer.bindCmdBuffer = cmdBuf;
+    descriptorBuffer.handle = nextSubmitHandle;
   }
 
   uint32_t bufferIndex = 0;
@@ -2076,7 +2078,8 @@ void VulkanContext::updateBindingsStorageImagesByDescriptorBuffer(
         getVkDevice(), &getInfo, combinedSize, (char*)mappedPtr + originOffset + bindingOffset);
   }
 
-  if (descriptorBuffer.bindCmdBuffer != cmdBuf) {
+  if (descriptorBuffer.bindCmdBuffer != cmdBuf ||
+      descriptorBuffer.handle != nextSubmitHandle) {
     VkDescriptorBufferBindingInfoEXT bindingInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
         .address = descriptorBuffer.buffer->getVkDeviceAddress(),
@@ -2085,6 +2088,7 @@ void VulkanContext::updateBindingsStorageImagesByDescriptorBuffer(
     };
     vf_.vkCmdBindDescriptorBuffersEXT(cmdBuf, 1, &bindingInfo);
     descriptorBuffer.bindCmdBuffer = cmdBuf;
+    descriptorBuffer.handle = nextSubmitHandle;
   }
 
   uint32_t bufferIndex = 0;
@@ -2149,14 +2153,17 @@ void VulkanContext::updateBindingsBuffersByDescriptorBuffer(
                            (char*)mappedPtr + originOffset + bindingOffset);
   }
 
-  if (descriptorBuffer.bindCmdBuffer != cmdBuf) {
+  if (descriptorBuffer.bindCmdBuffer != cmdBuf ||
+      descriptorBuffer.handle != nextSubmitHandle) {
     VkDescriptorBufferBindingInfoEXT bindingInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
         .address = descriptorBuffer.buffer->getVkDeviceAddress(),
         .usage = VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT |
-                 VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT};
+                 VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
+    };
     vf_.vkCmdBindDescriptorBuffersEXT(cmdBuf, 1, &bindingInfo);
     descriptorBuffer.bindCmdBuffer = cmdBuf;
+    descriptorBuffer.handle = nextSubmitHandle;
   }
 
   uint32_t bufferIndex = 0;
