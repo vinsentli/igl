@@ -260,7 +260,7 @@ std::shared_ptr<ITimestampQueries> Device::createTimestampQueries(uint32_t maxTi
 
     MTLCounterSampleBufferDescriptor* descriptor = [[MTLCounterSampleBufferDescriptor alloc] init];
     descriptor.counterSet = timestampCounterSet;
-    descriptor.sampleCount = maxTimestamps * metal::TimestampQueries::kSamplesPerTimingSlot;
+    descriptor.sampleCount = maxTimestamps * TimestampQueries::kSamplesPerTimingSlot;
     descriptor.storageMode = MTLStorageModeShared;
     descriptor.label = @"IGL TimestampQueries";
 
@@ -276,7 +276,7 @@ std::shared_ptr<ITimestampQueries> Device::createTimestampQueries(uint32_t maxTi
     }
 
     Result::setOk(outResult);
-    return std::make_shared<metal::TimestampQueries>(csb, maxTimestamps);
+    return std::make_shared<TimestampQueries>(csb, maxTimestamps);
   } else {
     Result::setResult(
         outResult, Result::Code::Unsupported, "TimestampQueries require macOS 10.15+ or iOS 14+");
