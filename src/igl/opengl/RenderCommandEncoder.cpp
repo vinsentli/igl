@@ -63,6 +63,8 @@ uint8_t getIndexByteSize(GLenum indexType) {
     return 2u;
   case GL_UNSIGNED_INT:
     return 4u;
+  default:
+    break;
   }
   IGL_UNREACHABLE_RETURN(4u)
 }
