@@ -186,10 +186,10 @@ void ComputeCommandEncoder::bindTexture(uint32_t index, ITexture* texture) {
 
   IGL_DEBUG_ASSERT(vkImage);
 
-  if (vkImage->isStorageImage()) {
-    igl::vulkan::transitionToGeneral(cmdBuffer_, texture);
-  } else if (vkImage->isSampledImage()) {
+  if (vkImage->isSampledImage()) {
     igl::vulkan::transitionToShaderReadOnly(cmdBuffer_, texture);
+  } else if (vkImage->isStorageImage()) {
+    igl::vulkan::transitionToGeneral(cmdBuffer_, texture);
   } else {
     IGL_DEBUG_ASSERT(false, "A texture should be Sampled or Storage");
   }
