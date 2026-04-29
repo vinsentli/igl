@@ -20,10 +20,13 @@
 
 namespace igl::vulkan {
 
-CommandQueue::CommandQueue(Device& device, const CommandQueueDesc& /*desc*/) : device_(device) {}
+CommandQueue::CommandQueue(Device& device, const CommandQueueDesc& /*desc*/) : device_(device) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+}
 
 std::shared_ptr<ICommandBuffer> CommandQueue::createCommandBuffer(const CommandBufferDesc& desc,
-                                                                  Result* /*outResult*/) {
+                                                                  Result* IGL_NULLABLE
+                                                                  /*outResult*/) {
   IGL_PROFILER_FUNCTION();
 
   VulkanContext& ctx = device_.getVulkanContext();

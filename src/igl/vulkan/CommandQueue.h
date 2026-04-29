@@ -35,7 +35,7 @@ class CommandQueue final : public ICommandQueue {
   /// @brief Create a new command buffer. Sets the internal flag that tracks an active command
   /// buffer has been created.
   std::shared_ptr<ICommandBuffer> createCommandBuffer(const CommandBufferDesc& desc,
-                                                      Result* outResult) override;
+                                                      Result* IGL_NULLABLE outResult) override;
 
   /// @brief Submits the `commandBuffer` for execution on the GPU.
   /// @param cmdBuffer The command buffer to be submitted.
