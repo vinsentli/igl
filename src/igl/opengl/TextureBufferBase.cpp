@@ -33,6 +33,8 @@ TextureType TextureBufferBase::getType() const {
       return TextureType::ExternalImage;
     }
     break;
+  default:
+    break;
   }
   IGL_DEBUG_ABORT("Unsupported OGL Texture Target: 0x%x", target_);
   return TextureType::Invalid;
