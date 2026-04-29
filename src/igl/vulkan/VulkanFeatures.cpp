@@ -11,6 +11,7 @@
 
 namespace igl::vulkan {
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
   // Vulkan 1.1
   vkPhysicalDeviceFeatures2({
@@ -142,9 +143,10 @@ VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
   assembleFeatureChain(config);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void VulkanFeatures::populateWithAvailablePhysicalDeviceFeatures(
     const VulkanContext& context,
-    VkPhysicalDevice physicalDevice) noexcept { // NOLINT(bugprone-exception-escape)
+    VkPhysicalDevice physicalDevice) noexcept {
   IGL_DEBUG_ASSERT(context.vf_.vkGetPhysicalDeviceFeatures2 != nullptr,
                    "Pointer to function vkGetPhysicalDeviceFeatures2() is nullptr");
   uint32_t numExtensions = 0;
@@ -166,8 +168,9 @@ bool VulkanFeatures::hasExtension(const char* ext) const {
   return false;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 Result VulkanFeatures::checkSelectedFeatures(
-    const VulkanFeatures& availableFeatures) const noexcept { // NOLINT(bugprone-exception-escape)
+    const VulkanFeatures& availableFeatures) const noexcept {
   // Stores missing features
   std::string missingFeatures;
 
@@ -342,6 +345,7 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& contextConf
   }
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 VulkanFeatures& VulkanFeatures::operator=(const VulkanFeatures& other) noexcept {
   if (this == &other) {
     return *this;
