@@ -8,6 +8,7 @@
 #include <igl/vulkan/ShaderModule.h>
 
 #include <igl/Shader.h>
+#include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanShaderModule.h>
 
 namespace igl::vulkan {
@@ -15,6 +16,7 @@ namespace igl::vulkan {
 ShaderModule::ShaderModule(ShaderModuleInfo info,
                            std::shared_ptr<VulkanShaderModule> shaderModule) :
   IShaderModule(std::move(info)), module_(std::move(shaderModule)) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_DEBUG_ASSERT(module_);
 }
 
