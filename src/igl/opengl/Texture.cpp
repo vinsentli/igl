@@ -225,10 +225,10 @@ bool Texture::toFormatDescGL(const IContext& ctx,
   }
 
   const bool sampled = (usage & TextureDesc::TextureUsageBits::Sampled) != 0;
-  bool attachment = (usage & TextureDesc::TextureUsageBits::Attachment) != 0;
+  const bool attachment = (usage & TextureDesc::TextureUsageBits::Attachment) != 0;
   const bool storage = (usage & TextureDesc::TextureUsageBits::Storage) != 0;
-  bool sampledAttachment = sampled && attachment;
-  bool sampledOnly = sampled && !attachment;
+  const bool sampledAttachment = sampled && attachment;
+  const bool sampledOnly = sampled && !attachment;
   bool attachmentOnly = attachment && !sampled;
 
   // Sanity check capabilities
@@ -275,9 +275,7 @@ bool Texture::toFormatDescGL(const IContext& ctx,
       IGL_LOG_INFO(
           "Texture format %s does not support SampledAttachment usage. Falling back to Sampled.\n",
           TextureFormatProperties::fromTextureFormat(textureFormat).name);
-      sampledAttachment = false;
       attachmentOnly = false;
-      attachment = false;
     } else {
       IGL_LOG_ERROR("Texture format %s does not support SampledAttachment usage.\n",
                     TextureFormatProperties::fromTextureFormat(textureFormat).name);
