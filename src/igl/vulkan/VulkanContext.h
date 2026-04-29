@@ -257,11 +257,13 @@ class VulkanContext final {
 
   /// @param handle The handle to the GPU Fence
   /// @return The Vulkan fence associated with the handle
+  // @fb-only
   [[nodiscard]] VkFence getVkFenceFromSubmitHandle(igl::SubmitHandle handle) const noexcept;
 
   /// Android only for now - Creates the file descriptor for the underlying VkFence
   /// @param handle The handle to the GPU Fence
   /// @return The fd for the Vulkan Fence associated with the handleint
+  // @fb-only
   [[nodiscard]] int getFenceFdFromSubmitHandle(igl::SubmitHandle handle) const noexcept;
 
  private:
