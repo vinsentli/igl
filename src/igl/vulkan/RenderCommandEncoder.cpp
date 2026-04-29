@@ -97,7 +97,8 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
 
   const FramebufferDesc& desc = static_cast<const Framebuffer&>((*framebuffer)).getDesc();
 
-  std::array<VkClearValue, 2 * IGL_COLOR_ATTACHMENTS_MAX + 2> clearValues;
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
+  std::array<VkClearValue, 2 * IGL_COLOR_ATTACHMENTS_MAX + 2> clearValues; // uninitialized
   uint32_t numClearValues = 0;
   uint32_t mipLevel = 0;
   uint32_t layer = 0;
