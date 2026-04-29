@@ -398,6 +398,7 @@ Holder<BindGroupBufferHandle> Device::createBindGroup(const BindGroupBufferDesc&
   return {this, handle};
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 std::shared_ptr<ITimer> Device::createTimer(Result* IGL_NULLABLE outResult) const noexcept {
   if (deviceFeatureSet_.hasFeature(DeviceFeatures::Timers)) {
     Result::setOk(outResult);
@@ -408,6 +409,7 @@ std::shared_ptr<ITimer> Device::createTimer(Result* IGL_NULLABLE outResult) cons
   return nullptr;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 std::shared_ptr<ITimestampQueries> Device::createTimestampQueries(uint32_t maxTimestamps,
                                                                   Result* IGL_NULLABLE
                                                                       outResult) const noexcept {
