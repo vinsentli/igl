@@ -385,6 +385,30 @@ class VulkanContext final {
                                    const BindingsStorageImages& data,
                                    const VulkanDescriptorSetLayout& dsl,
                                    const util::SpvModuleInfo& info) const;
+  void updateBindingsTexturesByDescriptorBuffer(
+      VkCommandBuffer IGL_NONNULL cmdBuf,
+      VkPipelineLayout layout,
+      VkPipelineBindPoint bindPoint,
+      VulkanImmediateCommands::SubmitHandle nextSubmitHandle,
+      const BindingsTextures& data,
+      const VulkanDescriptorSetLayout& dsl,
+      const util::SpvModuleInfo& info) const;
+  void updateBindingsBuffersByDescriptorBuffer(
+      VkCommandBuffer IGL_NONNULL cmdBuf,
+      VkPipelineLayout layout,
+      VkPipelineBindPoint bindPoint,
+      VulkanImmediateCommands::SubmitHandle nextSubmitHandle,
+      BindingsBuffers& data,
+      const VulkanDescriptorSetLayout& dsl,
+      const util::SpvModuleInfo& info);
+  void updateBindingsStorageImagesByDescriptorBuffer(
+      VkCommandBuffer IGL_NONNULL cmdBuf,
+      VkPipelineLayout layout,
+      VkPipelineBindPoint bindPoint,
+      VulkanImmediateCommands::SubmitHandle nextSubmitHandle,
+      const BindingsStorageImages& data,
+      const VulkanDescriptorSetLayout& dsl,
+      const util::SpvModuleInfo& info) const;
 
   struct DeferredTask {
     DeferredTask(std::packaged_task<void()>&& task, SubmitHandle handle) :
