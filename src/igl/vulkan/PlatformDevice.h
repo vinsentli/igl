@@ -35,18 +35,18 @@ class PlatformDevice : public IPlatformDevice {
   /// @return pointer to generated Texture or nullptr
   std::shared_ptr<ITexture> createTextureFromNativeDepth(uint32_t width,
                                                          uint32_t height,
-                                                         Result* outResult);
+                                                         Result* IGL_NULLABLE outResult);
 
   /// Creates a texture from a native drawable surface
   /// @param outResult optional result
   /// @return pointer to generated Texture or nullptr
-  std::shared_ptr<ITexture> createTextureFromNativeDrawable(Result* outResult);
+  std::shared_ptr<ITexture> createTextureFromNativeDrawable(Result* IGL_NULLABLE outResult);
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
   std::shared_ptr<ITexture> createTextureWithSharedMemory(const TextureDesc& desc,
-                                                          Result* outResult) const;
+                                                          Result* IGL_NULLABLE outResult) const;
   std::shared_ptr<ITexture> createTextureWithSharedMemory(AHardwareBuffer* buffer,
-                                                          Result* outResult) const;
+                                                          Result* IGL_NULLABLE outResult) const;
 #endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
   /// @param handle The handle to the GPU Fence

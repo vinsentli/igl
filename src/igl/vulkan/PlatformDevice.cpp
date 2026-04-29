@@ -24,7 +24,8 @@ PlatformDevice::PlatformDevice(Device& device) : device_(device) {}
 
 std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(uint32_t width,
                                                                        uint32_t height,
-                                                                       Result* outResult) {
+                                                                       Result* IGL_NULLABLE
+                                                                           outResult) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
   const auto& ctx = device_.getVulkanContext();
@@ -71,7 +72,8 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(uint32_t 
   return nativeDepthTexture_;
 }
 
-std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(Result* outResult) {
+std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
+    Result* IGL_NULLABLE outResult) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
   const auto& ctx = device_.getVulkanContext();
@@ -130,7 +132,8 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(Result
 /// returns a android::NativeHWTextureBuffer on platforms supporting it
 /// this texture allows CPU and GPU to both read/write memory
 std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const TextureDesc& desc,
-                                                                        Result* outResult) const {
+                                                                        Result* IGL_NULLABLE
+                                                                            outResult) const {
   Result subResult;
 
   auto texture =
@@ -146,7 +149,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const Te
 
 std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(
     struct AHardwareBuffer* buffer,
-    Result* outResult) const {
+    Result* IGL_NULLABLE outResult) const {
   Result subResult;
 
   AHardwareBuffer_Desc hwbDesc;
