@@ -329,7 +329,7 @@ inline size_t alignUp(size_t value, size_t alignment) {
 
 class DescriptorBuffersArena final {
  public:
-  DescriptorBuffersArena(const VulkanContext& ctx) : ctx_(ctx) {
+  explicit DescriptorBuffersArena(const VulkanContext& ctx) : ctx_(ctx) {
     buffer_ = createNewBuffer();
   }
 
@@ -363,7 +363,7 @@ class DescriptorBuffersArena final {
   }
 
  private:
-  DescriptorBuffer createNewBuffer() const {
+  [[nodiscard]] DescriptorBuffer createNewBuffer() const {
     DescriptorBuffer buffer;
     buffer.buffer = ctx_.createBuffer(kBufferSize,
                                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
@@ -2049,7 +2049,8 @@ void VulkanContext::updateBindingsTexturesByDescriptorBuffer(
         getVkDevice(), &getInfo, combinedSize, (char*)mappedPtr + originOffset + bindingOffset);
   }
 
-  if (descriptorBuffer.bindCmdBuffer != cmdBuf) {
+  if (descriptorBuffer.bindCmdBuffer != cmdBuf ||
+      descriptorBuffer.handle != nextSubmitHandle) {
     VkDescriptorBufferBindingInfoEXT bindingInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
         .address = descriptorBuffer.buffer->getVkDeviceAddress(),
@@ -2058,6 +2059,7 @@ void VulkanContext::updateBindingsTexturesByDescriptorBuffer(
     };
     vf_.vkCmdBindDescriptorBuffersEXT(cmdBuf, 1, &bindingInfo);
     descriptorBuffer.bindCmdBuffer = cmdBuf;
+    descriptorBuffer.handle = nextSubmitHandle;
   }
 
   uint32_t bufferIndex = 0;
@@ -2121,7 +2123,8 @@ void VulkanContext::updateBindingsStorageImagesByDescriptorBuffer(
         getVkDevice(), &getInfo, combinedSize, (char*)mappedPtr + originOffset + bindingOffset);
   }
 
-  if (descriptorBuffer.bindCmdBuffer != cmdBuf) {
+  if (descriptorBuffer.bindCmdBuffer != cmdBuf ||
+      descriptorBuffer.handle != nextSubmitHandle) {
     VkDescriptorBufferBindingInfoEXT bindingInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
         .address = descriptorBuffer.buffer->getVkDeviceAddress(),
@@ -2130,6 +2133,7 @@ void VulkanContext::updateBindingsStorageImagesByDescriptorBuffer(
     };
     vf_.vkCmdBindDescriptorBuffersEXT(cmdBuf, 1, &bindingInfo);
     descriptorBuffer.bindCmdBuffer = cmdBuf;
+    descriptorBuffer.handle = nextSubmitHandle;
   }
 
   uint32_t bufferIndex = 0;
@@ -2152,6 +2156,8 @@ void VulkanContext::updateBindingsBuffersByDescriptorBuffer(
 
   auto uniformBufferDescriptorSize =
       vkPhysicalDeviceDescriptorBufferProperties_.uniformBufferDescriptorSize;
+  auto storageBufferDescriptorSize =
+      vkPhysicalDeviceDescriptorBufferProperties_.storageBufferDescriptorSize;
   auto alignment = vkPhysicalDeviceDescriptorBufferProperties_.descriptorBufferOffsetAlignment;
   auto layoutSize = dsl.layoutSize_;
 
@@ -2182,17 +2188,18 @@ void VulkanContext::updateBindingsBuffersByDescriptorBuffer(
 
     VkDescriptorGetInfoEXT getInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
-        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .type = b.isStorage ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .data = {.pUniformBuffer = &addressInfo},
     };
 
     vf_.vkGetDescriptorEXT(getVkDevice(),
                            &getInfo,
-                           uniformBufferDescriptorSize,
+                           b.isStorage ? storageBufferDescriptorSize : uniformBufferDescriptorSize,
                            (char*)mappedPtr + originOffset + bindingOffset);
   }
 
-  if (descriptorBuffer.bindCmdBuffer != cmdBuf) {
+  if (descriptorBuffer.bindCmdBuffer != cmdBuf ||
+      descriptorBuffer.handle != nextSubmitHandle) {
     VkDescriptorBufferBindingInfoEXT bindingInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
         .address = descriptorBuffer.buffer->getVkDeviceAddress(),
@@ -2200,6 +2207,7 @@ void VulkanContext::updateBindingsBuffersByDescriptorBuffer(
                  VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT};
     vf_.vkCmdBindDescriptorBuffersEXT(cmdBuf, 1, &bindingInfo);
     descriptorBuffer.bindCmdBuffer = cmdBuf;
+    descriptorBuffer.handle = nextSubmitHandle;
   }
 
   uint32_t bufferIndex = 0;
