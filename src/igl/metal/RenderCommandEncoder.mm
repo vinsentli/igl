@@ -278,12 +278,14 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
   if ((bindTarget & BindTarget::kFragment) != 0) {
     [encoder_ setFragmentBuffer:metalBuffer offset:offset atIndex:index];
   }
-  if (@available(iOS 16, *)) {
-    if ((bindTarget & BindTarget::kTask) != 0) {
-      [encoder_ setObjectBuffer:metalBuffer offset:offset atIndex:index];
-    }
-    if ((bindTarget & BindTarget::kMesh) != 0) {
-      [encoder_ setMeshBuffer:metalBuffer offset:offset atIndex:index];
+  if (@available(iOS 16, macOS 13, *)) {
+    if (device_.hasFeature(DeviceFeatures::MeshShaders)) {
+      if ((bindTarget & BindTarget::kTask) != 0) {
+        [encoder_ setObjectBuffer:metalBuffer offset:offset atIndex:index];
+      }
+      if ((bindTarget & BindTarget::kMesh) != 0) {
+        [encoder_ setMeshBuffer:metalBuffer offset:offset atIndex:index];
+      }
     }
   }
 }
