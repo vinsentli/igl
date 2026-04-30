@@ -188,8 +188,10 @@ void ComputeCommandEncoder::bindTexture(uint32_t index, ITexture* texture) {
 
   if (vkImage->isSampledImage()) {
     igl::vulkan::transitionToShaderReadOnly(cmdBuffer_, texture);
+    binder_.bindTexture(index, static_cast<Texture*>(texture));
   } else if (vkImage->isStorageImage()) {
     igl::vulkan::transitionToGeneral(cmdBuffer_, texture);
+    binder_.bindStorageImage(index, static_cast<Texture*>(texture));
   } else {
     IGL_DEBUG_ASSERT(false, "A texture should be Sampled or Storage");
   }
@@ -198,8 +200,6 @@ void ComputeCommandEncoder::bindTexture(uint32_t index, ITexture* texture) {
   restoreLayout_[numRestoreLayouts_] = vkImage;
   restoreLayoutAspectFlags_[numRestoreLayouts_] = vkTex.imageView_.getVkImageAspectFlags();
   numRestoreLayouts_++;
-
-  binder_.bindTexture(index, static_cast<Texture*>(texture));
 }
 
 void ComputeCommandEncoder::bindImageTexture(uint32_t index,
