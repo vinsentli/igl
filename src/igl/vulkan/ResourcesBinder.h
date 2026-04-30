@@ -74,6 +74,11 @@ class ResourcesBinder final {
   void bindPipeline(VkPipeline pipeline, const util::SpvModuleInfo* info);
 
  private:
+  void updateBindingsByDescriptorSet(VkPipelineLayout layout, const vulkan::PipelineState& state);
+  void updateBindingsByDescriptorBuffer(VkPipelineLayout layout,
+                                        const vulkan::PipelineState& state);
+
+ private:
   friend class VulkanContext;
   friend class RenderCommandEncoder;
 
