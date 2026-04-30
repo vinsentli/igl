@@ -111,14 +111,19 @@ SubmitHandle CommandQueue::endCommandBuffer(VulkanContext& ctx,
     ctx.present();
   }
 #else
+  VkSemaphore signalSemaphore = VK_NULL_HANDLE;
+  VkFence signalFence = VK_NULL_HANDLE;
+
   if (shouldPresent) {
-      ctx.immediate_->waitSemaphore(ctx.swapchain_->getWaitSemaphore());
+    ctx.immediate_->waitSemaphore(ctx.swapchain_->getWaitSemaphore());
+    signalSemaphore = ctx.swapchain_->getSignalSemaphore();
+    signalFence = ctx.swapchain_->getAcquireFence();
   }
 
-  cmdBuffer->lastSubmitHandle_ = ctx.immediate_->submit(cmdBuffer->wrapper_, ctx.swapchain_->getSignalSemaphore(), ctx.swapchain_->getAcquireFence());
-  if (ctx.swapchain_->getAcquireFence()) {
-      //必须要让wrapper_.fence_激活一下，否则会一直处于等待状态，导致画面卡住
-      cmdBuffer->wrapper_.fence_.signal(ctx.immediate_->queue_);
+  cmdBuffer->lastSubmitHandle_ = ctx.immediate_->submit(cmdBuffer->wrapper_, signalSemaphore, signalFence);
+  if (signalFence) {
+    //如果有signalFence，必须要让wrapper_中的fence_激活一下，否则会一直处于等待状态，导致画面卡住
+    cmdBuffer->wrapper_.fence_.signal(ctx.immediate_->queue_);
   }
 
   if (shouldPresent) {
