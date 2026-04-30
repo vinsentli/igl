@@ -182,7 +182,7 @@ void ComputeCommandEncoder::bindTexture(uint32_t index, ITexture* texture) {
 
   const igl::vulkan::Texture* tex = static_cast<Texture*>(texture);
   const igl::vulkan::VulkanTexture& vkTex = tex->getVulkanTexture();
-  const igl::vulkan::VulkanImage* vkImage = &vkTex.image_;
+  const igl::vulkan::VulkanImage* vkImage = &vkTex.image;
 
   IGL_DEBUG_ASSERT(vkImage);
 
@@ -212,7 +212,7 @@ void ComputeCommandEncoder::bindImageTexture(uint32_t index,
   (void)format;
 
   auto* tex = static_cast<Texture*>(texture);
-  const VulkanImage* vkImage = tex ? &tex->getVulkanTexture().image_ : nullptr;
+  const VulkanImage* vkImage = tex ? &tex->getVulkanTexture().image : nullptr;
 
   IGL_DEBUG_ASSERT(vkImage);
 

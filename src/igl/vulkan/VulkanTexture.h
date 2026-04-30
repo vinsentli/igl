@@ -23,7 +23,7 @@ class VulkanTexture final {
   VulkanTexture& operator=(VulkanTexture&&) noexcept = default;
 
  public:
-  VulkanImage image_;
+  VulkanImage image;
   VulkanImageView imageView_;
   // an index into VulkanContext::textures_
   uint32_t textureId_ = 0;

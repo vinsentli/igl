@@ -52,10 +52,10 @@ std::unique_ptr<IRenderCommandEncoder> CommandBuffer::createRenderCommandEncoder
   const auto depthTex = framebuffer->getDepthAttachment();
   if (depthTex) {
     const auto& vkDepthTex = static_cast<Texture&>(*depthTex);
-    const igl::vulkan::VulkanImage& depthImg = vkDepthTex.getVulkanTexture().image_;
+    const igl::vulkan::VulkanImage& depthImg = vkDepthTex.getVulkanTexture().image;
     IGL_DEBUG_ASSERT(depthImg.imageFormat_ != VK_FORMAT_UNDEFINED,
                      "Invalid depth attachment format");
-    const VkImageAspectFlags flags = vkDepthTex.getVulkanTexture().image_.getImageAspectFlags();
+    const VkImageAspectFlags flags = vkDepthTex.getVulkanTexture().image.getImageAspectFlags();
     depthImg.transitionLayout(
         wrapper_.cmdBuf,
         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
@@ -79,7 +79,7 @@ void CommandBuffer::present(const std::shared_ptr<ITexture>& surface) const {
 
   const auto& vkTex = static_cast<Texture&>(*surface);
   const VulkanTexture& tex = vkTex.getVulkanTexture();
-  const VulkanImage& img = tex.image_;
+  const VulkanImage& img = tex.image;
 
   // prepare image for presentation
   if (vkTex.isSwapchainTexture()) {
@@ -102,7 +102,7 @@ void CommandBuffer::present(const std::shared_ptr<ITexture>& surface) const {
 
   // transition only non-multisampled images - MSAA images cannot be accessed from shaders
   if (img.samples_ == VK_SAMPLE_COUNT_1_BIT) {
-    const VkImageAspectFlags flags = vkTex.getVulkanTexture().image_.getImageAspectFlags();
+    const VkImageAspectFlags flags = vkTex.getVulkanTexture().image.getImageAspectFlags();
     const VkPipelineStageFlags srcStage = vkTex.getProperties().isDepthOrStencil()
                                               ? VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
                                               : VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -181,7 +181,7 @@ void CommandBuffer::copyTextureToBuffer(ITexture& src,
   const auto& texSrc = static_cast<Texture&>(src);
   const auto& bufDst = static_cast<Buffer&>(dst);
 
-  VulkanImage& image = texSrc.getVulkanTexture().image_;
+  VulkanImage& image = texSrc.getVulkanTexture().image;
 
   const VkImageLayout oldLayout = image.imageLayout_;
 

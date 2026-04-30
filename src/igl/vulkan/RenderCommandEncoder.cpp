@@ -151,14 +151,14 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
     mipLevel = descColor.mipLevel;
     layer = colorLayer;
     const auto initialLayout = descColor.loadAction == igl::LoadAction::Load
-                                   ? colorTexture.getVulkanTexture().image_.imageLayout_
+                                   ? colorTexture.getVulkanTexture().image.imageLayout_
                                    : VK_IMAGE_LAYOUT_UNDEFINED;
     builder.addColor(textureFormatToVkFormat(colorTexture.getFormat()),
                      loadActionToVkAttachmentLoadOp(descColor.loadAction),
                      storeActionToVkAttachmentStoreOp(descColor.storeAction),
                      initialLayout,
                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                     colorTexture.getVulkanTexture().image_.samples_);
+                     colorTexture.getVulkanTexture().image.samples_);
     // handle MSAA
     if (descColor.storeAction == StoreAction::MsaaResolve) {
       IGL_DEBUG_ASSERT(attachment.resolveTexture,
@@ -193,7 +193,7 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
                                                      .stencil = descStencil.clearStencil,
                                                  }};
     const auto initialLayout = descDepth.loadAction == igl::LoadAction::Load
-                                   ? depthTexture.getVulkanTexture().image_.imageLayout_
+                                   ? depthTexture.getVulkanTexture().image.imageLayout_
                                    : VK_IMAGE_LAYOUT_UNDEFINED;
     builder.addDepthStencil(depthTexture.getVkFormat(),
                             loadActionToVkAttachmentLoadOp(descDepth.loadAction),
@@ -202,7 +202,7 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
                             storeActionToVkAttachmentStoreOp(descStencil.storeAction),
                             initialLayout,
                             VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                            depthTexture.getVulkanTexture().image_.samples_);
+                            depthTexture.getVulkanTexture().image.samples_);
 
     // handle MSAA
     if (renderPass.depthAttachment.storeAction == StoreAction::MsaaResolve) {
@@ -302,7 +302,7 @@ void RenderCommandEncoder::endEncoding() {
 
     // Retrieve the VulkanImage to check its usage
     const auto& vkTex = static_cast<Texture&>(*tex);
-    const igl::vulkan::VulkanImage& img = vkTex.getVulkanTexture().image_;
+    const igl::vulkan::VulkanImage& img = vkTex.getVulkanTexture().image;
 
     if (tex->getProperties().isDepthOrStencil()) {
       // If the texture has not been marked as a depth/stencil attachment

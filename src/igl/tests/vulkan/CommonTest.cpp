@@ -220,7 +220,7 @@ TEST_F(CommonWithDeviceTest, TransitionToGeneralTest) {
       texture.get());
 
   const igl::vulkan::Texture& tex = static_cast<igl::vulkan::Texture&>(*texture);
-  const vulkan::VulkanImage& img = tex.getVulkanTexture().image_;
+  const vulkan::VulkanImage& img = tex.getVulkanTexture().image;
 
   EXPECT_EQ(img.imageLayout_, VK_IMAGE_LAYOUT_GENERAL);
 }

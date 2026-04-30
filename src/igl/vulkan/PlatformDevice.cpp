@@ -46,9 +46,9 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(uint32_t 
     return nullptr;
   }
 
-  IGL_DEBUG_ASSERT(vkTex->image_.imageFormat_ != VK_FORMAT_UNDEFINED, "Invalid image format");
+  IGL_DEBUG_ASSERT(vkTex->image.imageFormat_ != VK_FORMAT_UNDEFINED, "Invalid image format");
 
-  const auto iglFormat = vkFormatToTextureFormat(vkTex->image_.imageFormat_);
+  const auto iglFormat = vkFormatToTextureFormat(vkTex->image.imageFormat_);
   if (!IGL_DEBUG_VERIFY(iglFormat != igl::TextureFormat::Invalid)) {
     Result::setResult(outResult, Result::Code::RuntimeError, "Invalid surface depth format");
     return nullptr;
@@ -94,9 +94,9 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
     return nullptr;
   }
 
-  IGL_DEBUG_ASSERT(vkTex->image_.imageFormat_ != VK_FORMAT_UNDEFINED, "Invalid image format");
+  IGL_DEBUG_ASSERT(vkTex->image.imageFormat_ != VK_FORMAT_UNDEFINED, "Invalid image format");
 
-  const igl::TextureFormat iglFormat = vkFormatToTextureFormat(vkTex->image_.imageFormat_);
+  const igl::TextureFormat iglFormat = vkFormatToTextureFormat(vkTex->image.imageFormat_);
   if (!IGL_DEBUG_VERIFY(iglFormat != igl::TextureFormat::Invalid)) {
     Result::setResult(outResult, Result::Code::RuntimeError, "Invalid surface color format");
     return nullptr;

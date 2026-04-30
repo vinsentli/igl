@@ -283,7 +283,7 @@ Result Texture::createView(const Texture& baseTexture, const TextureViewDesc& de
       !desc_.debugName.empty() ? IGL_FORMAT("Image View: {}", desc.debugName.c_str()) : "";
 
   // make a non-owning copy
-  VulkanImage image(vulkanTexture.image_);
+  VulkanImage image(vulkanTexture.image);
   image.isExternallyManaged_ = true;
 
   auto aspectToVkAspectFlags = [](VkImageAspectFlags baseAspectFlags,
@@ -376,7 +376,7 @@ Result Texture::uploadInternal(TextureType /*type*/,
     return Result{};
   }
 
-  const igl::vulkan::VulkanImage& vulkanImage = texture_->image_;
+  const igl::vulkan::VulkanImage& vulkanImage = texture_->image;
   if (vulkanImage.isMappedPtrAccessible()) {
     checked_memcpy(
         vulkanImage.mappedPtr_, vulkanImage.allocatedSize, data, bytesPerRow * range.width);
@@ -417,17 +417,17 @@ Dimensions Texture::getDimensions() const {
 
 VkFormat Texture::getVkFormat() const {
   IGL_DEBUG_ASSERT(texture_);
-  return texture_ ? texture_->image_.imageFormat_ : VK_FORMAT_UNDEFINED;
+  return texture_ ? texture_->image.imageFormat_ : VK_FORMAT_UNDEFINED;
 }
 
 VkImageUsageFlags Texture::getVkUsageFlags() const {
   IGL_DEBUG_ASSERT(texture_);
-  return texture_ ? texture_->image_.getVkImageUsageFlags() : 0;
+  return texture_ ? texture_->image.getVkImageUsageFlags() : 0;
 }
 
 uint32_t Texture::getVkExtendedFormat() const {
   IGL_DEBUG_ASSERT(texture_);
-  return texture_ ? texture_->image_.extendedFormat_ : 0;
+  return texture_ ? texture_->image.extendedFormat_ : 0;
 }
 
 uint32_t Texture::getNumLayers() const {
@@ -457,7 +457,7 @@ void Texture::generateMipmap(ICommandQueue& /* unused */,
   if (texture_ && desc_.numMipLevels > 1) {
     const auto& ctx = device_.getVulkanContext();
     const auto& wrapper = ctx.immediate_->acquire();
-    texture_->image_.generateMipmap(wrapper.cmdBuf, range ? *range : desc_.asRange());
+    texture_->image.generateMipmap(wrapper.cmdBuf, range ? *range : desc_.asRange());
     ctx.immediate_->submit(wrapper);
   }
 }
@@ -466,8 +466,8 @@ void Texture::generateMipmap(ICommandBuffer& cmdBuffer, const TextureRangeDesc* 
   IGL_DEBUG_ASSERT(texture_);
 
   auto& vkCmdBuffer = static_cast<CommandBuffer&>(cmdBuffer);
-  texture_->image_.generateMipmap(vkCmdBuffer.getVkCommandBuffer(),
-                                  range ? *range : desc_.asRange());
+  texture_->image.generateMipmap(vkCmdBuffer.getVkCommandBuffer(),
+                                 range ? *range : desc_.asRange());
 }
 
 bool Texture::isRequiredGenerateMipmap() const {
@@ -479,7 +479,7 @@ bool Texture::isRequiredGenerateMipmap() const {
     return false;
   }
 
-  return texture_->image_.imageLayout_ != VK_IMAGE_LAYOUT_UNDEFINED;
+  return texture_->image.imageLayout_ != VK_IMAGE_LAYOUT_UNDEFINED;
 }
 
 uint64_t Texture::getTextureId() const {
@@ -514,8 +514,8 @@ VkImageView Texture::getVkImageViewForFramebuffer(uint32_t mipLevel,
           ? device_.getVulkanContext().getClosestDepthStencilFormat(desc_.format)
           : textureFormatToVkFormat(desc_.format);
 
-  const VkImageAspectFlags flags = texture_->image_.getImageAspectFlags();
-  imageViews[index] = texture_->image_.createImageView(
+  const VkImageAspectFlags flags = texture_->image.getImageAspectFlags();
+  imageViews[index] = texture_->image.createImageView(
       isStereo ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
       vkFormat,
       flags,
@@ -529,7 +529,7 @@ VkImageView Texture::getVkImageViewForFramebuffer(uint32_t mipLevel,
 }
 
 VkImage Texture::getVkImage() const {
-  return texture_ ? texture_->image_.vkImage_ : VK_NULL_HANDLE;
+  return texture_ ? texture_->image.vkImage_ : VK_NULL_HANDLE;
 }
 
 VulkanTexture& Texture::getVulkanTexture() const {
@@ -538,7 +538,7 @@ VulkanTexture& Texture::getVulkanTexture() const {
 }
 
 bool Texture::isSwapchainTexture() const {
-  return texture_ ? texture_->image_.isExternallyManaged_ : false;
+  return texture_ ? texture_->image.isExternallyManaged_ : false;
 }
 
 TextureDesc::TextureMipmapGeneration Texture::getMipmapGeneration() const {
@@ -554,7 +554,7 @@ void Texture::clearColorTexture(const igl::Color& rgba) {
     return;
   }
 
-  const igl::vulkan::VulkanImage& img = texture_->image_;
+  const igl::vulkan::VulkanImage& img = texture_->image;
   IGL_DEBUG_ASSERT(img.valid());
 
   const auto& wrapper = img.ctx_->stagingDevice_->immediate->acquire();
