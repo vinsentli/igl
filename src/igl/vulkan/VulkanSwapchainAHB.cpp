@@ -288,6 +288,9 @@ void VulkanSwapchain::SubmitFrameToSystem(int gpuFenceFd, VkSemaphore waitSemaph
   funcTable_->ASurfaceTransaction_setBuffer(
       transaction, surfaceControl_, texture->getHardwareBuffer(), gpuFenceFd);
 
+  //设置非透明解决小米切后台时闪烁问题。
+  funcTable_->ASurfaceTransaction_setBufferTransparency(transaction, surfaceControl_, ASURFACE_TRANSACTION_TRANSPARENCY_OPAQUE);
+
   TransactionInFlightData* inFlightData = nullptr;
 #if WAIT_SURFACE_FLINGER
   inFlightData = new TransactionInFlightData();

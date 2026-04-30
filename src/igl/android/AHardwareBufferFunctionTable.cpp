@@ -60,6 +60,10 @@ std::unique_ptr<AHardwareBufferFunctionTable> AHardwareBufferFunctionTable::crea
           (PFASurfaceTransaction_apply)dlsym(dll_handle, "ASurfaceTransaction_apply");
   functionTable->ASurfaceTransaction_setBuffer =
           (PFASurfaceTransaction_setBuffer)dlsym(dll_handle, "ASurfaceTransaction_setBuffer");
+  functionTable->ASurfaceTransaction_setBufferDataSpace =
+          (PFASurfaceTransaction_setBufferDataSpace)dlsym(dll_handle, "ASurfaceTransaction_setBufferDataSpace");
+  functionTable->ASurfaceTransaction_setBufferTransparency =
+          (PFASurfaceTransaction_setBufferTransparency)dlsym(dll_handle, "ASurfaceTransaction_setBufferTransparency");
   functionTable->ASurfaceTransaction_setOnComplete =
           (PFASurfaceTransaction_setOnComplete)dlsym(dll_handle, "ASurfaceTransaction_setOnComplete");
   functionTable->ASurfaceTransactionStats_getPresentFenceFd =
@@ -81,6 +85,7 @@ std::unique_ptr<AHardwareBufferFunctionTable> AHardwareBufferFunctionTable::crea
   if(!functionTable->ASurfaceTransaction_delete) return nullptr;
   if(!functionTable->ASurfaceTransaction_apply) return nullptr;
   if(!functionTable->ASurfaceTransaction_setBuffer) return nullptr;
+  if(!functionTable->ASurfaceTransaction_setBufferDataSpace) return nullptr;
   if(!functionTable->ASurfaceTransaction_setOnComplete) return nullptr;
 
   return functionTable;

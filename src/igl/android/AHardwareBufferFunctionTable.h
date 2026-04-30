@@ -19,6 +19,13 @@ struct ASurfaceTransactionStats;
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef enum ASurfaceTransactionTransparency {
+    ASURFACE_TRANSACTION_TRANSPARENCY_TRANSPARENT = 0,
+    ASURFACE_TRANSACTION_TRANSPARENCY_TRANSLUCENT = 1,
+    ASURFACE_TRANSACTION_TRANSPARENCY_OPAQUE = 2,
+} ASurfaceTransactionTransparency;
+
 using PFAHardwareBuffer_allocate = int (*)(const AHardwareBuffer_Desc* desc,
                                            AHardwareBuffer** outBuffer);
 using PFAHardwareBuffer_acquire = void (*)(AHardwareBuffer* buffer);
@@ -44,6 +51,8 @@ using PFASurfaceTransaction_create = ASurfaceTransaction* (*)();
 using PFASurfaceTransaction_delete = void (*)(ASurfaceTransaction*);
 using PFASurfaceTransaction_apply = void (*)(ASurfaceTransaction*);
 using PFASurfaceTransaction_setBuffer = void (*)(ASurfaceTransaction *, ASurfaceControl *, AHardwareBuffer *, int);
+using PFASurfaceTransaction_setBufferDataSpace = void (*)(ASurfaceTransaction* transaction, ASurfaceControl* surface_control, int32_t data_space);
+using PFASurfaceTransaction_setBufferTransparency = void (*)(ASurfaceTransaction* transaction, ASurfaceControl* surface_control, ASurfaceTransactionTransparency transparency);
 typedef void(* ASurfaceTransaction_OnComplete_Callback)(void *_Null_unspecified context, ASurfaceTransactionStats *_Nonnull stats);
 using PFASurfaceTransaction_setOnComplete = void (*)(
   ASurfaceTransaction *_Nonnull transaction,
@@ -78,6 +87,8 @@ struct AHardwareBufferFunctionTable {
   PFASurfaceTransaction_delete ASurfaceTransaction_delete = nullptr;
   PFASurfaceTransaction_apply ASurfaceTransaction_apply = nullptr;
   PFASurfaceTransaction_setBuffer ASurfaceTransaction_setBuffer = nullptr;
+  PFASurfaceTransaction_setBufferDataSpace ASurfaceTransaction_setBufferDataSpace = nullptr;
+  PFASurfaceTransaction_setBufferTransparency ASurfaceTransaction_setBufferTransparency = nullptr;
   PFASurfaceTransaction_setOnComplete ASurfaceTransaction_setOnComplete = nullptr;
   PFASurfaceTransactionStats_getPresentFenceFd ASurfaceTransactionStats_getPresentFenceFd = nullptr;
   PFASurfaceTransactionStats_getPreviousReleaseFenceFd ASurfaceTransactionStats_getPreviousReleaseFenceFd = nullptr;

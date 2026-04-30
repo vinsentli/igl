@@ -154,6 +154,6 @@ class VulkanSwapchain : public std::enable_shared_from_this<VulkanSwapchain> {
   AHBTexturePool texturePool_;
 };
 
-#endif
-
 } // namespace igl::vulkan
+
+#endif
