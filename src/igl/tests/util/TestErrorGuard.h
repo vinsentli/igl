@@ -16,9 +16,9 @@ class TestErrorGuard final {
  public:
   TestErrorGuard();
 
-  virtual ~TestErrorGuard();
+  ~TestErrorGuard();
 
-  static void ReportErrorHandler(const char* category,
+  static void reportErrorHandler(const char* category,
                                  const char* reason,
                                  const char* file,
                                  const char* func,

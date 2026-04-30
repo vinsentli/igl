@@ -7,9 +7,8 @@
 
 #pragma once
 
-#include <igl/IGL.h>
-
 #include <string>
+#include <igl/IGL.h>
 
 namespace iglu {
 /// Wrapper for SPIR-V cross compiler to generate IGL-compatible shader sources for different
@@ -18,6 +17,10 @@ class ShaderCross final {
  public:
   explicit ShaderCross(igl::IDevice& device) noexcept;
   ~ShaderCross() noexcept;
+  ShaderCross(const ShaderCross&) = delete;
+  ShaderCross& operator=(const ShaderCross&) = delete;
+  ShaderCross(ShaderCross&&) = delete;
+  ShaderCross& operator=(ShaderCross&&) = delete;
 
   [[nodiscard]] std::string entryPointName(igl::ShaderStage stage) const noexcept;
 

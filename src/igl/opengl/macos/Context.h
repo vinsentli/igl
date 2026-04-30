@@ -7,11 +7,9 @@
 
 #pragma once
 
-#include <CoreVideo/CoreVideo.h>
-
 #include <AppKit/AppKit.h>
-
 #include <CoreVideo/CVOpenGLTextureCache.h>
+#include <CoreVideo/CoreVideo.h>
 #include <igl/opengl/IContext.h>
 
 @class NSOpenGLContext;
@@ -38,6 +36,11 @@ class Context final : public IContext {
       Result* outResult);
 
   ~Context() override;
+
+  Context(const Context&) = delete;
+  Context& operator=(const Context&) = delete;
+  Context(Context&&) = delete;
+  Context& operator=(Context&&) = delete;
 
   void setCurrent() override;
   void clearCurrentContext() const override;

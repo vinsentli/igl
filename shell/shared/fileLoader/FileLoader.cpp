@@ -8,25 +8,30 @@
 #include <shell/shared/fileLoader/FileLoader.h>
 
 #include <cstdio>
+#include <filesystem>
+#include <limits>
 #include <igl/Common.h>
 
-#if defined(IGL_CMAKE_BUILD)
-#include <filesystem>
-namespace fs = std::filesystem;
-#else
-#include <boost/filesystem.hpp>
-namespace fs = boost::filesystem;
+#if IGL_PLATFORM_ANDROID
+#include <shell/shared/fileLoader/android/FileLoaderAndroid.h>
+#elif IGL_PLATFORM_LINUX
+#include <shell/shared/fileLoader/linux/FileLoaderLinux.h>
+#elif IGL_PLATFORM_APPLE
+#include <shell/shared/fileLoader/apple/FileLoaderApple.h>
+#elif IGL_PLATFORM_WINDOWS
+#include <shell/shared/fileLoader/win/FileLoaderWin.h>
 #endif
 
 namespace igl::shell {
 
 FileLoader::FileData FileLoader::loadBinaryDataInternal(const std::string& filePath) {
-  if (IGL_DEBUG_VERIFY_NOT(!fs::exists(filePath), "Couldn't find file: %s", filePath.c_str())) {
+  if (IGL_DEBUG_VERIFY_NOT(
+          !std::filesystem::exists(filePath), "Couldn't find file: %s", filePath.c_str())) {
     return {};
   }
-  const uintmax_t length = fs::file_size(filePath);
+  const uintmax_t length = std::filesystem::file_size(filePath);
 
-  if (IGL_DEBUG_VERIFY_NOT(length > std::numeric_limits<uint32_t>::max())) {
+  if (IGL_DEBUG_VERIFY_NOT(length > std::numeric_limits<uint64_t>::max())) {
     return {};
   }
 
@@ -44,7 +49,21 @@ FileLoader::FileData FileLoader::loadBinaryDataInternal(const std::string& fileP
     return {};
   }
 
-  return {std::move(data), static_cast<uint32_t>(length)};
+  return {.data = std::move(data), .length = static_cast<uint64_t>(length)};
+}
+
+std::unique_ptr<FileLoader> createFileLoader() {
+#if IGL_PLATFORM_ANDROID
+  return std::make_unique<FileLoaderAndroid>();
+#elif IGL_PLATFORM_LINUX
+  return std::make_unique<FileLoaderLinux>();
+#elif IGL_PLATFORM_APPLE
+  return std::make_unique<FileLoaderApple>();
+#elif IGL_PLATFORM_WINDOWS
+  return std::make_unique<FileLoaderWin>();
+#else
+  return nullptr;
+#endif
 }
 
 } // namespace igl::shell

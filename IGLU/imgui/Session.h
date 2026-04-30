@@ -5,9 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-// @fb-only
+// @MARK:COVERAGE_EXCLUDE_FILE
 
 #pragma once
+
+#include "imgui.h"
 
 #include <IGLU/imgui/InputListener.h>
 #include <memory>
@@ -17,8 +19,6 @@
 #include <igl/Device.h>
 #include <igl/Framebuffer.h>
 #include <igl/RenderCommandEncoder.h>
-
-#include "imgui.h"
 
 namespace iglu::imgui {
 
@@ -38,11 +38,11 @@ class Session {
  private:
   class Renderer;
 
-  igl::shell::InputDispatcher& _inputDispatcher;
-  std::shared_ptr<InputListener> _inputListener;
-  ImGuiContext* _context;
-  std::unique_ptr<Renderer> _renderer;
-  bool _isInitialized = false;
+  igl::shell::InputDispatcher& inputDispatcher_;
+  std::shared_ptr<InputListener> inputListener_;
+  ImGuiContext* context_;
+  std::unique_ptr<Renderer> renderer_;
+  bool isInitialized_ = false;
 
   void makeCurrentContext() const;
 };

@@ -7,16 +7,18 @@
 
 // @fb-only
 
-#include <cmath>
-#include <string.h>
-
 #include <shell/windows/common/GlfwShell.h>
 
-#include "shell/shared/renderSession/ScreenshotTestRenderSessionHelper.h"
+#include <cmath>
+#include <cstdlib>
+#include <thread>
 #include <shell/shared/input/InputDispatcher.h>
 #include <shell/shared/renderSession/AppParams.h>
 #include <shell/shared/renderSession/DefaultRenderSessionFactory.h>
 #include <shell/shared/renderSession/IRenderSessionFactory.h>
+#include <shell/shared/renderSession/RenderSession.h>
+#include <shell/shared/renderSession/ScreenshotTestRenderSessionHelper.h>
+#include <shell/shared/renderSession/ShellParams.h>
 #include <igl/Framebuffer.h>
 
 namespace igl::shell {
@@ -95,7 +97,7 @@ bool GlfwShell::createWindow() noexcept {
   int width = windowConfig_.width;
   int height = windowConfig_.height;
 
-  GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+  GLFWmonitor* IGL_NULLABLE monitor = glfwGetPrimaryMonitor();
 
   if (windowConfig_.windowMode == WindowMode::Fullscreen) {
     const GLFWvidmode* mode = glfwGetVideoMode(monitor);
@@ -113,6 +115,7 @@ bool GlfwShell::createWindow() noexcept {
   willCreateWindow();
 
   GLFWwindow* windowHandle =
+      // @fb-only
       glfwCreateWindow(width, height, sessionConfig_.displayName.c_str(), monitor, nullptr);
   if (!windowHandle) {
     return false;
@@ -156,19 +159,19 @@ bool GlfwShell::createWindow() noexcept {
     }
     uint32_t modifiers = 0;
     if (mods & GLFW_MOD_SHIFT) {
-      modifiers |= igl::shell::KeyEventModifierShift;
+      modifiers |= igl::shell::kKeyEventModifierShift;
     }
     if (mods & GLFW_MOD_CONTROL) {
-      modifiers |= igl::shell::KeyEventModifierControl;
+      modifiers |= igl::shell::kKeyEventModifierControl;
     }
     if (mods & GLFW_MOD_ALT) {
-      modifiers |= igl::shell::KeyEventModifierOption;
+      modifiers |= igl::shell::kKeyEventModifierOption;
     }
     if (mods & GLFW_MOD_CAPS_LOCK) {
-      modifiers |= igl::shell::KeyEventModifierCapsLock;
+      modifiers |= igl::shell::kKeyEventModifierCapsLock;
     }
     if (mods & GLFW_MOD_NUM_LOCK) {
-      modifiers |= igl::shell::KeyEventModifierNumLock;
+      modifiers |= igl::shell::kKeyEventModifierNumLock;
     }
     shell->platform_->getInputDispatcher().queueEvent(
         KeyEvent(action == GLFW_PRESS, key, modifiers));
@@ -194,11 +197,14 @@ bool GlfwShell::initialize(int argc,
                            const RenderSessionConfig& suggestedSessionConfig) noexcept {
   igl::shell::Platform::initializeCommandLineArgs(argc, argv);
 
-  for (int i = 1; i < argc; i++) {
-    if (!strcmp(argv[i], "--headless")) {
-      shellParams_.isHeadless = true;
-    }
-  }
+  // Use the comprehensive parser
+  auto args = shell::convertArgvToParams(argc, argv);
+  shell::parseShellParams(args, shellParams_);
+
+  // Apply viewport size if specified
+  suggestedWindowConfig.width = static_cast<int>(shellParams_.viewportSize.x);
+  suggestedWindowConfig.height = static_cast<int>(shellParams_.viewportSize.y);
+  suggestedWindowConfig.windowMode = WindowMode::Window;
 
   auto factory = igl::shell::createDefaultRenderSessionFactory();
 
@@ -234,8 +240,18 @@ bool GlfwShell::initialize(int argc,
 }
 
 void GlfwShell::run() noexcept {
+  uint64_t frameNumber = 0;
+  bool frozen = false;
   while ((!window_ || !glfwWindowShouldClose(window_.get())) &&
          !session_->appParams().exitRequested) {
+    if (frozen) {
+      if (window_) {
+        glfwPollEvents();
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(16));
+      continue;
+    }
+
     willTick();
     auto surfaceTextures = createSurfaceTextures();
     IGL_DEBUG_ASSERT(surfaceTextures.color != nullptr && surfaceTextures.depth != nullptr);
@@ -243,20 +259,45 @@ void GlfwShell::run() noexcept {
     std::shared_ptr<ITexture> colorTexture = surfaceTextures.color;
 
     platform_->getInputDispatcher().processEvents();
+
+    const auto& params = session_->shellParams();
+    if (params.freezeAtFrame != ~0u && frameNumber >= params.freezeAtFrame) {
+      frozen = true;
+      IGL_LOG_INFO("[IGL Shell] Frozen at frame %u\n", params.freezeAtFrame);
+      continue;
+    }
+
+    const double startTime = RenderSession::getSeconds();
     session_->update(std::move(surfaceTextures));
+    postUpdate();
+
+    if (params.fpsThrottleMs > 0) {
+      const double endTime = RenderSession::getSeconds();
+      const double frameTimeMs = (endTime - startTime) * 1000.0;
+      const double targetMs = params.fpsThrottleRandom
+                                  ? static_cast<double>(1 + (std::rand() % params.fpsThrottleMs))
+                                  : static_cast<double>(params.fpsThrottleMs);
+      if (frameTimeMs < targetMs) {
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(static_cast<int>(targetMs - frameTimeMs)));
+      }
+    }
+
     if (window_) {
       glfwPollEvents();
-    } else {
-      IGL_LOG_INFO("\nWe are running headless - breaking after 1 frame\n");
-      const char* screenshotFileName = session_->shellParams().screenshotFileName;
-      if (screenshotFileName && *screenshotFileName) {
-        SaveFrameBufferToPng(screenshotFileName,
+    }
+    if (frameNumber == session_->shellParams().screenshotNumber) {
+      IGL_LOG_INFO("\nWe are running screenshot test - breaking after %u frame\n",
+                   (uint32_t)frameNumber);
+      if (!session_->shellParams().screenshotFileName.empty()) {
+        saveFrameBufferToPng(session_->shellParams().screenshotFileName.c_str(),
                              platform_->getDevice().createFramebuffer(
                                  {.colorAttachments = {{.texture = colorTexture}}}, nullptr),
                              *platform_);
       }
       break;
     }
+    frameNumber++;
   }
 }
 

@@ -49,7 +49,7 @@ class VulkanPipelineBuilder final {
                                const char* debugName = nullptr) noexcept;
 
   static uint32_t getNumPipelinesCreated() {
-    return numPipelinesCreated_;
+    return numPipelinesCreated;
   }
 
  private:
@@ -61,7 +61,7 @@ class VulkanPipelineBuilder final {
   VkPipelineMultisampleStateCreateInfo multisampleState_;
   VkPipelineDepthStencilStateCreateInfo depthStencilState_;
   std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachmentStates_;
-  static uint32_t numPipelinesCreated_;
+  static uint32_t numPipelinesCreated;
 };
 
 class VulkanComputePipelineBuilder final {
@@ -80,12 +80,12 @@ class VulkanComputePipelineBuilder final {
                  const char* debugName = nullptr) noexcept;
 
   static uint32_t getNumPipelinesCreated() {
-    return numPipelinesCreated_;
+    return numPipelinesCreated;
   }
 
  private:
   VkPipelineShaderStageCreateInfo shaderStage_;
-  static uint32_t numPipelinesCreated_;
+  static uint32_t numPipelinesCreated;
 };
 
 } // namespace igl::vulkan

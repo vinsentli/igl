@@ -17,25 +17,25 @@
 
 - (instancetype)initWithTouchDelegate:(id<TouchDelegate>)delegate {
   if (self = [super init]) {
-    _delegate = delegate;
+    self->_delegate = delegate;
   }
   return self;
 }
 
 - (void)touchesBegan:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event {
-  [_delegate touchBegan:touches.anyObject];
+  [self->_delegate touchBegan:touches.anyObject];
 }
 
 - (void)touchesMoved:(NSSet<UITouch*>*)touches withEvent:(nullable UIEvent*)event {
-  [_delegate touchMoved:touches.anyObject];
+  [self->_delegate touchMoved:touches.anyObject];
 }
 
 - (void)touchesEnded:(NSSet<UITouch*>*)touches withEvent:(nullable UIEvent*)event {
-  [_delegate touchEnded:touches.anyObject];
+  [self->_delegate touchEnded:touches.anyObject];
 }
 
 - (void)touchesCanceled:(NSSet<UITouch*>*)touches withEvent:(nullable UIEvent*)event {
-  [_delegate touchEnded:touches.anyObject];
+  [self->_delegate touchEnded:touches.anyObject];
 }
 
 @end
@@ -45,23 +45,23 @@
 }
 
 - (void)setTouchDelegate:(id<TouchDelegate>)delegate {
-  _touchDelegate = delegate;
+  self->_touchDelegate = delegate;
 }
 
 - (void)touchesBegan:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event {
-  [_touchDelegate touchBegan:touches.anyObject];
+  [self->_touchDelegate touchBegan:touches.anyObject];
 }
 
 - (void)touchesMoved:(NSSet<UITouch*>*)touches withEvent:(nullable UIEvent*)event {
-  [_touchDelegate touchMoved:touches.anyObject];
+  [self->_touchDelegate touchMoved:touches.anyObject];
 }
 
 - (void)touchesEnded:(NSSet<UITouch*>*)touches withEvent:(nullable UIEvent*)event {
-  [_touchDelegate touchEnded:touches.anyObject];
+  [self->_touchDelegate touchEnded:touches.anyObject];
 }
 
 - (void)touchesCanceled:(NSSet<UITouch*>*)touches withEvent:(nullable UIEvent*)event {
-  [_touchDelegate touchEnded:touches.anyObject];
+  [self->_touchDelegate touchEnded:touches.anyObject];
 }
 
 + (Class)layerClass {
@@ -78,6 +78,7 @@
 @end
 
 @implementation OpenGLView
+@synthesize viewSizeChangeDelegate = _viewSizeChangeDelegate;
 
 - (void)layoutSubviews {
   [super layoutSubviews];

@@ -35,8 +35,18 @@ add_library(IGLLibrary ${IGLBuildType} ${SRC_FILES} ${HEADER_FILES})
 target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/src")
 target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/glm")
 
-if (IGL_WITH_OPENGLES OR IGL_WITH_VULKAN OR IGL_WITH_IGLU OR IGL_WITH_SAMPLES)
-  target_link_libraries(IGLLibrary PUBLIC fmt)
+if(NOT IGL_WITH_OPENGL)
+  target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/src/igl/opengl/util")
+  target_sources(IGLLibrary PRIVATE opengl/util/TextureFormat.cpp opengl/util/TextureFormat.h)
+endif()
+
+if(NOT EMSCRIPTEN)
+  # Only link fmt if it's available, use PRIVATE to avoid exporting the dependency
+  if(TARGET fmt::fmt)
+    target_link_libraries(IGLLibrary PRIVATE fmt::fmt)
+  elseif(TARGET fmt)
+    target_link_libraries(IGLLibrary PRIVATE fmt)
+  endif()
 endif()
 
 igl_set_cxxstd(IGLLibrary 17)
@@ -59,9 +69,16 @@ if(IGL_WITH_METAL)
   target_link_libraries(IGLLibrary PUBLIC IGLMetal)
 endif()
 
+if(IGL_WITH_D3D12)
+  add_subdirectory(d3d12)
+  target_link_libraries(IGLLibrary PUBLIC IGLD3D12)
+endif()
+
 # OpenGL tests use GLES on Windows and we do not use Angle with CMake - so OGL
 # tests are disabled for now on Windows
-if(IGL_WITH_TESTS AND IGL_WITH_IGLU AND (IGL_WITH_VULKAN OR (NOT WIN32)))
+# Enable tests when requested. On Windows, allow tests if either Vulkan or D3D12 is enabled
+# (previously required Vulkan on Windows, which blocked D3D12-only test runs).
+if(IGL_WITH_TESTS AND IGL_WITH_IGLU AND (IGL_WITH_VULKAN OR IGL_WITH_D3D12 OR (NOT WIN32)))
   add_subdirectory(tests)
   if((IGL_WITH_OPENGL OR IGL_WITH_OPENGLES) AND NOT APPLE)
     target_sources(IGLTests PRIVATE opengl/egl/Context.cpp opengl/egl/Device.cpp opengl/egl/HWDevice.cpp

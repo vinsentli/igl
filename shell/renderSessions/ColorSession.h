@@ -28,16 +28,27 @@ class ColorSession : public RenderSession {
   void update(SurfaceTextures surfaceTextures) noexcept override;
 
   enum class ColorTestModes {
-    eMacbethTexture,
-    eOrangeTexture,
-    eOrangeClear,
+    MacbethTexture,
+    MacbethTexture720,
+    MacbethTextureKtx,
+    MacbethTextureKtx2,
+    // @fb-only
+    EyeChartTexture720,
+    OrangeTexture,
+    OrangeClear,
+    Gradient,
   };
   void setTestMode(ColorTestModes colorTestModes) noexcept {
     colorTestModes_ = colorTestModes;
   }
 
+  void setSwapchainColorTextureformat(TextureFormat swapchainColorTextureformat) {
+    swapchainColorTextureformat_ = swapchainColorTextureformat;
+  }
+
  private:
-  ColorTestModes colorTestModes_ = ColorTestModes::eMacbethTexture;
+  std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device);
+  ColorTestModes colorTestModes_ = ColorTestModes::MacbethTexture;
 
   std::shared_ptr<IRenderPipelineState> pipelineState_;
   std::shared_ptr<IVertexInputState> vertexInput0_;
@@ -53,6 +64,7 @@ class ColorSession : public RenderSession {
   FragmentFormat fragmentParameters_{};
   std::vector<UniformDesc> fragmentUniformDescriptors_;
   std::vector<UniformDesc> vertexUniformDescriptors_;
+  TextureFormat swapchainColorTextureformat_ = TextureFormat::RGBA_SRGB;
 };
 
 } // namespace igl::shell

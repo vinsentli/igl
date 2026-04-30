@@ -7,15 +7,18 @@
 
 // @MARK:COVERAGE_EXCLUDE_FILE
 
-#include <cstddef>
 #include <shell/renderSessions/TextureViewSession.h>
-#include <shell/shared/imageLoader/ImageLoader.h>
+
+#include <cstddef>
 #include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/ShellParams.h>
+#include <igl/Device.h>
 #include <igl/NameHandle.h>
+#include <igl/RenderPass.h>
+#include <igl/RenderPipelineState.h>
+#include <igl/SamplerState.h>
 #include <igl/ShaderCreator.h>
-#include <igl/opengl/Device.h>
-#include <igl/opengl/RenderCommandEncoder.h>
+#include <igl/VertexInputState.h>
 
 namespace {
 
@@ -29,35 +32,35 @@ constexpr float kHalf = 1.2f;
 // UV-mapped cube with indices: 24 vertices, 36 indices
 constexpr VertexPosUvw kVertexData[] = {
     // top
-    {{-kHalf, -kHalf, +kHalf}, {0, 0}}, // 0
-    {{+kHalf, -kHalf, +kHalf}, {1, 0}}, // 1
-    {{+kHalf, +kHalf, +kHalf}, {1, 1}}, // 2
-    {{-kHalf, +kHalf, +kHalf}, {0, 1}}, // 3
+    {.position = {-kHalf, -kHalf, +kHalf}, .uv = {0, 0}}, // 0
+    {.position = {+kHalf, -kHalf, +kHalf}, .uv = {1, 0}}, // 1
+    {.position = {+kHalf, +kHalf, +kHalf}, .uv = {1, 1}}, // 2
+    {.position = {-kHalf, +kHalf, +kHalf}, .uv = {0, 1}}, // 3
     // bottom
-    {{-kHalf, -kHalf, -kHalf}, {0, 0}}, // 4
-    {{-kHalf, +kHalf, -kHalf}, {0, 1}}, // 5
-    {{+kHalf, +kHalf, -kHalf}, {1, 1}}, // 6
-    {{+kHalf, -kHalf, -kHalf}, {1, 0}}, // 7
+    {.position = {-kHalf, -kHalf, -kHalf}, .uv = {0, 0}}, // 4
+    {.position = {-kHalf, +kHalf, -kHalf}, .uv = {0, 1}}, // 5
+    {.position = {+kHalf, +kHalf, -kHalf}, .uv = {1, 1}}, // 6
+    {.position = {+kHalf, -kHalf, -kHalf}, .uv = {1, 0}}, // 7
     // left
-    {{+kHalf, +kHalf, -kHalf}, {1, 0}}, // 8
-    {{-kHalf, +kHalf, -kHalf}, {0, 0}}, // 9
-    {{-kHalf, +kHalf, +kHalf}, {0, 1}}, // 10
-    {{+kHalf, +kHalf, +kHalf}, {1, 1}}, // 11
+    {.position = {+kHalf, +kHalf, -kHalf}, .uv = {1, 0}}, // 8
+    {.position = {-kHalf, +kHalf, -kHalf}, .uv = {0, 0}}, // 9
+    {.position = {-kHalf, +kHalf, +kHalf}, .uv = {0, 1}}, // 10
+    {.position = {+kHalf, +kHalf, +kHalf}, .uv = {1, 1}}, // 11
     // right
-    {{-kHalf, -kHalf, -kHalf}, {0, 0}}, // 12
-    {{+kHalf, -kHalf, -kHalf}, {1, 0}}, // 13
-    {{+kHalf, -kHalf, +kHalf}, {1, 1}}, // 14
-    {{-kHalf, -kHalf, +kHalf}, {0, 1}}, // 15
+    {.position = {-kHalf, -kHalf, -kHalf}, .uv = {0, 0}}, // 12
+    {.position = {+kHalf, -kHalf, -kHalf}, .uv = {1, 0}}, // 13
+    {.position = {+kHalf, -kHalf, +kHalf}, .uv = {1, 1}}, // 14
+    {.position = {-kHalf, -kHalf, +kHalf}, .uv = {0, 1}}, // 15
     // front
-    {{+kHalf, -kHalf, -kHalf}, {0, 0}}, // 16
-    {{+kHalf, +kHalf, -kHalf}, {1, 0}}, // 17
-    {{+kHalf, +kHalf, +kHalf}, {1, 1}}, // 18
-    {{+kHalf, -kHalf, +kHalf}, {0, 1}}, // 19
+    {.position = {+kHalf, -kHalf, -kHalf}, .uv = {0, 0}}, // 16
+    {.position = {+kHalf, +kHalf, -kHalf}, .uv = {1, 0}}, // 17
+    {.position = {+kHalf, +kHalf, +kHalf}, .uv = {1, 1}}, // 18
+    {.position = {+kHalf, -kHalf, +kHalf}, .uv = {0, 1}}, // 19
     // back
-    {{-kHalf, +kHalf, -kHalf}, {1, 0}}, // 20
-    {{-kHalf, -kHalf, -kHalf}, {0, 0}}, // 21
-    {{-kHalf, -kHalf, +kHalf}, {0, 1}}, // 22
-    {{-kHalf, +kHalf, +kHalf}, {1, 1}}, // 23
+    {.position = {-kHalf, +kHalf, -kHalf}, .uv = {1, 0}}, // 20
+    {.position = {-kHalf, -kHalf, -kHalf}, .uv = {0, 0}}, // 21
+    {.position = {-kHalf, -kHalf, +kHalf}, .uv = {0, 1}}, // 22
+    {.position = {-kHalf, +kHalf, +kHalf}, .uv = {1, 1}}, // 23
 };
 
 constexpr uint16_t kIndexData[] = {0,  1,  2,  2,  3,  0,  4,  5,  6,  6,  7,  4,
@@ -144,6 +147,27 @@ std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevice& devi
                                                            "main",
                                                            "",
                                                            nullptr);
+  case igl::BackendType::D3D12: {
+    static const char* kVS = R"(
+      cbuffer PushConstants : register(b2) { float4x4 mvpMatrix; };
+      struct VSIn { float3 position : POSITION; float2 uv : TEXCOORD0; };
+      struct VSOut { float4 position : SV_POSITION; float2 uv : TEXCOORD0; };
+      VSOut main(VSIn v) {
+        VSOut o;
+        o.position = mul(mvpMatrix, float4(v.position, 1.0));
+        o.uv = v.uv;
+        return o;
+      }
+    )";
+    static const char* kPS = R"(
+      Texture2D<float4> input2D : register(t0);
+      SamplerState linearSampler : register(s0);
+      struct PSIn { float4 position : SV_POSITION; float2 uv : TEXCOORD0; };
+      float4 main(PSIn i) : SV_TARGET { return input2D.Sample(linearSampler, i.uv); }
+    )";
+    return igl::ShaderStagesCreator::fromModuleStringInput(
+        device, kVS, "main", "", kPS, "main", "", nullptr);
+  }
   case igl::BackendType::Custom:
     IGL_DEBUG_ABORT("IGLSamples not set up for Custom");
     return nullptr;
@@ -178,10 +202,14 @@ void TextureViewSession::initialize() noexcept {
     std::terminate();
   }
 
-  vb_ = device.createBuffer(
-      BufferDesc(BufferDesc::BufferTypeBits::Vertex, kVertexData, sizeof(kVertexData)), nullptr);
-  ib_ = device.createBuffer(
-      BufferDesc(BufferDesc::BufferTypeBits::Index, kIndexData, sizeof(kIndexData)), nullptr);
+  vb_ = device.createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Vertex,
+                                       .data = kVertexData,
+                                       .length = sizeof(kVertexData)},
+                            nullptr);
+  ib_ = device.createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Index,
+                                       .data = kIndexData,
+                                       .length = sizeof(kIndexData)},
+                            nullptr);
 
   const VertexInputStateDesc inputDesc = {
       .numAttributes = 2,
@@ -344,6 +372,8 @@ void TextureViewSession::update(SurfaceTextures surfaceTextures) noexcept {
     commands->bindPushConstants(&mvpMatrix, sizeof(mvpMatrix));
   } else if (device.getBackendType() == BackendType::Metal) {
     commands->bindBytes(0, BindTarget::kVertex, &mvpMatrix, sizeof(mvpMatrix));
+  } else if (device.getBackendType() == BackendType::D3D12) {
+    commands->bindPushConstants(&mvpMatrix, sizeof(mvpMatrix));
   } else {
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   }

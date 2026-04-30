@@ -286,10 +286,14 @@ void RenderPipelineReflection::generateShaderStorageBufferObjectDictionary(ICont
       GLsizei length = 0;
       context.getProgramResourceName(
           pid, GL_SHADER_STORAGE_BLOCK, i, maxSSBONameLength, &length, cname.data());
-      const GLint location =
-          context.getProgramResourceIndex(pid, GL_SHADER_STORAGE_BLOCK, cname.data());
-
       auto name = std::string(cname.data(), cname.data() + length);
+      const GLuint index =
+          context.getProgramResourceIndex(pid, GL_SHADER_STORAGE_BLOCK, cname.data());
+      GLint location{-1};
+      const GLenum prop = GL_BUFFER_BINDING;
+      context.getProgramResourceiv(
+          pid, GL_SHADER_STORAGE_BLOCK, index, 1, &prop, 1, &length, &location);
+
       shaderStorageBufferObjectDictionary_.insert(
           std::make_pair(igl::genNameHandle(name), location));
     }
@@ -346,10 +350,10 @@ void RenderPipelineReflection::cacheDescriptors() {
       bufferDesc.shaderStage = igl::ShaderStage::Fragment;
 
       igl::BufferArgDesc::BufferMemberDesc iglMemberDesc{
-          entry.first,
-          uniformType,
-          0,
-          (size_t)glDesc.size,
+          .name = entry.first,
+          .type = uniformType,
+          .offset = 0,
+          .arrayLength = (size_t)glDesc.size,
       };
       bufferDesc.members.push_back(std::move(iglMemberDesc));
 
@@ -390,10 +394,10 @@ void RenderPipelineReflection::cacheDescriptors() {
       const igl::UniformType uniformType = toIGLUniformType(uniformDesc.type);
 
       igl::BufferArgDesc::BufferMemberDesc iglMemberDesc{
-          uniformEntry.first,
-          uniformType,
-          static_cast<size_t>(uniformDesc.offset),
-          static_cast<size_t>(uniformDesc.size),
+          .name = uniformEntry.first,
+          .type = uniformType,
+          .offset = static_cast<size_t>(uniformDesc.offset),
+          .arrayLength = static_cast<size_t>(uniformDesc.size),
       };
       bufferDesc.members.push_back(std::move(iglMemberDesc));
     }

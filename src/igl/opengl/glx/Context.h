@@ -7,18 +7,17 @@
 
 #pragma once
 
-#include <igl/opengl/GLIncludes.h>
-#include <igl/opengl/IContext.h>
-
 #include <X11/Xlib.h>
-
 #include <cstdint>
 #include <memory>
+#include <igl/opengl/GLIncludes.h>
+#include <igl/opengl/IContext.h>
 
 namespace igl::opengl::glx {
 
 using GLXDrawable = XID;
-using GLXContext = struct __GLXcontext*;
+// NOLINTNEXTLINE(facebook-unused-forward-decls)
+using GLXContext = struct __GLXcontext*; // NOLINT(bugprone-reserved-identifier)
 struct GLXSharedModule;
 
 class Context : public IContext {
@@ -32,6 +31,10 @@ class Context : public IContext {
           GLXDrawable windowHandle,
           GLXContext contextHandle);
   ~Context() override;
+  Context(const Context&) = delete;
+  Context& operator=(const Context&) = delete;
+  Context(Context&&) = delete;
+  Context& operator=(Context&&) = delete;
 
   void setCurrent() override;
   void clearCurrentContext() const override;

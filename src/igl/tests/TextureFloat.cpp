@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gtest/gtest.h>
+
 #include "data/ShaderData.h"
-#include "data/TextureData.h"
 #include "data/VertexIndexData.h"
 #include "util/Color.h"
 #include "util/Common.h"
@@ -16,8 +17,6 @@
 #include <array>
 #include <cstring>
 #include <glm/gtc/color_space.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <gtest/gtest.h>
 #include <string>
 #include <igl/NameHandle.h>
 
@@ -151,7 +150,7 @@ class TextureFloatTest : public ::testing::Test {
     renderPipelineDesc_.targetDesc.colorAttachments[0].textureFormat =
         offscreenTexture_->getFormat();
     renderPipelineDesc_.fragmentUnitSamplerMap[textureUnit_] =
-        IGL_NAMEHANDLE(data::shader::simpleSampler);
+        IGL_NAMEHANDLE(data::shader::kSimpleSampler);
     renderPipelineDesc_.cullMode = igl::CullMode::Disabled;
   }
   //
@@ -179,7 +178,6 @@ class TextureFloatTest : public ::testing::Test {
     if (!iglDev_->hasFeature(DeviceFeatures::TextureFloat) &&
         !iglDev_->hasFeature(DeviceFeatures::Texture2DArray)) {
       GTEST_SKIP() << "2D float texture array is unsupported for this platform.";
-      return;
     }
 
 // Those tests just crash on macos but run fine on android opengles
@@ -205,15 +203,15 @@ class TextureFloatTest : public ::testing::Test {
 
     inputDesc.attributes[0].format = VertexAttributeFormat::Float4;
     inputDesc.attributes[0].offset = 0;
-    inputDesc.attributes[0].bufferIndex = data::shader::simplePosIndex;
-    inputDesc.attributes[0].name = data::shader::simplePos;
+    inputDesc.attributes[0].bufferIndex = data::shader::kSimplePosIndex;
+    inputDesc.attributes[0].name = data::shader::kSimplePos;
     inputDesc.attributes[0].location = 0;
     inputDesc.inputBindings[0].stride = sizeof(float) * 4;
 
     inputDesc.attributes[1].format = VertexAttributeFormat::Float2;
     inputDesc.attributes[1].offset = 0;
-    inputDesc.attributes[1].bufferIndex = data::shader::simpleUvIndex;
-    inputDesc.attributes[1].name = data::shader::simpleUv;
+    inputDesc.attributes[1].bufferIndex = data::shader::kSimpleUvIndex;
+    inputDesc.attributes[1].name = data::shader::kSimpleUv;
     inputDesc.attributes[1].location = 1;
     inputDesc.inputBindings[1].stride = sizeof(float) * 2;
 
@@ -228,8 +226,8 @@ class TextureFloatTest : public ::testing::Test {
     BufferDesc bufDesc;
 
     bufDesc.type = BufferDesc::BufferTypeBits::Index;
-    bufDesc.data = data::vertex_index::QUAD_IND;
-    bufDesc.length = sizeof(data::vertex_index::QUAD_IND);
+    bufDesc.data = data::vertex_index::kQuadInd.data();
+    bufDesc.length = sizeof(data::vertex_index::kQuadInd);
 
     ib_ = iglDev_->createBuffer(bufDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -237,8 +235,8 @@ class TextureFloatTest : public ::testing::Test {
 
     // Initialize vertex and sampler buffers
     bufDesc.type = BufferDesc::BufferTypeBits::Vertex;
-    bufDesc.data = data::vertex_index::QUAD_VERT;
-    bufDesc.length = sizeof(data::vertex_index::QUAD_VERT);
+    bufDesc.data = data::vertex_index::kQuadVert.data();
+    bufDesc.length = sizeof(data::vertex_index::kQuadVert);
 
     vb_ = iglDev_->createBuffer(bufDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -246,8 +244,8 @@ class TextureFloatTest : public ::testing::Test {
 
     // Initialize UV data and sampler buffer
     bufDesc.type = BufferDesc::BufferTypeBits::Vertex;
-    bufDesc.data = data::vertex_index::QUAD_UV;
-    bufDesc.length = sizeof(data::vertex_index::QUAD_UV);
+    bufDesc.data = data::vertex_index::kQuadUv.data();
+    bufDesc.length = sizeof(data::vertex_index::kQuadUv);
 
     uv_ = iglDev_->createBuffer(bufDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -305,8 +303,8 @@ class TextureFloatTest : public ::testing::Test {
     ASSERT_TRUE(cmdBuf_ != nullptr);
 
     auto cmds = cmdBuf_->createRenderCommandEncoder(renderPass_, framebuffer_);
-    cmds->bindVertexBuffer(data::shader::simplePosIndex, *vb_);
-    cmds->bindVertexBuffer(data::shader::simpleUvIndex, *uv_);
+    cmds->bindVertexBuffer(data::shader::kSimplePosIndex, *vb_);
+    cmds->bindVertexBuffer(data::shader::kSimpleUvIndex, *uv_);
 
     cmds->bindRenderPipelineState(pipelineState);
 

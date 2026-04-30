@@ -6,22 +6,23 @@
  */
 
 #include <igl/opengl/Device.h>
-#include <igl/opengl/Shader.h>
 
-#include <cstdio>
 #include <cstring>
 #include <igl/opengl/Buffer.h>
 #include <igl/opengl/CommandQueue.h>
 #include <igl/opengl/ComputePipelineState.h>
 #include <igl/opengl/DepthStencilState.h>
 #include <igl/opengl/DeviceFeatureSet.h>
-#include <igl/opengl/Errors.h>
 #include <igl/opengl/Framebuffer.h>
+#include <igl/opengl/FramebufferWrapper.h>
 #include <igl/opengl/IContext.h>
 #include <igl/opengl/RenderPipelineState.h>
 #include <igl/opengl/SamplerState.h>
+#include <igl/opengl/Shader.h>
 #include <igl/opengl/TextureBuffer.h>
 #include <igl/opengl/TextureTarget.h>
+#include <igl/opengl/Timer.h>
+#include <igl/opengl/TimestampQueries.h>
 #include <igl/opengl/UniformBuffer.h>
 #include <igl/opengl/VertexInputState.h>
 
@@ -53,7 +54,7 @@ std::unique_ptr<Buffer> allocateBuffer(BufferDesc::BufferType bufferType,
 }
 
 template<class Ptr>
-Ptr verifyResult(Ptr resource, Result inResult, Result* outResult) {
+Ptr verifyResult(Ptr resource, Result inResult, Result* outResult) noexcept {
   if (inResult.isOk()) {
     Result::setOk(outResult);
   } else {
@@ -70,6 +71,7 @@ template<class Ptr, class Desc, class... Params>
 Ptr createResource(const Desc& desc, Result* outResult, Params&&... constructorParams) {
   // Create the object type and a smart pointer to hold it.
   using T = typename Ptr::element_type;
+  // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
   Ptr resource(new T(std::forward<Params>(constructorParams)...));
 
   // Create the resource using desc.
@@ -95,7 +97,7 @@ std::unique_ptr<T> createUniqueResource(const Desc& desc,
 
 } // namespace
 
-Device::Device(std::unique_ptr<IContext> context) :
+Device::Device(std::unique_ptr<IContext> context) : // NOLINT(bugprone-exception-escape)
   context_(std::move(context)), deviceFeatureSet_(getContext().deviceFeatures()) {}
 Device::~Device() = default;
 
@@ -118,7 +120,7 @@ void Device::popMarker() {
 
 // Command Queue
 std::shared_ptr<ICommandQueue> Device::createCommandQueue(const CommandQueueDesc& /*desc*/,
-                                                          Result* outResult) {
+                                                          Result* outResult) noexcept {
   // we only use a single command queue on OpenGL
   if (!commandQueue_) {
     commandQueue_ = std::make_shared<CommandQueue>();
@@ -129,8 +131,9 @@ std::shared_ptr<ICommandQueue> Device::createCommandQueue(const CommandQueueDesc
 }
 
 // Resources
-std::unique_ptr<IBuffer> Device::createBuffer(const BufferDesc& desc,
-                                              Result* outResult) const noexcept {
+std::unique_ptr<IBuffer> Device::createBuffer( // NOLINT(bugprone-exception-escape)
+    const BufferDesc& desc,
+    Result* outResult) const noexcept {
   std::unique_ptr<Buffer> resource = allocateBuffer(desc.type, desc.hint, getContext());
 
   if (resource) {
@@ -161,12 +164,13 @@ std::shared_ptr<ISamplerState> Device::createSamplerState(const SamplerStateDesc
   return resource;
 }
 
-std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
-                                                Result* outResult) const noexcept {
+std::shared_ptr<ITexture> Device::createTexture( // NOLINT(bugprone-exception-escape)
+    const TextureDesc& desc,
+    Result* outResult) const noexcept {
   const auto sanitized = sanitize(desc);
 
   std::unique_ptr<Texture> texture;
-#if IGL_DEBUG
+#if IGL_DEBUG_ABORT_ENABLED
   if (sanitized.type == TextureType::TwoD || sanitized.type == TextureType::TwoDArray) {
     size_t textureSizeLimit = 0;
     getFeatureLimits(DeviceFeatureLimits::MaxTextureDimension1D2D, textureSizeLimit);
@@ -213,9 +217,10 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
   return texture;
 }
 
-std::shared_ptr<ITexture> Device::createTextureView(std::shared_ptr<ITexture> texture,
-                                                    const TextureViewDesc& desc,
-                                                    Result* IGL_NULLABLE outResult) const noexcept {
+std::shared_ptr<ITexture> Device::createTextureView( // NOLINT(bugprone-exception-escape)
+    std::shared_ptr<ITexture> texture,
+    const TextureViewDesc& desc,
+    Result* IGL_NULLABLE outResult) const noexcept {
   IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
 
   Result::setResult(
@@ -274,9 +279,18 @@ std::unique_ptr<IShaderStages> Device::createShaderStages(const ShaderStagesDesc
 }
 
 std::shared_ptr<IFramebuffer> Device::createFramebuffer(const FramebufferDesc& desc,
-                                                        Result* outResult) {
+                                                        Result* outResult) noexcept {
   IGL_DEBUG_ASSERT(deviceFeatureSet_.hasInternalFeature(InternalFeatures::FramebufferObject));
   return getPlatformDevice().createFramebuffer(desc, outResult);
+}
+
+base::IFramebufferInterop* IGL_NULLABLE
+Device::createFramebufferInterop(const base::FramebufferInteropDesc& desc) {
+  auto framebuffer = createFramebufferFromBaseDesc(desc);
+  if (!framebuffer) {
+    return nullptr;
+  }
+  return new (std::nothrow) FramebufferWrapper(std::move(framebuffer));
 }
 
 bool Device::hasFeature(DeviceFeatures capability) const {
@@ -351,6 +365,10 @@ size_t Device::getCurrentDrawCount() const {
   return context_->getCurrentDrawCount();
 }
 
+size_t Device::getShaderCompilationCount() const {
+  return context_->getShaderCompilationCount();
+}
+
 Holder<BindGroupTextureHandle> Device::createBindGroup(
     const BindGroupTextureDesc& desc,
     const IRenderPipelineState* IGL_NULLABLE /*compatiblePipeline*/,
@@ -360,7 +378,7 @@ Holder<BindGroupTextureHandle> Device::createBindGroup(
 
   BindGroupTextureDesc description(desc);
 
-  const auto handle = context_->bindGroupTexturesPool_.create(std::move(description));
+  const auto handle = context_->bindGroupTexturesPool.create(std::move(description));
 
   Result::setResult(outResult,
                     handle.empty() ? Result(Result::Code::RuntimeError, "Cannot create bind group")
@@ -376,13 +394,53 @@ Holder<BindGroupBufferHandle> Device::createBindGroup(const BindGroupBufferDesc&
 
   BindGroupBufferDesc description(desc);
 
-  const auto handle = context_->bindGroupBuffersPool_.create(std::move(description));
+  const auto handle = context_->bindGroupBuffersPool.create(std::move(description));
 
   Result::setResult(outResult,
                     handle.empty() ? Result(Result::Code::RuntimeError, "Cannot create bind group")
                                    : Result());
 
   return {this, handle};
+}
+
+// NOLINTNEXTLINE(bugprone-exception-escape)
+std::shared_ptr<ITimer> Device::createTimer(Result* IGL_NULLABLE outResult) const noexcept {
+  if (deviceFeatureSet_.hasFeature(DeviceFeatures::Timers)) {
+    Result::setOk(outResult);
+    return std::make_shared<Timer>(*context_);
+  }
+  Result::setResult(
+      outResult, Result::Code::Unsupported, "Timers are not supported on this device");
+  return nullptr;
+}
+
+// NOLINTNEXTLINE(bugprone-exception-escape)
+std::shared_ptr<ITimestampQueries> Device::createTimestampQueries(uint32_t maxTimestamps,
+                                                                  Result* IGL_NULLABLE
+                                                                      outResult) const noexcept {
+  // Tier-based limit from GL_RENDERER / GL_VENDOR classification.
+  const GpuTimerTier tier = deviceFeatureSet_.getGpuTimerTier();
+  if (tier == GpuTimerTier::Disabled) {
+    Result::setResult(outResult,
+                      Result::Code::Unsupported,
+                      "TimestampQueries disabled (no extension or blocked GPU tier)");
+    return nullptr;
+  }
+  const uint32_t tierMax = static_cast<uint32_t>(tier);
+
+  const uint32_t cappedMax = std::min(maxTimestamps, tierMax);
+  auto queries = std::make_shared<TimestampQueries>(getContext(), cappedMax);
+  if (!queries->isValid()) {
+    // Driver reports timer query support but iglGenQueries silently failed
+    // (e.g. broken Mali budget GPU drivers). Return nullptr so
+    // GPUTimingCollector::isEnabled() returns false.
+    Result::setResult(outResult,
+                      Result::Code::RuntimeError,
+                      "TimestampQueries: iglGenQueries failed (query IDs are zero)");
+    return nullptr;
+  }
+  Result::setOk(outResult);
+  return queries;
 }
 
 void Device::destroy(BindGroupTextureHandle handle) {
@@ -392,7 +450,7 @@ void Device::destroy(BindGroupTextureHandle handle) {
 
   IGL_DEBUG_ASSERT(context_);
 
-  context_->bindGroupTexturesPool_.destroy(handle);
+  context_->bindGroupTexturesPool.destroy(handle);
 }
 
 void Device::destroy(BindGroupBufferHandle handle) {
@@ -402,7 +460,7 @@ void Device::destroy(BindGroupBufferHandle handle) {
 
   IGL_DEBUG_ASSERT(context_);
 
-  context_->bindGroupBuffersPool_.destroy(handle);
+  context_->bindGroupBuffersPool.destroy(handle);
 }
 
 void Device::destroy(SamplerHandle handle) {

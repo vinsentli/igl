@@ -7,15 +7,16 @@
 
 #pragma once
 
-#include <shell/shared/imageWriter/ImageWriter.h>
 #include <string>
+#include <shell/shared/imageWriter/ImageWriter.h>
 
 namespace igl::shell {
 
 class ImageWriterSTB final : public ImageWriter {
  public:
   void writeImage(const std::string& /*imageAbsolutePath*/,
-                  const ImageData& imageData) const noexcept override;
+                  const ImageData& imageData,
+                  bool flipY = true) const noexcept override;
 
  private:
 };

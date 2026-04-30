@@ -15,6 +15,7 @@ option(IGL_WITH_OPENGLES  "Enable IGL/OpenGL ES"              OFF)
 option(IGL_WITH_VULKAN    "Enable IGL/Vulkan"                  ON)
 option(IGL_WITH_METAL     "Enable IGL/Metal"                   ON)
 option(IGL_WITH_WEBGL     "Enable IGL/WebGL"                  OFF)
+option(IGL_WITH_D3D12     "Enable IGL/DirectX 12"             OFF)
 
 option(IGL_WITH_IGLU      "Enable IGLU utils"                  ON)
 option(IGL_WITH_SHELL     "Enable Shell utils"                 ON)
@@ -25,6 +26,8 @@ option(IGL_WITH_OPENXR    "Enable OpenXR"                     OFF)
 option(IGL_ENFORCE_LOGS   "Enable logs in Release builds"      ON)
 
 option(IGL_DEPLOY_DEPS    "Deploy dependencies via CMake"      ON)
+
+option(IGL_ENABLE_INSTALL "Enable install targets for IGL"    OFF)
 # cmake-format: on
 
 if(DEFINED ENV{VULKAN_SDK})
@@ -45,6 +48,10 @@ endif()
 
 if(NOT APPLE)
   set(IGL_WITH_METAL OFF)
+endif()
+
+if(NOT WIN32)
+  set(IGL_WITH_D3D12 OFF)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -91,13 +98,14 @@ function(igl_set_cxxstd target cpp_version)
 endfunction()
 
 # cmake-format: off
-message(STATUS "IGL_WITH_SAMPLES  = ${IGL_WITH_SAMPLES}")
+message(STATUS "IGL_WITH_SAMPLES   = ${IGL_WITH_SAMPLES}")
 
 message(STATUS "IGL_WITH_OPENGL    = ${IGL_WITH_OPENGL}")
 message(STATUS "IGL_WITH_OPENGLES  = ${IGL_WITH_OPENGLES}")
 message(STATUS "IGL_WITH_VULKAN    = ${IGL_WITH_VULKAN}")
 message(STATUS "IGL_WITH_METAL     = ${IGL_WITH_METAL}")
 message(STATUS "IGL_WITH_WEBGL     = ${IGL_WITH_WEBGL}")
+message(STATUS "IGL_WITH_D3D12     = ${IGL_WITH_D3D12}")
 
 message(STATUS "IGL_WITH_IGLU      = ${IGL_WITH_IGLU}")
 message(STATUS "IGL_WITH_SHELL     = ${IGL_WITH_SHELL}")
@@ -118,8 +126,8 @@ if(APPLE)
     message(FATAL_ERROR "At least one rendering backend should be defined (OpenGL, Vulkan or Metal).")
   endif()
 else()
-  if(NOT (IGL_WITH_OPENGL OR IGL_WITH_VULKAN OR IGL_WITH_OPENGLES OR IGL_WITH_WEBGL))
-    message(FATAL_ERROR "At least one rendering backend should be defined (OpenGL or Vulkan).")
+  if(NOT (IGL_WITH_OPENGL OR IGL_WITH_VULKAN OR IGL_WITH_OPENGLES OR IGL_WITH_WEBGL OR IGL_WITH_D3D12))
+    message(FATAL_ERROR "At least one rendering backend should be defined (OpenGL, Vulkan, or DirectX 12).")
   endif()
 endif()
 
@@ -181,6 +189,7 @@ endif()
 
 if(IGL_WITH_TRACY)
   add_definitions("-DTRACY_ENABLE=1")
+  add_definitions("-DTRACY_VK_USE_SYMBOL_TABLE=1")
   add_subdirectory(third-party/deps/src/tracy)
   igl_set_folder(TracyClient "third-party")
 endif()
@@ -188,6 +197,16 @@ endif()
 if(IGL_WITH_OPENXR)
   add_subdirectory(third-party/deps/src/openxr-sdk)
   igl_set_folder(openxr_loader "third-party/OpenXR")
+endif()
+
+if(WIN32 AND IGL_WITH_D3D12)
+  set(DIRECTX_HEADERS_ROOT "${IGL_ROOT_DIR}/third-party/deps/src/DirectX-Headers")
+  if(EXISTS "${DIRECTX_HEADERS_ROOT}/CMakeLists.txt")
+    add_subdirectory("${DIRECTX_HEADERS_ROOT}" "${CMAKE_BINARY_DIR}/DirectX-Headers")
+    set(DIRECTX_HEADERS_INCLUDE_DIR "${DIRECTX_HEADERS_ROOT}/include/directx")
+  else()
+    message(FATAL_ERROR "DirectX-Headers dependency not found. Run deploy_deps.py to download third-party/deps/src/DirectX-Headers.")
+  endif()
 endif()
 
 add_subdirectory(src/igl)
@@ -231,10 +250,23 @@ endif()
 if(APPLE AND IGL_WITH_METAL)
   target_compile_definitions(IGLLibrary PUBLIC "IGL_BACKEND_ENABLE_METAL=1")
 endif()
+if(WIN32 AND IGL_WITH_D3D12)
+  target_compile_definitions(IGLLibrary PUBLIC "IGL_BACKEND_ENABLE_D3D12=1")
+endif()
+
+if(NOT IGL_WITH_VULKAN)
+  target_sources(IGLLibrary PRIVATE "src/igl/vulkan/util/TextureFormat.cpp")
+endif()
 
 target_compile_definitions(IGLLibrary PUBLIC "IGL_CMAKE_BUILD=1")
 
 include_directories(.)
+
+# Enable CTest at top-level when tests are requested so `ctest` can discover tests
+if(IGL_WITH_TESTS)
+  include(CTest)
+  enable_testing()
+endif()
 
 if(IGL_WITH_IGLU OR IGL_WITH_SAMPLES)
   add_library(IGLstb third-party/deps/patches/stb_impl/stb_image.c third-party/deps/patches/stb_impl/stb_image_resize.c
@@ -298,29 +330,27 @@ if (IGL_WITH_VULKAN OR IGL_WITH_IGLU OR IGL_WITH_SAMPLES)
 endif()
 
 if (IGL_WITH_IGLU OR IGL_WITH_SAMPLES)
-  set(KTX_FEATURE_DOC OFF CACHE BOOL "")
-
-  if (NOT EMSCRIPTEN)
-    set(KTX_FEATURE_GL_UPLOAD OFF CACHE BOOL "")
+  # cmake-format: off
+  set(BUILD_SHARED_LIBS           OFF CACHE BOOL "")
+  set(LIBKTX_VERSION_READ_ONLY    OFF CACHE BOOL "")
+  set(LIBKTX_VERSION_FULL          ON CACHE BOOL "")
+  set(LIBKTX_FEATURE_KTX1          ON CACHE BOOL "")
+  set(LIBKTX_FEATURE_KTX2          ON CACHE BOOL "")
+  set(LIBKTX_FEATURE_VK_UPLOAD    OFF CACHE BOOL "")
+  set(LIBKTX_FEATURE_GL_UPLOAD    OFF CACHE BOOL "")
+  set(LIBKTX_FEATURE_ETC_UNPACK    ON CACHE BOOL "")
+  # cmake-format: on
+  add_subdirectory(third-party/deps/src/ktx-software/lib)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(basisu_encoder PUBLIC "-Wno-deprecated-anon-enum-enum-conversion" "-Wno-deprecated-enum-enum-conversion")
+    target_compile_options(ktx            PRIVATE "-Wno-deprecated-anon-enum-enum-conversion" "-Wno-deprecated-enum-enum-conversion")
   endif()
-
-  set(KTX_FEATURE_JNI OFF CACHE BOOL "")
-  set(KTX_FEATURE_KTX1 ON CACHE BOOL "")
-  set(KTX_FEATURE_KTX2 ON CACHE BOOL "")
-  set(KTX_FEATURE_LOADTEST_APPS OFF CACHE BOOL "")
-  set(KTX_FEATURE_STATIC_LIBRARY ON CACHE BOOL "")
-  set(KTX_FEATURE_TESTS OFF CACHE BOOL "")
-  set(KTX_FEATURE_TOOLS OFF CACHE BOOL "")
-  set(KTX_FEATURE_VK_UPLOAD OFF CACHE BOOL "")
-  add_subdirectory(third-party/deps/src/ktx-software)
   if(TARGET astcenc-avx2-static)
     igl_set_folder(astcenc-avx2-static "third-party/ktx-software")
   endif()
   igl_set_folder(ktx "third-party/ktx-software")
-  igl_set_folder(ktx_read "third-party/ktx-software")
   igl_set_folder(ktx_version "third-party/ktx-software")
-  igl_set_folder(obj_basisu_cbind "third-party/ktx-software")
-  igl_set_folder(objUtil "third-party/ktx-software")
+  igl_set_folder(basisu_encoder "third-party/ktx-software")
 endif()
 
 
@@ -332,4 +362,8 @@ if(IGL_WITH_OPENXR)
   target_compile_definitions(IGLLibrary PUBLIC "IGL_WITH_OPENXR=1")
   target_link_libraries(IGLLibrary PUBLIC OpenXR::openxr_loader)
   target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/openxr-sdk/include")
+endif()
+
+if(IGL_ENABLE_INSTALL)
+  include(cmake/install.cmake)
 endif()

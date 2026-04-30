@@ -9,15 +9,10 @@
 
 #include <memory>
 #include <vector>
-
-#include <igl/Device.h>
 #include <igl/HWDevice.h>
+#include <igl/vulkan/Device.h>
 
 namespace igl::vulkan {
-
-class VulkanContext;
-struct VulkanContextConfig;
-class VulkanFeatures;
 
 /// @brief This class provides convenience functions to query, and create devices, as well as to
 /// create a VulkanContext object.
@@ -35,12 +30,9 @@ class HWDevice final {
    * @param display is a pointer to an Xlib Display connection to the X server. Used only when
    * `VK_USE_PLATFORM_XLIB_KHR` is defined.
    */
-  static std::unique_ptr<VulkanContext> createContext(
-      const VulkanContextConfig& config,
-      void* IGL_NULLABLE window,
-      size_t numExtraInstanceExtensions = 0,
-      const char* IGL_NULLABLE* IGL_NULLABLE extraInstanceExtensions = nullptr,
-      void* IGL_NULLABLE display = nullptr);
+  static std::unique_ptr<VulkanContext> createContext(const VulkanContextConfig& config,
+                                                      void* IGL_NULLABLE window,
+                                                      void* IGL_NULLABLE display = nullptr);
 
   static std::vector<HWDeviceDesc> queryDevices(VulkanContext& ctx,
                                                 const HWDeviceQueryDesc& desc,
@@ -53,7 +45,7 @@ class HWDevice final {
    * height are greater than 0, this functions also initializes the swapchain.
    */
 
-  static std::unique_ptr<IDevice> create(
+  static std::unique_ptr<Device> create(
       std::unique_ptr<VulkanContext> ctx,
       const HWDeviceDesc& desc,
       uint32_t width,

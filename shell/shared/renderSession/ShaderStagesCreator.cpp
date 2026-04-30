@@ -20,6 +20,10 @@ const char* getEntryPointName(ShaderStage stage, BackendType backendType) {
       return "fragmentMain";
     case igl::ShaderStage::Compute:
       return "computeMain";
+    case igl::ShaderStage::Task:
+      return "taskMain";
+    case igl::ShaderStage::Mesh:
+      return "meshMain";
     }
   case igl::BackendType::Vulkan:
     return "main";
@@ -29,7 +33,7 @@ const char* getEntryPointName(ShaderStage stage, BackendType backendType) {
 }
 
 ShaderModuleInfo getShaderModuleInfo(ShaderStage stage, BackendType backendType) {
-  return {stage, getEntryPointName(stage, backendType)};
+  return {.stage = stage, .entryPoint = getEntryPointName(stage, backendType)};
 }
 } // namespace
 
@@ -41,7 +45,7 @@ std::unique_ptr<IShaderStages> createRenderPipelineStages(
   auto backend = device.getBackendType();
   if (backend == igl::BackendType::Vulkan) {
     auto vertWords = vertShaderProvider.getShaderBinary(device);
-    auto fragWords = vertShaderProvider.getShaderBinary(device);
+    auto fragWords = fragShaderProvider.getShaderBinary(device);
     auto vertModule = igl::ShaderModuleCreator::fromBinaryInput(
         device,
         vertWords.data(),

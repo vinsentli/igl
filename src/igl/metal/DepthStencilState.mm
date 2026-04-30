@@ -5,13 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#import <Foundation/Foundation.h>
-
 #include <igl/metal/DepthStencilState.h>
+
+#import <Foundation/Foundation.h>
 
 namespace igl::metal {
 
-DepthStencilState::DepthStencilState(id<MTLDepthStencilState> value) : value_(value) {}
+DepthStencilState::DepthStencilState(id<MTLDepthStencilState> value) : value(value) {}
 
 MTLCompareFunction DepthStencilState::convertCompareFunction(CompareFunction value) {
   switch (value) {

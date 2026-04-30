@@ -9,6 +9,10 @@
 #include "data/VertexIndexData.h"
 #include "util/Common.h"
 
+#if IGL_PLATFORM_WINDOWS
+#include <windows.h>
+#endif
+
 #include <string>
 #include <igl/CommandBuffer.h>
 #include <igl/RenderPass.h>
@@ -31,7 +35,23 @@ namespace igl::tests {
 class DeviceTest : public ::testing::Test {
  public:
   DeviceTest() = default;
-  ~DeviceTest() override = default;
+  ~DeviceTest() override {
+    // [Alexey] TODO: Somehow D3D12 is sensitive to the order of destruction
+    // of resources and D3D debug layer report leaks
+    // I suspect that might be the actual issue, but it requires deeper D3D12 backend investigation
+    // first Release all GPU resources before destroying the device Resources must be released in
+    // reverse order of creation and before the device is destroyed to avoid VMA cleanup issues
+    if (iglDev_->getBackendType() == igl::BackendType::D3D12) {
+      ib_.reset();
+      vertexInputState_.reset();
+      shaderStages_.reset();
+      framebuffer_.reset();
+      offscreenTexture_.reset();
+      cmdBuf_.reset();
+      cmdQueue_.reset();
+      iglDev_.reset();
+    }
+  }
 
   // Set up common resources. This will create a device and a command queue
   void SetUp() override {
@@ -76,15 +96,15 @@ class DeviceTest : public ::testing::Test {
 
     inputDesc.attributes[0].format = VertexAttributeFormat::Float4;
     inputDesc.attributes[0].offset = 0;
-    inputDesc.attributes[0].bufferIndex = data::shader::simplePosIndex;
-    inputDesc.attributes[0].name = data::shader::simplePos;
+    inputDesc.attributes[0].bufferIndex = data::shader::kSimplePosIndex;
+    inputDesc.attributes[0].name = data::shader::kSimplePos;
     inputDesc.attributes[0].location = 0;
     inputDesc.inputBindings[0].stride = sizeof(float) * 4;
 
     inputDesc.attributes[1].format = VertexAttributeFormat::Float2;
     inputDesc.attributes[1].offset = 0;
-    inputDesc.attributes[1].bufferIndex = data::shader::simpleUvIndex;
-    inputDesc.attributes[1].name = data::shader::simpleUv;
+    inputDesc.attributes[1].bufferIndex = data::shader::kSimpleUvIndex;
+    inputDesc.attributes[1].name = data::shader::kSimpleUv;
     inputDesc.attributes[1].location = 1;
     inputDesc.inputBindings[1].stride = sizeof(float) * 2;
 
@@ -99,8 +119,8 @@ class DeviceTest : public ::testing::Test {
     BufferDesc bufDesc;
 
     bufDesc.type = BufferDesc::BufferTypeBits::Index;
-    bufDesc.data = data::vertex_index::QUAD_IND;
-    bufDesc.length = sizeof(data::vertex_index::QUAD_IND);
+    bufDesc.data = data::vertex_index::kQuadInd.data();
+    bufDesc.length = sizeof(data::vertex_index::kQuadInd);
 
     ib_ = iglDev_->createBuffer(bufDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -200,13 +220,14 @@ TEST_F(DeviceTest, InDevelopmentFeature) {
 //
 TEST_F(DeviceTest, GetBackendType) {
   if (iglDev_->getBackendType() == igl::BackendType::Metal) {
-    ASSERT_EQ(backend_, util::BACKEND_MTL);
+    ASSERT_EQ(backend_, util::kBackendMtl);
   } else if (iglDev_->getBackendType() == igl::BackendType::OpenGL) {
-    ASSERT_EQ(backend_, util::BACKEND_OGL);
+    ASSERT_EQ(backend_, util::kBackendOgl);
   } else if (iglDev_->getBackendType() == igl::BackendType::Vulkan) {
-    ASSERT_EQ(backend_, util::BACKEND_VUL);
+    ASSERT_EQ(backend_, util::kBackendVul);
+  } else if (iglDev_->getBackendType() == igl::BackendType::D3D12) {
+    ASSERT_EQ(backend_, util::kBackendD3D12);
   } else {
-    // Unknow backend. Please add to this test.
     ASSERT_TRUE(0);
   }
 }

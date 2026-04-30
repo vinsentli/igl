@@ -8,7 +8,7 @@
 #include <igl/vulkan/RenderCommandEncoder.h>
 
 #include <algorithm>
-
+#include <array>
 #include <igl/IGLSafeC.h>
 #include <igl/RenderPass.h>
 #include <igl/vulkan/Buffer.h>
@@ -18,10 +18,10 @@
 #include <igl/vulkan/RenderPipelineState.h>
 #include <igl/vulkan/SamplerState.h>
 #include <igl/vulkan/Texture.h>
-#include <igl/vulkan/VulkanBuffer.h>
 #include <igl/vulkan/VulkanContext.h>
+#include <igl/vulkan/VulkanImage.h>
 #include <igl/vulkan/VulkanRenderPassBuilder.h>
-#include <igl/vulkan/VulkanSwapchain.h>
+#include <igl/vulkan/VulkanTexture.h>
 #include <igl/vulkan/util/SpvReflection.h>
 
 namespace {
@@ -97,7 +97,9 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
 
   const FramebufferDesc& desc = static_cast<const Framebuffer&>((*framebuffer)).getDesc();
 
-  std::vector<VkClearValue> clearValues;
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
+  std::array<VkClearValue, 2 * IGL_COLOR_ATTACHMENTS_MAX + 2> clearValues; // uninitialized
+  uint32_t numClearValues = 0;
   uint32_t mipLevel = 0;
   uint32_t layer = 0;
 
@@ -131,11 +133,13 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
     }
 
     const auto& descColor = renderPass.colorAttachments[i];
-    clearValues.push_back(ivkGetClearColorValue(descColor.clearColor.r,
-                                                descColor.clearColor.g,
-                                                descColor.clearColor.b,
-                                                descColor.clearColor.a));
-    const auto colorLayer = getVkLayer(colorTexture.getType(), descColor.face, descColor.layer);
+    clearValues[numClearValues++] = VkClearValue{.color = {.float32 = {
+                                                               descColor.clearColor.r,
+                                                               descColor.clearColor.g,
+                                                               descColor.clearColor.b,
+                                                               descColor.clearColor.a,
+                                                           }}};
+    const uint32_t colorLayer = getVkLayer(colorTexture.getType(), descColor.face, descColor.layer);
     if (mipLevel) {
       IGL_DEBUG_ASSERT(descColor.mipLevel == mipLevel,
                        "All color attachments should have the same mip-level");
@@ -163,10 +167,12 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
       builder.addColorResolve(textureFormatToVkFormat(colorResolveTexture.getFormat()),
                               VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                               VK_ATTACHMENT_STORE_OP_STORE);
-      clearValues.push_back(ivkGetClearColorValue(descColor.clearColor.r,
-                                                  descColor.clearColor.g,
-                                                  descColor.clearColor.b,
-                                                  descColor.clearColor.a));
+      clearValues[numClearValues++] = VkClearValue{.color = {.float32 = {
+                                                                 descColor.clearColor.r,
+                                                                 descColor.clearColor.g,
+                                                                 descColor.clearColor.b,
+                                                                 descColor.clearColor.a,
+                                                             }}};
     }
   }
 
@@ -182,8 +188,10 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
                      "Depth attachment should have the same mip-level as color attachments");
     IGL_DEBUG_ASSERT(getVkLayer(depthTexture.getType(), descDepth.face, descDepth.layer) == layer,
                      "Depth attachment should have the same face or layer as color attachments");
-    clearValues.push_back(
-        ivkGetClearDepthStencilValue(descDepth.clearDepth, descStencil.clearStencil));
+    clearValues[numClearValues++] = VkClearValue{.depthStencil = {
+                                                     .depth = descDepth.clearDepth,
+                                                     .stencil = descStencil.clearStencil,
+                                                 }};
     const auto initialLayout = descDepth.loadAction == igl::LoadAction::Load
                                    ? depthTexture.getVulkanTexture().image_.imageLayout_
                                    : VK_IMAGE_LAYOUT_UNDEFINED;
@@ -196,47 +204,45 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
                             VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                             depthTexture.getVulkanTexture().image_.samples_);
 
-      // handle MSAA
-      if (renderPass.depthAttachment.storeAction == StoreAction::MsaaResolve) {
-        IGL_DEBUG_ASSERT(framebuffer->getResolveDepthAttachment(),
-                         "Framebuffer attachment should contain a resolve depth texture");
-        const auto& depthResolveTexture = static_cast<Texture&>(*framebuffer->getResolveDepthAttachment());
-        builder.addDepthStencilResolve(depthResolveTexture.getVkFormat(),
-                                       VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                                       VK_ATTACHMENT_STORE_OP_STORE,
-                                       VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                                       VK_ATTACHMENT_STORE_OP_STORE,
-                                       initialLayout,
-                                       VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-        clearValues.push_back(ivkGetClearDepthStencilValue(descDepth.clearDepth, descStencil.clearStencil));
-      }
+    // handle MSAA
+    if (renderPass.depthAttachment.storeAction == StoreAction::MsaaResolve) {
+      IGL_DEBUG_ASSERT(framebuffer->getResolveDepthAttachment(),
+                       "Framebuffer attachment should contain a resolve depth texture");
+      const auto& depthResolveTexture =
+          static_cast<Texture&>(*framebuffer->getResolveDepthAttachment());
+      builder.addDepthStencilResolve(depthResolveTexture.getVkFormat(),
+                                     VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                                     VK_ATTACHMENT_STORE_OP_STORE,
+                                     VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                                     VK_ATTACHMENT_STORE_OP_STORE,
+                                     initialLayout,
+                                     VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+      clearValues[numClearValues++] = VkClearValue{.depthStencil = {
+                                                       .depth = descDepth.clearDepth,
+                                                       .stencil = descStencil.clearStencil,
+                                                   }};
+    }
   }
 
   const auto& fb = static_cast<Framebuffer&>(*framebuffer);
 
-  auto renderPassHandle = ctx_.findRenderPass(builder);
+  const auto renderPassHandle = ctx_.findRenderPass(builder);
 
-  dynamicState_.renderPassIndex_ = renderPassHandle.index;
-  dynamicState_.depthBiasEnable_ = false;
+  dynamicState_.renderPassIndex = renderPassHandle.index;
+  dynamicState_.depthBiasEnable = false;
 
-  VkRenderPassBeginInfo bi = fb.getRenderPassBeginInfo(
-      renderPassHandle.pass, mipLevel, layer, (uint32_t)clearValues.size(), clearValues.data());
-
-  // clang-format off
-  // @fb-only
-      // @fb-only
-      // @fb-only
-      // @fb-only
-  // @fb-only
-  // clang-format on
-  // @fb-only
-    // @fb-only
-  // @fb-only
+  const VkRenderPassBeginInfo bi = fb.getRenderPassBeginInfo(
+      renderPassHandle.pass, mipLevel, layer, numClearValues, clearValues.data());
 
   const uint32_t width = std::max(fb.getWidth() >> mipLevel, 1u);
   const uint32_t height = std::max(fb.getHeight() >> mipLevel, 1u);
-  const igl::Viewport viewport = {0.0f, 0.0f, (float)width, (float)height, 0.0f, +1.0f};
-  const igl::ScissorRect scissor = {0, 0, width, height};
+  const igl::Viewport viewport = {.x = 0.0f,
+                                  .y = 0.0f,
+                                  .width = static_cast<float>(width),
+                                  .height = static_cast<float>(height),
+                                  .minDepth = 0.0f,
+                                  .maxDepth = +1.0f};
+  const igl::ScissorRect scissor = {.x = 0, .y = 0, .width = width, .height = height};
 
   bindViewport(viewport);
   bindScissorRect(scissor);
@@ -266,6 +272,7 @@ std::unique_ptr<RenderCommandEncoder> RenderCommandEncoder::create(
 
   Result ret;
 
+  // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
   std::unique_ptr<RenderCommandEncoder> encoder(new RenderCommandEncoder(commandBuffer, ctx));
   encoder->initialize(renderPass, framebuffer, dependencies, ret);
 
@@ -367,20 +374,20 @@ void RenderCommandEncoder::bindViewport(const Viewport& viewport) {
   More details: https://www.saschawillems.de/blog/2019/03/29/flipping-the-vulkan-viewport/
   **/
   const VkViewport vp = {
-      viewport.x, // float x;
-      viewport.y, // float y;
-      viewport.width, // float width;
-      viewport.height, // float height;
-      viewport.minDepth, // float minDepth;
-      viewport.maxDepth, // float maxDepth;
+      .x = viewport.x,
+      .y = viewport.y,
+      .width = viewport.width,
+      .height = viewport.height,
+      .minDepth = viewport.minDepth,
+      .maxDepth = viewport.maxDepth,
   };
   ctx_.vf_.vkCmdSetViewport(cmdBuffer_, 0, 1, &vp);
 }
 
 void RenderCommandEncoder::bindScissorRect(const ScissorRect& rect) {
   const VkRect2D scissor = {
-      VkOffset2D{(int32_t)rect.x, (int32_t)rect.y},
-      VkExtent2D{rect.width, rect.height},
+      .offset = {.x = static_cast<int32_t>(rect.x), .y = static_cast<int32_t>(rect.y)},
+      .extent = {.width = rect.width, .height = rect.height},
   };
   ctx_.vf_.vkCmdSetScissor(cmdBuffer_, 0, 1, &scissor);
 }
@@ -399,7 +406,11 @@ void RenderCommandEncoder::bindRenderPipelineState(
 
   const RenderPipelineDesc& desc = rps_->getRenderPipelineDesc();
 
-  ensureShaderModule(desc.shaderStages->getVertexModule().get());
+  if (desc.shaderStages->getType() == igl::ShaderStagesType::Render) {
+    ensureShaderModule(desc.shaderStages->getVertexModule().get());
+  } else if (desc.shaderStages->getType() == igl::ShaderStagesType::RenderMeshShader) {
+    ensureShaderModule(desc.shaderStages->getMeshModule().get());
+  }
   ensureShaderModule(desc.shaderStages->getFragmentModule().get());
 
   const bool hasDepthAttachment = desc.targetDesc.depthAttachmentFormat != TextureFormat::Invalid;
@@ -422,9 +433,9 @@ void RenderCommandEncoder::bindDepthStencilState(
   const igl::vulkan::DepthStencilState* state =
       static_cast<DepthStencilState*>(depthStencilState.get());
 
-  const igl::DepthStencilStateDesc& desc = state->desc_;
+  const igl::DepthStencilStateDesc& desc = state->desc;
 
-  dynamicState_.depthWriteEnable_ = desc.isDepthWriteEnabled;
+  dynamicState_.depthWriteEnable = desc.isDepthWriteEnabled;
   dynamicState_.setDepthCompareOp(compareFunctionToVkCompareOp(desc.compareFunction));
 
   auto setStencilState = [this](VkStencilFaceFlagBits faceMask, const igl::StencilStateDesc& desc) {
@@ -442,10 +453,11 @@ void RenderCommandEncoder::bindDepthStencilState(
 }
 
 void RenderCommandEncoder::bindBuffer(uint32_t index,
-                                      uint8_t target,   
+                                      uint8_t target,
                                       IBuffer* buffer,
                                       size_t bufferOffset,
                                       size_t bufferSize) {
+  (void)target;
   bindBuffer(index, buffer, bufferOffset, bufferSize);
 }
 
@@ -457,7 +469,7 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
   IGL_PROFILER_ZONE_GPU_VK("bindBuffer()", ctx_.tracyCtx_, cmdBuffer_);
 
 #if IGL_VULKAN_PRINT_COMMANDS
-  IGL_LOG_INFO("%p  bindBuffer(%u, %u)\n", cmdBuffer_, index, (uint32_t)bufferOffset);
+  IGL_LOG_INFO("%p  bindBuffer(%u, %u)\n", cmdBuffer_, index, static_cast<uint32_t>(bufferOffset));
 #endif // IGL_VULKAN_PRINT_COMMANDS
 
   if (!IGL_DEBUG_VERIFY(buffer != nullptr)) {
@@ -473,10 +485,6 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
   if (!IGL_DEBUG_VERIFY(isUniformOrStorageBuffer, "Must be a uniform or a storage buffer")) {
     return;
   }
-  if (ctx_.enhancedShaderDebuggingStore_) {
-    IGL_DEBUG_ASSERT(index < (IGL_UNIFORM_BLOCKS_BINDING_MAX - 1),
-                     "The last buffer index is reserved for enhanced debugging features");
-  }
   binder_.bindBuffer(index, buf, bufferOffset, bufferSize);
 }
 
@@ -485,8 +493,11 @@ void RenderCommandEncoder::bindVertexBuffer(uint32_t index, IBuffer& buffer, siz
   IGL_PROFILER_ZONE_GPU_VK("bindVertexBuffer()", ctx_.tracyCtx_, cmdBuffer_);
 
 #if IGL_VULKAN_PRINT_COMMANDS
-  IGL_LOG_INFO(
-      "%p  bindVertexBuffer(%u, %p, %u)\n", cmdBuffer_, index, &buffer, (uint32_t)bufferOffset);
+  IGL_LOG_INFO("%p  bindVertexBuffer(%u, %p, %u)\n",
+               cmdBuffer_,
+               index,
+               &buffer,
+               static_cast<uint32_t>(bufferOffset));
 #endif // IGL_VULKAN_PRINT_COMMANDS
 
   const bool isVertexBuffer = (buffer.getBufferType() & BufferDesc::BufferTypeBits::Vertex) != 0;
@@ -498,7 +509,7 @@ void RenderCommandEncoder::bindVertexBuffer(uint32_t index, IBuffer& buffer, siz
   if (IGL_DEBUG_VERIFY(index < IGL_ARRAY_NUM_ELEMENTS(isVertexBufferBound_))) {
     isVertexBufferBound_[index] = true;
   }
-  VkBuffer vkBuf = static_cast<Buffer&>(buffer).getVkBuffer();
+  const VkBuffer vkBuf = static_cast<Buffer&>(buffer).getVkBuffer();
   const VkDeviceSize offset = bufferOffset;
   ctx_.vf_.vkCmdBindVertexBuffers(cmdBuffer_, index, 1, &vkBuf, &offset);
 }
@@ -546,13 +557,12 @@ void RenderCommandEncoder::bindPushConstants(const void* data, size_t length, si
                                      // of 4
 
   IGL_DEBUG_ASSERT(rps_, "Did you forget to call bindRenderPipelineState()?");
-  IGL_DEBUG_ASSERT(rps_->pushConstantRange_.size,
+  IGL_DEBUG_ASSERT(rps_->pushConstantRange.size,
                    "Currently bound render pipeline state has no push constants");
-  IGL_DEBUG_ASSERT(offset + length <=
-                       rps_->pushConstantRange_.offset + rps_->pushConstantRange_.size,
+  IGL_DEBUG_ASSERT(offset + length <= rps_->pushConstantRange.offset + rps_->pushConstantRange.size,
                    "Push constants size exceeded");
 
-  if (!rps_->pipelineLayout_) {
+  if (!rps_->pipelineLayout) {
     // bring a pipeline layout into existence - we don't really care about the dynamic state here
     (void)rps_->getVkPipeline(dynamicState_);
   }
@@ -562,9 +572,9 @@ void RenderCommandEncoder::bindPushConstants(const void* data, size_t length, si
 #endif // IGL_VULKAN_PRINT_COMMANDS
   ctx_.vf_.vkCmdPushConstants(cmdBuffer_,
                               rps_->getVkPipelineLayout(),
-                              rps_->pushConstantRange_.stageFlags,
-                              (uint32_t)offset,
-                              (uint32_t)length,
+                              rps_->pushConstantRange.stageFlags,
+                              static_cast<uint32_t>(offset),
+                              static_cast<uint32_t>(length),
                               data);
 }
 
@@ -574,7 +584,10 @@ void RenderCommandEncoder::bindSamplerState(size_t index,
   IGL_PROFILER_FUNCTION();
 
 #if IGL_VULKAN_PRINT_COMMANDS
-  IGL_LOG_INFO("%p  bindSamplerState(%u, %u)\n", cmdBuffer_, (uint32_t)index, (uint32_t)target);
+  IGL_LOG_INFO("%p  bindSamplerState(%u, %u)\n",
+               cmdBuffer_,
+               static_cast<uint32_t>(index),
+               static_cast<uint32_t>(target));
 #endif // IGL_VULKAN_PRINT_COMMANDS
 
   if (!IGL_DEBUG_VERIFY(target == igl::BindTarget::kFragment ||
@@ -595,7 +608,10 @@ void RenderCommandEncoder::bindTexture(size_t index, uint8_t target, ITexture* t
                    "individual textures again only after a draw call.");
 
 #if IGL_VULKAN_PRINT_COMMANDS
-  IGL_LOG_INFO("%p  bindTexture(%u, %u)\n", cmdBuffer_, (uint32_t)index, (uint32_t)target);
+  IGL_LOG_INFO("%p  bindTexture(%u, %u)\n",
+               cmdBuffer_,
+               static_cast<uint32_t>(index),
+               static_cast<uint32_t>(target));
 #endif // IGL_VULKAN_PRINT_COMMANDS
 
   if (!IGL_DEBUG_VERIFY(target == igl::BindTarget::kFragment ||
@@ -642,13 +658,14 @@ void RenderCommandEncoder::draw(size_t vertexCount,
 #if IGL_VULKAN_PRINT_COMMANDS
   IGL_LOG_INFO("%p vkCmdDraw(%u, %u, %u, %u)\n",
                cmdBuffer_,
-               (uint32_t)vertexCount,
+               static_cast<uint32_t>(vertexCount),
                instanceCount,
                firstVertex,
                baseInstance);
 #endif // IGL_VULKAN_PRINT_COMMANDS
 
-  ctx_.vf_.vkCmdDraw(cmdBuffer_, (uint32_t)vertexCount, instanceCount, firstVertex, baseInstance);
+  ctx_.vf_.vkCmdDraw(
+      cmdBuffer_, static_cast<uint32_t>(vertexCount), instanceCount, firstVertex, baseInstance);
 }
 
 void RenderCommandEncoder::drawIndexed(size_t indexCount,
@@ -677,14 +694,40 @@ void RenderCommandEncoder::drawIndexed(size_t indexCount,
 #if IGL_VULKAN_PRINT_COMMANDS
   IGL_LOG_INFO("%p vkCmdDrawIndexed(%u, %u, %u, %i, %u)\n",
                cmdBuffer_,
-               (uint32_t)indexCount,
+               static_cast<uint32_t>(indexCount),
                instanceCount,
                firstIndex,
                vertexOffset,
                baseInstance);
 #endif // IGL_VULKAN_PRINT_COMMANDS
-  ctx_.vf_.vkCmdDrawIndexed(
-      cmdBuffer_, (uint32_t)indexCount, instanceCount, firstIndex, vertexOffset, baseInstance);
+  ctx_.vf_.vkCmdDrawIndexed(cmdBuffer_,
+                            static_cast<uint32_t>(indexCount),
+                            instanceCount,
+                            firstIndex,
+                            vertexOffset,
+                            baseInstance);
+}
+
+void RenderCommandEncoder::drawMeshTasks(const Dimensions& threadgroupsPerGrid,
+                                         const Dimensions& /*threadsPerTaskThreadgroup*/,
+                                         const Dimensions& /*threadsPerMeshThreadgroup*/) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DRAW);
+  IGL_PROFILER_ZONE_GPU_COLOR_VK(
+      "drawMeshTasks()", ctx_.tracyCtx_, cmdBuffer_, IGL_PROFILER_COLOR_DRAW);
+
+  if (!ctx_.features().has_VK_EXT_mesh_shader) {
+    IGL_DEBUG_ASSERT(false, "Mesh shaders require VK_EXT_mesh_shader extension.");
+    return;
+  }
+
+  ctx_.drawCallCount_ += drawCallCountEnabled_;
+
+  IGL_DEBUG_ASSERT(rps_, "Did you forget to call bindRenderPipelineState()?");
+
+  flushDynamicState();
+
+  ctx_.vf_.vkCmdDrawMeshTasksEXT(
+      cmdBuffer_, threadgroupsPerGrid.width, threadgroupsPerGrid.height, threadgroupsPerGrid.depth);
 }
 
 void RenderCommandEncoder::multiDrawIndirect(IBuffer& indirectBuffer,
@@ -753,14 +796,14 @@ void RenderCommandEncoder::setBlendColor(const Color& color) {
 void RenderCommandEncoder::setDepthBias(float depthBias, float slopeScale, float clamp) {
   IGL_PROFILER_FUNCTION();
 
-  dynamicState_.depthBiasEnable_ = true;
+  dynamicState_.depthBiasEnable = true;
   ctx_.vf_.vkCmdSetDepthBias(cmdBuffer_, depthBias, clamp, slopeScale);
 }
 
 bool RenderCommandEncoder::setDrawCallCountEnabled(bool value) {
   IGL_PROFILER_FUNCTION();
 
-  const auto returnVal = drawCallCountEnabled_ > 0;
+  const bool returnVal = drawCallCountEnabled_ > 0;
   drawCallCountEnabled_ = static_cast<uint32_t>(value);
   return returnVal;
 }
@@ -866,7 +909,7 @@ void RenderCommandEncoder::ensureVertexBuffers() {
     return;
   }
 
-  const VertexInputStateDesc& desc = vi->desc_;
+  const VertexInputStateDesc& desc = vi->desc;
 
   IGL_DEBUG_ASSERT(desc.numInputBindings <= IGL_ARRAY_NUM_ELEMENTS(isVertexBufferBound_));
 
@@ -889,18 +932,18 @@ void RenderCommandEncoder::blitColorImage(const igl::vulkan::VulkanImage& srcIma
                                           const igl::TextureRangeDesc& srcRange,
                                           const igl::TextureRangeDesc& destRange) {
   const VkImageSubresourceRange srcResourceRange = {
-      srcImage.getImageAspectFlags(),
-      srcRange.mipLevel,
-      srcRange.numMipLevels,
-      srcRange.layer,
-      srcRange.numLayers,
+      .aspectMask = srcImage.getImageAspectFlags(),
+      .baseMipLevel = srcRange.mipLevel,
+      .levelCount = srcRange.numMipLevels,
+      .baseArrayLayer = srcRange.layer,
+      .layerCount = srcRange.numLayers,
   };
   const VkImageSubresourceRange destSubresourceRange = {
-      destImage.getImageAspectFlags(),
-      destRange.mipLevel,
-      destRange.numMipLevels,
-      destRange.layer,
-      destRange.numLayers,
+      .aspectMask = destImage.getImageAspectFlags(),
+      .baseMipLevel = destRange.mipLevel,
+      .levelCount = destRange.numMipLevels,
+      .baseArrayLayer = destRange.layer,
+      .layerCount = destRange.numLayers,
   };
   srcImage.transitionLayout(cmdBuffer_,
                             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -914,16 +957,18 @@ void RenderCommandEncoder::blitColorImage(const igl::vulkan::VulkanImage& srcIma
                              VK_PIPELINE_STAGE_TRANSFER_BIT,
                              destSubresourceRange);
 
-  const std::array<VkOffset3D, 2> srcOffsets = {
-      {{static_cast<int32_t>(srcRange.x), static_cast<int32_t>(srcRange.y), 0},
-       {static_cast<int32_t>(srcRange.width + srcRange.x),
-        static_cast<int32_t>(srcRange.height + srcRange.y),
-        1}}};
-  const std::array<VkOffset3D, 2> dstOffsets = {
-      {{static_cast<int32_t>(destRange.x), static_cast<int32_t>(destRange.y), 0},
-       {static_cast<int32_t>(destRange.width + destRange.x),
-        static_cast<int32_t>(destRange.height + destRange.y),
-        1}}};
+  const std::array<VkOffset3D, 2> srcOffsets = {{
+      {.x = static_cast<int32_t>(srcRange.x), .y = static_cast<int32_t>(srcRange.y), .z = 0},
+      {.x = static_cast<int32_t>(srcRange.width + srcRange.x),
+       .y = static_cast<int32_t>(srcRange.height + srcRange.y),
+       .z = 1},
+  }};
+  const std::array<VkOffset3D, 2> dstOffsets = {{
+      {.x = static_cast<int32_t>(destRange.x), .y = static_cast<int32_t>(destRange.y), .z = 0},
+      {.x = static_cast<int32_t>(destRange.width + destRange.x),
+       .y = static_cast<int32_t>(destRange.height + destRange.y),
+       .z = 1},
+  }};
   ivkCmdBlitImage(&ctx_.vf_,
                   cmdBuffer_,
                   srcImage.getVkImage(),
@@ -932,8 +977,18 @@ void RenderCommandEncoder::blitColorImage(const igl::vulkan::VulkanImage& srcIma
                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                   srcOffsets.data(),
                   dstOffsets.data(),
-                  VkImageSubresourceLayers{VK_IMAGE_ASPECT_COLOR_BIT, srcRange.mipLevel, 0, 1},
-                  VkImageSubresourceLayers{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                  VkImageSubresourceLayers{
+                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                      .mipLevel = srcRange.mipLevel,
+                      .baseArrayLayer = 0,
+                      .layerCount = 1,
+                  },
+                  VkImageSubresourceLayers{
+                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                      .mipLevel = 0,
+                      .baseArrayLayer = 0,
+                      .layerCount = 1,
+                  },
                   VK_FILTER_LINEAR);
 
   const bool isSampled = (destImage.getVkImageUsageFlags() & VK_IMAGE_USAGE_SAMPLED_BIT) != 0;

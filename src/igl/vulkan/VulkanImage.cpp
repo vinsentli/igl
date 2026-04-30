@@ -63,7 +63,6 @@ constexpr auto kHandleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
 namespace igl::vulkan {
 
 VulkanImage::VulkanImage(const VulkanContext& ctx,
-                         VkDevice device,
                          VkImage image,
                          const char* debugName,
                          VkImageUsageFlags usageFlags,
@@ -77,7 +76,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
                          bool isImported) :
   ctx_(&ctx),
   physicalDevice_(ctx.getVkPhysicalDevice()),
-  device_(device),
+  device_(ctx.getVkDevice()),
   vkImage_(image),
   usageFlags_(usageFlags),
   isExternallyManaged_(isExternallyManaged),
@@ -87,8 +86,8 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   mipLevels_(mipLevels),
   arrayLayers_(arrayLayers),
   samples_(samples),
-  isDepthFormat_(isDepthFormat(imageFormat)),
-  isStencilFormat_(isStencilFormat(imageFormat)),
+  isDepthFormat_(hasDepth(imageFormat)), // NOLINT(readability-identifier-naming)
+  isStencilFormat_(hasStencil(imageFormat)), // NOLINT(readability-identifier-naming)
   isDepthOrStencilFormat_(isDepthFormat_ || isStencilFormat_),
   isImported_(isImported) {
   setName(debugName);
@@ -97,12 +96,10 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   ctx_->vf_.vkGetPhysicalDeviceFormatProperties(physicalDevice_, imageFormat_, &formatProperties_);
 }
 VulkanImage::VulkanImage(const VulkanContext& ctx,
-                         VkDevice device,
                          VkImage image,
                          const VulkanImageCreateInfo& createInfo,
                          const char* debugName) :
   VulkanImage(ctx,
-              device,
               image,
               debugName,
               createInfo.usageFlags,
@@ -116,7 +113,6 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
               createInfo.isImported) {}
 
 VulkanImage::VulkanImage(const VulkanContext& ctx,
-                         VkDevice device,
                          VkExtent3D extent,
                          VkImageType type,
                          VkFormat format,
@@ -130,7 +126,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
                          const char* debugName) :
   ctx_(&ctx),
   physicalDevice_(ctx.getVkPhysicalDevice()),
-  device_(device),
+  device_(ctx.getVkDevice()),
   usageFlags_(usageFlags),
   extent_(extent),
   type_(type),
@@ -138,8 +134,8 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   mipLevels_(mipLevels),
   arrayLayers_(arrayLayers),
   samples_(samples),
-  isDepthFormat_(isDepthFormat(format)),
-  isStencilFormat_(isStencilFormat(format)),
+  isDepthFormat_(hasDepth(format)), // NOLINT(readability-identifier-naming)
+  isStencilFormat_(hasStencil(format)), // NOLINT(readability-identifier-naming)
   isDepthOrStencilFormat_(isDepthFormat_ || isStencilFormat_),
   isCubemap_((createFlags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0),
   tiling_(tiling) {
@@ -154,87 +150,137 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
 
   const bool isDisjoint = (createFlags & VK_IMAGE_CREATE_DISJOINT_BIT) != 0;
 
-  const VkImageCreateInfo ci = ivkGetImageCreateInfo(type,
-                                                     imageFormat_,
-                                                     tiling,
-                                                     usageFlags,
-                                                     extent_,
-                                                     mipLevels_,
-                                                     arrayLayers_,
-                                                     createFlags,
-                                                     samples);
+  const VkImageCreateInfo ci = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .flags = createFlags,
+      .imageType = type,
+      .format = imageFormat_,
+      .extent = extent_,
+      .mipLevels = mipLevels_,
+      .arrayLayers = arrayLayers_,
+      .samples = samples,
+      .tiling = tiling,
+      .usage = usageFlags,
+      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+  };
 
   if (IGL_VULKAN_USE_VMA && !isDisjoint) {
     const bool isHostVisible = (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
     const bool isLazilyAllocated = (memFlags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) != 0;
     const VmaAllocationCreateInfo ciAlloc = {
-          .flags = 0,
-          .usage = isHostVisible ? VMA_MEMORY_USAGE_CPU_TO_GPU : VMA_MEMORY_USAGE_AUTO,
-          // For lazily allocated (memoryless) images, require the flag so VMA picks GMEM-backed
-          // memory on TBDR GPUs. For other non-host-visible cases, pass memFlags as a preference
-          // to guide VMA without causing hard allocation failures.
-          .requiredFlags = isLazilyAllocated ? memFlags : static_cast<VkMemoryPropertyFlags>(0),
-          .preferredFlags = (!isHostVisible && !isLazilyAllocated)
-                            ? memFlags
-                            : static_cast<VkMemoryPropertyFlags>(0),
+        .flags = 0,
+        .usage = isHostVisible ? VMA_MEMORY_USAGE_CPU_TO_GPU : VMA_MEMORY_USAGE_AUTO,
+        // For lazily allocated (memoryless) images, require the flag so VMA picks GMEM-backed
+        // memory on TBDR GPUs. For other non-host-visible cases, pass memFlags as a preference
+        // to guide VMA without causing hard allocation failures.
+        .requiredFlags = isLazilyAllocated ? memFlags : static_cast<VkMemoryPropertyFlags>(0),
+        .preferredFlags = (!isHostVisible && !isLazilyAllocated)
+                              ? memFlags
+                              : static_cast<VkMemoryPropertyFlags>(0),
     };
 
-    const VkResult result = vmaCreateImage(
-        (VmaAllocator)ctx_->getVmaAllocator(), &ci, &ciAlloc, &vkImage_, &vmaAllocation_, nullptr);
+    const VkResult result = vmaCreateImage(static_cast<VmaAllocator>(ctx_->getVmaAllocator()),
+                                           &ci,
+                                           &ciAlloc,
+                                           &vkImage_,
+                                           &vmaAllocation_,
+                                           nullptr);
 
-    if (!IGL_DEBUG_VERIFY(result == VK_SUCCESS)) {
-      IGL_LOG_ERROR("failed: error result: %d, memflags: %d,  imageformat: %d\n",
-                    result,
-                    memFlags,
-                    imageFormat_);
-    }
+    if (result != VK_SUCCESS || vmaAllocation_ == nullptr) {
+      IGL_LOG_INFO(
+          "vmaCreateImage failed: error result: %d, memflags: %d, imageformat: %d. Retrying after "
+          "draining deferred tasks.\n",
+          result,
+          memFlags,
+          imageFormat_);
+      // Allocation failed - possibly due to memory pressure from deferred tasks not being
+      // processed. Drain deferred tasks queue to free memory and retry.
+      const_cast<VulkanContext&>(*ctx_).waitDeferredTasks();
 
-    VkMemoryRequirements memRequirements;
-    ctx_->vf_.vkGetImageMemoryRequirements(device, vkImage_, &memRequirements);
+      const VkResult retryResult =
+          vmaCreateImage(static_cast<VmaAllocator>(ctx_->getVmaAllocator()),
+                         &ci,
+                         &ciAlloc,
+                         &vkImage_,
+                         &vmaAllocation_,
+                         nullptr);
 
-    // handle memory-mapped buffers
-    if (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-      vmaMapMemory((VmaAllocator)ctx_->getVmaAllocator(), vmaAllocation_, &mappedPtr_);
-      if (memRequirements.memoryTypeBits & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
-        isCoherentMemory_ = true;
+      if (retryResult != VK_SUCCESS || vmaAllocation_ == nullptr) {
+        IGL_LOG_INFO(
+            "vmaCreateImage retry failed: error result: %d, memflags: %d, imageformat: %d. "
+            "Continuing with null allocation.\n",
+            retryResult,
+            memFlags,
+            imageFormat_);
+      } else {
+        IGL_LOG_INFO(
+            "vmaCreateImage retry succeeded: memflags: %d, imageformat: %d after draining "
+            "deferred tasks.\n",
+            memFlags,
+            imageFormat_);
       }
     }
 
     if (vmaAllocation_) {
+      VkMemoryRequirements memRequirements;
+      ctx_->vf_.vkGetImageMemoryRequirements(device_, vkImage_, &memRequirements);
+
+      // handle memory-mapped buffers
+      if (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+        vmaMapMemory(
+            static_cast<VmaAllocator>(ctx_->getVmaAllocator()), vmaAllocation_, &mappedPtr_);
+        if (memRequirements.memoryTypeBits & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
+          isCoherentMemory_ = true;
+        }
+      }
+
+      vmaSetAllocationName(static_cast<VmaAllocator>(ctx_->getVmaAllocator()),
+                           vmaAllocation_,
+                           IGL_FORMAT("VMA Allocation: {}", debugName).c_str());
+
       VmaAllocationInfo allocationInfo;
-      vmaGetAllocationInfo((VmaAllocator)ctx_->getVmaAllocator(), vmaAllocation_, &allocationInfo);
+      vmaGetAllocationInfo(
+          static_cast<VmaAllocator>(ctx_->getVmaAllocator()), vmaAllocation_, &allocationInfo);
       allocatedSize = allocationInfo.size;
     }
   } else {
     // create a disjoint image - TODO: merge it with the VMA code path above
     VK_ASSERT(ctx_->vf_.vkCreateImage(device_, &ci, nullptr, &vkImage_));
 
-    // Ignore clang-diagnostic-missing-field-initializers
-    // @lint-ignore CLANGTIDY
     VkMemoryRequirements2 memRequirements[3] = {
-        {VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2},
-        {VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2},
-        {VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2},
+        {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2},
+        {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2},
+        {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2},
     };
 
     // back the image with some memory
     {
       const uint32_t numPlanes = igl::vulkan::getNumImagePlanes(format);
       IGL_DEBUG_ASSERT(numPlanes > 0 && numPlanes <= kMaxImagePlanes);
-      // @fb-only
+      // NOLINTNEXTLINE(modernize-avoid-c-arrays)
       const VkImagePlaneMemoryRequirementsInfo planes[kMaxImagePlanes] = {
-          ivkGetImagePlaneMemoryRequirementsInfo(VK_IMAGE_ASPECT_PLANE_0_BIT),
-          ivkGetImagePlaneMemoryRequirementsInfo(VK_IMAGE_ASPECT_PLANE_1_BIT),
-          ivkGetImagePlaneMemoryRequirementsInfo(VK_IMAGE_ASPECT_PLANE_2_BIT),
+          {.sType = VK_STRUCTURE_TYPE_IMAGE_PLANE_MEMORY_REQUIREMENTS_INFO,
+           .planeAspect = VK_IMAGE_ASPECT_PLANE_0_BIT},
+          {.sType = VK_STRUCTURE_TYPE_IMAGE_PLANE_MEMORY_REQUIREMENTS_INFO,
+           .planeAspect = VK_IMAGE_ASPECT_PLANE_1_BIT},
+          {.sType = VK_STRUCTURE_TYPE_IMAGE_PLANE_MEMORY_REQUIREMENTS_INFO,
+           .planeAspect = VK_IMAGE_ASPECT_PLANE_2_BIT},
       };
-      // @fb-only
+      // NOLINTNEXTLINE(modernize-avoid-c-arrays)
       const VkImageMemoryRequirementsInfo2 imgRequirements[kMaxImagePlanes] = {
-          ivkGetImageMemoryRequirementsInfo2(isDisjoint && numPlanes > 0 ? &planes[0] : nullptr, vkImage_),
-          ivkGetImageMemoryRequirementsInfo2(isDisjoint && numPlanes > 1 ? &planes[1] : nullptr, vkImage_),
-          ivkGetImageMemoryRequirementsInfo2(isDisjoint && numPlanes > 2 ? &planes[2] : nullptr, vkImage_),
+          {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
+           .pNext = isDisjoint && numPlanes > 0 ? &planes[0] : nullptr,
+           .image = vkImage_},
+          {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
+           .pNext = isDisjoint && numPlanes > 1 ? &planes[1] : nullptr,
+           .image = vkImage_},
+          {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
+           .pNext = isDisjoint && numPlanes > 2 ? &planes[2] : nullptr,
+           .image = vkImage_},
       };
       for (uint32_t p = 0; p != numPlanes; p++) {
-        ctx_->vf_.vkGetImageMemoryRequirements2(device, &imgRequirements[p], &memRequirements[p]);
+        ctx_->vf_.vkGetImageMemoryRequirements2(device_, &imgRequirements[p], &memRequirements[p]);
         VK_ASSERT(ivkAllocateMemory2(&ctx_->vf_,
                                      physicalDevice_,
                                      device_,
@@ -242,19 +288,36 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
                                      memFlags,
                                      false,
                                      &vkMemory_[p]));
+
+        VK_ASSERT(ivkSetDebugObjectName(&ctx_->vf_,
+                                        device_,
+                                        VK_OBJECT_TYPE_DEVICE_MEMORY,
+                                        (uint64_t)vkMemory_[p],
+                                        IGL_FORMAT("Memory [{}]: {}", p, debugName).c_str()));
       }
-      // @fb-only
+      // NOLINTNEXTLINE(modernize-avoid-c-arrays)
       const VkBindImagePlaneMemoryInfo bindImagePlaneMemoryInfo[kMaxImagePlanes] = {
-          {VK_STRUCTURE_TYPE_BIND_IMAGE_PLANE_MEMORY_INFO, nullptr, VK_IMAGE_ASPECT_PLANE_0_BIT},
-          {VK_STRUCTURE_TYPE_BIND_IMAGE_PLANE_MEMORY_INFO, nullptr, VK_IMAGE_ASPECT_PLANE_1_BIT},
-          {VK_STRUCTURE_TYPE_BIND_IMAGE_PLANE_MEMORY_INFO, nullptr, VK_IMAGE_ASPECT_PLANE_2_BIT},
+          {.sType = VK_STRUCTURE_TYPE_BIND_IMAGE_PLANE_MEMORY_INFO,
+           .planeAspect = VK_IMAGE_ASPECT_PLANE_0_BIT},
+          {.sType = VK_STRUCTURE_TYPE_BIND_IMAGE_PLANE_MEMORY_INFO,
+           .planeAspect = VK_IMAGE_ASPECT_PLANE_1_BIT},
+          {.sType = VK_STRUCTURE_TYPE_BIND_IMAGE_PLANE_MEMORY_INFO,
+           .planeAspect = VK_IMAGE_ASPECT_PLANE_2_BIT},
       };
-      // @fb-only
+      // NOLINTNEXTLINE(modernize-avoid-c-arrays)
       const VkBindImageMemoryInfo bindInfo[kMaxImagePlanes] = {
-          ivkGetBindImageMemoryInfo(
-              isDisjoint ? &bindImagePlaneMemoryInfo[0] : nullptr, vkImage_, vkMemory_[0]),
-          ivkGetBindImageMemoryInfo(&bindImagePlaneMemoryInfo[1], vkImage_, vkMemory_[1]),
-          ivkGetBindImageMemoryInfo(&bindImagePlaneMemoryInfo[2], vkImage_, vkMemory_[2]),
+          {.sType = VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO,
+           .pNext = isDisjoint ? &bindImagePlaneMemoryInfo[0] : nullptr,
+           .image = vkImage_,
+           .memory = vkMemory_[0]},
+          {.sType = VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO,
+           .pNext = &bindImagePlaneMemoryInfo[1],
+           .image = vkImage_,
+           .memory = vkMemory_[1]},
+          {.sType = VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO,
+           .pNext = &bindImagePlaneMemoryInfo[2],
+           .image = vkImage_,
+           .memory = vkMemory_[2]},
       };
       VK_ASSERT(ctx_->vf_.vkBindImageMemory2(device_, numPlanes, bindInfo));
 
@@ -285,7 +348,6 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
 VulkanImage::VulkanImage(const VulkanContext& ctx,
                          AHardwareBuffer* hwBuffer,
                          uint64_t memoryAllocationSize,
-                         VkDevice device,
                          VkExtent3D extent,
                          VkImageType type,
                          VkFormat format,
@@ -298,7 +360,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
                          const char* debugName) :
   ctx_(&ctx),
   physicalDevice_(ctx.getVkPhysicalDevice()),
-  device_(device),
+  device_(ctx.getVkDevice()),
   usageFlags_(usageFlags),
   extent_(extent),
   type_(type),
@@ -306,8 +368,8 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   mipLevels_(mipLevels),
   arrayLayers_(arrayLayers),
   samples_(samples),
-  isDepthFormat_(isDepthFormat(format)),
-  isStencilFormat_(isStencilFormat(format)),
+  isDepthFormat_(hasDepth(format)),
+  isStencilFormat_(hasStencil(format)),
   isDepthOrStencilFormat_(isDepthFormat_ || isStencilFormat_),
   isImported_(true),
   tiling_(tiling) {
@@ -321,21 +383,25 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
 
   setName(debugName);
 
-  VkImageCreateInfo ci = ivkGetImageCreateInfo(type,
-                                               imageFormat_,
-                                               tiling,
-                                               usageFlags,
-                                               extent_,
-                                               mipLevels_,
-                                               arrayLayers_,
-                                               createFlags,
-                                               samples);
-
   const VkExternalMemoryImageCreateInfo extImgMem = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
       .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID};
 
-  ci.pNext = &extImgMem;
+  const VkImageCreateInfo ci = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .pNext = &extImgMem,
+      .flags = createFlags,
+      .imageType = type,
+      .format = imageFormat_,
+      .extent = extent_,
+      .mipLevels = mipLevels_,
+      .arrayLayers = arrayLayers_,
+      .samples = samples,
+      .tiling = tiling,
+      .usage = usageFlags,
+      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+  };
 
   VK_ASSERT(ctx_->vf_.vkCreateImage(device_, &ci, nullptr, &vkImage_));
   VK_ASSERT(ivkSetDebugObjectName(
@@ -349,7 +415,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
       .buffer = hwBuffer,
   };
 
-  VkMemoryDedicatedAllocateInfo dedicatedAllocateInfo = {
+  const VkMemoryDedicatedAllocateInfo dedicatedAllocateInfo = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
       .pNext = &hwBufferInfo,
       .image = vkImage_,
@@ -362,14 +428,11 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   VK_ASSERT(ctx_->vf_.vkGetAndroidHardwareBufferPropertiesANDROID(
       device_, hwBuffer, &hwBufferProperties));
 
-  VkPhysicalDeviceMemoryProperties vulkanMemoryProperties;
-  ctx_->vf_.vkGetPhysicalDeviceMemoryProperties(physicalDevice_, &vulkanMemoryProperties);
-
   const VkMemoryAllocateInfo memoryAllocateInfo = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
       .pNext = &dedicatedAllocateInfo,
       .allocationSize = hwBufferProperties.allocationSize,
-      .memoryTypeIndex = ivkGetMemoryTypeIndex(vulkanMemoryProperties,
+      .memoryTypeIndex = ivkGetMemoryTypeIndex(ctx_->memoryProperties,
                                                hwBufferProperties.memoryTypeBits,
                                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)};
 
@@ -387,7 +450,6 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
 VulkanImage::VulkanImage(const VulkanContext& ctx,
                          int32_t undupedFileDescriptor,
                          uint64_t memoryAllocationSize,
-                         VkDevice device,
                          VkExtent3D extent,
                          VkImageType type,
                          VkFormat format,
@@ -400,7 +462,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
                          const char* debugName) :
   ctx_(&ctx),
   physicalDevice_(ctx.getVkPhysicalDevice()),
-  device_(device),
+  device_(ctx.getVkDevice()),
   usageFlags_(usageFlags),
   extent_(extent),
   type_(type),
@@ -408,8 +470,8 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   mipLevels_(mipLevels),
   arrayLayers_(arrayLayers),
   samples_(samples),
-  isDepthFormat_(isDepthFormat(format)),
-  isStencilFormat_(isStencilFormat(format)),
+  isDepthFormat_(hasDepth(format)), // NOLINT(readability-identifier-naming)
+  isStencilFormat_(hasStencil(format)), // NOLINT(readability-identifier-naming)
   isDepthOrStencilFormat_(isDepthFormat_ || isStencilFormat_),
   isImported_(true),
   tiling_(tiling) {
@@ -426,25 +488,26 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
 
   setName(debugName);
 
-  VkImageCreateInfo ci = ivkGetImageCreateInfo(type,
-                                               imageFormat_,
-                                               tiling,
-                                               usageFlags,
-                                               extent_,
-                                               mipLevels_,
-                                               arrayLayers_,
-                                               createFlags,
-                                               samples);
-
-  VkExternalMemoryImageCreateInfo extImgMem = {
+  const VkExternalMemoryImageCreateInfo extImgMem = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
       .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT,
   };
 
-  ci.pNext = &extImgMem;
-
-  VkPhysicalDeviceMemoryProperties vulkanMemoryProperties;
-  ctx_->vf_.vkGetPhysicalDeviceMemoryProperties(physicalDevice_, &vulkanMemoryProperties);
+  const VkImageCreateInfo ci = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .pNext = &extImgMem,
+      .flags = createFlags,
+      .imageType = type,
+      .format = imageFormat_,
+      .extent = extent_,
+      .mipLevels = mipLevels_,
+      .arrayLayers = arrayLayers_,
+      .samples = samples,
+      .tiling = tiling,
+      .usage = usageFlags,
+      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+  };
 
   // create image.. importing external memory cannot use VMA
   VK_ASSERT(ctx_->vf_.vkCreateImage(device_, &ci, nullptr, &vkImage_));
@@ -480,7 +543,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   // TODO_VULKAN: Verify the following from the spec:
   // the memory from which fd was exported must have been created on the same physical device
   // as device.
-  VkImportMemoryFdInfoKHR fdInfo = {
+  const VkImportMemoryFdInfoKHR fdInfo = {
       .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
       .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT,
       .fd = importedFd,
@@ -490,7 +553,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
       .pNext = &fdInfo,
       .allocationSize = memoryAllocationSize,
-      .memoryTypeIndex = ivkGetMemoryTypeIndex(vulkanMemoryProperties,
+      .memoryTypeIndex = ivkGetMemoryTypeIndex(ctx_->memoryProperties,
                                                memoryRequirements.memoryRequirements.memoryTypeBits,
                                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
   };
@@ -514,13 +577,18 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   VK_ASSERT(ctx_->vf_.vkBindImageMemory(device_, vkImage_, vkMemory_[0], 0));
 // @fb-only
 
+  VK_ASSERT(ivkSetDebugObjectName(&ctx_->vf_,
+                                  device_,
+                                  VK_OBJECT_TYPE_DEVICE_MEMORY,
+                                  (uint64_t)vkMemory_[0],
+                                  IGL_FORMAT("Memory: {}", debugName).c_str()));
+
   ctx_->vf_.vkGetPhysicalDeviceFormatProperties(physicalDevice_, imageFormat_, &formatProperties_);
 }
 
 #if IGL_PLATFORM_WINDOWS
 VulkanImage::VulkanImage(const VulkanContext& ctx,
                          void* windowsHandle,
-                         VkDevice device,
                          VkExtent3D extent,
                          VkImageType type,
                          VkFormat format,
@@ -533,7 +601,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
                          const char* debugName) :
   ctx_(&ctx),
   physicalDevice_(ctx.getVkPhysicalDevice()),
-  device_(device),
+  device_(ctx.getVkDevice()),
   usageFlags_(usageFlags),
   extent_(extent),
   type_(type),
@@ -541,8 +609,8 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   mipLevels_(mipLevels),
   arrayLayers_(arrayLayers),
   samples_(samples),
-  isDepthFormat_(isDepthFormat(format)),
-  isStencilFormat_(isStencilFormat(format)),
+  isDepthFormat_(hasDepth(format)),
+  isStencilFormat_(hasStencil(format)),
   isDepthOrStencilFormat_(isDepthFormat_ || isStencilFormat_),
   isImported_(true),
   tiling_(tiling) {
@@ -553,25 +621,26 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   IGL_DEBUG_ASSERT(imageFormat_ != VK_FORMAT_UNDEFINED, "Invalid VkFormat value");
   IGL_DEBUG_ASSERT(samples_ > 0, "The image must contain at least one sample");
 
-  VkImageCreateInfo ci = ivkGetImageCreateInfo(type,
-                                               imageFormat_,
-                                               tiling,
-                                               usageFlags,
-                                               extent_,
-                                               mipLevels_,
-                                               arrayLayers_,
-                                               createFlags,
-                                               samples);
-
   const VkExternalMemoryImageCreateInfo extImgMem = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
       .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_KMT_BIT,
   };
 
-  ci.pNext = &extImgMem;
-
-  VkPhysicalDeviceMemoryProperties vulkanMemoryProperties;
-  ctx_->vf_.vkGetPhysicalDeviceMemoryProperties(physicalDevice_, &vulkanMemoryProperties);
+  const VkImageCreateInfo ci = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .pNext = &extImgMem,
+      .flags = createFlags,
+      .imageType = type,
+      .format = imageFormat_,
+      .extent = extent_,
+      .mipLevels = mipLevels_,
+      .arrayLayers = arrayLayers_,
+      .samples = samples,
+      .tiling = tiling,
+      .usage = usageFlags,
+      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+  };
 
   // create image. importing external memory cannot use VMA
   VK_ASSERT(ctx_->vf_.vkCreateImage(device_, &ci, nullptr, &vkImage_));
@@ -579,9 +648,11 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
       &ctx_->vf_, device_, VK_OBJECT_TYPE_IMAGE, (uint64_t)vkImage_, debugName));
 
   const VkImageMemoryRequirementsInfo2 memoryRequirementInfo = {
-      VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2, nullptr, vkImage_};
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
+      .image = vkImage_,
+  };
 
-  VkMemoryRequirements2 memoryRequirements = {VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
+  VkMemoryRequirements2 memoryRequirements = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
   ctx_->vf_.vkGetImageMemoryRequirements2(device_, &memoryRequirementInfo, &memoryRequirements);
 
   const VkImportMemoryWin32HandleInfoKHR handleInfo = {
@@ -594,7 +665,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
       .pNext = &handleInfo,
       .allocationSize = memoryRequirements.memoryRequirements.size,
-      .memoryTypeIndex = ivkGetMemoryTypeIndex(vulkanMemoryProperties,
+      .memoryTypeIndex = ivkGetMemoryTypeIndex(ctx_->memoryProperties,
                                                memoryRequirements.memoryRequirements.memoryTypeBits,
                                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
   };
@@ -608,13 +679,18 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   VK_ASSERT(ctx_->vf_.vkAllocateMemory(device_, &memoryAllocateInfo, nullptr, &vkMemory_[0]));
   VK_ASSERT(ctx_->vf_.vkBindImageMemory(device_, vkImage_, vkMemory_[0], 0));
 
+  VK_ASSERT(ivkSetDebugObjectName(&ctx_->vf_,
+                                  device_,
+                                  VK_OBJECT_TYPE_DEVICE_MEMORY,
+                                  (uint64_t)vkMemory_[0],
+                                  IGL_FORMAT("Memory: {}", debugName).c_str()));
+
   ctx_->vf_.vkGetPhysicalDeviceFormatProperties(physicalDevice_, imageFormat_, &formatProperties_);
 }
 #endif // IGL_PLATFORM_WINDOWS
 
 #if IGL_PLATFORM_WINDOWS || IGL_PLATFORM_LINUX || IGL_PLATFORM_ANDROID
 VulkanImage VulkanImage::createWithExportMemory(const VulkanContext& ctx,
-                                                VkDevice device,
                                                 VkExtent3D extent,
                                                 VkImageType type,
                                                 VkFormat format,
@@ -669,14 +745,10 @@ VulkanImage VulkanImage::createWithExportMemory(const VulkanContext& ctx,
     return VulkanImage();
   }
 
-  VkExternalMemoryHandleTypeFlags compatibleHandleTypes =
-      VK_EXTERNAL_MEMORY_HANDLE_TYPE_FLAG_BITS_MAX_ENUM;
-
   IGL_DEBUG_ASSERT(externalFormatProperties.compatibleHandleTypes & kHandleType);
-  compatibleHandleTypes = kHandleType;
+  const VkExternalMemoryHandleTypeFlags compatibleHandleTypes = kHandleType;
 
   return {ctx,
-          device,
           extent,
           type,
           format,
@@ -692,7 +764,6 @@ VulkanImage VulkanImage::createWithExportMemory(const VulkanContext& ctx,
 }
 
 VulkanImage::VulkanImage(const VulkanContext& ctx,
-                         VkDevice device,
                          VkExtent3D extent,
                          VkImageType type,
                          VkFormat format,
@@ -707,7 +778,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
                          const char* debugName) :
   ctx_(&ctx),
   physicalDevice_(ctx.getVkPhysicalDevice()),
-  device_(device),
+  device_(ctx.getVkDevice()),
   usageFlags_(usageFlags),
   extent_(extent),
   type_(type),
@@ -715,8 +786,8 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   mipLevels_(mipLevels),
   arrayLayers_(arrayLayers),
   samples_(samples),
-  isDepthFormat_(isDepthFormat(format)),
-  isStencilFormat_(isStencilFormat(format)),
+  isDepthFormat_(hasDepth(format)), // NOLINT(readability-identifier-naming)
+  isStencilFormat_(hasStencil(format)), // NOLINT(readability-identifier-naming)
   isDepthOrStencilFormat_(isDepthFormat_ || isStencilFormat_),
   isExported_(true),
   tiling_(tiling) {
@@ -732,20 +803,21 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
       .handleTypes = compatibleHandleTypes,
   };
 
-  VkImageCreateInfo ci = ivkGetImageCreateInfo(type,
-                                               imageFormat_,
-                                               tiling,
-                                               usageFlags,
-                                               extent_,
-                                               mipLevels_,
-                                               arrayLayers_,
-                                               createFlags,
-                                               samples);
-
-  ci.pNext = &externalImageCreateInfo;
-
-  VkPhysicalDeviceMemoryProperties vulkanMemoryProperties;
-  ctx_->vf_.vkGetPhysicalDeviceMemoryProperties(physicalDevice_, &vulkanMemoryProperties);
+  const VkImageCreateInfo ci = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .pNext = &externalImageCreateInfo,
+      .flags = createFlags,
+      .imageType = type,
+      .format = imageFormat_,
+      .extent = extent_,
+      .mipLevels = mipLevels_,
+      .arrayLayers = arrayLayers_,
+      .samples = samples,
+      .tiling = tiling,
+      .usage = usageFlags,
+      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+  };
 
   // create VkImage importing external memory cannot use VMA
   VK_ASSERT(ctx_->vf_.vkCreateImage(device_, &ci, nullptr, &vkImage_));
@@ -755,7 +827,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   // For Android we need a dedicated allocation for exporting the image, otherwise
   // the exported handle is not generated properly.
 #if IGL_PLATFORM_ANDROID
-  VkMemoryDedicatedAllocateInfo dedicatedAllocateInfo = {
+  const VkMemoryDedicatedAllocateInfo dedicatedAllocateInfo = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
       .pNext = nullptr,
       .image = vkImage_,
@@ -776,8 +848,10 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   const uint32_t numPlanes = igl::vulkan::getNumImagePlanes(format);
   IGL_DEBUG_ASSERT(numPlanes > 0 && numPlanes <= kMaxImagePlanes);
   for (uint32_t p = 0; p != numPlanes; p++) {
-    auto imagePlaneMemoryRequirementsInfo = ivkGetImagePlaneMemoryRequirementsInfo(
-        (VkImageAspectFlagBits)(VK_IMAGE_ASPECT_PLANE_0_BIT << p));
+    const auto imagePlaneMemoryRequirementsInfo = VkImagePlaneMemoryRequirementsInfo{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_PLANE_MEMORY_REQUIREMENTS_INFO,
+        .planeAspect = static_cast<VkImageAspectFlagBits>(VK_IMAGE_ASPECT_PLANE_0_BIT << p),
+    };
 
     const VkImageMemoryRequirementsInfo2 imageMemoryRequirementInfo = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
@@ -785,7 +859,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
         .image = vkImage_,
     };
 
-    VkMemoryRequirements2 memoryRequirements = {VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, nullptr};
+    VkMemoryRequirements2 memoryRequirements = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
     ctx_->vf_.vkGetImageMemoryRequirements2(
         device_, &imageMemoryRequirementInfo, &memoryRequirements);
 
@@ -794,7 +868,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
         .pNext = &externalMemoryAllocateInfo,
         .allocationSize = memoryRequirements.memoryRequirements.size,
         .memoryTypeIndex = ivkGetMemoryTypeIndex(
-            vulkanMemoryProperties, memoryRequirements.memoryRequirements.memoryTypeBits, memFlags),
+            ctx_->memoryProperties, memoryRequirements.memoryRequirements.memoryTypeBits, memFlags),
     };
 
     IGL_LOG_INFO("Creating image to be exported with memoryAllocationSize %" PRIu64
@@ -805,12 +879,22 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
 
     VK_ASSERT(ctx_->vf_.vkAllocateMemory(device_, &memoryAllocateInfo, nullptr, &vkMemory_[p]));
 
+    VK_ASSERT(ivkSetDebugObjectName(&ctx_->vf_,
+                                    device_,
+                                    VK_OBJECT_TYPE_DEVICE_MEMORY,
+                                    (uint64_t)vkMemory_[p],
+                                    IGL_FORMAT("Memory [{}]: {}", p, debugName).c_str()));
+
     bindImagePlaneMemoryInfo[p] = VkBindImagePlaneMemoryInfo{
         .sType = VK_STRUCTURE_TYPE_BIND_IMAGE_PLANE_MEMORY_INFO,
-        .planeAspect = (VkImageAspectFlagBits)(VK_IMAGE_ASPECT_PLANE_0_BIT << p),
+        .planeAspect = static_cast<VkImageAspectFlagBits>(VK_IMAGE_ASPECT_PLANE_0_BIT << p),
     };
-    bindInfo[p] = ivkGetBindImageMemoryInfo(
-        numPlanes > 1 ? &bindImagePlaneMemoryInfo[p] : nullptr, vkImage_, vkMemory_[p]);
+    bindInfo[p] = VkBindImageMemoryInfo{
+        .sType = VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO,
+        .pNext = numPlanes > 1 ? &bindImagePlaneMemoryInfo[p] : nullptr,
+        .image = vkImage_,
+        .memory = vkMemory_[p],
+    };
   }
   VK_ASSERT(ctx_->vf_.vkBindImageMemory2(device_, numPlanes, bindInfo.data()));
 
@@ -850,11 +934,11 @@ void VulkanImage::destroy() {
     if (vkMemory_[1] == VK_NULL_HANDLE) {
       if (vmaAllocation_) {
         if (mappedPtr_) {
-          vmaUnmapMemory((VmaAllocator)ctx_->getVmaAllocator(), vmaAllocation_);
+          vmaUnmapMemory(static_cast<VmaAllocator>(ctx_->getVmaAllocator()), vmaAllocation_);
         }
         ctx_->deferredTask(std::packaged_task<void()>(
             [vma = ctx_->getVmaAllocator(), image = vkImage_, allocation = vmaAllocation_]() {
-              vmaDestroyImage((VmaAllocator)vma, image, allocation);
+              vmaDestroyImage(static_cast<VmaAllocator>(vma), image, allocation);
             }));
       } else {
         if (mappedPtr_) {
@@ -907,21 +991,24 @@ VulkanImageView VulkanImage::createImageView(VkImageViewType type,
                                              uint32_t baseLayer,
                                              uint32_t numLayers,
                                              const char* debugName) const {
-  return {*ctx_,
-          vkImage_,
-          type,
-          format,
-          aspectMask,
-          baseLevel,
-          numLevels ? numLevels : mipLevels_,
-          baseLayer,
-          numLayers,
-          debugName};
+  const VulkanImageViewCreateInfo ci = {
+      .image = vkImage_,
+      .viewType = type,
+      .format = format,
+      .subresourceRange = VkImageSubresourceRange{.aspectMask = aspectMask,
+                                                  .baseMipLevel = baseLevel,
+                                                  .levelCount = numLevels,
+                                                  .baseArrayLayer = baseLayer,
+                                                  .layerCount = numLayers},
+  };
+
+  return VulkanImageView{*ctx_, ci, debugName};
 }
 
 VulkanImageView VulkanImage::createImageView(VulkanImageViewCreateInfo createInfo,
                                              const char* debugName) const {
-  return {*ctx_, device_, vkImage_, createInfo, debugName};
+  createInfo.image = vkImage_;
+  return VulkanImageView{*ctx_, createInfo, debugName};
 }
 
 void VulkanImage::transitionLayout(VkCommandBuffer cmdBuf,
@@ -1152,7 +1239,7 @@ void VulkanImage::generateMipmap(VkCommandBuffer commandBuffer,
   const VkImageAspectFlags imageAspectFlags = getImageAspectFlags();
 
   ivkCmdBeginDebugUtilsLabel(
-      &ctx_->vf_, commandBuffer, "Generate mipmaps", kColorGenerateMipmaps.toFloatPtr());
+      &ctx_->vf_, commandBuffer, "Generate mipmaps", K_COLOR_GENERATE_MIPMAPS.toFloatPtr());
 
   IGL_SCOPE_EXIT {
     ivkCmdEndDebugUtilsLabel(&ctx_->vf_, commandBuffer);
@@ -1179,8 +1266,10 @@ void VulkanImage::generateMipmap(VkCommandBuffer commandBuffer,
        ++arrayLayer) {
     for (uint32_t face = range.face; face < (range.face + range.numFaces); ++face) {
       const uint32_t layer = arrayLayer * multiplier + face;
-      int32_t mipWidth = extent_.width > 1 ? (int32_t)extent_.width >> (range.mipLevel) : 1;
-      int32_t mipHeight = extent_.height > 1 ? (int32_t)extent_.height >> (range.mipLevel) : 1;
+      int32_t mipWidth = extent_.width > 1 ? static_cast<int32_t>(extent_.width) >> (range.mipLevel)
+                                           : 1;
+      int32_t mipHeight =
+          extent_.height > 1 ? static_cast<int32_t>(extent_.height) >> (range.mipLevel) : 1;
 
       for (uint32_t i = (range.mipLevel + 1); i < (range.mipLevel + range.numMipLevels); ++i) {
         // 1: Transition the i-th level to VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
@@ -1262,20 +1351,9 @@ void VulkanImage::generateMipmap(VkCommandBuffer commandBuffer,
   imageLayout_ = originalImageLayout;
 }
 
-bool VulkanImage::isDepthFormat(VkFormat format) {
-  return (format == VK_FORMAT_D16_UNORM) || (format == VK_FORMAT_X8_D24_UNORM_PACK32) ||
-         (format == VK_FORMAT_D32_SFLOAT) || (format == VK_FORMAT_D16_UNORM_S8_UINT) ||
-         (format == VK_FORMAT_D24_UNORM_S8_UINT) || (format == VK_FORMAT_D32_SFLOAT_S8_UINT);
-}
-
-bool VulkanImage::isStencilFormat(VkFormat format) {
-  return (format == VK_FORMAT_S8_UINT) || (format == VK_FORMAT_D16_UNORM_S8_UINT) ||
-         (format == VK_FORMAT_D24_UNORM_S8_UINT) || (format == VK_FORMAT_D32_SFLOAT_S8_UINT);
-}
-
-void VulkanImage::setName(const std::string& name) noexcept {
-#if defined(IGL_DEBUG)
-  name_ = name;
+void VulkanImage::setName(std::string name) noexcept { // NOLINT(bugprone-exception-escape)
+#if IGL_DEBUG
+  name_ = std::move(name);
 #else
   (void)name;
 #endif
@@ -1312,7 +1390,7 @@ VulkanImage& VulkanImage::operator=(VulkanImage&& other) noexcept {
   isExported_ = other.isExported_;
   exportedMemoryHandle_ = other.exportedMemoryHandle_;
   exportedFd_ = other.exportedFd_;
-#if defined(IGL_DEBUG)
+#if IGL_DEBUG
   name_ = std::move(other.name_);
 #endif
   tiling_ = other.tiling_;
@@ -1335,14 +1413,14 @@ void VulkanImage::flushMappedMemory() const {
   }
 
   if (vmaAllocation_) {
-    vmaFlushAllocation((VmaAllocator)ctx_->getVmaAllocator(), vmaAllocation_, 0, VK_WHOLE_SIZE);
+    vmaFlushAllocation(
+        static_cast<VmaAllocator>(ctx_->getVmaAllocator()), vmaAllocation_, 0, VK_WHOLE_SIZE);
   } else {
-    const VkMappedMemoryRange memoryRange{
-        VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-        nullptr,
-        vkMemory_[0],
-        0,
-        VK_WHOLE_SIZE,
+    const VkMappedMemoryRange memoryRange = {
+        .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+        .memory = vkMemory_[0],
+        .offset = 0,
+        .size = VK_WHOLE_SIZE,
     };
     ctx_->vf_.vkFlushMappedMemoryRanges(device_, 1, &memoryRange);
   }

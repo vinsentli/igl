@@ -7,13 +7,12 @@
 
 #pragma once
 
+#include <vector>
 #include <igl/Common.h>
 #include <igl/Framebuffer.h>
 #include <igl/Texture.h>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanImageView.h>
-
-#include <vector>
 
 namespace igl::vulkan {
 
@@ -52,11 +51,17 @@ class Texture : public ITexture {
   bool isRequiredGenerateMipmap() const override;
   uint64_t getTextureId() const override;
   bool isSwapchainTexture() const override;
+  TextureDesc::TextureMipmapGeneration getMipmapGeneration() const;
   VkFormat getVkFormat() const;
   uint32_t getVkExtendedFormat() const;
   VkImageUsageFlags getVkUsageFlags() const;
 
   VkImageView getVkImageView() const;
+
+  // IAttachmentInterop interface
+  [[nodiscard]] void* IGL_NULLABLE getNativeImage() const override;
+  [[nodiscard]] void* IGL_NULLABLE getNativeImageView() const override;
+  [[nodiscard]] const base::AttachmentInteropDesc& getDesc() const override;
 
   /// @brief Specialization of `getVkImageView()` that returns an image view specific to a mip level
   /// and layer of an image. Used to retrieve image views to be used with framebuffers
@@ -77,13 +82,15 @@ class Texture : public ITexture {
   Result uploadInternal(TextureType type,
                         const TextureRangeDesc& range,
                         const void* data,
-                        size_t bytesPerRow) const final;
+                        size_t bytesPerRow,
+                        const uint32_t* IGL_NULLABLE mipLevelBytes) const final;
 
   void clearColorTexture(const igl::Color& rgba);
 
  protected:
   Device& device_;
   TextureDesc desc_;
+  mutable base::AttachmentInteropDesc attachmentDesc_; // Cached for IAttachmentInterop::getDesc()
 
   std::shared_ptr<VulkanTexture> texture_;
   mutable std::vector<VulkanImageView> imageViewsForFramebufferMono_;
@@ -93,6 +100,10 @@ class Texture : public ITexture {
   /// only be called by the `Device` class, from its `vulkan::Device::createTexture()`
   virtual Result create(const TextureDesc& desc);
   virtual Result createView(const Texture& baseTexture, const TextureViewDesc& desc);
+
+  /// @brief To record whether mipmaps are available and uploaded to the GPU. This is used by the
+  /// `isRequiredGenerateMipmap()` function
+  mutable bool mipmapsAreAvailableAndUploaded_ = false;
 };
 
 } // namespace igl::vulkan

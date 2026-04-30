@@ -7,16 +7,19 @@
 
 // @fb-only
 
+#include <shell/renderSessions/BindGroupSession.h>
+
 #include <IGLU/managedUniformBuffer/ManagedUniformBuffer.h>
 #include <cstddef>
-#include <shell/renderSessions/BindGroupSession.h>
 #include <shell/shared/imageLoader/ImageLoader.h>
 #include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/ShellParams.h>
 #include <igl/NameHandle.h>
+#include <igl/RenderCommandEncoder.h>
 #include <igl/ShaderCreator.h>
-#include <igl/opengl/Device.h>
-#include <igl/opengl/RenderCommandEncoder.h>
+#if IGL_BACKEND_OPENGL
+#include <igl/opengl/Version.h>
+#endif
 
 namespace {
 struct VertexPosUvw {
@@ -30,35 +33,35 @@ const float kHalf = 1.0f;
 // UV-mapped cube with indices: 24 vertices, 36 indices
 const VertexPosUvw kVertexData0[] = {
     // top
-    {{-kHalf, -kHalf, +kHalf}, {0.5, 0.5, 1.0}, {0, 0}}, // 0
-    {{+kHalf, -kHalf, +kHalf}, {1.0, 0.0, 1.0}, {1, 0}}, // 1
-    {{+kHalf, +kHalf, +kHalf}, {1.0, 1.0, 1.0}, {1, 1}}, // 2
-    {{-kHalf, +kHalf, +kHalf}, {0.5, 1.0, 1.0}, {0, 1}}, // 3
+    {.position = {-kHalf, -kHalf, +kHalf}, .color = {0.5, 0.5, 1.0}, .uv = {0, 0}}, // 0
+    {.position = {+kHalf, -kHalf, +kHalf}, .color = {1.0, 0.0, 1.0}, .uv = {1, 0}}, // 1
+    {.position = {+kHalf, +kHalf, +kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {1, 1}}, // 2
+    {.position = {-kHalf, +kHalf, +kHalf}, .color = {0.5, 1.0, 1.0}, .uv = {0, 1}}, // 3
     // bottom
-    {{-kHalf, -kHalf, -kHalf}, {1.0, 1.0, 1.0}, {0, 0}}, // 4
-    {{-kHalf, +kHalf, -kHalf}, {0.5, 1.0, 0.5}, {0, 1}}, // 5
-    {{+kHalf, +kHalf, -kHalf}, {1.0, 1.0, 0.5}, {1, 1}}, // 6
-    {{+kHalf, -kHalf, -kHalf}, {1.0, 0.5, 0.5}, {1, 0}}, // 7
+    {.position = {-kHalf, -kHalf, -kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {0, 0}}, // 4
+    {.position = {-kHalf, +kHalf, -kHalf}, .color = {0.5, 1.0, 0.5}, .uv = {0, 1}}, // 5
+    {.position = {+kHalf, +kHalf, -kHalf}, .color = {1.0, 1.0, 0.5}, .uv = {1, 1}}, // 6
+    {.position = {+kHalf, -kHalf, -kHalf}, .color = {1.0, 0.5, 0.5}, .uv = {1, 0}}, // 7
     // left
-    {{+kHalf, +kHalf, -kHalf}, {1.0, 1.0, 0.5}, {1, 0}}, // 8
-    {{-kHalf, +kHalf, -kHalf}, {0.5, 1.0, 0.5}, {0, 0}}, // 9
-    {{-kHalf, +kHalf, +kHalf}, {0.5, 1.0, 1.0}, {0, 1}}, // 10
-    {{+kHalf, +kHalf, +kHalf}, {1.0, 1.0, 1.0}, {1, 1}}, // 11
+    {.position = {+kHalf, +kHalf, -kHalf}, .color = {1.0, 1.0, 0.5}, .uv = {1, 0}}, // 8
+    {.position = {-kHalf, +kHalf, -kHalf}, .color = {0.5, 1.0, 0.5}, .uv = {0, 0}}, // 9
+    {.position = {-kHalf, +kHalf, +kHalf}, .color = {0.5, 1.0, 1.0}, .uv = {0, 1}}, // 10
+    {.position = {+kHalf, +kHalf, +kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {1, 1}}, // 11
     // right
-    {{-kHalf, -kHalf, -kHalf}, {1.0, 1.0, 1.0}, {0, 0}}, // 12
-    {{+kHalf, -kHalf, -kHalf}, {1.0, 0.5, 0.5}, {1, 0}}, // 13
-    {{+kHalf, -kHalf, +kHalf}, {1.0, 0.5, 1.0}, {1, 1}}, // 14
-    {{-kHalf, -kHalf, +kHalf}, {0.5, 0.5, 1.0}, {0, 1}}, // 15
+    {.position = {-kHalf, -kHalf, -kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {0, 0}}, // 12
+    {.position = {+kHalf, -kHalf, -kHalf}, .color = {1.0, 0.5, 0.5}, .uv = {1, 0}}, // 13
+    {.position = {+kHalf, -kHalf, +kHalf}, .color = {1.0, 0.5, 1.0}, .uv = {1, 1}}, // 14
+    {.position = {-kHalf, -kHalf, +kHalf}, .color = {0.5, 0.5, 1.0}, .uv = {0, 1}}, // 15
     // front
-    {{+kHalf, -kHalf, -kHalf}, {1.0, 0.5, 0.5}, {0, 0}}, // 16
-    {{+kHalf, +kHalf, -kHalf}, {1.0, 1.0, 0.5}, {1, 0}}, // 17
-    {{+kHalf, +kHalf, +kHalf}, {1.0, 1.0, 1.0}, {1, 1}}, // 18
-    {{+kHalf, -kHalf, +kHalf}, {1.0, 0.5, 1.0}, {0, 1}}, // 19
+    {.position = {+kHalf, -kHalf, -kHalf}, .color = {1.0, 0.5, 0.5}, .uv = {0, 0}}, // 16
+    {.position = {+kHalf, +kHalf, -kHalf}, .color = {1.0, 1.0, 0.5}, .uv = {1, 0}}, // 17
+    {.position = {+kHalf, +kHalf, +kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {1, 1}}, // 18
+    {.position = {+kHalf, -kHalf, +kHalf}, .color = {1.0, 0.5, 1.0}, .uv = {0, 1}}, // 19
     // back
-    {{-kHalf, +kHalf, -kHalf}, {0.5, 1.0, 0.5}, {1, 0}}, // 20
-    {{-kHalf, -kHalf, -kHalf}, {1.0, 1.0, 1.0}, {0, 0}}, // 21
-    {{-kHalf, -kHalf, +kHalf}, {0.5, 0.5, 1.0}, {0, 1}}, // 22
-    {{-kHalf, +kHalf, +kHalf}, {0.5, 1.0, 1.0}, {1, 1}}, // 23
+    {.position = {-kHalf, +kHalf, -kHalf}, .color = {0.5, 1.0, 0.5}, .uv = {1, 0}}, // 20
+    {.position = {-kHalf, -kHalf, -kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {0, 0}}, // 21
+    {.position = {-kHalf, -kHalf, +kHalf}, .color = {0.5, 0.5, 1.0}, .uv = {0, 1}}, // 22
+    {.position = {-kHalf, +kHalf, +kHalf}, .color = {0.5, 1.0, 1.0}, .uv = {1, 1}}, // 23
 };
 
 const uint16_t kIndexData[] = {0,  1,  2,  2,  3,  0,  4,  5,  6,  6,  7,  4,
@@ -73,6 +76,8 @@ std::string getProlog(igl::IDevice& device) {
     prependVersionString += "\nprecision highp float;\n";
     return prependVersionString;
   }
+#else
+  (void)device; // Suppress unused parameter warning
 #endif // IGL_BACKEND_OPENGL
   return "";
 }
@@ -202,7 +207,56 @@ std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevice& devi
                                                            "main",
                                                            "",
                                                            nullptr);
-    return nullptr;
+  case igl::BackendType::D3D12: {
+    // D3D12 HLSL shaders using register bindings
+    static const char* kVS = R"(
+      cbuffer PerFrame : register(b1) {
+        float4x4 mvpMatrix;
+      };
+
+      struct VSInput {
+        float3 position : POSITION;
+        float2 uvw : TEXCOORD0;
+        float3 color_in : COLOR0;
+      };
+
+      struct VSOutput {
+        float4 position : SV_POSITION;
+        float2 uv : TEXCOORD0;
+        float4 color : COLOR0;
+      };
+
+      VSOutput main(VSInput input) {
+        VSOutput output;
+        output.position = mul(mvpMatrix, float4(input.position, 1.0));
+        output.uv = input.uvw;
+        output.color = float4(input.color_in, 1.0);
+        return output;
+      }
+    )";
+
+    static const char* kPS = R"(
+      Texture2D in_texture0 : register(t0);
+      Texture2D in_texture1 : register(t1);
+      SamplerState sampler0 : register(s0);
+      SamplerState sampler1 : register(s1);
+
+      struct PSInput {
+        float4 position : SV_POSITION;
+        float2 uv : TEXCOORD0;
+        float4 color : COLOR0;
+      };
+
+      float4 main(PSInput input) : SV_Target {
+        float4 tex0 = in_texture0.Sample(sampler0, input.uv);
+        float4 tex1 = in_texture1.Sample(sampler1, input.uv);
+        return tex0 * tex1 * input.color;
+      }
+    )";
+
+    return igl::ShaderStagesCreator::fromModuleStringInput(
+        device, kVS, "main", "", kPS, "main", "", nullptr);
+  }
   case igl::BackendType::Custom:
     IGL_DEBUG_ABORT("IGLSamples not set up for Custom");
     return nullptr;
@@ -242,10 +296,9 @@ void BindGroupSession::createSamplerAndTextures(const igl::IDevice& device) {
                                                imageData.desc.width,
                                                imageData.desc.height,
                                                igl::TextureDesc::TextureUsageBits::Sampled |
-                                                   TextureDesc::TextureUsageBits::Storage,
+                                                   igl::TextureDesc::TextureUsageBits::Attachment,
                                                "igl.png");
-    desc.numMipLevels =
-        igl::TextureDesc::calcNumMipLevels(imageData.desc.width, imageData.desc.height);
+    desc.numMipLevels = TextureDesc::calcNumMipLevels(imageData.desc.width, imageData.desc.height);
     tex0 = device.createTexture(desc, nullptr);
     tex0->upload(tex0->getFullRange(), imageData.data->data());
     tex0->generateMipmap(*commandQueue_);
@@ -257,9 +310,10 @@ void BindGroupSession::createSamplerAndTextures(const igl::IDevice& device) {
     TextureDesc desc = TextureDesc::new2D(igl::TextureFormat::BGRA_UNorm8,
                                           texWidth,
                                           texHeight,
-                                          TextureDesc::TextureUsageBits::Sampled,
+                                          TextureDesc::TextureUsageBits::Sampled |
+                                              TextureDesc::TextureUsageBits::Attachment,
                                           "XOR pattern");
-    desc.numMipLevels = igl::TextureDesc::calcNumMipLevels(texWidth, texHeight);
+    desc.numMipLevels = TextureDesc::calcNumMipLevels(texWidth, texHeight);
     tex1 = getPlatform().getDevice().createTexture(desc, nullptr);
     std::vector<uint32_t> pixels(static_cast<size_t>(texWidth * texHeight));
     for (uint32_t y = 0; y != texHeight; y++) {
@@ -273,9 +327,9 @@ void BindGroupSession::createSamplerAndTextures(const igl::IDevice& device) {
   }
 
   bindGroupTextures_ = getPlatform().getDevice().createBindGroup(BindGroupTextureDesc{
-      {tex0, tex1},
-      {sampler, sampler},
-      "bindGroupTextures_",
+      .textures = {tex0, tex1},
+      .samplers = {sampler, sampler},
+      .debugName = "bindGroupTextures_",
   });
 }
 
@@ -289,32 +343,35 @@ void BindGroupSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
 
   // Vertex buffer, Index buffer and Vertex Input
-  const BufferDesc vb0Desc =
-      BufferDesc(BufferDesc::BufferTypeBits::Vertex, kVertexData0, sizeof(kVertexData0));
-  vb0_ = device.createBuffer(vb0Desc, nullptr);
-  const BufferDesc ibDesc =
-      BufferDesc(BufferDesc::BufferTypeBits::Index, kIndexData, sizeof(kIndexData));
-  ib0_ = device.createBuffer(ibDesc, nullptr);
+  vb0_ = device.createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Vertex,
+                                        .data = kVertexData0,
+                                        .length = sizeof(kVertexData0)},
+                             nullptr);
+  ib0_ = device.createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Index,
+                                        .data = kIndexData,
+                                        .length = sizeof(kIndexData)},
+                             nullptr);
 
-  VertexInputStateDesc inputDesc;
-  inputDesc.numAttributes = 3;
-  inputDesc.attributes[0].format = VertexAttributeFormat::Float3;
-  inputDesc.attributes[0].offset = offsetof(VertexPosUvw, position);
-  inputDesc.attributes[0].bufferIndex = 0;
-  inputDesc.attributes[0].name = "position";
-  inputDesc.attributes[0].location = 0;
-  inputDesc.attributes[1].format = VertexAttributeFormat::Float2;
-  inputDesc.attributes[1].offset = offsetof(VertexPosUvw, uv);
-  inputDesc.attributes[1].bufferIndex = 0;
-  inputDesc.attributes[1].name = "uv_in";
-  inputDesc.attributes[1].location = 1;
-  inputDesc.attributes[2].format = VertexAttributeFormat::Float3;
-  inputDesc.attributes[2].offset = offsetof(VertexPosUvw, color);
-  inputDesc.attributes[2].bufferIndex = 0;
-  inputDesc.attributes[2].name = "color_in";
-  inputDesc.attributes[2].location = 2;
-  inputDesc.numInputBindings = 1;
-  inputDesc.inputBindings[0].stride = sizeof(VertexPosUvw);
+  const VertexInputStateDesc inputDesc = {
+      .numAttributes = 3,
+      .attributes = {{.bufferIndex = 0,
+                      .format = VertexAttributeFormat::Float3,
+                      .offset = offsetof(VertexPosUvw, position),
+                      .name = "position",
+                      .location = 0},
+                     {.bufferIndex = 0,
+                      .format = VertexAttributeFormat::Float2,
+                      .offset = offsetof(VertexPosUvw, uv),
+                      .name = "uv_in",
+                      .location = 1},
+                     {.bufferIndex = 0,
+                      .format = VertexAttributeFormat::Float3,
+                      .offset = offsetof(VertexPosUvw, color),
+                      .name = "color_in",
+                      .location = 2}},
+      .numInputBindings = 1,
+      .inputBindings = {{.stride = sizeof(VertexPosUvw)}},
+  };
   vertexInput0_ = device.createVertexInputState(inputDesc, nullptr);
 
   createSamplerAndTextures(device);
@@ -323,13 +380,19 @@ void BindGroupSession::initialize() noexcept {
   // Command queue: backed by different types of GPU HW queues
   commandQueue_ = device.createCommandQueue({}, nullptr);
 
-  renderPass_.colorAttachments.resize(1);
-  renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
-  renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPass_.colorAttachments[0].clearColor = getPreferredClearColor();
-  renderPass_.depthAttachment.loadAction = LoadAction::Clear;
-  renderPass_.depthAttachment.storeAction = StoreAction::DontCare;
-  renderPass_.depthAttachment.clearDepth = 1.0;
+  renderPass_ = {
+      .colorAttachments = {{
+          .loadAction = LoadAction::Clear,
+          .storeAction = StoreAction::Store,
+          .clearColor = getPreferredClearColor(),
+      }},
+      .depthAttachment =
+          {
+              .loadAction = LoadAction::Clear,
+              .storeAction = StoreAction::DontCare,
+              .clearDepth = 1.0,
+          },
+  };
 }
 
 void BindGroupSession::update(SurfaceTextures surfaceTextures) noexcept {
@@ -360,33 +423,40 @@ void BindGroupSession::update(SurfaceTextures surfaceTextures) noexcept {
   }
 
   if (pipelineState_ == nullptr) {
-    RenderPipelineDesc desc;
-    desc.vertexInputState = vertexInput0_;
-    desc.shaderStages = shaderStages_;
-    desc.targetDesc.colorAttachments.resize(1);
-    desc.targetDesc.colorAttachments[0].textureFormat =
-        framebuffer_->getColorAttachment(0)->getProperties().format;
-    desc.targetDesc.depthAttachmentFormat =
-        framebuffer_->getDepthAttachment()->getProperties().format;
-    desc.fragmentUnitSamplerMap[0] = IGL_NAMEHANDLE("input2D");
-    desc.fragmentUnitSamplerMap[1] = IGL_NAMEHANDLE("inputXOR");
-    desc.cullMode = igl::CullMode::Back;
-    desc.frontFaceWinding = igl::WindingMode::Clockwise;
-    pipelineState_ = device.createRenderPipeline(desc, &ret);
+    pipelineState_ = device.createRenderPipeline(
+        RenderPipelineDesc{
+            .vertexInputState = vertexInput0_,
+            .shaderStages = shaderStages_,
+            .targetDesc =
+                {
+                    .colorAttachments = {{
+                        .textureFormat =
+                            framebuffer_->getColorAttachment(0)->getProperties().format,
+                    }},
+                    .depthAttachmentFormat =
+                        framebuffer_->getDepthAttachment()->getProperties().format,
+                },
+            .cullMode = igl::CullMode::Back,
+            .frontFaceWinding = igl::WindingMode::Clockwise,
+            .fragmentUnitSamplerMap = {{0, IGL_NAMEHANDLE("input2D")},
+                                       {1, IGL_NAMEHANDLE("inputXOR")}},
+        },
+        &ret);
     IGL_DEBUG_ASSERT(ret.isOk());
   }
 
-  auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
 
   const std::shared_ptr<IRenderCommandEncoder> commands =
       buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
 
-  // Bind Vertex Uniform Data
-  iglu::ManagedUniformBufferInfo info;
-  info.index = 1;
-  info.length = sizeof(VertexFormat);
-  info.uniforms = std::vector<UniformDesc>{UniformDesc{
-      "mvpMatrix", -1, igl::UniformType::Mat4x4, 1, offsetof(VertexFormat, mvpMatrix), 0}};
+  const iglu::ManagedUniformBufferInfo info = {
+      .index = 1,
+      .length = sizeof(VertexFormat),
+      .uniforms = {{.name = "mvpMatrix",
+                    .type = igl::UniformType::Mat4x4,
+                    .offset = offsetof(VertexFormat, mvpMatrix)}},
+  };
 
   const std::shared_ptr<iglu::ManagedUniformBuffer> vertUniformBuffer =
       std::make_shared<iglu::ManagedUniformBuffer>(device, info);

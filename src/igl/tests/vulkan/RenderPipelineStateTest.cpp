@@ -6,14 +6,15 @@
  */
 
 #include <gtest/gtest.h>
-#include <igl/ShaderCreator.h>
-#include <igl/vulkan/CommandBuffer.h>
-#include <igl/vulkan/Device.h>
-#include <igl/vulkan/RenderPipelineState.h>
-#include <igl/vulkan/Texture.h>
-#include <igl/vulkan/VulkanContext.h>
 
+#include <igl/RenderPipelineState.h>
+
+#include <igl/Common.h>
+#include <igl/ShaderCreator.h>
+#include <igl/VertexInputState.h>
 #include <igl/tests/util/device/TestDevice.h>
+#include <igl/vulkan/Device.h>
+#include <igl/vulkan/VulkanContext.h>
 
 #ifdef __ANDROID__
 #endif

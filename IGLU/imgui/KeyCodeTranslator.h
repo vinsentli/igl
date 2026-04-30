@@ -5,11 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-// @fb-only
+// @MARK:COVERAGE_EXCLUDE_FILE
 
 #pragma once
 
 #include "imgui.h"
+
 #include <shell/shared/input/KeyListener.h>
 
 namespace iglu::imgui {

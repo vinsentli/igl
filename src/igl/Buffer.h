@@ -9,7 +9,6 @@
 
 #include <array>
 #include <string>
-#include <vector>
 #include <igl/Common.h>
 #include <igl/ITrackedResource.h>
 
@@ -56,52 +55,51 @@ struct BufferDesc {
   };
 
   using BufferAPIHint = uint8_t;
-  /** @brief Data to upload at the time of creation. Can be nullptr. */
-  const void* IGL_NULLABLE data;
 
-  /** @brief Total internal store to allocate */
-  size_t length;
-
-  /**
-   * @brief Storage mode.
-   * @See igl::ResourceStorage
-   */
-  ResourceStorage storage;
-  /**
-   * @brief Backend API hint flags.
-   *
-   */
-  BufferAPIHint hint = 0;
   /**
    * @brief A bit mask of BufferTypeBits. All usage types must be specified.
    * @See  igl::BufferType
    */
   BufferType type = 0;
 
+  /** @brief Data to upload at the time of creation. Can be nullptr. */
+  const void* IGL_NULLABLE data = nullptr;
+
+  /** @brief Total internal store to allocate */
+  size_t length = 0;
+
+  /**
+   * @brief Storage mode.
+   * @See igl::ResourceStorage
+   */
+#if IGL_PLATFORM_MACOSX
+  ResourceStorage storage = ResourceStorage::Managed;
+#else
+  ResourceStorage storage = ResourceStorage::Shared;
+#endif
+  /**
+   * @brief Backend API hint flags.
+   *
+   */
+  BufferAPIHint hint = 0;
+
   /** @brief Identifier used for debugging */
   std::string debugName;
 
-  BufferDesc(BufferType type = 0,
-             const void* IGL_NULLABLE data = nullptr,
-             size_t length = 0,
-             ResourceStorage storageIn = ResourceStorage::Invalid,
-             BufferAPIHint hint = 0,
-             std::string debugName = std::string()) :
-    data(data),
-    length(length),
-    storage(storageIn),
-    hint(hint),
-    type(type),
-    debugName(std::move(debugName)) {
-    if (storage == ResourceStorage::Invalid) {
-#if IGL_PLATFORM_MACOSX
-      storage = ResourceStorage::Managed;
-#else
-      storage = ResourceStorage::Shared;
-#endif
-    }
-    // We fallback to the old UniformBuffer for OpenGL by default
-  }
+  /**
+   * @brief Element stride in bytes for storage buffers.
+   *
+   * For buffers created with BufferTypeBits::Storage, this describes the size of a single
+   * structured element when the buffer is viewed as a StructuredBuffer / RWStructuredBuffer.
+   *
+   * Backends that create structured SRV/UAV views (such as D3D12) use this value to populate
+   * D3D12_BUFFER_SRV / D3D12_BUFFER_UAV StructureByteStride and to compute NumElements.
+   *
+   * A value of 0 means "unknown/unspecified" and backends may fall back to a default
+   * element size (typically 4 bytes) for compatibility with existing code that assumes
+   * float / uint elements.
+   */
+  size_t storageStride = 0;
 };
 
 class IBuffer : public ITrackedResource<IBuffer> {

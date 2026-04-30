@@ -151,6 +151,10 @@
   #define IGL_ANDROID_HWBUFFER_SUPPORTED
 #endif // __ANDROID_API__ >= 26
 
+// @fb-only
+  // @fb-only
+// @fb-only
+
 // IGL_PLATFORM_XR is for extended reality platforms like OpenXR
 #if !defined(IGL_PLATFORM_XR)
   #define IGL_PLATFORM_XR 0
@@ -189,6 +193,12 @@
 #define IGL_BACKEND_VULKAN 1
 #else
 #define IGL_BACKEND_VULKAN 0
+#endif
+
+#if defined(IGL_BACKEND_ENABLE_D3D12)
+#define IGL_BACKEND_D3D12 1
+#else
+#define IGL_BACKEND_D3D12 0
 #endif
 
 // @fb-only
@@ -244,10 +254,7 @@
 
 // clang-format off
 #if !defined(IGL_DEBUG) // allow build systems to define it
-#if defined(IGL_BUILD_MODE_OPT)
-  // Forced opt build.
-  #define IGL_DEBUG 0
-#elif IGL_PLATFORM_ANDROID && !defined(FBANDROID_BUILD_MODE_OPT)
+#if IGL_PLATFORM_ANDROID && !defined(FBANDROID_BUILD_MODE_OPT)
   // On Android, buck defines NDEBUG for all builds so the test above doesn't work.
   // FBANDROID_BUILD_MODE_OPT is only defined in production builds and was created
   // with the exact purpose of allowing native code to differentiate build modes.
@@ -268,6 +275,18 @@
 #endif
 // clang-format on
 
+///--------------------------------------
+/// MARK: - Logging
+
+#if IGL_DEBUG || defined(IGL_FORCE_ENABLE_LOGS)
+#define IGL_LOGGING_ENABLED 1
+#else
+#define IGL_LOGGING_ENABLED 0
+#endif
+
+///--------------------------------------
+/// MARK: - Soft Errors
+
 // clang-format off
 #if !defined(IGL_SOFT_ERROR_ENABLED)
   // Either we have IGL_DEBUG, or Windows/Linux/etc, since we don't have good detection mechanism there.
@@ -278,3 +297,18 @@
   #endif
 #endif
 // clang-format on
+
+///--------------------------------------
+/// MARK: - Debug Asserts
+
+#if IGL_LOGGING_ENABLED
+#define IGL_DEBUG_ABORT_ENABLED 1
+#else
+#define IGL_DEBUG_ABORT_ENABLED 0
+#endif
+
+#if IGL_DEBUG
+#define IGL_DEBUG_BREAK_ENABLED 1
+#else
+#define IGL_DEBUG_BREAK_ENABLED 0
+#endif

@@ -10,8 +10,6 @@
 #include <cstdlib>
 #include <string>
 #include <vector>
-#include <igl/opengl/Device.h>
-#include <igl/opengl/Errors.h>
 
 namespace igl::opengl {
 

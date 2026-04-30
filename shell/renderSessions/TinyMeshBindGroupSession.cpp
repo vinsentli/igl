@@ -11,19 +11,16 @@
 
 #include <cmath>
 #include <cstddef>
-#include <glm/ext.hpp>
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/random.hpp>
 #include <shell/shared/platform/DisplayContext.h>
 #include <igl/FPSCounter.h>
 #if IGL_BACKEND_OPENGL
 #include <igl/opengl/Device.h>
-#include <igl/opengl/RenderCommandEncoder.h>
 #endif // IGL_BACKEND_OPENGL
 #if IGL_BACKEND_VULKAN
-#include <igl/vulkan/Common.h>
-#include <igl/vulkan/Device.h>
-#include <igl/vulkan/HWDevice.h>
 #include <igl/vulkan/PlatformDevice.h>
 #endif // IGL_BACKEND_VULKAN
 
@@ -108,35 +105,35 @@ const float kHalf = 1.0f;
 // UV-mapped cube with indices: 24 vertices, 36 indices
 const VertexPosUvw kVertexData0[] = {
     // top
-    {{-kHalf, -kHalf, +kHalf}, {0.0, 0.0, 1.0}, {0, 0}}, // 0
-    {{+kHalf, -kHalf, +kHalf}, {1.0, 0.0, 1.0}, {1, 0}}, // 1
-    {{+kHalf, +kHalf, +kHalf}, {1.0, 1.0, 1.0}, {1, 1}}, // 2
-    {{-kHalf, +kHalf, +kHalf}, {0.0, 1.0, 1.0}, {0, 1}}, // 3
+    {.position = {-kHalf, -kHalf, +kHalf}, .color = {0.0, 0.0, 1.0}, .uv = {0, 0}}, // 0
+    {.position = {+kHalf, -kHalf, +kHalf}, .color = {1.0, 0.0, 1.0}, .uv = {1, 0}}, // 1
+    {.position = {+kHalf, +kHalf, +kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {1, 1}}, // 2
+    {.position = {-kHalf, +kHalf, +kHalf}, .color = {0.0, 1.0, 1.0}, .uv = {0, 1}}, // 3
     // bottom
-    {{-kHalf, -kHalf, -kHalf}, {1.0, 1.0, 1.0}, {0, 0}}, // 4
-    {{-kHalf, +kHalf, -kHalf}, {0.0, 1.0, 0.0}, {0, 1}}, // 5
-    {{+kHalf, +kHalf, -kHalf}, {1.0, 1.0, 0.0}, {1, 1}}, // 6
-    {{+kHalf, -kHalf, -kHalf}, {1.0, 0.0, 0.0}, {1, 0}}, // 7
+    {.position = {-kHalf, -kHalf, -kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {0, 0}}, // 4
+    {.position = {-kHalf, +kHalf, -kHalf}, .color = {0.0, 1.0, 0.0}, .uv = {0, 1}}, // 5
+    {.position = {+kHalf, +kHalf, -kHalf}, .color = {1.0, 1.0, 0.0}, .uv = {1, 1}}, // 6
+    {.position = {+kHalf, -kHalf, -kHalf}, .color = {1.0, 0.0, 0.0}, .uv = {1, 0}}, // 7
     // left
-    {{+kHalf, +kHalf, -kHalf}, {1.0, 1.0, 0.0}, {1, 0}}, // 8
-    {{-kHalf, +kHalf, -kHalf}, {0.0, 1.0, 0.0}, {0, 0}}, // 9
-    {{-kHalf, +kHalf, +kHalf}, {0.0, 1.0, 1.0}, {0, 1}}, // 10
-    {{+kHalf, +kHalf, +kHalf}, {1.0, 1.0, 1.0}, {1, 1}}, // 11
+    {.position = {+kHalf, +kHalf, -kHalf}, .color = {1.0, 1.0, 0.0}, .uv = {1, 0}}, // 8
+    {.position = {-kHalf, +kHalf, -kHalf}, .color = {0.0, 1.0, 0.0}, .uv = {0, 0}}, // 9
+    {.position = {-kHalf, +kHalf, +kHalf}, .color = {0.0, 1.0, 1.0}, .uv = {0, 1}}, // 10
+    {.position = {+kHalf, +kHalf, +kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {1, 1}}, // 11
     // right
-    {{-kHalf, -kHalf, -kHalf}, {1.0, 1.0, 1.0}, {0, 0}}, // 12
-    {{+kHalf, -kHalf, -kHalf}, {1.0, 0.0, 0.0}, {1, 0}}, // 13
-    {{+kHalf, -kHalf, +kHalf}, {1.0, 0.0, 1.0}, {1, 1}}, // 14
-    {{-kHalf, -kHalf, +kHalf}, {0.0, 0.0, 1.0}, {0, 1}}, // 15
+    {.position = {-kHalf, -kHalf, -kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {0, 0}}, // 12
+    {.position = {+kHalf, -kHalf, -kHalf}, .color = {1.0, 0.0, 0.0}, .uv = {1, 0}}, // 13
+    {.position = {+kHalf, -kHalf, +kHalf}, .color = {1.0, 0.0, 1.0}, .uv = {1, 1}}, // 14
+    {.position = {-kHalf, -kHalf, +kHalf}, .color = {0.0, 0.0, 1.0}, .uv = {0, 1}}, // 15
     // front
-    {{+kHalf, -kHalf, -kHalf}, {1.0, 0.0, 0.0}, {0, 0}}, // 16
-    {{+kHalf, +kHalf, -kHalf}, {1.0, 1.0, 0.0}, {1, 0}}, // 17
-    {{+kHalf, +kHalf, +kHalf}, {1.0, 1.0, 1.0}, {1, 1}}, // 18
-    {{+kHalf, -kHalf, +kHalf}, {1.0, 0.0, 1.0}, {0, 1}}, // 19
+    {.position = {+kHalf, -kHalf, -kHalf}, .color = {1.0, 0.0, 0.0}, .uv = {0, 0}}, // 16
+    {.position = {+kHalf, +kHalf, -kHalf}, .color = {1.0, 1.0, 0.0}, .uv = {1, 0}}, // 17
+    {.position = {+kHalf, +kHalf, +kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {1, 1}}, // 18
+    {.position = {+kHalf, -kHalf, +kHalf}, .color = {1.0, 0.0, 1.0}, .uv = {0, 1}}, // 19
     // back
-    {{-kHalf, +kHalf, -kHalf}, {0.0, 1.0, 0.0}, {1, 0}}, // 20
-    {{-kHalf, -kHalf, -kHalf}, {1.0, 1.0, 1.0}, {0, 0}}, // 21
-    {{-kHalf, -kHalf, +kHalf}, {0.0, 0.0, 1.0}, {0, 1}}, // 22
-    {{-kHalf, +kHalf, +kHalf}, {0.0, 1.0, 1.0}, {1, 1}}, // 23
+    {.position = {-kHalf, +kHalf, -kHalf}, .color = {0.0, 1.0, 0.0}, .uv = {1, 0}}, // 20
+    {.position = {-kHalf, -kHalf, -kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {0, 0}}, // 21
+    {.position = {-kHalf, -kHalf, +kHalf}, .color = {0.0, 0.0, 1.0}, .uv = {0, 1}}, // 22
+    {.position = {-kHalf, +kHalf, +kHalf}, .color = {0.0, 1.0, 1.0}, .uv = {1, 1}}, // 23
 };
 
 uint16_t indexData[] = {0,  1,  2,  2,  3,  0,  4,  5,  6,  6,  7,  4,  8,  9,  10, 10, 11, 8,
@@ -241,7 +238,7 @@ layout (binding = 1) uniform sampler2D uTex1;
 void main() {
   vec4 t0 = texture(uTex0, 2.0 * uv);
   vec4 t1 = texture(uTex1,  uv);
-  out_FragColor = vec4(color * (t0.rgb + t1.rgb), 1.0);
+  out_FragColor = vec4(2.0 * color * (t0.rgb * t1.rgb), 1.0);
 };
 )";
 }
@@ -262,7 +259,6 @@ void main() {
                                                            "main",
                                                            "",
                                                            nullptr);
-    return nullptr;
 #endif // IGL_BACKEND_VULKAN
 
 // @fb-only
@@ -297,6 +293,25 @@ void main() {
   }
 #endif // IGL_BACKEND_OPENGL
 
+  case igl::BackendType::D3D12: {
+    static const char* kVS = R"(
+cbuffer UniformsPerFrame : register(b0) { float4x4 proj; float4x4 view; };
+cbuffer UniformsPerObject : register(b1) { float4x4 model; };
+struct VSInput { float3 pos:POSITION; float3 col:COLOR; float2 st:TEXCOORD0; };
+struct PSInput { float4 position:SV_POSITION; float3 color:COLOR; float2 uv:TEXCOORD0; };
+PSInput main(VSInput input){ PSInput o; float4 p = mul(model, float4(input.pos,1)); p=mul(view,p); o.position=mul(proj,p); o.color=input.col; o.uv=input.st; return o; }
+)";
+
+    static const char* kPS = R"(
+Texture2D uTex0:register(t0); Texture2D uTex1:register(t1); SamplerState s0:register(s0); SamplerState s1:register(s1);
+struct PSInput { float4 position:SV_POSITION; float3 color:COLOR; float2 uv:TEXCOORD0; };
+float4 main(PSInput input):SV_TARGET{ float3 t0=uTex0.Sample(s0,input.uv*2).rgb; float3 t1=uTex1.Sample(s1,input.uv).rgb; return float4(2.0*input.color*(t0*t1),1.0); }
+)";
+
+    return igl::ShaderStagesCreator::fromModuleStringInput(
+        device, kVS, "main", "", kPS, "main", "", nullptr);
+  }
+
   default:
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
     return nullptr;
@@ -317,37 +332,35 @@ void TinyMeshBindGroupSession::initialize() noexcept {
   device_ = &getPlatform().getDevice();
 
   // Vertex buffer, Index buffer and Vertex Input. Buffers are allocated in GPU memory.
-  vb0_ = device_->createBuffer(BufferDesc(BufferDesc::BufferTypeBits::Vertex,
-                                          kVertexData0,
-                                          sizeof(kVertexData0),
-                                          ResourceStorage::Private,
-                                          0,
-                                          "Buffer: vertex"),
+  vb0_ = device_->createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Vertex,
+                                          .data = kVertexData0,
+                                          .length = sizeof(kVertexData0),
+                                          .storage = ResourceStorage::Private,
+                                          .debugName = "Buffer: vertex"},
                                nullptr);
-  ib0_ = device_->createBuffer(BufferDesc(BufferDesc::BufferTypeBits::Index,
-                                          indexData,
-                                          sizeof(indexData),
-                                          ResourceStorage::Private,
-                                          0,
-                                          "Buffer: index"),
+  ib0_ = device_->createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Index,
+                                          .data = indexData,
+                                          .length = sizeof(indexData),
+                                          .storage = ResourceStorage::Private,
+                                          .debugName = "Buffer: index"},
                                nullptr);
   // create an Uniform buffers to store uniforms for 2 objects
   for (uint32_t i = 0; i != kNumBufferedFrames; i++) {
     ubPerFrame_.push_back(
-        device_->createBuffer(BufferDesc(BufferDesc::BufferTypeBits::Uniform,
-                                         &perFrame,
-                                         sizeof(UniformsPerFrame),
-                                         ResourceStorage::Shared,
-                                         BufferDesc::BufferAPIHintBits::UniformBlock,
-                                         "Buffer: uniforms (per frame)"),
+        device_->createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Uniform,
+                                         .data = &perFrame,
+                                         .length = sizeof(UniformsPerFrame),
+                                         .storage = ResourceStorage::Shared,
+                                         .hint = BufferDesc::BufferAPIHintBits::UniformBlock,
+                                         .debugName = "Buffer: uniforms (per frame)"},
                               nullptr));
     ubPerObject_.push_back(
-        device_->createBuffer(BufferDesc(BufferDesc::BufferTypeBits::Uniform,
-                                         perObject,
-                                         kNumCubes * sizeof(UniformsPerObject),
-                                         ResourceStorage::Shared,
-                                         BufferDesc::BufferAPIHintBits::UniformBlock,
-                                         "Buffer: uniforms (per object)"),
+        device_->createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Uniform,
+                                         .data = perObject,
+                                         .length = kNumCubes * sizeof(UniformsPerObject),
+                                         .storage = ResourceStorage::Shared,
+                                         .hint = BufferDesc::BufferAPIHintBits::UniformBlock,
+                                         .debugName = "Buffer: uniforms (per object)"},
                               nullptr));
   }
 
@@ -402,7 +415,7 @@ void TinyMeshBindGroupSession::initialize() noexcept {
 }
 
 void TinyMeshBindGroupSession::createRenderPipeline() {
-  if (renderPipelineState_Mesh_) {
+  if (renderPipelineStateMesh_) {
     return;
   }
 
@@ -431,7 +444,7 @@ void TinyMeshBindGroupSession::createRenderPipeline() {
   desc.debugName = igl::genNameHandle("Pipeline: mesh");
   desc.fragmentUnitSamplerMap[0] = IGL_NAMEHANDLE("uTex0");
   desc.fragmentUnitSamplerMap[1] = IGL_NAMEHANDLE("uTex1");
-  renderPipelineState_Mesh_ = device_->createRenderPipeline(desc, nullptr);
+  renderPipelineStateMesh_ = device_->createRenderPipeline(desc, nullptr);
 
   {
     const uint32_t texWidth = 256;
@@ -456,7 +469,7 @@ void TinyMeshBindGroupSession::createRenderPipeline() {
     path dir = current_path();
     // find IGLU somewhere above our current directory
     // @fb-only
-    const char* contentFolder = "third-party/content/src/";
+    const char* contentFolder = "shell/resources/";
     // @fb-only
     while (dir != current_path().root_path() && !exists(dir / path(contentFolder))) {
       dir = dir.parent_path();
@@ -464,21 +477,18 @@ void TinyMeshBindGroupSession::createRenderPipeline() {
     int32_t texWidth = 0;
     int32_t texHeight = 0;
     int32_t channels = 0;
-    uint8_t* pixels = stbi_load(
-        (dir / path(contentFolder) / path("bistro/BuildingTextures/wood_polished_01_diff.png"))
-            .string()
-            .c_str(),
-        &texWidth,
-        &texHeight,
-        &channels,
-        4);
-    IGL_DEBUG_ASSERT(pixels,
-                     "Cannot load textures. Run `deploy_content.py` before running this app.");
-    const TextureDesc desc2D = TextureDesc::new2D(igl::TextureFormat::BGRA_SRGB,
+    uint8_t* pixels =
+        stbi_load((dir / path(contentFolder) / path("images/marble.png")).string().c_str(),
+                  &texWidth,
+                  &texHeight,
+                  &channels,
+                  4);
+    IGL_DEBUG_ASSERT(pixels, "Cannot load texture.");
+    const TextureDesc desc2D = TextureDesc::new2D(igl::TextureFormat::RGBA_SRGB,
                                                   texWidth,
                                                   texHeight,
                                                   TextureDesc::TextureUsageBits::Sampled,
-                                                  "wood_polished_01_diff.png");
+                                                  "marble.png");
     texture1_ = device_->createTexture(desc2D, nullptr);
     texture1_->upload(TextureRangeDesc::new2D(0, 0, texWidth, texHeight), pixels);
     stbi_image_free(pixels);
@@ -512,7 +522,7 @@ void TinyMeshBindGroupSession::createRenderPipeline() {
           .debugName = "bindGroupNoTexture1_",
       },
       // as we don't provide all necessary textures, let IGL/Vulkan add dummies where necessary
-      renderPipelineState_Mesh_.get());
+      renderPipelineStateMesh_.get());
 }
 
 std::shared_ptr<ITexture> TinyMeshBindGroupSession::getVulkanNativeDepth() {
@@ -584,13 +594,19 @@ void TinyMeshBindGroupSession::update(SurfaceTextures surfaceTextures) noexcept 
   // Command buffers (1-N per thread): create, submit and forget
   const std::shared_ptr<ICommandBuffer> buffer = commandQueue_->createCommandBuffer({}, nullptr);
 
-  const igl::Viewport viewport = {0.0f, 0.0f, (float)width, (float)height, 0.0f, +1.0f};
-  const igl::ScissorRect scissor = {0, 0, (uint32_t)width, (uint32_t)height};
+  const igl::Viewport viewport = {.x = 0.0f,
+                                  .y = 0.0f,
+                                  .width = (float)width,
+                                  .height = (float)height,
+                                  .minDepth = 0.0f,
+                                  .maxDepth = +1.0f};
+  const igl::ScissorRect scissor = {
+      .x = 0, .y = 0, .width = (uint32_t)width, .height = (uint32_t)height};
 
   // This will clear the framebuffer
   auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
 
-  commands->bindRenderPipelineState(renderPipelineState_Mesh_);
+  commands->bindRenderPipelineState(renderPipelineStateMesh_);
   commands->bindViewport(viewport);
   commands->bindScissorRect(scissor);
   commands->pushDebugGroupLabel("Render Mesh", Color(1, 0, 0));

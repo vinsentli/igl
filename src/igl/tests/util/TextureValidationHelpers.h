@@ -7,10 +7,12 @@
 
 #pragma once
 
-#include <glm/glm.hpp>
 #include <gtest/gtest.h>
+
+#include <glm/glm.hpp>
 #include <igl/CommandBuffer.h>
 #include <igl/Common.h>
+#include <igl/Device.h>
 
 #if IGL_PLATFORM_IOS || IGL_PLATFORM_MACOSX
 #include "simd/simd.h"
@@ -21,7 +23,7 @@ namespace igl::tests::util {
 constexpr auto kTestPrecision = 0.0001f;
 
 template<typename ColorType>
-inline void TestArray(std::vector<ColorType> actualData,
+inline void testArray(std::vector<ColorType> actualData,
                       const ColorType* expectedData,
                       size_t expectedDataSize,
                       const char* message) {
@@ -35,7 +37,7 @@ inline void TestArray(std::vector<ColorType> actualData,
 }
 
 template<typename VectorUnit, glm::qualifier Precision>
-inline void TestArray(std::vector<glm::vec<4, VectorUnit, Precision>> actualData,
+inline void testArray(std::vector<glm::vec<4, VectorUnit, Precision>> actualData,
                       const glm::vec<4, VectorUnit, Precision>* expectedData,
                       size_t expectedDataSize,
                       const char* message) {
@@ -54,7 +56,7 @@ inline void TestArray(std::vector<glm::vec<4, VectorUnit, Precision>> actualData
 }
 
 template<typename VectorUnit, glm::qualifier Precision>
-inline void TestArray(std::vector<glm::vec<3, VectorUnit, Precision>> actualData,
+inline void testArray(std::vector<glm::vec<3, VectorUnit, Precision>> actualData,
                       const glm::vec<3, VectorUnit, Precision>* expectedData,
                       size_t expectedDataSize,
                       const char* message) {
@@ -72,7 +74,7 @@ inline void TestArray(std::vector<glm::vec<3, VectorUnit, Precision>> actualData
 }
 
 template<typename VectorUnit, glm::qualifier Precision>
-inline void TestArray(std::vector<glm::vec<2, VectorUnit, Precision>> actualData,
+inline void testArray(std::vector<glm::vec<2, VectorUnit, Precision>> actualData,
                       const glm::vec<2, VectorUnit, Precision>* expectedData,
                       size_t expectedDataSize,
                       const char* message) {
@@ -128,9 +130,10 @@ inline void validateTextureRange(IDevice& device,
   fb->copyBytesColorAttachment(cmdQueue, 0, actualData.data(), range);
 
   if (!isRenderTarget && (device.getBackendType() == igl::BackendType::Metal ||
-                          device.getBackendType() == igl::BackendType::Vulkan)) {
-    // The Vulkan and Metal implementations of copyBytesColorAttachment flip the returned image
-    // vertically. This is the desired behavior for render targets, but for non-render target
+                          device.getBackendType() == igl::BackendType::Vulkan ||
+                          device.getBackendType() == igl::BackendType::D3D12)) {
+    // The Vulkan, Metal, and D3D12 implementations of copyBytesColorAttachment flip the returned
+    // image vertically. This is the desired behavior for render targets, but for non-render target
     // textures, we want the unflipped data. This flips the output image again to get the unmodified
     // data.
     std::vector<ColorType> tmpData;
@@ -145,7 +148,7 @@ inline void validateTextureRange(IDevice& device,
     actualData = std::move(tmpData);
   }
 
-  TestArray(actualData, expectedData, expectedDataSize, message);
+  testArray(actualData, expectedData, expectedDataSize, message);
 }
 
 template<typename ColorType>

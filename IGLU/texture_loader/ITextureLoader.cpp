@@ -16,7 +16,7 @@ namespace iglu::textureloader {
 /// Interface for getting CPU access to GPU texture data
 ITextureLoader::ITextureLoader(DataReader reader, igl::TextureDesc::TextureUsage usage) noexcept :
   reader_(reader) {
-  IGL_DEBUG_ASSERT(reader.data() != nullptr && reader.length() > 0);
+  IGL_DEBUG_ASSERT(reader.data() != nullptr && reader.size() > 0);
   desc_.usage = usage;
 }
 
@@ -30,14 +30,25 @@ const igl::TextureDesc& ITextureLoader::descriptor() const noexcept {
 
 [[nodiscard]] uint32_t ITextureLoader::memorySizeInBytes() const noexcept {
   const auto properties = igl::TextureFormatProperties::fromTextureFormat(desc_.format);
-  igl::TextureRangeDesc range;
-  range.width = desc_.width;
-  range.height = desc_.height;
-  range.depth = desc_.depth;
-  range.numFaces = desc_.type == igl::TextureType::Cube ? static_cast<size_t>(6)
-                                                        : static_cast<size_t>(1);
-  range.numLayers = desc_.numLayers;
-  range.numMipLevels = shouldGenerateMipmaps() ? 1 : desc_.numMipLevels;
+  const igl::TextureRangeDesc range = {
+      .width = desc_.width,
+      .height = desc_.height,
+      .depth = desc_.depth,
+      .numLayers = desc_.numLayers,
+      .numMipLevels = shouldGenerateMipmaps() ? 1 : desc_.numMipLevels,
+      .numFaces = desc_.type == igl::TextureType::Cube ? 6u : 1u,
+  };
+
+  // If the format is a variable length format, we need to sum up the size of each mip level
+  // as specified in the KTX file
+  if (properties.isVariableLength()) {
+    uint32_t size = 0;
+    for (uint32_t mipLevel = range.mipLevel; mipLevel < (range.mipLevel + range.numMipLevels);
+         mipLevel++) {
+      size += getMemorySizeInBytesFromFile(mipLevel);
+    }
+    return size;
+  }
 
   return static_cast<uint32_t>(properties.getBytesPerRange(range));
 }
@@ -180,7 +191,7 @@ void ITextureLoader::defaultLoadToExternalMemory(uint8_t* IGL_NONNULL data,
                                                  uint32_t length,
                                                  igl::Result* IGL_NULLABLE
                                                      outResult) const noexcept {
-  if (reader_.length() != length) {
+  if (reader_.size() != length) {
     igl::Result::setResult(
         outResult, igl::Result::Code::ArgumentInvalid, "length doesn't match reader length.");
     return;

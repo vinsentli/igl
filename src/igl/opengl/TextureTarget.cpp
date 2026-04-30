@@ -7,8 +7,6 @@
 
 #include <igl/opengl/TextureTarget.h>
 
-#include <igl/opengl/Errors.h>
-
 namespace igl::opengl {
 
 TextureTarget::~TextureTarget() {
@@ -23,6 +21,10 @@ TextureType TextureTarget::getType() const {
 
 TextureDesc::TextureUsage TextureTarget::getUsage() const {
   return TextureDesc::TextureUsageBits::Attachment;
+}
+
+bool TextureTarget::canPresent() const noexcept {
+  return canPresent_;
 }
 
 // create a 2D texture given the specified dimensions and format

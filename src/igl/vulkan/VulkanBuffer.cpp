@@ -5,11 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "VulkanBuffer.h"
+
 #include <igl/IGLSafeC.h>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanContext.h>
-
-#include "VulkanBuffer.h"
 
 namespace igl::vulkan {
 
@@ -29,10 +29,17 @@ VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
   IGL_DEBUG_ASSERT(bufferSize > 0);
 
   // Initialize Buffer Info
-  const VkBufferCreateInfo ci = ivkGetBufferCreateInfo(bufferSize, usageFlags);
+  const VkBufferCreateInfo ci = {
+      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+      .size = bufferSize,
+      .usage = usageFlags,
+      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+  };
 
   if (IGL_VULKAN_USE_VMA) {
-    VmaAllocationCreateInfo ciAlloc = {};
+    VmaAllocationCreateInfo ciAlloc = {
+        .usage = VMA_MEMORY_USAGE_AUTO,
+    };
 
     // Initialize VmaAllocation Info
     if (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
@@ -55,15 +62,37 @@ VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
       }
     }
 
-    ciAlloc.usage = VMA_MEMORY_USAGE_AUTO;
+    const VkResult result = vmaCreateBuffer(static_cast<VmaAllocator>(ctx_.getVmaAllocator()),
+                                            &ci,
+                                            &ciAlloc,
+                                            &vkBuffer_,
+                                            &vmaAllocation_,
+                                            nullptr);
 
-    vmaCreateBuffer(
-        (VmaAllocator)ctx_.getVmaAllocator(), &ci, &ciAlloc, &vkBuffer_, &vmaAllocation_, nullptr);
+    if (result != VK_SUCCESS || vmaAllocation_ == nullptr) {
+      // Allocation failed - possibly due to memory pressure from deferred tasks not being
+      // processed. Drain deferred tasks queue to free memory.
+      const_cast<VulkanContext&>(ctx_).waitDeferredTasks();
+      VK_ASSERT(vmaCreateBuffer(static_cast<VmaAllocator>(ctx_.getVmaAllocator()),
+                                &ci,
+                                &ciAlloc,
+                                &vkBuffer_,
+                                &vmaAllocation_,
+                                nullptr));
+    }
+
     IGL_DEBUG_ASSERT(vmaAllocation_ != nullptr);
 
-    // handle memory-mapped buffers
-    if (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-      vmaMapMemory((VmaAllocator)ctx_.getVmaAllocator(), vmaAllocation_, &mappedPtr_);
+    if (vmaAllocation_) {
+      vmaSetAllocationName(static_cast<VmaAllocator>(ctx_.getVmaAllocator()),
+                           vmaAllocation_,
+                           IGL_FORMAT("VMA Allocation: {}", debugName).c_str());
+
+      // handle memory-mapped buffers
+      if (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+        vmaMapMemory(
+            static_cast<VmaAllocator>(ctx_.getVmaAllocator()), vmaAllocation_, &mappedPtr_);
+      }
     }
   } else {
     // create buffer
@@ -85,6 +114,12 @@ VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
                                   ctx.features().has_VK_KHR_buffer_device_address,
                                   &vkMemory_));
       VK_ASSERT(ctx_.vf_.vkBindBufferMemory(device_, vkBuffer_, vkMemory_, 0));
+
+      VK_ASSERT(ivkSetDebugObjectName(&ctx_.vf_,
+                                      device_,
+                                      VK_OBJECT_TYPE_DEVICE_MEMORY,
+                                      (uint64_t)vkMemory_,
+                                      IGL_FORMAT("Buffer memory: {}", debugName).c_str()));
     }
 
     // handle memory-mapped buffers
@@ -102,7 +137,9 @@ VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
   // handle shader access
   if (usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR) {
     const VkBufferDeviceAddressInfo ai = {
-        VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR, nullptr, vkBuffer_};
+        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR,
+        .buffer = vkBuffer_,
+    };
     vkDeviceAddress_ = ctx_.vf_.vkGetBufferDeviceAddressKHR(device_, &ai);
     IGL_DEBUG_ASSERT(vkDeviceAddress_);
   }
@@ -115,11 +152,11 @@ VulkanBuffer::~VulkanBuffer() {
 
   if (IGL_VULKAN_USE_VMA) {
     if (mappedPtr_) {
-      vmaUnmapMemory((VmaAllocator)ctx_.getVmaAllocator(), vmaAllocation_);
+      vmaUnmapMemory(static_cast<VmaAllocator>(ctx_.getVmaAllocator()), vmaAllocation_);
     }
     ctx_.deferredTask(std::packaged_task<void()>(
         [vma = ctx_.getVmaAllocator(), buffer = vkBuffer_, allocation = vmaAllocation_]() {
-          vmaDestroyBuffer((VmaAllocator)vma, buffer, allocation);
+          vmaDestroyBuffer(static_cast<VmaAllocator>(vma), buffer, allocation);
         }));
   } else {
     if (mappedPtr_) {
@@ -139,14 +176,14 @@ void VulkanBuffer::flushMappedMemory(VkDeviceSize offset, VkDeviceSize size) con
   }
 
   if (IGL_VULKAN_USE_VMA) {
-    vmaFlushAllocation((VmaAllocator)ctx_.getVmaAllocator(), vmaAllocation_, offset, size);
+    vmaFlushAllocation(
+        static_cast<VmaAllocator>(ctx_.getVmaAllocator()), vmaAllocation_, offset, size);
   } else {
-    const VkMappedMemoryRange memoryRange{
-        VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-        nullptr,
-        vkMemory_,
-        offset,
-        size,
+    const VkMappedMemoryRange memoryRange = {
+        .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+        .memory = vkMemory_,
+        .offset = offset,
+        .size = size,
     };
     ctx_.vf_.vkFlushMappedMemoryRanges(device_, 1, &memoryRange);
   }
@@ -162,11 +199,10 @@ void VulkanBuffer::invalidateMappedMemory(VkDeviceSize offset, VkDeviceSize size
         static_cast<VmaAllocator>(ctx_.getVmaAllocator()), vmaAllocation_, offset, size);
   } else {
     const VkMappedMemoryRange memoryRange = {
-        VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-        nullptr,
-        vkMemory_,
-        offset,
-        size,
+        .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+        .memory = vkMemory_,
+        .offset = offset,
+        .size = size,
     };
     ctx_.vf_.vkInvalidateMappedMemoryRanges(device_, 1, &memoryRange);
   }
@@ -209,9 +245,9 @@ void VulkanBuffer::bufferSubData(size_t offset, size_t size, const void* data) {
   IGL_DEBUG_ASSERT(offset + size <= bufferSize_);
 
   if (data) {
-    checked_memcpy((uint8_t*)mappedPtr_ + offset, bufferSize_ - offset, data, size);
+    checked_memcpy(static_cast<uint8_t*>(mappedPtr_) + offset, bufferSize_ - offset, data, size);
   } else {
-    memset((uint8_t*)mappedPtr_ + offset, 0, size);
+    memset(static_cast<uint8_t*>(mappedPtr_) + offset, 0, size);
   }
   if (!isCoherentMemory_) {
     flushMappedMemory(offset, size);

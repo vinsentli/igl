@@ -9,11 +9,10 @@
 
 #pragma once
 
-#include <shell/shared/renderSession/RenderSession.h>
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <shell/shared/platform/Platform.h>
+#include <shell/shared/renderSession/RenderSession.h>
 #include <igl/IGL.h>
 
 namespace igl::shell {
@@ -31,7 +30,6 @@ class Textured3DCubeSession : public RenderSession {
   void update(SurfaceTextures surfaceTextures) noexcept override;
 
  private:
-  std::shared_ptr<ICommandQueue> commandQueue_;
   RenderPassDesc renderPass_;
   std::shared_ptr<IRenderPipelineState> pipelineState_;
   std::shared_ptr<IVertexInputState> vertexInput0_;

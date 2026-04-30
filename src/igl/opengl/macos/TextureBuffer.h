@@ -13,8 +13,10 @@
 
 namespace igl::opengl::macos {
 
+// @fb-only
 class TextureBuffer final : public opengl::TextureBuffer {
   using Super = opengl::TextureBuffer;
+  // @fb-only
 
  public:
   TextureBuffer(IContext& context,
@@ -22,6 +24,10 @@ class TextureBuffer final : public opengl::TextureBuffer {
                 CVOpenGLTextureCacheRef textureCache,
                 TextureDesc::TextureUsage usage = TextureDesc::TextureUsageBits::Sampled);
   ~TextureBuffer() override;
+  TextureBuffer(const TextureBuffer&) = delete;
+  TextureBuffer& operator=(const TextureBuffer&) = delete;
+  TextureBuffer(TextureBuffer&&) = delete;
+  TextureBuffer& operator=(TextureBuffer&&) = delete;
 
   // Disable those creation methods
   Result create(const TextureDesc& desc, bool hasStorageAlready) override;
@@ -36,7 +42,8 @@ class TextureBuffer final : public opengl::TextureBuffer {
   Result uploadInternal(TextureType type,
                         const TextureRangeDesc& range,
                         const void* data,
-                        size_t bytesPerRow) const final;
+                        size_t bytesPerRow,
+                        const uint32_t* IGL_NULLABLE mipLevelBytes) const final;
 
   CVOpenGLTextureRef cvTexture_ = nullptr;
   CVPixelBufferRef pixelBuffer_ = nullptr;

@@ -10,7 +10,7 @@
 #include <map>
 #include <utility>
 #include <vector>
-#include <igl/Common.h>
+#include <igl/Common.h> // IWYU pragma: keep
 #include <igl/ITrackedResource.h>
 
 namespace igl {
@@ -28,7 +28,7 @@ enum class ShaderStage : uint8_t {
   /** @brief Task shader. */
   Task,
   /** @brief Mesh shader. */
-  Mesh
+  Mesh,
 };
 
 /**
@@ -51,8 +51,11 @@ struct ShaderModuleInfo {
   ShaderStage stage = ShaderStage::Fragment;
   /** @brief The module's entry point. */
   std::string entryPoint;
-    
-  std::map<uint8_t, int> functionConstantValues;
+  /** @brief The module's function constant values.
+   * Metal:MTLFunctionConstantValues.
+   * Vulkan:SpecializationInfo.
+   * index:constant_id, value:constant value.*/
+  std::vector<int> functionConstantValues;
 
   std::string debugName;
 
@@ -244,7 +247,7 @@ enum class ShaderStagesType : uint8_t {
   /** @brief Compute shader stages. */
   Compute,
   /** @brief Mesh render shader stages. */
-  MeshRender
+  RenderMeshShader
 };
 
 /**

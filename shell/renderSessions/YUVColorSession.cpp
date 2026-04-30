@@ -7,8 +7,9 @@
 
 // @fb-only
 
-#include <IGLU/simdtypes/SimdTypes.h>
 #include <shell/renderSessions/YUVColorSession.h>
+
+#include <IGLU/simdtypes/SimdTypes.h>
 #include <shell/shared/fileLoader/FileLoader.h>
 #include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/RenderSession.h>
@@ -26,10 +27,10 @@ struct VertexPosUv {
 namespace {
 
 constexpr VertexPosUv kVertexData[] = {
-    {{-1.f, 1.f, 0.0}, {0.0, 0.0}},
-    {{1.f, 1.f, 0.0}, {1.0, 0.0}},
-    {{-1.f, -1.f, 0.0}, {0.0, 1.0}},
-    {{1.f, -1.f, 0.0}, {1.0, 1.0}},
+    {.position = {-1.f, 1.f, 0.0}, .uv = {0.0, 0.0}},
+    {.position = {1.f, 1.f, 0.0}, .uv = {1.0, 0.0}},
+    {.position = {-1.f, -1.f, 0.0}, .uv = {0.0, 1.0}},
+    {.position = {1.f, -1.f, 0.0}, .uv = {1.0, 1.0}},
 };
 constexpr uint16_t kIndexData[] = {0, 1, 2, 1, 3, 2};
 
@@ -49,7 +50,7 @@ std::string getOpenGLVertexShaderSource() {
 }
 
 std::string getOpenGLFragmentShaderSource() {
-  return std::string(R"(
+  return R"(
                 #version 300 es
                 #extension GL_EXT_YUV_target : require
                 precision highp float;
@@ -60,7 +61,7 @@ std::string getOpenGLFragmentShaderSource() {
 
                 void main() {
                   outColor = texture(inputImage, uv);
-                })");
+                })";
 }
 
 std::string getVulkanVertexShaderSource() {
@@ -95,6 +96,7 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
   case igl::BackendType::Invalid:
   case igl::BackendType::Metal:
   case igl::BackendType::Custom:
+  case igl::BackendType::D3D12: // D3D12 YUV shaders not yet implemented
     IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
   case igl::BackendType::Vulkan:
@@ -136,21 +138,45 @@ void YUVColorSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
 
   // Vertex & Index buffer
-  vb0_ = device.createBuffer(
-      BufferDesc(BufferDesc::BufferTypeBits::Vertex, kVertexData, sizeof(kVertexData)), nullptr);
+  vb0_ = device.createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Vertex,
+                                        .data = kVertexData,
+                                        .length = sizeof(kVertexData)},
+                             nullptr);
   IGL_DEBUG_ASSERT(vb0_ != nullptr);
-  ib0_ = device.createBuffer(
-      BufferDesc(BufferDesc::BufferTypeBits::Index, kIndexData, sizeof(kIndexData)), nullptr);
+  ib0_ = device.createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Index,
+                                        .data = kIndexData,
+                                        .length = sizeof(kIndexData)},
+                             nullptr);
   IGL_DEBUG_ASSERT(ib0_ != nullptr);
 
-  VertexInputStateDesc inputDesc;
-  inputDesc.numAttributes = 2;
-  inputDesc.attributes[0] = VertexAttribute{
-      1, VertexAttributeFormat::Float3, offsetof(VertexPosUv, position), "position", 0};
-  inputDesc.attributes[1] =
-      VertexAttribute{1, VertexAttributeFormat::Float2, offsetof(VertexPosUv, uv), "uv_in", 1};
-  inputDesc.numInputBindings = 1;
-  inputDesc.inputBindings[1].stride = sizeof(VertexPosUv);
+  const VertexInputStateDesc inputDesc = {
+      .numAttributes = 2,
+      .attributes =
+          {
+              {
+                  .bufferIndex = 1,
+                  .format = VertexAttributeFormat::Float3,
+                  .offset = offsetof(VertexPosUv, position),
+                  .name = "position",
+                  .location = 0,
+              },
+              {
+                  .bufferIndex = 1,
+                  .format = VertexAttributeFormat::Float2,
+                  .offset = offsetof(VertexPosUv, uv),
+                  .name = "uv_in",
+                  .location = 1,
+              },
+          },
+      .numInputBindings = 1,
+      .inputBindings =
+          {
+              {},
+              {
+                  .stride = sizeof(VertexPosUv),
+              },
+          },
+  };
   vertexInput0_ = device.createVertexInputState(inputDesc, nullptr);
   IGL_DEBUG_ASSERT(vertexInput0_ != nullptr);
 
@@ -174,9 +200,11 @@ void YUVColorSession::initialize() noexcept {
         IGL_DEBUG_ASSERT(width * height + width * height / 2 == fileData.length);
         auto texture = device.createTexture(textureDesc, nullptr);
         IGL_DEBUG_ASSERT(texture);
-        texture->upload(TextureRangeDesc{0, 0, 0, width, height}, fileData.data.get());
+        texture->upload(TextureRangeDesc{.x = 0, .y = 0, .z = 0, .width = width, .height = height},
+                        fileData.data.get());
 
-        this->yuvFormatDemos_.push_back(YUVFormatDemo{demoName, sampler, texture, nullptr});
+        this->yuvFormatDemos_.push_back(YUVFormatDemo{
+            .name = demoName, .sampler = sampler, .texture = texture, .pipelineState = nullptr});
       };
 
   createYUVDemo(device, "YUV 420p", igl::TextureFormat::YUV_420p, "output_frame_900.420p.yuv");
@@ -186,17 +214,18 @@ void YUVColorSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(shaderStages_ != nullptr);
 
   // Command queue
-  const CommandQueueDesc desc{};
-  commandQueue_ = device.createCommandQueue(desc, nullptr);
+  commandQueue_ = device.createCommandQueue(CommandQueueDesc{}, nullptr);
   IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
 
-  renderPass_.colorAttachments.resize(1);
-  renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
-  renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPass_.colorAttachments[0].clearColor = getPreferredClearColor();
-  renderPass_.depthAttachment.loadAction = LoadAction::Clear;
-  renderPass_.depthAttachment.clearDepth = 1.0;
-}
+  renderPass_ = {
+      .colorAttachments = {{
+          .loadAction = LoadAction::Clear,
+          .storeAction = StoreAction::Store,
+          .clearColor = getPreferredClearColor(),
+      }},
+      .depthAttachment = {.loadAction = LoadAction::Clear, .clearDepth = 1.0},
+  };
+} // namespace igl::shell
 
 void YUVColorSession::update(SurfaceTextures surfaceTextures) noexcept {
   Result ret;
@@ -211,30 +240,34 @@ void YUVColorSession::update(SurfaceTextures surfaceTextures) noexcept {
     framebuffer_->updateDrawable(surfaceTextures.color);
   }
 
-  constexpr size_t kTextureUnit = 0;
-
   YUVFormatDemo& demo = yuvFormatDemos_[currentDemo_];
 
   if (!demo.pipelineState) {
-    RenderPipelineDesc desc;
-    desc.vertexInputState = vertexInput0_;
-    desc.shaderStages = shaderStages_;
-    desc.targetDesc.colorAttachments.resize(1);
-    desc.targetDesc.colorAttachments[0].textureFormat =
-        framebuffer_->getColorAttachment(0)->getProperties().format;
-    desc.targetDesc.depthAttachmentFormat =
-        framebuffer_->getDepthAttachment()->getProperties().format;
-    desc.fragmentUnitSamplerMap[kTextureUnit] = IGL_NAMEHANDLE("inputImage");
-    desc.cullMode = igl::CullMode::Back;
-    desc.frontFaceWinding = igl::WindingMode::Clockwise;
-    desc.immutableSamplers[kTextureUnit] = demo.sampler; // Ycbcr sampler
-
+    const RenderPipelineDesc desc = {
+        .vertexInputState = vertexInput0_,
+        .shaderStages = shaderStages_,
+        .targetDesc =
+            {
+                .colorAttachments =
+                    {
+                        {
+                            .textureFormat =
+                                framebuffer_->getColorAttachment(0)->getProperties().format,
+                        },
+                    },
+                .depthAttachmentFormat = framebuffer_->getDepthAttachment()->getProperties().format,
+            },
+        .cullMode = igl::CullMode::Back,
+        .frontFaceWinding = igl::WindingMode::Clockwise,
+        .fragmentUnitSamplerMap = {std::pair<size_t, NameHandle>(0, IGL_NAMEHANDLE("inputImage"))},
+        .immutableSamplers = {demo.sampler}, // Ycbcr sampler
+    };
     demo.pipelineState = getPlatform().getDevice().createRenderPipeline(desc, nullptr);
     IGL_DEBUG_ASSERT(demo.pipelineState != nullptr);
   }
 
   // Command Buffers
-  auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
+  auto buffer = commandQueue_->createCommandBuffer(CommandBufferDesc{}, nullptr);
   IGL_DEBUG_ASSERT(buffer != nullptr);
   auto drawableSurface = framebuffer_->getColorAttachment(0);
 
@@ -248,8 +281,8 @@ void YUVColorSession::update(SurfaceTextures surfaceTextures) noexcept {
     commands->bindVertexBuffer(0, *vb0_);
     commands->bindVertexBuffer(1, *vb0_);
     commands->bindRenderPipelineState(demo.pipelineState);
-    commands->bindTexture(kTextureUnit, BindTarget::kFragment, demo.texture.get());
-    commands->bindSamplerState(kTextureUnit, BindTarget::kFragment, demo.sampler.get());
+    commands->bindTexture(0, BindTarget::kFragment, demo.texture.get());
+    commands->bindSamplerState(0, BindTarget::kFragment, demo.sampler.get());
     commands->bindIndexBuffer(*ib0_, IndexFormat::UInt16);
     commands->drawIndexed(6);
 

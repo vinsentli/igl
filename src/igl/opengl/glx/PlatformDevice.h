@@ -7,11 +7,10 @@
 
 #pragma once
 
+#include <cstdint>
 #include <igl/Texture.h>
 #include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/PlatformDevice.h>
-
-#include <cstdint>
 
 namespace igl::opengl {
 class ViewTextureTarget;
@@ -20,11 +19,11 @@ class ViewTextureTarget;
 namespace igl::opengl::glx {
 
 class Device;
-class Context;
 
+// @fb-only
 class PlatformDevice : public opengl::PlatformDevice {
  public:
-  static constexpr igl::PlatformDeviceType Type = igl::PlatformDeviceType::OpenGLx;
+  static constexpr PlatformDeviceType kType = PlatformDeviceType::OpenGLx;
 
   explicit PlatformDevice(Device& owner);
   ~PlatformDevice() override = default;

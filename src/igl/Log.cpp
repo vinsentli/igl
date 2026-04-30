@@ -16,6 +16,8 @@
 
 #if IGL_PLATFORM_ANDROID
 #include <igl/android/LogDefault.h>
+//#elif IGL_PLATFORM_IOS
+//#include <igl/apple/LogDefault.h>
 #elif IGL_PLATFORM_WINDOWS
 #include <igl/win/LogDefault.h>
 #endif
@@ -24,6 +26,8 @@
 static IGLLogHandlerFunc* getHandle() {
 #if IGL_PLATFORM_ANDROID
   static IGLLogHandlerFunc sHandler = IGLAndroidLogDefaultHandler;
+//#elif IGL_PLATFORM_IOS
+//  static IGLLogHandlerFunc sHandler = IGLAppleLogDefaultHandler;
 #elif IGL_PLATFORM_WINDOWS
   static IGLLogHandlerFunc sHandler = IGLWinLogDefaultHandler;
 #else
@@ -49,7 +53,7 @@ IGL_API int IGLLogOnce(IGLLogLevel logLevel, const char* IGL_RESTRICT format, ..
   va_copy(apCopy, ap); // make a copy for later passing to IGLLogV()
 
   constexpr size_t bufferLength = 256;
-  // @fb-only
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   char buffer[bufferLength]; // uninitialized
   FOLLY_PUSH_WARNING
   FOLLY_GNU_DISABLE_WARNING("-Wformat-nonliteral")

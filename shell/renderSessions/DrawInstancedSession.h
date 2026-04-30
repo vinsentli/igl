@@ -23,11 +23,10 @@ class DrawInstancedSession : public RenderSession {
   void update(SurfaceTextures surfaceTextures) noexcept override;
 
  private:
-  std::shared_ptr<ICommandQueue> commandQueue_;
   RenderPassDesc renderPass_;
-  std::shared_ptr<IRenderPipelineState> renderPipelineState_Triangle_;
-  std::shared_ptr<IBuffer> vertex_buffer_;
-  std::shared_ptr<IBuffer> index_buffer_;
+  std::shared_ptr<IRenderPipelineState> renderPipelineStateTriangle_;
+  std::shared_ptr<IBuffer> vertexBuffer_;
+  std::shared_ptr<IBuffer> indexBuffer_;
 };
 
 } // namespace igl::shell

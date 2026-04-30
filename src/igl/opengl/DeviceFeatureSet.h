@@ -56,7 +56,8 @@ enum class Extensions {
   TextureRgArb,               // GL_ARB_texture_rg is supported
   TextureRgExt,               // GL_EXT_texture_rg is supported
   TextureSrgb,                // GL_EXT_texture_sRGB is supported
-  TextureType2_10_10_10_Rev,  // GL_EXT_texture_type_2_10_10_10_REV is supporteds
+  TextureType2101010Rev,  // GL_EXT_texture_type_2_10_10_10_REV is supporteds
+  TimerQuery,                 // GL_EXT_timer_query is supported
   VertexArrayObject,          // GL_OES_vertex_array_object is supported
   VertexAttribDivisor,        // GL_NV_instanced_arrays is supported
 };
@@ -64,15 +65,19 @@ enum class Extensions {
 
 // clang-format off
 enum class InternalFeatures {
+  ClearBufferfv,             // glClearBufferfv is supported
   ClearDepthf,               // glClearDepthf is supported
   DebugLabel,                // Debug labels on objects are supported
   DebugMessage,              // Debug messages and group markers are supported
   DebugMessageCallback,      // Debug message callbacks are supported
+  DrawArraysIndirect,        // glDrawArraysIndirect is supported
+  MultiDrawIndirect,         // glMultiDrawArraysIndirect is supported
   FramebufferBlit,           // BlitFramebuffer is supported
   FramebufferObject,         // Framebuffer objects are supported
   GetStringi,                // GetStringi is supported
   InvalidateFramebuffer,     // glInvalidateFramebuffer is supported
   MapBuffer,                 // glMapBuffer is supported
+  PackRowLength,             // GL_PACK_ROW_LENGTH is supported with glPixelStorei
   PixelBufferObject,         // PBOs are available
   PolygonFillMode,           // glPolygonFillMode is supported
   ProgramInterfaceQuery,     // Querying info about shader program interfaces is supported
@@ -80,13 +85,12 @@ enum class InternalFeatures {
   ShaderImageLoadStore,      // Shader image load/store is supported
   Sync,                      // Sync objects are supported
   TexStorage,                // glTexStorage* is available
+  TextureClampToBorder,      // GL_CLAMP_TO_BORDER is supported (GL 1.3+, ES 3.2+, or extension)
   TextureCompare,            // GL_TEXTURE_COMPARE_MODE and GL_TEXTURE_COMPARE_FUNC are supported
   UnmapBuffer,               // glUnmapBuffer is supported
   UnpackRowLength,           // GL_UNPACK_ROW_LENGTH is supported with glPixelStorei
   VertexArrayObject,         // VAOS are available
   VertexAttribDivisor,       // glVertexAttribDivisor is supported
-  DrawArraysIndirect,        // glDrawArraysIndirect is supported
-  PackRowLength,             // GL_PACK_ROW_LENGTH is supported with glPixelStorei
 };
 // clang-format on
 
@@ -97,6 +101,7 @@ enum class TextureFeatures {
   ColorFormatRgb10A2UI,         // RGB10_A2UI is supported as an internal format
   ColorFormatRgInt,             // Integer R and RG textures are supported
   ColorFormatRgUNorm16,         // UNorm 16 R and RG textures are supported
+  ColorFormatRgbaUNorm16,       // UNorm 16 RGBA textures are supported
   ColorRenderbuffer16f,         // RenderbufferStorage supports XXX16F for color targets
   ColorRenderbuffer32f,         // RenderbufferStorage supports XXX32F for color targets
   ColorRenderbufferRg16f,       // RenderbufferStorage supports Rg16F for color targets
@@ -152,7 +157,7 @@ enum class TextureFeatures {
   TextureCompressionTexStorage, // TexStorage can be used to initialize compressed textures
   TextureInteger,               // Integer textures are supported
   TextureTypeUInt8888Rev,       // GL_UNSIGNED_INT_8_8_8_8_REV is supported
-  };
+};
 // clang-format on
 
 enum class InternalRequirement {
@@ -183,6 +188,19 @@ enum class InternalRequirement {
   VertexAttribDivisorExtReq,
 };
 
+/// GPU timer query tier. Underlying values are max query-slot counts,
+/// usable directly via static_cast<uint32_t>(tier).
+enum class GpuTimerTier : uint32_t {
+  Disabled = 0,
+  Conservative = 32,
+  Full = 64,
+};
+
+/// Classify GPU timer tier from raw GL_RENDERER / GL_VENDOR strings.
+/// Exposed as a free function for unit testing without a GL context.
+[[nodiscard]] GpuTimerTier classifyGpuTimerTier(const char* IGL_NULLABLE renderer,
+                                                const char* IGL_NULLABLE vendor);
+
 class DeviceFeatureSet final {
  public:
   explicit DeviceFeatureSet(IContext& glContext);
@@ -211,6 +229,12 @@ class DeviceFeatureSet final {
   bool hasInternalRequirement(InternalRequirement requirement) const;
 
   bool getFeatureLimits(DeviceFeatureLimits featureLimits, size_t& result) const;
+
+  /// Returns the GPU timer tier based on GL_RENDERER / GL_VENDOR.
+  [[nodiscard]] GpuTimerTier getGpuTimerTier() const;
+
+  /// Convenience: static_cast<uint32_t>(getGpuTimerTier()).
+  [[nodiscard]] uint32_t getTimerQueryMaxSlots() const;
 
   ICapabilities::TextureFormatCapabilities getTextureFormatCapabilities(TextureFormat format) const;
 

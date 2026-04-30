@@ -14,6 +14,7 @@
 #include <igl/opengl/IContext.h>
 #include <igl/opengl/RenderPipelineReflection.h>
 #include <igl/opengl/Shader.h>
+#include <igl/opengl/Texture.h>
 
 namespace igl::opengl {
 
@@ -39,7 +40,7 @@ class RenderPipelineState final : public WithContext, public IRenderPipelineStat
 
   void bind();
   void unbind();
-  Result bindTextureUnit(size_t unit, uint8_t bindTarget);
+  Result bindTextureUnit(size_t unit, uint8_t bindTarget, Texture& texture);
 
   void bindVertexAttributes(size_t bufferIndex, size_t offset);
   void unbindVertexAttributes();
@@ -86,13 +87,18 @@ class RenderPipelineState final : public WithContext, public IRenderPipelineStat
   std::vector<int> bufferAttribLocations_[IGL_BUFFER_BINDINGS_MAX];
 
   std::shared_ptr<RenderPipelineReflection> reflection_;
-  std::unordered_map<size_t, size_t> vertexTextureUnitRemap;
+  std::unordered_map<size_t, size_t> vertexTextureUnitRemap_;
   std::array<GLint, IGL_TEXTURE_SAMPLERS_MAX> unitSamplerLocationMap_{};
   std::unordered_map<int, size_t> uniformBlockBindingMap_;
   std::array<GLboolean, 4> colorMask_ = {GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE};
   std::vector<int> prevPipelineStateAttributesLocations_;
   std::vector<int> activeAttributesLocations_;
-  BlendMode blendMode_ = {GL_FUNC_ADD, GL_FUNC_ADD, GL_ONE, GL_ZERO, GL_ONE, GL_ZERO};
+  BlendMode blendMode_ = {.blendOpColor = GL_FUNC_ADD,
+                          .blendOpAlpha = GL_FUNC_ADD,
+                          .srcColor = GL_ONE,
+                          .dstColor = GL_ZERO,
+                          .srcAlpha = GL_ONE,
+                          .dstAlpha = GL_ZERO};
   bool blendEnabled_ = false;
   bool uniformBlockBindingPointSet_ = false;
 };

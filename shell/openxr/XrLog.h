@@ -8,8 +8,7 @@
 #pragma once
 
 #include <openxr/openxr.h>
-
-#include <igl/Common.h>
+#include <igl/Config.h>
 
 namespace igl::shell::openxr {
 #if IGL_DEBUG
@@ -20,5 +19,5 @@ void checkXRErrors(XrResult result, const char* function);
 #if IGL_DEBUG
 #define XR_CHECK(func) igl::shell::openxr::checkXRErrors(func, #func)
 #else
-#define XR_CHECK(func) func
+#define XR_CHECK(func) (void)(func)
 #endif

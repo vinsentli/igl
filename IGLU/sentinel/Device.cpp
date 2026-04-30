@@ -51,7 +51,7 @@ igl::BackendVersion Device::getBackendVersion() const {
 
 std::shared_ptr<igl::ICommandQueue> Device::createCommandQueue(
     const igl::CommandQueueDesc& /*desc*/,
-    igl::Result* IGL_NULLABLE /*outResult*/) {
+    igl::Result* IGL_NULLABLE /*outResult*/) noexcept {
   IGLU_SENTINEL_ASSERT_IF_NOT(shouldAssert_);
   return nullptr;
 }
@@ -148,6 +148,11 @@ size_t Device::getCurrentDrawCount() const {
   return 0;
 }
 
+size_t Device::getShaderCompilationCount() const {
+  IGLU_SENTINEL_ASSERT_IF_NOT(shouldAssert_);
+  return 0;
+}
+
 std::unique_ptr<igl::IShaderLibrary> Device::createShaderLibrary(
     const igl::ShaderLibraryDesc& /*desc*/,
     igl::Result* IGL_NULLABLE
@@ -177,6 +182,13 @@ igl::Holder<igl::BindGroupTextureHandle> Device::createBindGroup(
 igl::Holder<igl::BindGroupBufferHandle> Device::createBindGroup(
     const igl::BindGroupBufferDesc& /*desc*/,
     igl::Result* IGL_NULLABLE /*outResult*/) {
+  IGLU_SENTINEL_ASSERT_IF_NOT(shouldAssert_);
+
+  return {};
+}
+
+std::shared_ptr<igl::ITimer> Device::createTimer(
+    igl::Result* IGL_NULLABLE /*outResult*/) const noexcept {
   IGLU_SENTINEL_ASSERT_IF_NOT(shouldAssert_);
 
   return {};

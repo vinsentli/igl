@@ -9,10 +9,10 @@
 
 #include <cstring>
 #include <memory>
-#import <simd/simd.h>
+#include <nlohmann/json.hpp>
+#import <simd/vector_types.h>
 #import <igl/IGL.h>
 #import <igl/NameHandle.h>
-#import <igl/ShaderCreator.h>
 
 namespace {
 
@@ -112,6 +112,9 @@ std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevice& devi
   case igl::BackendType::Custom:
     IGL_DEBUG_ABORT("IGLSamples not set up for Custom");
     return nullptr;
+  case igl::BackendType::D3D12:
+    IGL_DEBUG_ABORT("IGLSamples not set up for D3D12");
+    return nullptr;
   // @fb-only
     // @fb-only
     // @fb-only
@@ -176,21 +179,21 @@ void TinyRenderable::initialize(igl::IDevice& device, const igl::IFramebuffer& f
 
   const float kMax = 20;
   const VertexPosUv kVertexData[] = {
-      {{-0.9f, 0.9f, 0.0}, {0.0, kMax}},
-      {{0.9f, 0.9f, 0.0}, {kMax, kMax}},
-      {{-0.9f, -0.9f, 0.0}, {0.0, 0.0}},
-      {{0.9f, -0.9f, 0.0}, {kMax, 0.0}},
+      {.position = {-0.9f, 0.9f, 0.0}, .uv = {0.0, kMax}},
+      {.position = {0.9f, 0.9f, 0.0}, .uv = {kMax, kMax}},
+      {.position = {-0.9f, -0.9f, 0.0}, .uv = {0.0, 0.0}},
+      {.position = {0.9f, -0.9f, 0.0}, .uv = {kMax, 0.0}},
   };
 
   const igl::BufferDesc vbDesc =
-      igl::BufferDesc(igl::BufferDesc::BufferTypeBits::Vertex, kVertexData, sizeof(kVertexData));
+      igl::BufferDesc{igl::BufferDesc::BufferTypeBits::Vertex, kVertexData, sizeof(kVertexData)};
   vertexBuffer_ = device.createBuffer(vbDesc, &result);
   IGL_DEBUG_ASSERT(result.isOk(), "create buffer failed: %s\n", result.message.c_str());
 
   // Index buffer
   const uint16_t kIndexData[] = {0, 1, 2, 1, 3, 2};
   auto ibDesc =
-      igl::BufferDesc(igl::BufferDesc::BufferTypeBits::Index, kIndexData, sizeof(kIndexData));
+      igl::BufferDesc{igl::BufferDesc::BufferTypeBits::Index, kIndexData, sizeof(kIndexData)};
   indexBuffer_ = device.createBuffer(ibDesc, &result);
   IGL_DEBUG_ASSERT(result.isOk(), "create buffer failed: %s\n", result.message.c_str());
 

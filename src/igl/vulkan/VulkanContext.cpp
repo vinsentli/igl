@@ -29,15 +29,15 @@
 #endif
 
 #include <igl/SamplerState.h>
+#include <igl/glslang/GlslCompiler.h>
 #include <igl/vulkan/Buffer.h>
-#include <igl/vulkan/EnhancedShaderDebuggingStore.h>
 #include <igl/vulkan/RenderPipelineState.h>
+#include <igl/vulkan/ResourcesBinder.h>
 #include <igl/vulkan/SamplerState.h>
 #include <igl/vulkan/Texture.h>
 #include <igl/vulkan/VulkanBuffer.h>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanDescriptorSetLayout.h>
-#include <igl/vulkan/VulkanDevice.h>
 #include <igl/vulkan/VulkanFeatures.h>
 #include <igl/vulkan/VulkanImageView.h>
 #include <igl/vulkan/VulkanPipelineBuilder.h>
@@ -69,7 +69,7 @@ const uint32_t kBinding_SamplerShadow = 5;
 const uint32_t kBinding_StorageImages = 6;
 // NOLINTEND(readability-identifier-naming)
 
-#if defined(VK_EXT_debug_utils)
+#if !IGL_PLATFORM_APPLE
 VKAPI_ATTR VkBool32 VKAPI_CALL
 vulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT msgSeverity,
                     [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT msgType,
@@ -81,9 +81,9 @@ vulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT msgSeverity,
 
   const bool isError = (msgSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0;
 
-  igl::vulkan::VulkanContext* ctx = static_cast<igl::vulkan::VulkanContext*>(userData);
+  auto* ctx = static_cast<igl::vulkan::VulkanContext*>(userData);
 
-#if IGL_DEBUG || defined(IGL_FORCE_ENABLE_LOGS)
+#if IGL_LOGGING_ENABLED
   std::array<char, 128> errorName = {};
   int object = 0;
   void* handle = nullptr;
@@ -108,6 +108,9 @@ vulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT msgSeverity,
         typeName.data(),
         messageID,
         message);
+#if IGL_VULKAN_VALIDATION_LAYER_ERROR_SUMMARY
+    ctx.validationErrorsSummary_[errorName.data()]++;
+#endif
   } else {
     const bool isWarning = (msgSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0;
 
@@ -125,7 +128,7 @@ vulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT msgSeverity,
 
   return VK_FALSE;
 }
-#endif // defined(VK_EXT_debug_utils) && !IGL_PLATFORM_ANDROID
+#endif // !IGL_PLATFORM_ANDROID
 
 std::vector<VkFormat> getCompatibleDepthStencilFormats(igl::TextureFormat format) {
   switch (format) {
@@ -225,8 +228,12 @@ class DescriptorPoolsArena final {
     IGL_DEBUG_ASSERT(debugName);
     dpDebugName_ = IGL_FORMAT("Descriptor Pool: {}", debugName ? debugName : "");
   }
+  DescriptorPoolsArena(const DescriptorPoolsArena&) = delete;
+  DescriptorPoolsArena& operator=(const DescriptorPoolsArena&) = delete;
+  DescriptorPoolsArena(DescriptorPoolsArena&&) = delete;
+  DescriptorPoolsArena& operator=(DescriptorPoolsArena&&) = delete;
   ~DescriptorPoolsArena() {
-    extinct_.push_back({pool_, {}});
+    extinct_.push_back({.pool = pool_, .handle = {}});
     ctx_.deferredTask(std::packaged_task<void()>(
         [extinct = std::move(extinct_), vf = ctx_.vf_, device = device_]() {
           for (const auto& p : extinct) {
@@ -262,7 +269,7 @@ class DescriptorPoolsArena final {
     numRemainingDSetsInPool_ = kNumDSetsPerPool;
 
     if (pool_ != VK_NULL_HANDLE) {
-      extinct_.push_back({pool_, nextSubmitHandle, allocedDSet_});
+      extinct_.push_back({.pool = pool_, .handle = nextSubmitHandle, .allocedDSet = allocedDSet_});
     }
     // first, let's try to reuse the oldest extinct pool (never reuse pools that are tagged with the
     // same SubmitHandle because they have not yet been submitted)
@@ -277,7 +284,7 @@ class DescriptorPoolsArena final {
         return;
       }
     }
-    // @fb-only
+    // NOLINTNEXTLINE(modernize-avoid-c-arrays)
     VkDescriptorPoolSize poolSizes[IGL_ARRAY_NUM_ELEMENTS(types_)];
     for (uint32_t i = 0; i != numTypes_; i++) {
       poolSizes[i] = VkDescriptorPoolSize{
@@ -386,6 +393,65 @@ class DescriptorBuffersArena final {
 
 namespace {
 
+inline size_t alignUp(size_t value, size_t alignment) {
+  return (value + alignment - 1) & ~(alignment - 1);
+}
+
+class DescriptorBuffersArena final {
+ public:
+  explicit DescriptorBuffersArena(const VulkanContext& ctx) : ctx_(ctx) {
+    buffer_ = createNewBuffer();
+  }
+
+  DescriptorBuffer& getDescriptorBuffer(size_t requireSize,
+                                        size_t alignment,
+                                        VulkanImmediateCommands& ic,
+                                        VulkanImmediateCommands::SubmitHandle nextSubmitHandle) {
+    IGL_DEBUG_ASSERT(requireSize && alignment);
+    IGL_DEBUG_ASSERT(requireSize <= kBufferSize);
+    buffer_.offset = alignUp(buffer_.offset, alignment);
+    if ((buffer_.offset + requireSize) <= kBufferSize) {
+      return buffer_;
+    }
+
+    buffer_.handle = nextSubmitHandle;
+    extinct_.push_back(buffer_);
+
+    if (extinct_.size() > 1 && extinct_.front().handle != nextSubmitHandle) {
+      DescriptorBuffer p = extinct_.front();
+      if (ic.isReady(p.handle)) {
+        buffer_ = p;
+        buffer_.offset = 0;
+        buffer_.bindCmdBuffer = VK_NULL_HANDLE;
+        extinct_.pop_front();
+        return buffer_;
+      }
+    }
+
+    buffer_ = createNewBuffer();
+    return buffer_;
+  }
+
+ private:
+  [[nodiscard]] DescriptorBuffer createNewBuffer() const {
+    return DescriptorBuffer{
+        .buffer = ctx_.createBuffer(kBufferSize,
+                                    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                                        VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT |
+                                        VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
+                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                    nullptr,
+                                    "DescriptorBuffer")};
+  }
+
+ private:
+  static constexpr uint32_t kBufferSize = 512 * 1024;
+  const VulkanContext& ctx_;
+  DescriptorBuffer buffer_;
+  std::deque<DescriptorBuffer> extinct_;
+};
+
 struct BindGroupMetadataTextures {
   // cold
   BindGroupTextureDesc desc = {};
@@ -412,13 +478,12 @@ struct VulkanContextImpl final {
   // Vulkan Memory Allocator
   VmaAllocator vma = VK_NULL_HANDLE;
   // :)
-  std::unordered_map<VkDescriptorSetLayout, std::unique_ptr<igl::vulkan::DescriptorPoolsArena>>
+  std::unordered_map<VkDescriptorSetLayout, std::unique_ptr<DescriptorPoolsArena>>
       arenaCombinedImageSamplers;
-  std::unordered_map<VkDescriptorSetLayout, std::unique_ptr<igl::vulkan::DescriptorPoolsArena>>
-      arenaBuffers;
-  std::unordered_map<VkDescriptorSetLayout, std::unique_ptr<igl::vulkan::DescriptorPoolsArena>>
+  std::unordered_map<VkDescriptorSetLayout, std::unique_ptr<DescriptorPoolsArena>> arenaBuffers;
+  std::unordered_map<VkDescriptorSetLayout, std::unique_ptr<DescriptorPoolsArena>>
       arenaStorageImages;
-  std::unique_ptr<igl::vulkan::VulkanDescriptorSetLayout> dslBindless; // everything
+  std::unique_ptr<VulkanDescriptorSetLayout> dslBindless; // everything
   std::unique_ptr<DescriptorBuffersArena> descriptorBuffersArena;
   VkDescriptorPool dpBindless = VK_NULL_HANDLE;
   VkDescriptorSet dsBindless = VK_NULL_HANDLE;
@@ -432,10 +497,9 @@ struct VulkanContextImpl final {
   TextureHandle dummyTexture = {};
 
   // NOLINTBEGIN(readability-identifier-naming)
-  igl::vulkan::DescriptorPoolsArena& getOrCreateArena_CombinedImageSamplers(
-      const VulkanContext& ctx,
-      VkDescriptorSetLayout dsl,
-      uint32_t numBindings)
+  DescriptorPoolsArena& getOrCreateArena_CombinedImageSamplers(const VulkanContext& ctx,
+                                                               VkDescriptorSetLayout dsl,
+                                                               uint32_t numBindings)
   // NOLINTEND(readability-identifier-naming)
   {
     auto it = arenaCombinedImageSamplers.find(dsl);
@@ -451,9 +515,9 @@ struct VulkanContextImpl final {
     return *arenaCombinedImageSamplers[dsl].get();
   }
   // NOLINTBEGIN(readability-identifier-naming)
-  igl::vulkan::DescriptorPoolsArena& getOrCreateArena_StorageImages(const VulkanContext& ctx,
-                                                                    VkDescriptorSetLayout dsl,
-                                                                    uint32_t numBindings)
+  DescriptorPoolsArena& getOrCreateArena_StorageImages(const VulkanContext& ctx,
+                                                       VkDescriptorSetLayout dsl,
+                                                       uint32_t numBindings)
   // NOLINTEND(readability-identifier-naming)
   {
     auto it = arenaStorageImages.find(dsl);
@@ -465,9 +529,9 @@ struct VulkanContextImpl final {
     return *arenaStorageImages[dsl].get();
   }
   // NOLINTBEGIN(readability-identifier-naming)
-  igl::vulkan::DescriptorPoolsArena& getOrCreateArena_Buffers(const VulkanContext& ctx,
-                                                              VkDescriptorSetLayout dsl,
-                                                              uint32_t numBindings)
+  DescriptorPoolsArena& getOrCreateArena_Buffers(const VulkanContext& ctx,
+                                                 VkDescriptorSetLayout dsl,
+                                                 uint32_t numBindings)
   // NOLINTEND(readability-identifier-naming)
   {
     auto it = arenaBuffers.find(dsl);
@@ -486,10 +550,9 @@ struct VulkanContextImpl final {
 
 VulkanContext::VulkanContext(VulkanContextConfig config,
                              void* IGL_NULLABLE window,
-                             size_t numExtraInstanceExtensions,
-                             const char* IGL_NULLABLE* IGL_NULLABLE extraInstanceExtensions,
                              void* IGL_NULLABLE display) :
   tableImpl_(std::make_unique<VulkanFunctionTable>()),
+  // NOLINTBEGIN(clang-diagnostic-missing-designated-field-initializers)
   vkPhysicalDeviceDescriptorBufferProperties_({
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT,
       .pNext = nullptr,
@@ -506,6 +569,11 @@ VulkanContext::VulkanContext(VulkanContextConfig config,
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
       .pNext = &vkPhysicalDeviceDriverProperties_,
   }),
+  vkPhysicalDeviceMeshShaderPropertiesEXT_({
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT,
+      .pNext = nullptr,
+  }),
+  // NOLINTEND(clang-diagnostic-missing-designated-field-initializers)
   features_(config),
   vf_(*tableImpl_),
   window_(window),
@@ -529,7 +597,7 @@ VulkanContext::VulkanContext(VulkanContextConfig config,
   glslang::initializeCompiler();
 #endif
 
-  createInstance(numExtraInstanceExtensions, extraInstanceExtensions);
+  createInstance();
 
   if (config_.headless) {
     IGL_DEBUG_ASSERT(features_.has_VK_EXT_headless_surface,
@@ -543,25 +611,22 @@ VulkanContext::VulkanContext(VulkanContextConfig config,
 VulkanContext::~VulkanContext() {
   IGL_PROFILER_FUNCTION();
 
-  if (device_) {
+  if (vkDevice_) {
     waitIdle();
   }
 
 #if defined(IGL_WITH_TRACY_GPU)
   if (tracyCtx_) {
     TracyVkDestroy(tracyCtx_);
-    profilingCommandPool_.reset(nullptr);
+    vf_.vkDestroyCommandPool(vkDevice_, profilingCommandPool_, nullptr);
   }
 #endif
 
-  enhancedShaderDebuggingStore_.reset(nullptr);
-
   dummyStorageBuffer_.reset();
   dummyUniformBuffer_.reset();
-
   pimpl_->descriptorBuffersArena.reset(nullptr);
 
-#if IGL_DEBUG
+#if IGL_DEBUG_ABORT_ENABLED
   for (const auto& t : pimpl_->bindGroupTexturesPool.objects_) {
     if (t.obj_.dset != VK_NULL_HANDLE) {
       IGL_DEBUG_ABORT("Leaked texture bind group detected! %s", t.obj_.desc.debugName.c_str());
@@ -572,7 +637,7 @@ VulkanContext::~VulkanContext() {
       IGL_DEBUG_ABORT("Leaked buffer bind group detected! %s", t.obj_.desc.debugName.c_str());
     }
   }
-#endif // IGL_DEBUG
+#endif // IGL_DEBUG_ABORT_ENABLED
 
   // BindGroups can hold shared pointers to textures/samplers/buffers. Release them here.
   pimpl_->bindGroupTexturesPool.clear();
@@ -583,24 +648,23 @@ VulkanContext::~VulkanContext() {
 
   pruneTextures();
 
-#if IGL_DEBUG
+#if IGL_LOGGING_ENABLED
   if (textures_.numObjects()) {
     IGL_LOG_ERROR("Leaked %u textures\n", textures_.numObjects());
   }
   if (samplers_.numObjects()) {
     IGL_LOG_ERROR("Leaked %u samplers\n", samplers_.numObjects());
   }
-#endif // IGL_DEBUG
+#endif // IGL_LOGGING_ENABLED
   textures_.clear();
   samplers_.clear();
 
   // This will free an internal buffer that was allocated by VMA
   stagingDevice_.reset(nullptr);
 
-  VkDevice device = device_ ? device_->getVkDevice() : VK_NULL_HANDLE;
-  if (device_) {
+  if (vkDevice_) {
     for (auto r : renderPasses_) {
-      vf_.vkDestroyRenderPass(device, r, nullptr);
+      vf_.vkDestroyRenderPass(vkDevice_, r, nullptr);
     }
   }
 
@@ -613,19 +677,19 @@ VulkanContext::~VulkanContext() {
   immediate_.reset(nullptr);
   timelineSemaphore_.reset(nullptr);
 
-  if (device_) {
+  if (vkDevice_) {
     if (pimpl_->dpBindless != VK_NULL_HANDLE) {
-      vf_.vkDestroyDescriptorPool(device, pimpl_->dpBindless, nullptr);
+      vf_.vkDestroyDescriptorPool(vkDevice_, pimpl_->dpBindless, nullptr);
     }
     for (auto& p : ycbcrConversionInfos_) {
       if (p.second.conversion != VK_NULL_HANDLE) {
-        vf_.vkDestroySamplerYcbcrConversion(device, p.second.conversion, nullptr);
+        vf_.vkDestroySamplerYcbcrConversion(vkDevice_, p.second.conversion, nullptr);
       }
     }
     pimpl_->arenaCombinedImageSamplers.clear();
     pimpl_->arenaStorageImages.clear();
     pimpl_->arenaBuffers.clear();
-    vf_.vkDestroyPipelineCache(device, pipelineCache_, nullptr);
+    vf_.vkDestroyPipelineCache(vkDevice_, pipelineCache_, nullptr);
   }
 
   if (vkSurface_ != VK_NULL_HANDLE) {
@@ -637,12 +701,14 @@ VulkanContext::~VulkanContext() {
     vmaDestroyAllocator(pimpl_->vma);
   }
 
-  device_.reset(nullptr); // Device has to be destroyed prior to Instance
-#if defined(VK_EXT_debug_utils)
+  if (vkDevice_) {
+    vf_.vkDestroyDevice(vkDevice_, nullptr); // Device has to be destroyed prior to Instance
+  }
+#if !IGL_PLATFORM_ANDROID
   if (vf_.vkDestroyDebugUtilsMessengerEXT != nullptr) {
     vf_.vkDestroyDebugUtilsMessengerEXT(vkInstance_, vkDebugUtilsMessenger_, nullptr);
   }
-#endif // defined(VK_EXT_debug_utils) && !IGL_PLATFORM_ANDROID
+#endif // !IGL_PLATFORM_ANDROID
   if (vf_.vkDestroyInstance != nullptr) {
     vf_.vkDestroyInstance(vkInstance_, nullptr);
   }
@@ -651,32 +717,42 @@ VulkanContext::~VulkanContext() {
   glslang::finalizeCompiler();
 #endif
 
-#if IGL_DEBUG || defined(IGL_FORCE_ENABLE_LOGS)
+#if IGL_LOGGING_ENABLED
   if (config_.enableExtraLogs) {
     IGL_LOG_INFO("Vulkan graphics pipelines created: %u\n",
                  VulkanPipelineBuilder::getNumPipelinesCreated());
     IGL_LOG_INFO("Vulkan compute pipelines created: %u\n",
                  VulkanComputePipelineBuilder::getNumPipelinesCreated());
   }
-#endif // IGL_DEBUG || defined(IGL_FORCE_ENABLE_LOGS)
+#endif // IGL_LOGGING_ENABLED
 
 #if defined(IGL_CMAKE_BUILD)
   volkFinalize();
 #endif
+
+#if IGL_VULKAN_VALIDATION_LAYER_ERROR_SUMMARY
+  if (!validationErrorsSummary_.empty()) {
+    IGL_LOG_INFO("Vulkan Validation Layer errors found: %u\n", validationErrorsSummary_.size());
+    for (const auto& error : validationErrorsSummary_) {
+      IGL_LOG_ERROR("\t%s: %u\n", error.first.c_str(), error.second);
+    }
+  }
+#endif
 }
 
-void VulkanContext::createInstance(const size_t numExtraExtensions,
-                                   const char* IGL_NULLABLE* IGL_NULLABLE extraExtensions) {
+void VulkanContext::createInstance() {
   IGL_DEBUG_ASSERT(vkInstance_ == VK_NULL_HANDLE, "createInstance() is not reentrant");
 
   // Enumerate all instance extensions
   features_.enumerate(vf_);
+  // NOLINTBEGIN(readability-identifier-naming)
   features_.enableCommonInstanceExtensions(config_);
-  for (size_t index = 0; index < numExtraExtensions; ++index) {
-    features_.enable(extraExtensions[index], VulkanFeatures::ExtensionType::Instance);
+  for (size_t index = 0; index < config_.numExtraInstanceExtensions; ++index) {
+    features_.enable(config_.extraInstanceExtensions[index],
+                     VulkanFeatures::ExtensionType::Instance);
   }
-
-  auto instanceExtensions = features_.allEnabled(VulkanFeatures::ExtensionType::Instance);
+  // NOLINTEND(readability-identifier-naming)
+  const auto instanceExtensions = features_.allEnabled(VulkanFeatures::ExtensionType::Instance);
 
   std::vector<const char*> layers;
   // @fb-only
@@ -697,16 +773,16 @@ void VulkanContext::createInstance(const size_t numExtraExtensions,
   }
   const VkValidationFeaturesEXT features = {
       .sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
-      .enabledValidationFeatureCount = (uint32_t)valFeatures.size(),
+      .enabledValidationFeatureCount = static_cast<uint32_t>(valFeatures.size()),
       .pEnabledValidationFeatures = valFeatures.empty() ? nullptr : valFeatures.data(),
   };
 #endif // !IGL_PLATFORM_ANDROID
 
   const VkApplicationInfo appInfo = {
       .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-      .pApplicationName = "IGL/Vulkan",
+      .pApplicationName = config_.applicationName,
       .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-      .pEngineName = "IGL/Vulkan",
+      .pEngineName = config_.engineName,
       .engineVersion = VK_MAKE_VERSION(1, 0, 0),
       .apiVersion = VK_API_VERSION_1_3,
   };
@@ -716,13 +792,13 @@ void VulkanContext::createInstance(const size_t numExtraExtensions,
 #if !IGL_PLATFORM_ANDROID && !IGL_PLATFORM_MACOSX
       .pNext = config_.enableValidation ? &features : nullptr,
 #endif
-#if IGL_PLATFORM_MACOSX || IGL_PLATFORM_MACCATALYST
-      .flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
-#endif
+      .flags = features_.has_VK_KHR_portability_enumeration
+                   ? VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR
+                   : (VkInstanceCreateFlags)0,
       .pApplicationInfo = &appInfo,
       .enabledLayerCount = static_cast<uint32_t>(layers.size()),
       .ppEnabledLayerNames = !layers.empty() ? layers.data() : nullptr,
-      .enabledExtensionCount = (uint32_t)instanceExtensions.size(),
+      .enabledExtensionCount = static_cast<uint32_t>(instanceExtensions.size()),
       .ppEnabledExtensionNames = instanceExtensions.data(),
   };
 
@@ -760,14 +836,14 @@ void VulkanContext::createInstance(const size_t numExtraExtensions,
       features_.enable(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VulkanFeatures::ExtensionType::Instance);
   vulkan::functions::loadInstanceFunctions(*tableImpl_, vkInstance_, enableExtDebugUtils);
 
-#if defined(VK_EXT_debug_utils)
+#if !IGL_PLATFORM_APPLE
   if (features_.enabled(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
     VK_ASSERT(ivkCreateDebugUtilsMessenger(
         &vf_, vkInstance_, &vulkanDebugCallback, this, &vkDebugUtilsMessenger_));
   }
-#endif // if defined(VK_EXT_debug_utils) && IGL_PLATFORM_WINDOWS
+#endif // !IGL_PLATFORM_APPLE
 
-#if IGL_DEBUG || defined(IGL_FORCE_ENABLE_LOGS)
+#if IGL_LOGGING_ENABLED
   if (config_.enableExtraLogs) {
     // log available instance extensions
     IGL_LOG_INFO("Vulkan instance extensions:\n");
@@ -797,8 +873,8 @@ void VulkanContext::createSurface(void* IGL_NULLABLE window, void* IGL_NULLABLE 
   VK_ASSERT(ivkCreateSurface(&vf_, vkInstance_, window, display, layer, &vkSurface_));
 }
 
-igl::Result VulkanContext::queryDevices(const HWDeviceQueryDesc& desc,
-                                        std::vector<HWDeviceDesc>& outDevices) {
+Result VulkanContext::queryDevices(const HWDeviceQueryDesc& desc,
+                                   std::vector<HWDeviceDesc>& outDevices) {
   outDevices.clear();
 
   // Physical devices
@@ -855,19 +931,24 @@ igl::Result VulkanContext::queryDevices(const HWDeviceQueryDesc& desc,
   return Result();
 }
 
-igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
-                                       size_t numExtraDeviceExtensions,
-                                       const char* IGL_NULLABLE* IGL_NULLABLE extraDeviceExtensions,
-                                       const VulkanFeatures* IGL_NULLABLE requestedFeatures,
-                                       const char* IGL_NULLABLE debugName) {
+Result VulkanContext::initContext(const HWDeviceDesc& desc,
+                                  size_t numExtraDeviceExtensions,
+                                  const char* IGL_NULLABLE* IGL_NULLABLE extraDeviceExtensions,
+                                  const VulkanFeatures* IGL_NULLABLE requestedFeatures,
+                                  const char* IGL_NULLABLE debugName) {
+  IGL_DEBUG_ASSERT(vkDevice_ == VK_NULL_HANDLE);
+
   if (desc.guid == 0UL) {
     IGL_LOG_ERROR("Invalid hardwareGuid(%lu)", desc.guid);
     return Result(Result::Code::Unsupported, "Vulkan is not supported");
   }
 
-  vkPhysicalDevice_ = (VkPhysicalDevice)desc.guid;
+  vkPhysicalDevice_ = (VkPhysicalDevice)desc.guid; // NOLINT(performance-no-int-to-ptr)
 
-  useStagingForBuffers_ = !ivkIsHostVisibleSingleHeapMemory(&vf_, vkPhysicalDevice_);
+  // Caches the memory types
+  vf_.vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice_, &memoryProperties);
+
+  useStagingForBuffers_ = !ivkIsHostVisibleSingleHeapMemory(&memoryProperties);
 
   // Get the available physical device features
   VulkanFeatures availableFeatures(config_);
@@ -908,7 +989,7 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
 
   features_.enumerate(vf_, vkPhysicalDevice_);
 
-#if IGL_DEBUG || defined(IGL_FORCE_ENABLE_LOGS)
+#if IGL_LOGGING_ENABLED
   if (config_.enableExtraLogs) {
     IGL_LOG_INFO("Vulkan physical device extensions:\n");
     // log available physical device extensions
@@ -925,16 +1006,23 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
     features_.enable(extraDeviceExtensions[i], VulkanFeatures::ExtensionType::Device);
   }
 
-  // @fb-only
-    // @fb-only
-                     // @fb-only
-  // @fb-only
+  if (features_.enabled(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)) {
+    vkPhysicalDeviceDescriptorBufferProperties_.pNext = vkPhysicalDeviceProperties2_.pNext;
+    vkPhysicalDeviceProperties2_.pNext = &vkPhysicalDeviceDescriptorBufferProperties_;
+    vf_.vkGetPhysicalDeviceProperties2(vkPhysicalDevice_, &vkPhysicalDeviceProperties2_);
+  }
+
+  if (features_.available(VK_EXT_MESH_SHADER_EXTENSION_NAME,
+                          VulkanFeatures::ExtensionType::Device)) {
+    vkPhysicalDeviceDescriptorIndexingProperties_.pNext = &vkPhysicalDeviceMeshShaderPropertiesEXT_;
+    vf_.vkGetPhysicalDeviceProperties2(vkPhysicalDevice_, &vkPhysicalDeviceProperties2_);
+  }
 
   VulkanQueuePool queuePool(vf_, vkPhysicalDevice_);
 
   // Reserve IGL Vulkan queues
-  auto graphicsQueueDescriptor = queuePool.findQueueDescriptor(VK_QUEUE_GRAPHICS_BIT);
-  auto computeQueueDescriptor = queuePool.findQueueDescriptor(VK_QUEUE_COMPUTE_BIT);
+  const auto graphicsQueueDescriptor = queuePool.findQueueDescriptor(VK_QUEUE_GRAPHICS_BIT);
+  const auto computeQueueDescriptor = queuePool.findQueueDescriptor(VK_QUEUE_COMPUTE_BIT);
 
   if (!graphicsQueueDescriptor.isValid()) {
     IGL_LOG_ERROR("VK_QUEUE_GRAPHICS_BIT is not supported");
@@ -990,12 +1078,35 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
   vf_.vkGetDeviceQueue(
       device, deviceQueues_.computeQueueFamilyIndex, 0, &deviceQueues_.computeQueue);
 
-  device_ = std::make_unique<igl::vulkan::VulkanDevice>(
-      vf_,
-      device,
-      IGL_FORMAT("Device: VulkanContext::device_ {}",
+  vkDevice_ = device;
+
+  VK_ASSERT(ivkSetDebugObjectName(&vf_,
+                                  vkDevice_,
+                                  VK_OBJECT_TYPE_DEVICE,
+                                  (uint64_t)vkDevice_,
+                                  IGL_FORMAT("Device: VulkanContext::device_ {}",
+                                             debugName ? debugName : "igl/vulkan/VulkanContext.cpp")
+                                      .c_str()));
+
+  VK_ASSERT(ivkSetDebugObjectName(
+      &vf_,
+      vkDevice_,
+      VK_OBJECT_TYPE_QUEUE,
+      (uint64_t)deviceQueues_.graphicsQueue,
+      IGL_FORMAT("Graphics{} queue: {}",
+                 deviceQueues_.graphicsQueue == deviceQueues_.computeQueue ? "/compute" : "",
                  debugName ? debugName : "igl/vulkan/VulkanContext.cpp")
-          .c_str());
+          .c_str()));
+  if (deviceQueues_.graphicsQueue != deviceQueues_.computeQueue) {
+    VK_ASSERT(ivkSetDebugObjectName(
+        &vf_,
+        vkDevice_,
+        VK_OBJECT_TYPE_QUEUE,
+        (uint64_t)deviceQueues_.computeQueue,
+        IGL_FORMAT("Compute queue: {}", debugName ? debugName : "igl/vulkan/VulkanContext.cpp")
+            .c_str()));
+  }
+
   immediate_ = std::make_unique<VulkanImmediateCommands>(vf_,
                                                          device,
                                                          deviceQueues_.graphicsQueueFamilyIndex,
@@ -1005,7 +1116,7 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
                                                          "VulkanContext::immediate_");
   IGL_DEBUG_ASSERT(config_.maxResourceCount > 0,
                    "Max resource count needs to be greater than zero");
-  syncSubmitHandles_.resize(config_.maxResourceCount);
+  syncSubmitHandles.resize(config_.maxResourceCount);
 
   // create Vulkan pipeline cache
   {
@@ -1023,7 +1134,7 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
     VK_ASSERT_RETURN(
         ivkVmaCreateAllocator(&vf_,
                               vkPhysicalDevice_,
-                              device_->getVkDevice(),
+                              vkDevice_,
                               vkInstance_,
                               apiVersion > VK_API_VERSION_1_3 ? VK_API_VERSION_1_3 : apiVersion,
                               features_.has_VK_KHR_buffer_device_address,
@@ -1031,9 +1142,12 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
                               &pimpl_->vma));
   }
 
+  // Caches the memory types
+  vf_.vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice_, &memoryProperties);
+
   // The staging device will use VMA to allocate a buffer, so this needs
   // to happen after VMA has been initialized.
-  stagingDevice_ = std::make_unique<igl::vulkan::VulkanStagingDevice>(*this);
+  stagingDevice_ = std::make_unique<VulkanStagingDevice>(*this);
 
   // Unextended Vulkan 1.1 does not allow sparse (VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT)
   // bindings. Our descriptor set layout emulates OpenGL binding slots but we cannot put
@@ -1137,18 +1251,22 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
   querySurfaceCapabilities();
 
 #if defined(IGL_WITH_TRACY_GPU)
-  profilingCommandPool_ = std::make_unique<VulkanCommandPool>(
-      vf_,
-      device_->getVkDevice(),
-      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-      deviceQueues_.graphicsQueueFamilyIndex,
-      "VulkanContext::profilingCommandPool_ (Tracy)");
+  VK_ASSERT(ivkCreateCommandPool(&vf_,
+                                 vkDevice_,
+                                 VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT |
+                                     VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+                                 deviceQueues_.graphicsQueueFamilyIndex,
+                                 &profilingCommandPool_));
+
+  ivkSetDebugObjectName(&vf_,
+                        vkDevice_,
+                        VK_OBJECT_TYPE_COMMAND_POOL,
+                        (uint64_t)profilingCommandPool_,
+                        "VulkanContext::profilingCommandPool_ (Tracy)");
 
   profilingCommandBuffer_ = VK_NULL_HANDLE;
-  VK_ASSERT(ivkAllocateCommandBuffer(&vf_,
-                                     device_->getVkDevice(),
-                                     profilingCommandPool_->getVkCommandPool(),
-                                     &profilingCommandBuffer_));
+  VK_ASSERT(
+      ivkAllocateCommandBuffer(&vf_, vkDevice_, profilingCommandPool_, &profilingCommandBuffer_));
 
 #if defined(VK_EXT_calibrated_timestamps)
   if (features_.enabled(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)) {
@@ -1175,11 +1293,6 @@ igl::Result VulkanContext::initContext(const HWDeviceDesc& desc,
 
   IGL_DEBUG_ASSERT(tracyCtx_, "Failed to create Tracy GPU profiling context");
 #endif // IGL_WITH_TRACY_GPU
-
-  // enables/disables enhanced shader debugging
-  if (config_.enhancedShaderDebugging) {
-    enhancedShaderDebuggingStore_ = std::make_unique<EnhancedShaderDebuggingStore>();
-  }
 
   supportMemoryLess_ = iFindMemoryType(&vf_, vkPhysicalDevice_, VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT);
   IGL_LOG_INFO("Vulkan, this device support memory less : %s", supportMemoryLess_ ? "true" : "false");
@@ -1237,34 +1350,48 @@ void VulkanContext::growBindlessDescriptorPool(uint32_t newMaxTextures, uint32_t
   constexpr VkShaderStageFlags stageFlags =
       VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
   const std::array<VkDescriptorSetLayoutBinding, kNumBindings> bindings = {
-      ivkGetDescriptorSetLayoutBinding(kBinding_Texture2D,
-                                       VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                                       pimpl_->currentMaxBindlessTextures,
-                                       stageFlags),
-      ivkGetDescriptorSetLayoutBinding(kBinding_Texture2DArray,
-                                       VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                                       pimpl_->currentMaxBindlessTextures,
-                                       stageFlags),
-      ivkGetDescriptorSetLayoutBinding(kBinding_Texture3D,
-                                       VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                                       pimpl_->currentMaxBindlessTextures,
-                                       stageFlags),
-      ivkGetDescriptorSetLayoutBinding(kBinding_TextureCube,
-                                       VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                                       pimpl_->currentMaxBindlessTextures,
-                                       stageFlags),
-      ivkGetDescriptorSetLayoutBinding(kBinding_Sampler,
-                                       VK_DESCRIPTOR_TYPE_SAMPLER,
-                                       pimpl_->currentMaxBindlessSamplers,
-                                       stageFlags),
-      ivkGetDescriptorSetLayoutBinding(kBinding_SamplerShadow,
-                                       VK_DESCRIPTOR_TYPE_SAMPLER,
-                                       pimpl_->currentMaxBindlessSamplers,
-                                       stageFlags),
-      ivkGetDescriptorSetLayoutBinding(kBinding_StorageImages,
-                                       VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                       pimpl_->currentMaxBindlessTextures,
-                                       stageFlags),
+      VkDescriptorSetLayoutBinding{
+          .binding = kBinding_Texture2D,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .descriptorCount = pimpl_->currentMaxBindlessTextures,
+          .stageFlags = stageFlags,
+      },
+      VkDescriptorSetLayoutBinding{
+          .binding = kBinding_Texture2DArray,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .descriptorCount = pimpl_->currentMaxBindlessTextures,
+          .stageFlags = stageFlags,
+      },
+      VkDescriptorSetLayoutBinding{
+          .binding = kBinding_Texture3D,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .descriptorCount = pimpl_->currentMaxBindlessTextures,
+          .stageFlags = stageFlags,
+      },
+      VkDescriptorSetLayoutBinding{
+          .binding = kBinding_TextureCube,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .descriptorCount = pimpl_->currentMaxBindlessTextures,
+          .stageFlags = stageFlags,
+      },
+      VkDescriptorSetLayoutBinding{
+          .binding = kBinding_Sampler,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+          .descriptorCount = pimpl_->currentMaxBindlessSamplers,
+          .stageFlags = stageFlags,
+      },
+      VkDescriptorSetLayoutBinding{
+          .binding = kBinding_SamplerShadow,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+          .descriptorCount = pimpl_->currentMaxBindlessSamplers,
+          .stageFlags = stageFlags,
+      },
+      VkDescriptorSetLayoutBinding{
+          .binding = kBinding_StorageImages,
+          .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+          .descriptorCount = pimpl_->currentMaxBindlessTextures,
+          .stageFlags = stageFlags,
+      },
   };
   const uint32_t flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
                          VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT |
@@ -1313,16 +1440,16 @@ void VulkanContext::growBindlessDescriptorPool(uint32_t newMaxTextures, uint32_t
                                   "Descriptor Set: dsBindless_"));
 }
 
-igl::Result VulkanContext::initSwapchain(uint32_t width, uint32_t height) {
+Result VulkanContext::initSwapchain(uint32_t width, uint32_t height) {
   IGL_PROFILER_FUNCTION();
 
-  if (!device_ || !immediate_) {
+  if (!vkDevice_ || !immediate_) {
     IGL_LOG_ERROR("Call initContext() first");
     return Result(Result::Code::Unsupported, "Call initContext() first");
   }
 
   if (swapchain_) {
-    vf_.vkDeviceWaitIdle(device_->device_);
+    vf_.vkDeviceWaitIdle(vkDevice_);
     swapchain_ = nullptr; // Destroy old swapchain first
   }
 
@@ -1330,7 +1457,7 @@ igl::Result VulkanContext::initSwapchain(uint32_t width, uint32_t height) {
     return Result();
   }
 
-  swapchain_ = std::make_shared<igl::vulkan::VulkanSwapchain>(*this, width, height);
+  swapchain_ = std::make_shared<VulkanSwapchain>(*this, width, height);
 
   if (features_.has_VK_KHR_timeline_semaphore && features_.has_VK_KHR_synchronization2) {
     timelineSemaphore_ = std::make_unique<VulkanSemaphore>(
@@ -1365,7 +1492,7 @@ Result VulkanContext::present() const {
 std::unique_ptr<VulkanBuffer> VulkanContext::createBuffer(VkDeviceSize bufferSize,
                                                           VkBufferUsageFlags usageFlags,
                                                           VkMemoryPropertyFlags memFlags,
-                                                          igl::Result* IGL_NULLABLE outResult,
+                                                          Result* IGL_NULLABLE outResult,
                                                           const char* IGL_NULLABLE
                                                               debugName) const {
   IGL_PROFILER_FUNCTION();
@@ -1389,7 +1516,7 @@ std::unique_ptr<VulkanBuffer> VulkanContext::createBuffer(VkDeviceSize bufferSiz
 
   Result::setOk(outResult);
   return std::make_unique<VulkanBuffer>(
-      *this, device_->getVkDevice(), bufferSize, usageFlags, memFlags, debugName);
+      *this, vkDevice_, bufferSize, usageFlags, memFlags, debugName);
 }
 
 VulkanImage VulkanContext::createImage(VkImageType imageType,
@@ -1402,7 +1529,7 @@ VulkanImage VulkanContext::createImage(VkImageType imageType,
                                        VkMemoryPropertyFlags memFlags,
                                        VkImageCreateFlags flags,
                                        VkSampleCountFlagBits samples,
-                                       igl::Result* IGL_NULLABLE outResult,
+                                       Result* IGL_NULLABLE outResult,
                                        const char* IGL_NULLABLE debugName) const {
   IGL_PROFILER_FUNCTION();
 
@@ -1412,7 +1539,6 @@ VulkanImage VulkanContext::createImage(VkImageType imageType,
   }
 
   return {*this,
-          device_->getVkDevice(),
           extent,
           imageType,
           format,
@@ -1426,48 +1552,9 @@ VulkanImage VulkanContext::createImage(VkImageType imageType,
           debugName};
 }
 
-// @fb-only
-// @fb-only
-    // @fb-only
-    // @fb-only
-    // @fb-only
-    // @fb-only
-    // @fb-only
-    // @fb-only
-    // @fb-only
-    // @fb-only
-    // @fb-only
-    // @fb-only
-    // @fb-only
-    // @fb-only
-    // @fb-only
-  // @fb-only
-          // @fb-only
-          // @fb-only
-          // @fb-only
-          // @fb-only
-          // @fb-only
-    // @fb-only
-  // @fb-only
-  // @fb-only
-                                       // @fb-only
-                                       // @fb-only
-                                       // @fb-only
-                                       // @fb-only
-                                       // @fb-only
-                                       // @fb-only
-                                       // @fb-only
-                                       // @fb-only
-                                       // @fb-only
-                                       // @fb-only
-                                       // @fb-only
-                                       // @fb-only
-                                       // @fb-only
-// @fb-only
-// @fb-only
-
-std::unique_ptr<VulkanImage> VulkanContext::createImageFromFileDescriptor(
-    int32_t fileDescriptor,
+#if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
+std::unique_ptr<VulkanImage> VulkanContext::createImageFromAndroidHardwareBuffer(
+    AHardwareBuffer* androidHardwareBuffer,
     uint64_t memoryAllocationSize,
     VkImageType imageType,
     VkExtent3D extent,
@@ -1484,11 +1571,44 @@ std::unique_ptr<VulkanImage> VulkanContext::createImageFromFileDescriptor(
           imageType, samples, extent, getVkPhysicalDeviceProperties().limits, outResult)) {
     return nullptr;
   }
+  return std::make_unique<VulkanImage>(*this,
+                                       androidHardwareBuffer,
+                                       memoryAllocationSize,
+                                       extent,
+                                       imageType,
+                                       format,
+                                       mipLevels,
+                                       arrayLayers,
+                                       tiling,
+                                       usageFlags,
+                                       flags,
+                                       samples,
+                                       debugName);
+}
+#endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
+
+std::unique_ptr<VulkanImage> VulkanContext::createImageFromFileDescriptor(
+    int32_t fileDescriptor,
+    uint64_t memoryAllocationSize,
+    VkImageType imageType,
+    VkExtent3D extent,
+    VkFormat format,
+    uint32_t mipLevels,
+    uint32_t arrayLayers,
+    VkImageTiling tiling,
+    VkImageUsageFlags usageFlags,
+    VkImageCreateFlags flags,
+    VkSampleCountFlagBits samples,
+    Result* IGL_NULLABLE outResult,
+    const char* IGL_NULLABLE debugName) const {
+  if (!validateImageLimits(
+          imageType, samples, extent, getVkPhysicalDeviceProperties().limits, outResult)) {
+    return nullptr;
+  }
 
   return std::make_unique<VulkanImage>(*this,
                                        fileDescriptor,
                                        memoryAllocationSize,
-                                       device_->getVkDevice(),
                                        extent,
                                        imageType,
                                        format,
@@ -1507,7 +1627,7 @@ void VulkanContext::pruneTextures() {
 
   // textures
   {
-    for (uint32_t i = 1; i < (uint32_t)textures_.objects_.size(); i++) {
+    for (uint32_t i = 1; i < static_cast<uint32_t>(textures_.objects_.size()); i++) {
       if (textures_.objects_[i].obj_ && textures_.objects_[i].obj_.use_count() == 1) {
         textures_.destroy(i);
       }
@@ -1568,18 +1688,20 @@ VkResult VulkanContext::checkAndUpdateDescriptorSets() {
       const bool isSampledImage = isTextureAvailable && texture->image_.isSampledImage();
       const bool isStorageImage = isTextureAvailable && texture->image_.isStorageImage();
       infoSampledImages.push_back(
-          {dummySampler,
-           isSampledImage ? texture->imageView_.getVkImageView() : dummyImageView,
-           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+          {.sampler = dummySampler,
+           .imageView = isSampledImage ? texture->imageView_.getVkImageView() : dummyImageView,
+           .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
       infoStorageImages.push_back(VkDescriptorImageInfo{
-          VK_NULL_HANDLE,
-          isStorageImage ? texture->imageView_.getVkImageView() : dummyImageView,
-          VK_IMAGE_LAYOUT_GENERAL});
+          .sampler = VK_NULL_HANDLE,
+          .imageView = isStorageImage ? texture->imageView_.getVkImageView() : dummyImageView,
+          .imageLayout = VK_IMAGE_LAYOUT_GENERAL});
     } else {
-      infoSampledImages.push_back(
-          {dummySampler, dummyImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
-      infoStorageImages.push_back(
-          VkDescriptorImageInfo{VK_NULL_HANDLE, dummyImageView, VK_IMAGE_LAYOUT_GENERAL});
+      infoSampledImages.push_back({.sampler = dummySampler,
+                                   .imageView = dummyImageView,
+                                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+      infoStorageImages.push_back(VkDescriptorImageInfo{.sampler = VK_NULL_HANDLE,
+                                                        .imageView = dummyImageView,
+                                                        .imageLayout = VK_IMAGE_LAYOUT_GENERAL});
     }
     IGL_DEBUG_ASSERT(infoSampledImages.back().imageView != VK_NULL_HANDLE);
     IGL_DEBUG_ASSERT(infoStorageImages.back().imageView != VK_NULL_HANDLE);
@@ -1591,8 +1713,9 @@ VkResult VulkanContext::checkAndUpdateDescriptorSets() {
 
   for (const auto& entry : samplers_.objects_) {
     const VulkanSampler* sampler = &entry.obj_;
-    infoSamplers.push_back(
-        {sampler ? sampler->vkSampler : dummySampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED});
+    infoSamplers.push_back({.sampler = sampler ? sampler->vkSampler : dummySampler,
+                            .imageView = VK_NULL_HANDLE,
+                            .imageLayout = VK_IMAGE_LAYOUT_UNDEFINED});
   }
 
   std::vector<VkWriteDescriptorSet> write;
@@ -1600,30 +1723,32 @@ VkResult VulkanContext::checkAndUpdateDescriptorSets() {
   if (!infoSampledImages.empty()) {
     // use the same indexing for every texture type
     for (uint32_t i = kBinding_Texture2D; i != kBinding_TextureCube + 1; i++) {
-      write.push_back(ivkGetWriteDescriptorSet_ImageInfo(pimpl_->dsBindless,
-                                                         i,
-                                                         VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                                                         (uint32_t)infoSampledImages.size(),
-                                                         infoSampledImages.data()));
+      write.push_back(
+          ivkGetWriteDescriptorSetImageInfo(pimpl_->dsBindless,
+                                            i,
+                                            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                                            static_cast<uint32_t>(infoSampledImages.size()),
+                                            infoSampledImages.data()));
     }
   };
 
   if (!infoSamplers.empty()) {
     for (uint32_t i = kBinding_Sampler; i != kBinding_SamplerShadow + 1; i++) {
-      write.push_back(ivkGetWriteDescriptorSet_ImageInfo(pimpl_->dsBindless,
-                                                         i,
-                                                         VK_DESCRIPTOR_TYPE_SAMPLER,
-                                                         (uint32_t)infoSamplers.size(),
-                                                         infoSamplers.data()));
+      write.push_back(ivkGetWriteDescriptorSetImageInfo(pimpl_->dsBindless,
+                                                        i,
+                                                        VK_DESCRIPTOR_TYPE_SAMPLER,
+                                                        static_cast<uint32_t>(infoSamplers.size()),
+                                                        infoSamplers.data()));
     }
   }
 
   if (!infoStorageImages.empty()) {
-    write.push_back(ivkGetWriteDescriptorSet_ImageInfo(pimpl_->dsBindless,
-                                                       kBinding_StorageImages,
-                                                       VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                                       (uint32_t)infoStorageImages.size(),
-                                                       infoStorageImages.data()));
+    write.push_back(
+        ivkGetWriteDescriptorSetImageInfo(pimpl_->dsBindless,
+                                          kBinding_StorageImages,
+                                          VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                                          static_cast<uint32_t>(infoStorageImages.size()),
+                                          infoStorageImages.data()));
   };
 
   // do not switch to the next descriptor set if there is nothing to update
@@ -1633,7 +1758,7 @@ VkResult VulkanContext::checkAndUpdateDescriptorSets() {
 #endif // IGL_VULKAN_PRINT_COMMANDS
     VK_ASSERT(immediate_->wait(immediate_->getLastSubmitHandle()));
     vf_.vkUpdateDescriptorSets(
-        device_->getVkDevice(), static_cast<uint32_t>(write.size()), write.data(), 0, nullptr);
+        vkDevice_, static_cast<uint32_t>(write.size()), write.data(), 0, nullptr);
   }
 
   awaitingCreation_ = false;
@@ -1667,14 +1792,14 @@ std::shared_ptr<VulkanTexture> VulkanContext::createTextureFromVkImage(
     VulkanImageCreateInfo imageCreateInfo,
     VulkanImageViewCreateInfo imageViewCreateInfo,
     const char* IGL_NULLABLE debugName) const {
-  auto iglImage = VulkanImage(*this, device_->getVkDevice(), vkImage, imageCreateInfo, debugName);
+  auto iglImage = VulkanImage(*this, vkImage, imageCreateInfo, debugName);
   auto imageView = iglImage.createImageView(imageViewCreateInfo, debugName);
   return createTexture(std::move(iglImage), std::move(imageView), debugName);
 }
 
 SamplerHandle VulkanContext::createSampler(const VkSamplerCreateInfo& ci,
                                            VkFormat yuvVkFormat,
-                                           igl::Result* IGL_NULLABLE outResult,
+                                           Result* IGL_NULLABLE outResult,
                                            const char* IGL_NULLABLE debugName) const {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
@@ -1698,7 +1823,7 @@ SamplerHandle VulkanContext::createSampler(const VkSamplerCreateInfo& ci,
   VK_ASSERT(vf_.vkCreateSampler(device, &cInfo, nullptr, &sampler.vkSampler));
   VK_ASSERT(ivkSetDebugObjectName(
       &vf_, device, VK_OBJECT_TYPE_SAMPLER, (uint64_t)sampler.vkSampler, debugName));
-  const SamplerHandle handle = samplers_.create(std::move(sampler));
+  const SamplerHandle handle = samplers_.create(static_cast<VulkanSampler&&>(sampler));
 
   samplers_.get(handle)->samplerId = handle.index();
 
@@ -1709,7 +1834,7 @@ SamplerHandle VulkanContext::createSampler(const VkSamplerCreateInfo& ci,
 
 void VulkanContext::querySurfaceCapabilities() {
   // This is not an exhaustive list. It's only formats that we are using.
-  // @fb-only
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   const VkFormat depthFormats[] = {VK_FORMAT_D32_SFLOAT_S8_UINT,
                                    VK_FORMAT_D24_UNORM_S8_UINT,
                                    VK_FORMAT_D16_UNORM_S8_UINT,
@@ -1753,7 +1878,7 @@ void VulkanContext::querySurfaceCapabilities() {
   }
 }
 
-VkFormat VulkanContext::getClosestDepthStencilFormat(igl::TextureFormat desiredFormat) const {
+VkFormat VulkanContext::getClosestDepthStencilFormat(TextureFormat desiredFormat) const {
   IGL_DEBUG_ASSERT(!deviceDepthFormats_.empty());
   // get a list of compatible depth formats for a given desired format
   // The list will contain depth format that are ordered from most to least closest
@@ -1773,7 +1898,7 @@ VkFormat VulkanContext::getClosestDepthStencilFormat(igl::TextureFormat desiredF
 }
 
 VulkanContext::RenderPassHandle VulkanContext::getRenderPass(uint8_t index) const {
-  return RenderPassHandle{renderPasses_[index], index};
+  return RenderPassHandle{.pass = renderPasses_[index], .index = index};
 }
 
 VulkanContext::RenderPassHandle VulkanContext::findRenderPass(
@@ -1783,11 +1908,11 @@ VulkanContext::RenderPassHandle VulkanContext::findRenderPass(
   auto it = renderPassesHash_.find(builder);
 
   if (it != renderPassesHash_.end()) {
-    return RenderPassHandle{renderPasses_[it->second], it->second};
+    return RenderPassHandle{.pass = renderPasses_[it->second], .index = it->second};
   }
 
   VkRenderPass pass = VK_NULL_HANDLE;
-  builder.build(vf_, device_->getVkDevice(), &pass);
+  builder.build(vf_, vkDevice_, &pass);
 
   const size_t index = renderPasses_.size();
 
@@ -1798,19 +1923,17 @@ VulkanContext::RenderPassHandle VulkanContext::findRenderPass(
   // @lint-ignore CLANGTIDY
   renderPasses_.push_back(pass);
 
-  return RenderPassHandle{pass, uint8_t(index)};
+  return RenderPassHandle{.pass = pass, .index = uint8_t(index)};
 }
 
 std::vector<uint8_t> VulkanContext::getPipelineCacheData() const {
-  VkDevice device = device_->getVkDevice();
-
   size_t size = 0;
-  vf_.vkGetPipelineCacheData(device, pipelineCache_, &size, nullptr);
+  vf_.vkGetPipelineCacheData(vkDevice_, pipelineCache_, &size, nullptr);
 
   std::vector<uint8_t> data(size);
 
   if (size) {
-    vf_.vkGetPipelineCacheData(device, pipelineCache_, &size, data.data());
+    vf_.vkGetPipelineCacheData(vkDevice_, pipelineCache_, &size, data.data());
   }
 
   return data;
@@ -1830,15 +1953,15 @@ void VulkanContext::updateBindingsTextures(VkCommandBuffer IGL_NONNULL cmdBuf,
   IGL_PROFILER_FUNCTION();
 
   DescriptorPoolsArena& arena = pimpl_->getOrCreateArena_CombinedImageSamplers(
-      *this, dsl.getVkDescriptorSetLayout(), dsl.numBindings_);
+      *this, dsl.getVkDescriptorSetLayout(), dsl.numBindings);
 
   VkDescriptorSet dset = arena.getNextDescriptorSet(*immediate_, nextSubmitHandle);
 
-  // @fb-only
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   VkDescriptorImageInfo infoSampledImages[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
   uint32_t numImages = 0;
 
-  // @fb-only
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   VkWriteDescriptorSet writes[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
   uint32_t numWrites = 0;
 
@@ -1862,7 +1985,7 @@ void VulkanContext::updateBindingsTextures(VkCommandBuffer IGL_NONNULL cmdBuf,
       IGL_DEBUG_ASSERT(data.samplers[loc], "A sampler should be bound to every bound texture slot");
     }
     VkSampler sampler = data.samplers[loc] ? data.samplers[loc] : dummySampler;
-    writes[numWrites++] = ivkGetWriteDescriptorSet_ImageInfo(
+    writes[numWrites++] = ivkGetWriteDescriptorSetImageInfo(
         dset, loc, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &infoSampledImages[numImages]);
     infoSampledImages[numImages++] = VkDescriptorImageInfo{
         .sampler = hasTexture ? sampler : dummySampler,
@@ -1873,7 +1996,7 @@ void VulkanContext::updateBindingsTextures(VkCommandBuffer IGL_NONNULL cmdBuf,
 
   if (numWrites) {
     IGL_PROFILER_ZONE("vkUpdateDescriptorSets()", IGL_PROFILER_COLOR_UPDATE);
-    vf_.vkUpdateDescriptorSets(device_->getVkDevice(), numWrites, writes, 0, nullptr);
+    vf_.vkUpdateDescriptorSets(vkDevice_, numWrites, writes, 0, nullptr);
     IGL_PROFILER_ZONE_END();
 
 #if IGL_VULKAN_PRINT_COMMANDS
@@ -1895,15 +2018,15 @@ void VulkanContext::updateBindingsStorageImages(
   IGL_PROFILER_FUNCTION();
 
   DescriptorPoolsArena& arena = pimpl_->getOrCreateArena_StorageImages(
-      *this, dsl.getVkDescriptorSetLayout(), dsl.numBindings_);
+      *this, dsl.getVkDescriptorSetLayout(), dsl.numBindings);
 
   VkDescriptorSet dset = arena.getNextDescriptorSet(*immediate_, nextSubmitHandle);
 
-  // @fb-only
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   VkDescriptorImageInfo infoStorageImages[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
   uint32_t numStorageImages = 0;
 
-  // @fb-only
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   VkWriteDescriptorSet writes[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
   uint32_t numWrites = 0;
 
@@ -1918,7 +2041,7 @@ void VulkanContext::updateBindingsStorageImages(
     const uint32_t loc = d.bindingLocation;
     IGL_DEBUG_ASSERT(loc < IGL_TEXTURE_SAMPLERS_MAX);
     VkImageView imageView = data.images[loc];
-    writes[numWrites++] = ivkGetWriteDescriptorSet_ImageInfo(
+    writes[numWrites++] = ivkGetWriteDescriptorSetImageInfo(
         dset, loc, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, &infoStorageImages[numStorageImages]);
     infoStorageImages[numStorageImages++] = VkDescriptorImageInfo{
         .sampler = VK_NULL_HANDLE,
@@ -1929,7 +2052,7 @@ void VulkanContext::updateBindingsStorageImages(
 
   if (numWrites) {
     IGL_PROFILER_ZONE("vkUpdateDescriptorSets()", IGL_PROFILER_COLOR_UPDATE);
-    vf_.vkUpdateDescriptorSets(device_->getVkDevice(), numWrites, writes, 0, nullptr);
+    vf_.vkUpdateDescriptorSets(vkDevice_, numWrites, writes, 0, nullptr);
     IGL_PROFILER_ZONE_END();
 
 #if IGL_VULKAN_PRINT_COMMANDS
@@ -1950,11 +2073,11 @@ void VulkanContext::updateBindingsBuffers(VkCommandBuffer IGL_NONNULL cmdBuf,
   IGL_PROFILER_FUNCTION();
 
   DescriptorPoolsArena& arena =
-      pimpl_->getOrCreateArena_Buffers(*this, dsl.getVkDescriptorSetLayout(), dsl.numBindings_);
+      pimpl_->getOrCreateArena_Buffers(*this, dsl.getVkDescriptorSetLayout(), dsl.numBindings);
 
   VkDescriptorSet dset = arena.getNextDescriptorSet(*immediate_, nextSubmitHandle);
 
-  // @fb-only
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   VkWriteDescriptorSet writes[IGL_UNIFORM_BLOCKS_BINDING_MAX]; // uninitialized
   uint32_t numWrites = 0;
 
@@ -1965,7 +2088,7 @@ void VulkanContext::updateBindingsBuffers(VkCommandBuffer IGL_NONNULL cmdBuf,
         IGL_FORMAT("Did you forget to call bindBuffer() for a buffer at the binding location {}?",
                    b.bindingLocation)
             .c_str());
-    writes[numWrites++] = ivkGetWriteDescriptorSet_BufferInfo(
+    writes[numWrites++] = ivkGetWriteDescriptorSetBufferInfo(
         dset,
         b.bindingLocation,
         b.isStorage ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -1975,7 +2098,7 @@ void VulkanContext::updateBindingsBuffers(VkCommandBuffer IGL_NONNULL cmdBuf,
 
   if (numWrites) {
     IGL_PROFILER_ZONE("vkUpdateDescriptorSets()", IGL_PROFILER_COLOR_UPDATE);
-    vf_.vkUpdateDescriptorSets(device_->getVkDevice(), numWrites, writes, 0, nullptr);
+    vf_.vkUpdateDescriptorSets(vkDevice_, numWrites, writes, 0, nullptr);
     IGL_PROFILER_ZONE_END();
 
 #if IGL_VULKAN_PRINT_COMMANDS
@@ -1994,8 +2117,9 @@ void VulkanContext::updateBindingsTexturesByDescriptorBuffer(
     const BindingsTextures& data,
     const VulkanDescriptorSetLayout& dsl,
     const util::SpvModuleInfo& info) const {
-  if (info.textures.empty())
+  if (info.textures.empty()) {
     return;
+  }
 
   // make sure the guard value is always there
   IGL_DEBUG_ASSERT(!textures_.objects_.empty());
@@ -2010,12 +2134,12 @@ void VulkanContext::updateBindingsTexturesByDescriptorBuffer(
   auto combinedSize =
       vkPhysicalDeviceDescriptorBufferProperties_.combinedImageSamplerDescriptorSize;
   auto alignment = vkPhysicalDeviceDescriptorBufferProperties_.descriptorBufferOffsetAlignment;
-  auto layoutSize = dsl.layoutSize_;
+  auto layoutSize = dsl.layoutSize;
 
   auto& descriptorBuffer = pimpl_->descriptorBuffersArena->getDescriptorBuffer(
       layoutSize, alignment, *immediate_, nextSubmitHandle);
 
-  void* mappedPtr = descriptorBuffer.mappedPtr;
+  void* mappedPtr = descriptorBuffer.buffer->getMappedPtr();
   auto originOffset = descriptorBuffer.offset;
   descriptorBuffer.offset += layoutSize;
 
@@ -2035,7 +2159,7 @@ void VulkanContext::updateBindingsTexturesByDescriptorBuffer(
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
 
-    VkDeviceSize bindingOffset;
+    VkDeviceSize bindingOffset = 0;
     vf_.vkGetDescriptorSetLayoutBindingOffsetEXT(
         getVkDevice(), dsl.getVkDescriptorSetLayout(), loc, &bindingOffset);
 
@@ -2049,8 +2173,7 @@ void VulkanContext::updateBindingsTexturesByDescriptorBuffer(
         getVkDevice(), &getInfo, combinedSize, (char*)mappedPtr + originOffset + bindingOffset);
   }
 
-  if (descriptorBuffer.bindCmdBuffer != cmdBuf ||
-      descriptorBuffer.handle != nextSubmitHandle) {
+  if (descriptorBuffer.bindCmdBuffer != cmdBuf || descriptorBuffer.handle != nextSubmitHandle) {
     VkDescriptorBufferBindingInfoEXT bindingInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
         .address = descriptorBuffer.buffer->getVkDeviceAddress(),
@@ -2085,19 +2208,18 @@ void VulkanContext::updateBindingsStorageImagesByDescriptorBuffer(
   // use the dummy texture to avoid sparse array
   VkImageView dummyImageView = textures_.objects_[0].obj_->imageView_.getVkImageView();
 
-  auto combinedSize =
-      vkPhysicalDeviceDescriptorBufferProperties_.combinedImageSamplerDescriptorSize;
+  auto storageImageSize = vkPhysicalDeviceDescriptorBufferProperties_.storageImageDescriptorSize;
   auto alignment = vkPhysicalDeviceDescriptorBufferProperties_.descriptorBufferOffsetAlignment;
-  auto layoutSize = dsl.layoutSize_;
+  auto layoutSize = dsl.layoutSize;
 
   auto& descriptorBuffer = pimpl_->descriptorBuffersArena->getDescriptorBuffer(
       layoutSize, alignment, *immediate_, nextSubmitHandle);
 
-  void* mappedPtr = descriptorBuffer.mappedPtr;
+  void* mappedPtr = descriptorBuffer.buffer->getMappedPtr();
   auto originOffset = descriptorBuffer.offset;
   descriptorBuffer.offset += layoutSize;
 
-  for (const util::TextureDescription& d : info.textures) {
+  for (const util::ImageDescription& d : info.images) {
     IGL_DEBUG_ASSERT(d.descriptorSet == kBindPoint_StorageImages);
     const uint32_t loc = d.bindingLocation;
     IGL_DEBUG_ASSERT(loc < IGL_TEXTURE_SAMPLERS_MAX);
@@ -2115,16 +2237,15 @@ void VulkanContext::updateBindingsStorageImagesByDescriptorBuffer(
 
     VkDescriptorGetInfoEXT getInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
-        .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .data = {.pCombinedImageSampler = &imageInfo},
+        .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+        .data = {.pStorageImage = &imageInfo},
     };
 
     vf_.vkGetDescriptorEXT(
-        getVkDevice(), &getInfo, combinedSize, (char*)mappedPtr + originOffset + bindingOffset);
+        getVkDevice(), &getInfo, storageImageSize, (char*)mappedPtr + originOffset + bindingOffset);
   }
 
-  if (descriptorBuffer.bindCmdBuffer != cmdBuf ||
-      descriptorBuffer.handle != nextSubmitHandle) {
+  if (descriptorBuffer.bindCmdBuffer != cmdBuf || descriptorBuffer.handle != nextSubmitHandle) {
     VkDescriptorBufferBindingInfoEXT bindingInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
         .address = descriptorBuffer.buffer->getVkDeviceAddress(),
@@ -2159,12 +2280,12 @@ void VulkanContext::updateBindingsBuffersByDescriptorBuffer(
   auto storageBufferDescriptorSize =
       vkPhysicalDeviceDescriptorBufferProperties_.storageBufferDescriptorSize;
   auto alignment = vkPhysicalDeviceDescriptorBufferProperties_.descriptorBufferOffsetAlignment;
-  auto layoutSize = dsl.layoutSize_;
+  auto layoutSize = dsl.layoutSize;
 
   auto& descriptorBuffer = pimpl_->descriptorBuffersArena->getDescriptorBuffer(
       layoutSize, alignment, *immediate_, nextSubmitHandle);
 
-  void* mappedPtr = descriptorBuffer.mappedPtr;
+  void* mappedPtr = descriptorBuffer.buffer->getMappedPtr();
   auto originOffset = descriptorBuffer.offset;
   descriptorBuffer.offset += layoutSize;
 
@@ -2198,13 +2319,13 @@ void VulkanContext::updateBindingsBuffersByDescriptorBuffer(
                            (char*)mappedPtr + originOffset + bindingOffset);
   }
 
-  if (descriptorBuffer.bindCmdBuffer != cmdBuf ||
-      descriptorBuffer.handle != nextSubmitHandle) {
+  if (descriptorBuffer.bindCmdBuffer != cmdBuf || descriptorBuffer.handle != nextSubmitHandle) {
     VkDescriptorBufferBindingInfoEXT bindingInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
         .address = descriptorBuffer.buffer->getVkDeviceAddress(),
         .usage = VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT |
-                 VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT};
+                 VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
+    };
     vf_.vkCmdBindDescriptorBuffersEXT(cmdBuf, 1, &bindingInfo);
     descriptorBuffer.bindCmdBuffer = cmdBuf;
     descriptorBuffer.handle = nextSubmitHandle;
@@ -2220,11 +2341,9 @@ void VulkanContext::deferredTask(std::packaged_task<void()>&& task, SubmitHandle
   if (handle.empty()) {
     handle = immediate_->getNextSubmitHandle();
   }
-
   std::lock_guard<std::mutex> lockGuard(deferredTasksMutex_);
-
-  deferredTasks_.emplace_back(std::move(task), handle);
-  deferredTasks_.back().frameId_ = this->getFrameNumber();
+  deferredTasks.emplace_back(std::move(task), handle);
+  deferredTasks.back().frameId = this->getFrameNumber();
 }
 
 bool VulkanContext::areValidationLayersEnabled() const {
@@ -2242,14 +2361,14 @@ void VulkanContext::processDeferredTasks() const {
   constexpr uint64_t kNumWaitFrames = 3u;
 
   std::lock_guard<std::mutex> lockGuard(deferredTasksMutex_);
-
-  while (!deferredTasks_.empty() && immediate_->isReady(deferredTasks_.front().handle_)) {
-    if (frameId && frameId <= deferredTasks_.front().frameId_ + kNumWaitFrames) {
+  
+  while (!deferredTasks.empty() && immediate_->isReady(deferredTasks.front().handle)) {
+    if (frameId && frameId <= deferredTasks.front().frameId + kNumWaitFrames) {
       // do not check anything if it is not yet older than kNumWaitFrames
       break;
     }
-    deferredTasks_.front().task_();
-    deferredTasks_.pop_front();
+    deferredTasks.front().task();
+    deferredTasks.pop_front();
   }
 }
 
@@ -2258,25 +2377,24 @@ void VulkanContext::waitDeferredTasks() {
 
   std::lock_guard<std::mutex> lockGuard(deferredTasksMutex_);
 
-  for (auto& task : deferredTasks_) {
-    immediate_->wait(task.handle_, config_.fenceTimeoutNanoseconds);
-    task.task_();
+  for (auto& task : deferredTasks) {
+    immediate_->wait(task.handle, config_.fenceTimeoutNanoseconds);
+    task.task();
   }
-  deferredTasks_.clear();
+  deferredTasks.clear();
 }
 
+// @fb-only
 VkFence VulkanContext::getVkFenceFromSubmitHandle(igl::SubmitHandle handle) const noexcept {
   if (handle == 0) {
     IGL_LOG_ERROR("Invalid submit handle passed to getVkFenceFromSubmitHandle");
     return VK_NULL_HANDLE;
   }
 
-  VkFence vkFence =
-      immediate_->getVkFenceFromSubmitHandle(VulkanImmediateCommands::SubmitHandle(handle));
-
-  return vkFence;
+  return immediate_->getVkFenceFromSubmitHandle(VulkanImmediateCommands::SubmitHandle(handle));
 }
 
+// @fb-only
 int VulkanContext::getFenceFdFromSubmitHandle(igl::SubmitHandle handle) const noexcept {
   int fenceFd = -1;
 #if defined(IGL_PLATFORM_ANDROID) && defined(VK_KHR_external_fence_fd)
@@ -2294,8 +2412,7 @@ int VulkanContext::getFenceFdFromSubmitHandle(igl::SubmitHandle handle) const no
       .handleType = VK_EXTERNAL_FENCE_HANDLE_TYPE_SYNC_FD_BIT,
   };
 
-  VkDevice vkDevice = device_->getVkDevice();
-  const VkResult result = vf_.vkGetFenceFdKHR(vkDevice, &getFdInfo, &fenceFd);
+  const VkResult result = vf_.vkGetFenceFdKHR(vkDevice_, &getFdInfo, &fenceFd);
   if (result != VK_SUCCESS) {
     IGL_LOG_ERROR("Unable to get fence fd from submit handle: %lu", handle);
   }
@@ -2364,17 +2481,21 @@ VkSamplerYcbcrConversionInfo VulkanContext::getOrCreateYcbcrConversionInfo(VkFor
 
   // check properties
   VkSamplerYcbcrConversionImageFormatProperties samplerYcbcrConversionImageFormatProps = {
-      VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_IMAGE_FORMAT_PROPERTIES, nullptr, 0};
+      .sType = VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_IMAGE_FORMAT_PROPERTIES,
+      .combinedImageSamplerDescriptorCount = 0,
+  };
   VkImageFormatProperties2 imageFormatProps = {
-      VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2, &samplerYcbcrConversionImageFormatProps, {}};
+      .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2,
+      .pNext = &samplerYcbcrConversionImageFormatProps,
+      .imageFormatProperties = {},
+  };
   const VkPhysicalDeviceImageFormatInfo2 imageFormatInfo = {
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
-      nullptr,
-      format,
-      VK_IMAGE_TYPE_2D,
-      VK_IMAGE_TILING_OPTIMAL,
-      VK_IMAGE_USAGE_SAMPLED_BIT,
-      VK_IMAGE_CREATE_DISJOINT_BIT,
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+      .format = format,
+      .type = VK_IMAGE_TYPE_2D,
+      .tiling = VK_IMAGE_TILING_OPTIMAL,
+      .usage = VK_IMAGE_USAGE_SAMPLED_BIT,
+      .flags = VK_IMAGE_CREATE_DISJOINT_BIT,
   };
   vf_.vkGetPhysicalDeviceImageFormatProperties2(
       getVkPhysicalDevice(), &imageFormatInfo, &imageFormatProps);
@@ -2392,15 +2513,15 @@ void VulkanContext::freeResourcesForDescriptorSetLayout(VkDescriptorSetLayout ds
   pimpl_->arenaStorageImages.erase(dsl);
 }
 
-igl::BindGroupTextureHandle VulkanContext::createBindGroup(const BindGroupTextureDesc& desc,
-                                                           const IRenderPipelineState* IGL_NULLABLE
-                                                               compatiblePipeline,
-                                                           Result* IGL_NULLABLE outResult) {
+BindGroupTextureHandle VulkanContext::createBindGroup(const BindGroupTextureDesc& desc,
+                                                      const IRenderPipelineState* IGL_NULLABLE
+                                                          compatiblePipeline,
+                                                      Result* IGL_NULLABLE outResult) {
   VkDevice device = getVkDevice();
 
-  BindGroupMetadataTextures metadata{desc};
+  BindGroupMetadataTextures metadata{.desc = desc};
 
-  // @fb-only
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   VkDescriptorSetLayoutBinding bindings[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
   uint32_t numBindings = 0;
 
@@ -2416,8 +2537,12 @@ igl::BindGroupTextureHandle VulkanContext::createBindGroup(const BindGroupTextur
     const bool isInPipeline = (usageMaskPipeline & (1ul << loc)) != 0;
     if (compatiblePipeline ? isInPipeline : desc.samplers[loc] != nullptr) {
       IGL_DEBUG_ASSERT(compatiblePipeline || desc.samplers[loc]);
-      bindings[numBindings++] = ivkGetDescriptorSetLayoutBinding(
-          loc, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, stageFlags);
+      bindings[numBindings++] = VkDescriptorSetLayoutBinding{
+          .binding = loc,
+          .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+          .descriptorCount = 1,
+          .stageFlags = stageFlags,
+      };
       metadata.usageMask |= 1ul << loc;
     }
   }
@@ -2425,7 +2550,7 @@ igl::BindGroupTextureHandle VulkanContext::createBindGroup(const BindGroupTextur
   VkDescriptorSetLayout dsl = VK_NULL_HANDLE;
 
   {
-    // @fb-only
+    // NOLINTNEXTLINE(modernize-avoid-c-arrays)
     const VkDescriptorBindingFlags bindingFlags[IGL_TEXTURE_SAMPLERS_MAX] = {};
 
     VK_ASSERT(ivkCreateDescriptorSetLayout(&vf_,
@@ -2465,9 +2590,9 @@ igl::BindGroupTextureHandle VulkanContext::createBindGroup(const BindGroupTextur
   // use the dummy texture to ensure pipeline compatibility
   VkImageView dummyImageView = textures_.objects_[0].obj_->imageView_.getVkImageView();
 
-  // @fb-only
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   VkDescriptorImageInfo images[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
-  // @fb-only
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   VkWriteDescriptorSet writes[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
   uint32_t numWrites = 0;
 
@@ -2477,12 +2602,11 @@ igl::BindGroupTextureHandle VulkanContext::createBindGroup(const BindGroupTextur
       continue;
     }
     const igl::vulkan::VulkanTexture& texture =
-        desc.textures[loc]
-            ? static_cast<igl::vulkan::Texture*>(desc.textures[loc].get())->getVulkanTexture()
-            : *textures_.objects_[0].obj_; // use a dummy texture when necessary
+        desc.textures[loc] ? static_cast<Texture*>(desc.textures[loc].get())->getVulkanTexture()
+                           : *textures_.objects_[0].obj_; // use a dummy texture when necessary
     const igl::vulkan::VulkanSampler& sampler =
         desc.samplers[loc]
-            ? *samplers_.get(static_cast<igl::vulkan::SamplerState&>(*desc.samplers[loc]).sampler_)
+            ? *samplers_.get(static_cast<SamplerState&>(*desc.samplers[loc]).sampler_)
             : samplers_.objects_[0].obj_; // use a dummy sampler when necessary
 
     // multisampled images cannot be directly accessed from shaders
@@ -2495,12 +2619,12 @@ igl::BindGroupTextureHandle VulkanContext::createBindGroup(const BindGroupTextur
       continue;
     }
 
-    writes[numWrites] = ivkGetWriteDescriptorSet_ImageInfo(
+    writes[numWrites] = ivkGetWriteDescriptorSetImageInfo(
         metadata.dset, loc, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &images[numWrites]);
     images[numWrites++] = {
-        sampler.vkSampler,
-        isSampledImage ? texture.imageView_.getVkImageView() : dummyImageView,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .sampler = sampler.vkSampler,
+        .imageView = isSampledImage ? texture.imageView_.getVkImageView() : dummyImageView,
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
   }
 
@@ -2512,7 +2636,7 @@ igl::BindGroupTextureHandle VulkanContext::createBindGroup(const BindGroupTextur
   }
 
   IGL_PROFILER_ZONE("vkUpdateDescriptorSets() - textures bind group", IGL_PROFILER_COLOR_UPDATE);
-  vf_.vkUpdateDescriptorSets(device_->getVkDevice(), numWrites, writes, 0, nullptr);
+  vf_.vkUpdateDescriptorSets(vkDevice_, numWrites, writes, 0, nullptr);
   IGL_PROFILER_ZONE_END();
 
   // once a descriptor set has been updated, destroy the DSL
@@ -2523,22 +2647,22 @@ igl::BindGroupTextureHandle VulkanContext::createBindGroup(const BindGroupTextur
   return pimpl_->bindGroupTexturesPool.create(std::move(metadata));
 }
 
-igl::BindGroupBufferHandle VulkanContext::createBindGroup(const BindGroupBufferDesc& desc,
-                                                          Result* outResult) {
+BindGroupBufferHandle VulkanContext::createBindGroup(const BindGroupBufferDesc& desc,
+                                                     Result* outResult) {
   VkDevice device = getVkDevice();
 
-  BindGroupMetadataBuffers metadata{desc};
+  BindGroupMetadataBuffers metadata{.desc = desc};
 
-  // @fb-only
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   VkDescriptorSetLayoutBinding bindings[IGL_UNIFORM_BLOCKS_BINDING_MAX]; // uninitialized
   uint32_t numBindings = 0;
 
-  // @fb-only
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   VkDescriptorPoolSize poolSizes[] = {
-      VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 0},
-      VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0},
-      VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 0},
-      VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0},
+      {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, .descriptorCount = 0},
+      {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 0},
+      {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, .descriptorCount = 0},
+      {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 0},
   };
 
   const VkShaderStageFlags stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -2547,7 +2671,7 @@ igl::BindGroupBufferHandle VulkanContext::createBindGroup(const BindGroupBufferD
     if (!desc.buffers[loc]) {
       continue;
     }
-    auto* buf = static_cast<igl::vulkan::Buffer*>(desc.buffers[loc].get());
+    auto* buf = static_cast<Buffer*>(desc.buffers[loc].get());
     const bool isDynamic = (desc.isDynamicBufferMask & (1ul << loc)) != 0;
     const bool isUniform = ((buf->getBufferType() & BufferDesc::BufferTypeBits::Uniform) != 0);
     const VkDescriptorType type =
@@ -2577,7 +2701,12 @@ igl::BindGroupBufferHandle VulkanContext::createBindGroup(const BindGroupBufferD
             alignment);
       }
     }
-    bindings[numBindings++] = ivkGetDescriptorSetLayoutBinding(loc, type, 1, stageFlags);
+    bindings[numBindings++] = VkDescriptorSetLayoutBinding{
+        .binding = loc,
+        .descriptorType = type,
+        .descriptorCount = 1,
+        .stageFlags = stageFlags,
+    };
     metadata.usageMask |= 1ul << loc;
   }
 
@@ -2601,7 +2730,7 @@ igl::BindGroupBufferHandle VulkanContext::createBindGroup(const BindGroupBufferD
   VkDescriptorSetLayout dsl = VK_NULL_HANDLE;
 
   {
-    // @fb-only
+    // NOLINTNEXTLINE(modernize-avoid-c-arrays)
     const VkDescriptorBindingFlags bindingFlags[IGL_UNIFORM_BLOCKS_BINDING_MAX] = {};
 
     VK_ASSERT(ivkCreateDescriptorSetLayout(&vf_,
@@ -2630,9 +2759,9 @@ igl::BindGroupBufferHandle VulkanContext::createBindGroup(const BindGroupBufferD
     VK_ASSERT(ivkAllocateDescriptorSet(&vf_, device, metadata.pool, dsl, &metadata.dset));
   }
 
-  // @fb-only
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   VkDescriptorBufferInfo buffers[IGL_UNIFORM_BLOCKS_BINDING_MAX]; // uninitialized
-  // @fb-only
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   VkWriteDescriptorSet writes[IGL_UNIFORM_BLOCKS_BINDING_MAX]; // uninitialized
   uint32_t numWrites = 0;
 
@@ -2640,7 +2769,7 @@ igl::BindGroupBufferHandle VulkanContext::createBindGroup(const BindGroupBufferD
     if (!desc.buffers[loc]) {
       continue;
     }
-    auto* buf = static_cast<igl::vulkan::Buffer*>(desc.buffers[loc].get());
+    auto* buf = static_cast<Buffer*>(desc.buffers[loc].get());
     const bool isDynamic = (desc.isDynamicBufferMask & (1ul << loc)) != 0;
     const bool isUniform = ((buf->getBufferType() & BufferDesc::BufferTypeBits::Uniform) != 0);
     const VkDescriptorType type = isUniform ? (isDynamic ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
@@ -2648,7 +2777,7 @@ igl::BindGroupBufferHandle VulkanContext::createBindGroup(const BindGroupBufferD
                                             : (isDynamic ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
                                                          : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
     writes[numWrites] =
-        ivkGetWriteDescriptorSet_BufferInfo(metadata.dset, loc, type, 1, &buffers[numWrites]);
+        ivkGetWriteDescriptorSetBufferInfo(metadata.dset, loc, type, 1, &buffers[numWrites]);
     buffers[numWrites++] = VkDescriptorBufferInfo{
         buf->getVkBuffer(),
         desc.offset[loc],
@@ -2664,18 +2793,18 @@ igl::BindGroupBufferHandle VulkanContext::createBindGroup(const BindGroupBufferD
   }
 
   IGL_PROFILER_ZONE("vkUpdateDescriptorSets() - textures bind group", IGL_PROFILER_COLOR_UPDATE);
-  vf_.vkUpdateDescriptorSets(device_->getVkDevice(), numWrites, writes, 0, nullptr);
+  vf_.vkUpdateDescriptorSets(vkDevice_, numWrites, writes, 0, nullptr);
   IGL_PROFILER_ZONE_END();
 
   // once a descriptor set has been updated, destroy the DSL
-  vf_.vkDestroyDescriptorSetLayout(device, dsl, nullptr);
+  vf_.vkDestroyDescriptorSetLayout(vkDevice_, dsl, nullptr);
 
   Result::setOk(outResult);
 
   return pimpl_->bindGroupBuffersPool.create(std::move(metadata));
 }
 
-void VulkanContext::destroy(igl::BindGroupTextureHandle handle) {
+void VulkanContext::destroy(BindGroupTextureHandle handle) {
   if (handle.empty()) {
     return;
   }
@@ -2688,7 +2817,7 @@ void VulkanContext::destroy(igl::BindGroupTextureHandle handle) {
   pimpl_->bindGroupTexturesPool.destroy(handle);
 }
 
-void VulkanContext::destroy(igl::BindGroupBufferHandle handle) {
+void VulkanContext::destroy(BindGroupBufferHandle handle) {
   if (handle.empty()) {
     return;
   }
@@ -2701,7 +2830,7 @@ void VulkanContext::destroy(igl::BindGroupBufferHandle handle) {
   pimpl_->bindGroupBuffersPool.destroy(handle);
 }
 
-void VulkanContext::destroy(igl::SamplerHandle handle) {
+void VulkanContext::destroy(SamplerHandle handle) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
 
   if (handle.empty()) {
@@ -2716,7 +2845,7 @@ void VulkanContext::destroy(igl::SamplerHandle handle) {
   samplers_.destroy(handle);
 }
 
-void VulkanContext::destroy(igl::TextureHandle handle) {
+void VulkanContext::destroy(TextureHandle handle) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
 
   if (handle.empty()) {
@@ -2726,19 +2855,19 @@ void VulkanContext::destroy(igl::TextureHandle handle) {
   textures_.destroy(handle);
 }
 
-VkDescriptorSet VulkanContext::getBindGroupDescriptorSet(igl::BindGroupTextureHandle handle) const {
+VkDescriptorSet VulkanContext::getBindGroupDescriptorSet(BindGroupTextureHandle handle) const {
   return handle.valid() ? pimpl_->bindGroupTexturesPool.get(handle)->dset : VK_NULL_HANDLE;
 }
 
-uint32_t VulkanContext::getBindGroupUsageMask(igl::BindGroupTextureHandle handle) const {
+uint32_t VulkanContext::getBindGroupUsageMask(BindGroupTextureHandle handle) const {
   return handle.valid() ? pimpl_->bindGroupTexturesPool.get(handle)->usageMask : 0;
 }
 
-VkDescriptorSet VulkanContext::getBindGroupDescriptorSet(igl::BindGroupBufferHandle handle) const {
+VkDescriptorSet VulkanContext::getBindGroupDescriptorSet(BindGroupBufferHandle handle) const {
   return handle.valid() ? pimpl_->bindGroupBuffersPool.get(handle)->dset : VK_NULL_HANDLE;
 }
 
-uint32_t VulkanContext::getBindGroupUsageMask(igl::BindGroupBufferHandle handle) const {
+uint32_t VulkanContext::getBindGroupUsageMask(BindGroupBufferHandle handle) const {
   return handle.valid() ? pimpl_->bindGroupBuffersPool.get(handle)->usageMask : 0;
 }
 
@@ -2749,16 +2878,16 @@ const VulkanFeatures& VulkanContext::features() const noexcept {
 void VulkanContext::syncAcquireNext() noexcept {
   IGL_PROFILER_FUNCTION();
 
-  syncCurrentIndex_ = (syncCurrentIndex_ + 1) % config_.maxResourceCount;
+  syncCurrentIndex = (syncCurrentIndex + 1) % config_.maxResourceCount;
 
   // Wait for the current buffer to become available
-  immediate_->wait(syncSubmitHandles_[syncCurrentIndex_], config_.fenceTimeoutNanoseconds);
+  immediate_->wait(syncSubmitHandles[syncCurrentIndex], config_.fenceTimeoutNanoseconds);
 }
 
 void VulkanContext::syncMarkSubmitted(VulkanImmediateCommands::SubmitHandle handle) noexcept {
   IGL_PROFILER_FUNCTION();
 
-  syncSubmitHandles_[syncCurrentIndex_] = handle;
+  syncSubmitHandles[syncCurrentIndex] = handle;
 
   syncAcquireNext();
 }

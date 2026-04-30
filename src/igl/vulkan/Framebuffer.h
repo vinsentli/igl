@@ -8,7 +8,6 @@
 #pragma once
 
 #include <unordered_map>
-
 #include <igl/Framebuffer.h>
 #include <igl/vulkan/Common.h>
 
@@ -106,9 +105,9 @@ class Framebuffer final : public IFramebuffer {
 
   /// @brief Structure used as key for unordered map based on all framebuffer attachments
   struct Attachments {
-    std::vector<VkImageView> attachments_;
+    std::vector<VkImageView> attachments;
     bool operator==(const Attachments& other) const {
-      return attachments_ == other.attachments_;
+      return attachments == other.attachments;
     }
   };
 

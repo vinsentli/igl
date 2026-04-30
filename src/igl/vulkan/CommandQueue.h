@@ -18,26 +18,26 @@ class CommandBuffer;
 /** @brief Implements the igl::ICommandQueue interface for Vulkan. Currently, this class only
  * supports one command buffer active at a time, tracked by an internal flag set to true in
  * `createCommandBuffer()` and reset in `endCommandBuffer()` (automatically called from `submit()`).
- * This class also implements shader debugging facilities, which are executed after a command buffer
- * is submitted. This extra pass is only executed if the context provides additional information for
- * rendering. It is disabled by default.
  */
 class CommandQueue final : public ICommandQueue {
  public:
   CommandQueue(Device& device, const CommandQueueDesc& desc);
 
-  ~CommandQueue() override = default;
+  ~CommandQueue() override {
+    IGL_DEBUG_ASSERT(numBuffersLeftToSubmit_ == 0);
+  }
+
+  CommandQueue(const CommandQueue&) = delete;
+  CommandQueue& operator=(const CommandQueue&) = delete;
+  CommandQueue(CommandQueue&&) = delete;
+  CommandQueue& operator=(CommandQueue&&) = delete;
 
   /// @brief Create a new command buffer. Sets the internal flag that tracks an active command
   /// buffer has been created.
   std::shared_ptr<ICommandBuffer> createCommandBuffer(const CommandBufferDesc& desc,
-                                                      Result* outResult) override;
+                                                      Result* IGL_NULLABLE outResult) override;
 
-  /// @brief Submits the `commandBuffer` for execution on the GPU. If the enhanced shader debugging
-  /// is enabled (stored data is available in the context), this function will install barriers
-  /// before the command buffer is executed. It will also execute the shader debugging render pass
-  /// by calling `enhancedShaderDebuggingPass()`. If the enhanced shader debugging is enabled,
-  /// presenting the image is disabled.
+  /// @brief Submits the `commandBuffer` for execution on the GPU.
   /// @param cmdBuffer The command buffer to be submitted.
   /// @param endOfFrame Not used
   SubmitHandle submit(const ICommandBuffer& cmdBuffer, bool endOfFrame = false) override;
@@ -56,9 +56,8 @@ class CommandQueue final : public ICommandQueue {
  private:
   Device& device_;
 
-  /// @brief Flag indicating whether or not there is an active command buffer. Currently only one
-  /// command buffer can be active at a time.
-  bool isInsideFrame_ = false;
+  /// @brief Counter indicating whether or not there is an active command buffer. C
+  int numBuffersLeftToSubmit_ = 0;
 };
 
 } // namespace igl::vulkan

@@ -17,22 +17,26 @@ namespace igl::vulkan {
 
 void PipelineState::initializeSpvModuleInfoFromShaderStages(const VulkanContext& ctx,
                                                             IShaderStages* stages) {
-  auto* smComp = static_cast<ShaderModule*>(stages->getComputeModule().get());
+  const ShaderStagesType shaderStagesType = stages->getType();
 
   VkShaderStageFlags pushConstantMask = 0;
 
-  if (smComp) {
+  switch (shaderStagesType) {
+  case igl::ShaderStagesType::Compute: {
     // compute
+    auto* smComp = static_cast<ShaderModule*>(stages->getComputeModule().get());
+
     ensureShaderModule(smComp);
 
-    info_ = smComp->getVulkanShaderModule().getSpvModuleInfo();
+    info = smComp->getVulkanShaderModule().getSpvModuleInfo();
 
-    if (info_.hasPushConstants) {
+    if (info.hasPushConstants) {
       pushConstantMask |= VK_SHADER_STAGE_COMPUTE_BIT;
     }
 
-    stageFlags_ = VK_SHADER_STAGE_COMPUTE_BIT;
-  } else {
+    stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+  } break;
+  case igl::ShaderStagesType::Render: {
     auto* smVert = static_cast<ShaderModule*>(stages->getVertexModule().get());
     auto* smFrag = static_cast<ShaderModule*>(stages->getFragmentModule().get());
 
@@ -50,10 +54,50 @@ void PipelineState::initializeSpvModuleInfoFromShaderStages(const VulkanContext&
       pushConstantMask |= VK_SHADER_STAGE_FRAGMENT_BIT;
     }
 
-    info_ = util::mergeReflectionData(infoVert, infoFrag);
+    info = util::mergeReflectionData(infoVert, infoFrag);
 
-    stageFlags_ = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-  }
+    stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+  } break;
+  case igl::ShaderStagesType::RenderMeshShader: {
+    auto* smTask = static_cast<ShaderModule*>(stages->getTaskModule().get());
+    auto* smMesh = static_cast<ShaderModule*>(stages->getMeshModule().get());
+    auto* smFrag = static_cast<ShaderModule*>(stages->getFragmentModule().get());
+
+    ensureShaderModule(smMesh);
+    ensureShaderModule(smFrag);
+
+    const util::SpvModuleInfo& infoMesh = smMesh->getVulkanShaderModule().getSpvModuleInfo();
+    const util::SpvModuleInfo& infoFrag = smFrag->getVulkanShaderModule().getSpvModuleInfo();
+
+    if (infoMesh.hasPushConstants) {
+      pushConstantMask |= VK_SHADER_STAGE_MESH_BIT_EXT;
+    }
+    if (infoFrag.hasPushConstants) {
+      pushConstantMask |= VK_SHADER_STAGE_FRAGMENT_BIT;
+    }
+
+    info = util::mergeReflectionData(infoMesh, infoFrag);
+
+    stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    if (smTask) {
+      ensureShaderModule(smTask);
+
+      const util::SpvModuleInfo& infoTask = smTask->getVulkanShaderModule().getSpvModuleInfo();
+
+      if (infoTask.hasPushConstants) {
+        pushConstantMask |= VK_SHADER_STAGE_TASK_BIT_EXT;
+      }
+
+      info = util::mergeReflectionData(info, infoTask);
+
+      stageFlags |= VK_SHADER_STAGE_TASK_BIT_EXT;
+    }
+  } break;
+  default:
+    IGL_DEBUG_ASSERT_NOT_REACHED();
+    break;
+  };
 
   if (pushConstantMask) {
     const VkPhysicalDeviceLimits& limits = ctx.getVkPhysicalDeviceProperties().limits;
@@ -66,7 +110,11 @@ void PipelineState::initializeSpvModuleInfoFromShaderStages(const VulkanContext&
                     limits.maxPushConstantsSize);
     }
 
-    pushConstantRange_ = ivkGetPushConstantRange(pushConstantMask, 0, kPushConstantsSize);
+    pushConstantRange = VkPushConstantRange{
+        .stageFlags = pushConstantMask,
+        .offset = 0u,
+        .size = kPushConstantsSize,
+    };
   }
 }
 
@@ -80,25 +128,29 @@ PipelineState::PipelineState(
 
   initializeSpvModuleInfoFromShaderStages(ctx, stages);
 
-  VkDescriptorSetLayoutCreateFlagBits flag = ctx.features().has_VK_EXT_descriptor_buffer ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : VkDescriptorSetLayoutCreateFlagBits{};
+  const VkDescriptorSetLayoutCreateFlags flag = ctx.features().has_VK_EXT_descriptor_buffer ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : VkDescriptorSetLayoutCreateFlags{};
 
   // Create all Vulkan descriptor set layouts for this pipeline
 
   // 0. Combined image samplers
   {
     std::vector<VkDescriptorSetLayoutBinding> bindings;
-    bindings.reserve(info_.textures.size());
-    for (const auto& t : info_.textures) {
+    bindings.reserve(info.textures.size());
+    for (const auto& t : info.textures) {
       const uint32_t loc = t.bindingLocation;
-      bindings.emplace_back(ivkGetDescriptorSetLayoutBinding(
-          loc, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, stageFlags_));
+      bindings.emplace_back(VkDescriptorSetLayoutBinding{
+          .binding = loc,
+          .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+          .descriptorCount = 1,
+          .stageFlags = stageFlags,
+      });
       if (loc < IGL_TEXTURE_SAMPLERS_MAX && immutableSamplers && immutableSamplers[loc]) {
         auto* sampler = static_cast<SamplerState*>(immutableSamplers[loc].get());
         bindings.back().pImmutableSamplers = &ctx.samplers_.get(sampler->sampler_)->vkSampler;
       }
     }
     std::vector<VkDescriptorBindingFlags> bindingFlags(bindings.size());
-    dslCombinedImageSamplers_ = std::make_unique<VulkanDescriptorSetLayout>(
+    dslCombinedImageSamplers = std::make_unique<VulkanDescriptorSetLayout>(
         ctx,
         flag,
         static_cast<uint32_t>(bindings.size()),
@@ -109,19 +161,23 @@ PipelineState::PipelineState(
   // 1. Buffers
   {
     std::vector<VkDescriptorSetLayoutBinding> bindings;
-    bindings.reserve(info_.buffers.size());
-    for (const auto& b : info_.buffers) {
+    bindings.reserve(info.buffers.size());
+    for (const auto& b : info.buffers) {
       const bool isDynamic = (isDynamicBufferMask & (1ul << b.bindingLocation)) != 0;
       const VkDescriptorType type = b.isStorage
                                         ? (isDynamic ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
                                                      : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
                                         : (isDynamic ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
                                                      : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-      bindings.emplace_back(
-          ivkGetDescriptorSetLayoutBinding(b.bindingLocation, type, 1, stageFlags_));
+      bindings.emplace_back(VkDescriptorSetLayoutBinding{
+          .binding = b.bindingLocation,
+          .descriptorType = type,
+          .descriptorCount = 1,
+          .stageFlags = stageFlags,
+      });
     }
     std::vector<VkDescriptorBindingFlags> bindingFlags(bindings.size());
-    dslBuffers_ = std::make_unique<VulkanDescriptorSetLayout>(
+    dslBuffers = std::make_unique<VulkanDescriptorSetLayout>(
         ctx,
         flag,
         static_cast<uint32_t>(bindings.size()),
@@ -134,14 +190,18 @@ PipelineState::PipelineState(
   // 3. Storage images
   {
     std::vector<VkDescriptorSetLayoutBinding> bindings;
-    bindings.reserve(info_.images.size());
-    for (const auto& t : info_.images) {
+    bindings.reserve(info.images.size());
+    for (const auto& t : info.images) {
       const uint32_t loc = t.bindingLocation;
-      bindings.emplace_back(
-          ivkGetDescriptorSetLayoutBinding(loc, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, stageFlags_));
+      bindings.emplace_back(VkDescriptorSetLayoutBinding{
+          .binding = loc,
+          .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+          .descriptorCount = 1,
+          .stageFlags = stageFlags,
+      });
     }
     std::vector<VkDescriptorBindingFlags> bindingFlags(bindings.size());
-    dslStorageImages_ = std::make_unique<VulkanDescriptorSetLayout>(
+    dslStorageImages = std::make_unique<VulkanDescriptorSetLayout>(
         ctx,
         flag,
         static_cast<uint32_t>(bindings.size()),
@@ -152,9 +212,9 @@ PipelineState::PipelineState(
 }
 
 VkPipelineLayout PipelineState::getVkPipelineLayout() const {
-  IGL_DEBUG_ASSERT(pipelineLayout_);
+  IGL_DEBUG_ASSERT(pipelineLayout);
 
-  return pipelineLayout_;
+  return pipelineLayout;
 }
 
 } // namespace igl::vulkan

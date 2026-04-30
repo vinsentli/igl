@@ -5,15 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gtest/gtest.h>
+
+#include <igl/ComputeCommandEncoder.h>
+
 #include "data/ShaderData.h"
 #include "util/Common.h"
 
-#include <gtest/gtest.h>
 #include <memory>
 #include <vector>
 #include <igl/Buffer.h>
 #include <igl/CommandBuffer.h>
-#include <igl/ComputeCommandEncoder.h>
 #include <igl/ComputePipelineState.h>
 #include <igl/Shader.h>
 #include <igl/ShaderCreator.h>
@@ -46,12 +48,19 @@ class ComputeCommandEncoderTest : public ::testing::Test {
       return;
     }
 
-    const BufferDesc vbInDesc = BufferDesc(
-        BufferDesc::BufferTypeBits::Storage, dataIn.data(), sizeof(float) * dataIn.size());
+    const BufferDesc vbInDesc{
+        .type = BufferDesc::BufferTypeBits::Storage,
+        .data = dataIn.data(),
+        .length = sizeof(float) * dataIn.size(),
+    };
     bufferIn_ = iglDev_->createBuffer(vbInDesc, nullptr);
     ASSERT_TRUE(bufferIn_ != nullptr);
-    const BufferDesc bufferOutDesc =
-        BufferDesc(BufferDesc::BufferTypeBits::Storage, nullptr, sizeof(float) * dataIn.size());
+    // Use ResourceStorage::Shared for output buffers so they can be mapped for reading
+    const BufferDesc bufferOutDesc{
+        .type = BufferDesc::BufferTypeBits::Storage,
+        .length = sizeof(float) * dataIn.size(),
+        .storage = ResourceStorage::Shared,
+    };
     bufferOut0_ = iglDev_->createBuffer(bufferOutDesc, nullptr);
     ASSERT_TRUE(bufferOut0_ != nullptr);
     bufferOut1_ = iglDev_->createBuffer(bufferOutDesc, nullptr);
@@ -60,24 +69,27 @@ class ComputeCommandEncoderTest : public ::testing::Test {
     ASSERT_TRUE(bufferOut2_ != nullptr);
 
     { // Compile CS
-      const char* entryName = nullptr;
-      const char* source = nullptr;
+      std::string_view entryName;
+      std::string_view source;
       if (iglDev_->getBackendType() == igl::BackendType::OpenGL) {
-        source = igl::tests::data::shader::OGL_SIMPLE_COMPUTE_SHADER;
-        entryName = igl::tests::data::shader::simpleComputeFunc;
+        source = igl::tests::data::shader::kOglSimpleComputeShader;
+        entryName = igl::tests::data::shader::kSimpleComputeFunc;
       } else if (iglDev_->getBackendType() == igl::BackendType::Vulkan) {
-        source = igl::tests::data::shader::VULKAN_SIMPLE_COMPUTE_SHADER;
+        source = igl::tests::data::shader::kVulkanSimpleComputeShader;
         entryName = "main"; // entry point is not pipelined. Hardcoding to main for now.
       } else if (iglDev_->getBackendType() == igl::BackendType::Metal) {
-        source = igl::tests::data::shader::MTL_SIMPLE_COMPUTE_SHADER;
-        entryName = igl::tests::data::shader::simpleComputeFunc;
+        source = igl::tests::data::shader::kMtlSimpleComputeShader;
+        entryName = igl::tests::data::shader::kSimpleComputeFunc;
+      } else if (iglDev_->getBackendType() == igl::BackendType::D3D12) {
+        source = igl::tests::data::shader::kD3D12SimpleComputeShader;
+        entryName = igl::tests::data::shader::kSimpleComputeFunc;
       } else {
         IGL_DEBUG_ASSERT_NOT_REACHED();
       }
 
       Result ret;
-      computeStages_ =
-          ShaderStagesCreator::fromModuleStringInput(*iglDev_, source, entryName, "", &ret);
+      computeStages_ = ShaderStagesCreator::fromModuleStringInput(
+          *iglDev_, source.data(), std::string(entryName), "", &ret);
       ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
       ASSERT_TRUE(computeStages_ != nullptr);
     }
@@ -94,10 +106,10 @@ class ComputeCommandEncoderTest : public ::testing::Test {
     ASSERT_TRUE(computeStages_ != nullptr);
     ComputePipelineDesc computeDesc;
     computeDesc.shaderStages = computeStages_;
-    computeDesc.buffersMap[igl::tests::data::shader::simpleComputeInputIndex] =
-        genNameHandle(igl::tests::data::shader::simpleComputeInput);
-    computeDesc.buffersMap[igl::tests::data::shader::simpleComputeOutputIndex] =
-        genNameHandle(igl::tests::data::shader::simpleComputeOutput);
+    computeDesc.buffersMap[igl::tests::data::shader::kSimpleComputeInputIndex] =
+        IGL_NAMEHANDLE(igl::tests::data::shader::kSimpleComputeInput);
+    computeDesc.buffersMap[igl::tests::data::shader::kSimpleComputeOutputIndex] =
+        IGL_NAMEHANDLE(igl::tests::data::shader::kSimpleComputeOutput);
     auto computePipelineState = iglDev_->createComputePipeline(computeDesc, nullptr);
     ASSERT_TRUE(computePipelineState != nullptr);
 
@@ -107,8 +119,9 @@ class ComputeCommandEncoderTest : public ::testing::Test {
     computeEncoder->insertDebugEventLabel("Running ComputeCommandEncoderTest...");
 
     computeEncoder->bindComputePipelineState(computePipelineState);
-    computeEncoder->bindBuffer(igl::tests::data::shader::simpleComputeInputIndex, bufferIn.get());
-    computeEncoder->bindBuffer(igl::tests::data::shader::simpleComputeOutputIndex, bufferOut.get());
+    computeEncoder->bindBuffer(igl::tests::data::shader::kSimpleComputeInputIndex, bufferIn.get());
+    computeEncoder->bindBuffer(igl::tests::data::shader::kSimpleComputeOutputIndex,
+                               bufferOut.get());
 
     const Dimensions threadgroupSize(dataIn.size(), 1, 1);
     const Dimensions threadgroupCount(1, 1, 1);
@@ -258,21 +271,24 @@ TEST_F(ComputeCommandEncoderTest, copyBuffer) {
 
   std::vector<uint8_t> dataIn2 = {0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 10};
 
-  auto bufferSrc = iglDev_->createBuffer(BufferDesc(BufferDesc::BufferTypeBits::Storage,
-                                                    dataIn2.data(),
-                                                    dataIn2.size(),
-                                                    ResourceStorage::Private,
-                                                    0,
-                                                    "bufferSrc"),
-                                         nullptr);
+  auto bufferSrc = iglDev_->createBuffer(
+      BufferDesc{
+          .type = BufferDesc::BufferTypeBits::Storage,
+          .data = dataIn2.data(),
+          .length = dataIn2.size(),
+          .storage = ResourceStorage::Private,
+          .debugName = "bufferSrc",
+      },
+      nullptr);
 
-  auto bufferDst = iglDev_->createBuffer(BufferDesc(BufferDesc::BufferTypeBits::Storage,
-                                                    nullptr,
-                                                    dataIn2.size(),
-                                                    ResourceStorage::Shared,
-                                                    0,
-                                                    "bufferDst"),
-                                         nullptr);
+  auto bufferDst = iglDev_->createBuffer(
+      BufferDesc{
+          .type = BufferDesc::BufferTypeBits::Storage,
+          .length = dataIn2.size(),
+          .storage = ResourceStorage::Shared,
+          .debugName = "bufferDst",
+      },
+      nullptr);
 
   {
     auto cmdBuffer = cmdQueue_->createCommandBuffer({}, nullptr);

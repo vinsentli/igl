@@ -22,10 +22,11 @@ std::set<VulkanQueueDescriptor> enumerateQueues(const VulkanFunctionTable& vf,
   std::set<VulkanQueueDescriptor> descriptors;
   for (uint32_t i = 0; i != properties.size(); i++) {
     for (uint32_t j = 0; j != properties[i].queueCount; j++) {
-      VulkanQueueDescriptor descriptor;
-      descriptor.queueIndex = j;
-      descriptor.familyIndex = i;
-      descriptor.queueFlags = properties[i].queueFlags;
+      const VulkanQueueDescriptor descriptor = {
+          .queueFlags = properties[i].queueFlags,
+          .queueIndex = j,
+          .familyIndex = i,
+      };
       descriptors.insert(descriptor);
     }
   }
@@ -105,15 +106,16 @@ std::vector<VkDeviceQueueCreateInfo> VulkanQueuePool::getQueueCreationInfos() co
     queues[queue.familyIndex].push_back(queue);
   }
 
-  static const float queuePriority = 1.0f;
+  static constexpr float kQueuePriority = 1.0f;
   std::vector<VkDeviceQueueCreateInfo> qcis;
+  qcis.reserve(queues.size());
   for (const auto& [family, descriptors] : queues) {
-    VkDeviceQueueCreateInfo qci{};
-    qci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    qci.queueFamilyIndex = family;
-    qci.queueCount = static_cast<uint32_t>(descriptors.size());
-    qci.pQueuePriorities = &queuePriority;
-    qcis.push_back(qci);
+    qcis.emplace_back(VkDeviceQueueCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        .queueFamilyIndex = family,
+        .queueCount = static_cast<uint32_t>(descriptors.size()),
+        .pQueuePriorities = &kQueuePriority,
+    });
   }
   return qcis;
 }

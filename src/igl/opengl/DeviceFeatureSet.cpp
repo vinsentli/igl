@@ -7,6 +7,8 @@
 
 #include <igl/opengl/DeviceFeatureSet.h>
 
+#include <cstdio>
+#include <cstring>
 #include <igl/Common.h>
 #include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/IContext.h>
@@ -89,6 +91,75 @@ bool hasDesktopOrESExtension(const DeviceFeatureSet& dfs, const char* extension)
 }
 } // namespace
 
+GpuTimerTier classifyGpuTimerTier(const char* renderer, const char* vendor) {
+  if (renderer == nullptr) {
+    return GpuTimerTier::Disabled;
+  }
+
+  // Adreno (Qualcomm): vendor cross-check + numeric range parsing.
+  // Handles both "Adreno (TM) NNN" and newer "Adreno NNN" formats.
+  int adrenoNumber = 0;
+  if (vendor != nullptr && std::strcmp(vendor, "Qualcomm") == 0 &&
+      (std::sscanf(renderer, "Adreno (TM) %d", &adrenoNumber) == 1 ||
+       std::sscanf(renderer, "Adreno %d", &adrenoNumber) == 1)) {
+    if (adrenoNumber < 620) {
+      return GpuTimerTier::Disabled; // 3xx–619: 0 slots
+    }
+    if (adrenoNumber < 640) {
+      return GpuTimerTier::Conservative; // 620, 630: 32 slots
+    }
+    return GpuTimerTier::Full; // 640+: 64 slots
+  }
+
+  // Mali (ARM): vendor cross-check + numeric range.
+  int maliNumber = 0;
+  if (vendor != nullptr && std::strcmp(vendor, "ARM") == 0 &&
+      std::sscanf(renderer, "Mali-G%d", &maliNumber) == 1) {
+    if (maliNumber <= 68) {
+      return GpuTimerTier::Disabled; // G31–G68: 0 slots
+    }
+    if (maliNumber <= 76) {
+      return GpuTimerTier::Conservative; // G72, G76: 32 slots
+    }
+    return GpuTimerTier::Full; // G77+: 64 slots
+  }
+
+  // Mali-T series: all are budget GPUs with broken timer query implementations.
+  // Common models: T720, T760, T820, T830, T860, T880.
+  // SEV S647462: these were not covered by the Mali-G pattern and fell through
+  // to the Full tier default, causing SIGSEGV on driver-internal resource overflow.
+  // ARM ships at least three vendor string variants ("ARM", "ARM Limited" on some
+  // Samsung devices, "Arm" with newer branding) — accept all three.
+  int maliTNumber = 0;
+  if (vendor != nullptr &&
+      (std::strcmp(vendor, "ARM") == 0 || std::strcmp(vendor, "ARM Limited") == 0 ||
+       std::strcmp(vendor, "Arm") == 0) &&
+      std::sscanf(renderer, "Mali-T%d", &maliTNumber) == 1) {
+    return GpuTimerTier::Disabled;
+  }
+
+  // PowerVR (Imagination Technologies): vendor cross-check + prefix match.
+  // Covers GE8 (Rogue, broken), Rogue GX (older, worse), and SGX (legacy, no
+  // hardware timer support). Newer Android drivers report vendor as
+  // "Imagination" (without "Technologies") — accept both spellings.
+  if (vendor != nullptr &&
+      (std::strcmp(vendor, "Imagination Technologies") == 0 ||
+       std::strcmp(vendor, "Imagination") == 0) &&
+      (std::strncmp(renderer, "PowerVR Rogue GE8", 17) == 0 ||
+       std::strncmp(renderer, "PowerVR Rogue GX", 16) == 0 ||
+       std::strncmp(renderer, "PowerVR SGX", 11) == 0)) {
+    return GpuTimerTier::Disabled;
+  }
+
+  // Samsung Xclipse (RDNA2): vendor cross-check.
+  if (vendor != nullptr && std::strcmp(vendor, "Samsung") == 0 &&
+      std::strstr(renderer, "Xclipse") != nullptr) {
+    return GpuTimerTier::Conservative;
+  }
+
+  return GpuTimerTier::Full;
+}
+
 bool DeviceFeatureSet::usesOpenGLES() noexcept {
 #if IGL_OPENGL_ES
   return true;
@@ -122,44 +193,46 @@ ShaderVersion DeviceFeatureSet::getShaderVersion() const {
 BackendVersion DeviceFeatureSet::getBackendVersion() const {
   switch (version_) {
   case GLVersion::v1_1:
-    return {BackendFlavor::OpenGL, 1, 1};
+    return {.flavor = BackendFlavor::OpenGL, .majorVersion = 1, .minorVersion = 1};
   case GLVersion::v2_0:
-    return {BackendFlavor::OpenGL, 2, 0};
+    return {.flavor = BackendFlavor::OpenGL, .majorVersion = 2, .minorVersion = 0};
   case GLVersion::v2_1:
-    return {BackendFlavor::OpenGL, 2, 1};
+    return {.flavor = BackendFlavor::OpenGL, .majorVersion = 2, .minorVersion = 1};
   case GLVersion::v3_0:
-    return {BackendFlavor::OpenGL, 3, 0};
+    return {.flavor = BackendFlavor::OpenGL, .majorVersion = 3, .minorVersion = 0};
   case GLVersion::v3_1:
-    return {BackendFlavor::OpenGL, 3, 1};
+    return {.flavor = BackendFlavor::OpenGL, .majorVersion = 3, .minorVersion = 1};
   case GLVersion::v3_2:
-    return {BackendFlavor::OpenGL, 3, 2};
+    return {.flavor = BackendFlavor::OpenGL, .majorVersion = 3, .minorVersion = 2};
   case GLVersion::v3_3:
-    return {BackendFlavor::OpenGL, 3, 3};
+    return {.flavor = BackendFlavor::OpenGL, .majorVersion = 3, .minorVersion = 3};
   case GLVersion::v4_0:
-    return {BackendFlavor::OpenGL, 4, 0};
+    return {.flavor = BackendFlavor::OpenGL, .majorVersion = 4, .minorVersion = 0};
   case GLVersion::v4_1:
-    return {BackendFlavor::OpenGL, 4, 1};
+    return {.flavor = BackendFlavor::OpenGL, .majorVersion = 4, .minorVersion = 1};
   case GLVersion::v4_2:
-    return {BackendFlavor::OpenGL, 4, 2};
+    return {.flavor = BackendFlavor::OpenGL, .majorVersion = 4, .minorVersion = 2};
   case GLVersion::v4_3:
-    return {BackendFlavor::OpenGL, 4, 3};
+    return {.flavor = BackendFlavor::OpenGL, .majorVersion = 4, .minorVersion = 3};
   case GLVersion::v4_4:
-    return {BackendFlavor::OpenGL, 4, 4};
+    return {.flavor = BackendFlavor::OpenGL, .majorVersion = 4, .minorVersion = 4};
   case GLVersion::v4_5:
-    return {BackendFlavor::OpenGL, 4, 5};
+    return {.flavor = BackendFlavor::OpenGL, .majorVersion = 4, .minorVersion = 5};
   case GLVersion::v4_6:
-    return {BackendFlavor::OpenGL, 4, 6};
+    return {.flavor = BackendFlavor::OpenGL, .majorVersion = 4, .minorVersion = 6};
   case GLVersion::v2_0_ES:
-    return {BackendFlavor::OpenGL_ES, 2, 0};
+    return {.flavor = BackendFlavor::OpenGL_ES, .majorVersion = 2, .minorVersion = 0};
   case GLVersion::v3_0_ES:
-    return {BackendFlavor::OpenGL_ES, 3, 0};
+    return {.flavor = BackendFlavor::OpenGL_ES, .majorVersion = 3, .minorVersion = 0};
   case GLVersion::v3_1_ES:
-    return {BackendFlavor::OpenGL_ES, 3, 1};
+    return {.flavor = BackendFlavor::OpenGL_ES, .majorVersion = 3, .minorVersion = 1};
   case GLVersion::v3_2_ES:
-    return {BackendFlavor::OpenGL_ES, 3, 2};
+    return {.flavor = BackendFlavor::OpenGL_ES, .majorVersion = 3, .minorVersion = 2};
   case GLVersion::NotAvailable:
     IGL_DEBUG_ASSERT_NOT_REACHED();
-    return {usesOpenGLES() ? BackendFlavor::OpenGL_ES : BackendFlavor::OpenGL, 2, 0};
+    return {.flavor = usesOpenGLES() ? BackendFlavor::OpenGL_ES : BackendFlavor::OpenGL,
+            .majorVersion = 2,
+            .minorVersion = 0};
   }
   IGL_UNREACHABLE_RETURN({});
 }
@@ -255,14 +328,29 @@ bool DeviceFeatureSet::isExtensionSupported(Extensions extension) const {
     return hasESExtension(*this, "GL_EXT_texture_rg");
   case Extensions::TextureSrgb:
     return hasDesktopExtension(*this, "GL_EXT_texture_sRGB");
-  case Extensions::TextureType2_10_10_10_Rev:
+  case Extensions::TextureType2101010Rev:
     return hasESExtension(*this, "GL_EXT_texture_type_2_10_10_10_REV");
+  case Extensions::TimerQuery:
+    return hasDesktopOrESExtension(*this, "GL_ARB_timer_query", "GL_EXT_disjoint_timer_query");
   case Extensions::VertexArrayObject:
     return hasESExtension(*this, "GL_OES_vertex_array_object");
   case Extensions::VertexAttribDivisor:
     return hasESExtension(*this, "GL_NV_instanced_arrays");
   }
   IGL_UNREACHABLE_RETURN(false)
+}
+
+GpuTimerTier DeviceFeatureSet::getGpuTimerTier() const {
+  if (!hasExtension(Extensions::TimerQuery)) {
+    return GpuTimerTier::Disabled;
+  }
+  const auto* renderer = reinterpret_cast<const char*>(glContext_.getString(GL_RENDERER));
+  const auto* vendor = reinterpret_cast<const char*>(glContext_.getString(GL_VENDOR));
+  return classifyGpuTimerTier(renderer, vendor);
+}
+
+uint32_t DeviceFeatureSet::getTimerQueryMaxSlots() const {
+  return static_cast<uint32_t>(getGpuTimerTier());
 }
 
 bool DeviceFeatureSet::isFeatureSupported(DeviceFeatures feature) const {
@@ -465,6 +553,12 @@ bool DeviceFeatureSet::isFeatureSupported(DeviceFeatures feature) const {
 
   case DeviceFeatures::Indices8Bit:
     return true;
+
+  case DeviceFeatures::TimestampQueries:
+    return getGpuTimerTier() != GpuTimerTier::Disabled;
+
+  case DeviceFeatures::Timers:
+    return hasExtension(Extensions::TimerQuery);
   }
 
   return false;
@@ -472,6 +566,9 @@ bool DeviceFeatureSet::isFeatureSupported(DeviceFeatures feature) const {
 
 bool DeviceFeatureSet::isInternalFeatureSupported(InternalFeatures feature) const {
   switch (feature) {
+  case InternalFeatures::ClearBufferfv:
+    return hasDesktopOrESVersion(*this, GLVersion::v3_0, GLVersion::v3_0_ES);
+
   case InternalFeatures::ClearDepthf:
     return hasDesktopOrESVersion(*this, GLVersion::v4_1, GLVersion::v2_0_ES);
 
@@ -486,6 +583,14 @@ bool DeviceFeatureSet::isInternalFeatureSupported(InternalFeatures feature) cons
   case InternalFeatures::DebugMessageCallback:
     return hasDesktopOrESVersion(*this, GLVersion::v4_3, GLVersion::v3_2_ES) ||
            hasExtension(Extensions::Debug);
+
+  case InternalFeatures::DrawArraysIndirect:
+    return hasDesktopOrESVersionOrExtension(
+        *this, GLVersion::v4_0, GLVersion::v3_1_ES, "GL_ARB_draw_indirect");
+
+  case InternalFeatures::MultiDrawIndirect:
+    return hasDesktopVersionOrExtension(*this, GLVersion::v4_3, "GL_ARB_multi_draw_indirect") ||
+           hasESExtension(*this, "GL_EXT_multi_draw_indirect");
 
   case InternalFeatures::FramebufferBlit:
     // TODO: Add support for GL_ANGLE_framebuffer_blit
@@ -507,6 +612,9 @@ bool DeviceFeatureSet::isInternalFeatureSupported(InternalFeatures feature) cons
 
   case InternalFeatures::MapBuffer:
     return hasDesktopVersion(*this, GLVersion::v2_0) || hasExtension(Extensions::MapBuffer);
+
+  case InternalFeatures::PackRowLength:
+    return hasDesktopOrESVersion(*this, GLVersion::v2_0, GLVersion::v3_0_ES);
 
   case InternalFeatures::PixelBufferObject:
     return hasDesktopOrESVersionOrExtension(*this,
@@ -539,6 +647,13 @@ bool DeviceFeatureSet::isInternalFeatureSupported(InternalFeatures feature) cons
            hasDesktopExtension(*this, "GL_ARB_shader_image_load_store") ||
            hasExtension(Extensions::ShaderImageLoadStore);
 
+  case InternalFeatures::TextureClampToBorder:
+    return hasDesktopOrESVersionOrExtension(*this,
+                                            GLVersion::v2_0,
+                                            GLVersion::v3_2_ES,
+                                            "GL_ARB_texture_border_clamp",
+                                            "GL_EXT_texture_border_clamp");
+
   case InternalFeatures::TextureCompare:
     return hasDesktopOrESVersion(*this, GLVersion::v2_0, GLVersion::v3_0_ES) ||
            hasESExtension(*this, "GL_EXT_shadow_samplers");
@@ -564,13 +679,6 @@ bool DeviceFeatureSet::isInternalFeatureSupported(InternalFeatures feature) cons
   case InternalFeatures::VertexAttribDivisor:
     return hasDesktopOrESVersion(*this, GLVersion::v3_3, GLVersion::v3_0_ES) ||
            hasExtension(Extensions::VertexAttribDivisor);
-
-  case InternalFeatures::DrawArraysIndirect:
-    return hasDesktopOrESVersionOrExtension(
-        *this, GLVersion::v4_0, GLVersion::v3_1_ES, "GL_ARB_draw_indirect");
-
-  case InternalFeatures::PackRowLength:
-    return hasDesktopOrESVersion(*this, GLVersion::v2_0, GLVersion::v3_0_ES);
   }
 
   return false;
@@ -597,6 +705,10 @@ bool DeviceFeatureSet::isTextureFeatureSupported(TextureFeatures feature) const 
 
   case TextureFeatures::ColorFormatRgUNorm16:
     return hasDesktopVersionOrExtension(*this, GLVersion::v3_0, "GL_ARB_texture_rg") ||
+           hasESExtension(*this, "GL_EXT_texture_norm16");
+
+  case TextureFeatures::ColorFormatRgbaUNorm16:
+    return hasDesktopVersion(*this, GLVersion::v3_0) ||
            hasESExtension(*this, "GL_EXT_texture_norm16");
 
   case TextureFeatures::ColorRenderbuffer16f:
@@ -699,7 +811,7 @@ bool DeviceFeatureSet::isTextureFeatureSupported(TextureFeatures feature) const 
 
   case TextureFeatures::ColorTexImageRgb10A2:
     return hasTextureFeature(TextureFeatures::ColorRenderbufferRgb10A2) ||
-           hasExtension(Extensions::TextureType2_10_10_10_Rev);
+           hasExtension(Extensions::TextureType2101010Rev);
 
   case TextureFeatures::ColorTexImageRgba8:
     return hasDesktopOrESVersion(*this, GLVersion::v2_0, GLVersion::v3_0_ES) ||
@@ -749,7 +861,7 @@ bool DeviceFeatureSet::isTextureFeatureSupported(TextureFeatures feature) const 
   case TextureFeatures::ColorTexStorageRgb10A2:
     return hasDesktopOrESVersion(*this, GLVersion::v4_2, GLVersion::v3_0_ES) ||
            (hasExtension(Extensions::TexStorage) &&
-            hasExtension(Extensions::TextureType2_10_10_10_Rev));
+            hasExtension(Extensions::TextureType2101010Rev));
 
   case TextureFeatures::ColorTexStorageRgba8:
     return hasTextureFeature(TextureFeatures::ColorRenderbufferRgba8) &&
@@ -979,7 +1091,7 @@ bool DeviceFeatureSet::hasInternalRequirement(InternalRequirement requirement) c
 
   case InternalRequirement::ColorTexImageRgb10A2Unsized:
     return !hasTextureFeature(TextureFeatures::ColorRenderbufferRgb10A2) &&
-           hasExtension(Extensions::TextureType2_10_10_10_Rev);
+           hasExtension(Extensions::TextureType2101010Rev);
 
   case InternalRequirement::ColorTexImageRgba4Unsized:
     return usesOpenGLES() && !hasESVersion(*this, GLVersion::v3_0_ES) &&
@@ -1125,23 +1237,19 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
     return true;
   case DeviceFeatureLimits::ShaderStorageBufferOffsetAlignment:
     tsize = 256;
-#ifdef GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT
-    if (hasFeature(DeviceFeatures::UniformBlocks)) {
+    if (hasFeature(DeviceFeatures::StorageBuffers)) {
       glContext_.getIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &tsize);
     }
-#endif
     result = (size_t)tsize;
     return true;
   case DeviceFeatureLimits::BufferAlignment:
     result = 16;
-#ifdef GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT
     if (hasFeature(DeviceFeatures::UniformBlocks)) {
       if (glContext_.isCurrentContext()) {
         glContext_.getIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &tsize);
         result = std::max((size_t)tsize, result);
       }
     }
-#endif
     return true;
   case DeviceFeatureLimits::BufferNoCopyAlignment:
     result = 0;
@@ -1155,6 +1263,59 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
       glContext_.getIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &tsize);
       result = std::max((size_t)tsize, result);
     }
+    return true;
+  case DeviceFeatureLimits::MaxTextureDimension3D:
+    glContext_.getIntegerv(GL_MAX_3D_TEXTURE_SIZE, &tsize);
+    result = (size_t)tsize;
+    return true;
+  case DeviceFeatureLimits::MaxComputeWorkGroupSizeX:
+    if (hasFeature(DeviceFeatures::Compute)) {
+      // OpenGL ES 3.1+ and OpenGL 4.3+: use conservative value
+      result = 64;
+    } else {
+      result = 0;
+    }
+    return true;
+  case DeviceFeatureLimits::MaxComputeWorkGroupSizeY:
+    if (hasFeature(DeviceFeatures::Compute)) {
+      // OpenGL ES 3.1+ and OpenGL 4.3+: use conservative value
+      result = 64;
+    } else {
+      result = 0;
+    }
+    return true;
+  case DeviceFeatureLimits::MaxComputeWorkGroupSizeZ:
+    if (hasFeature(DeviceFeatures::Compute)) {
+      // OpenGL ES 3.1+ and OpenGL 4.3+: use conservative value
+      result = 64;
+    } else {
+      result = 0;
+    }
+    return true;
+  case DeviceFeatureLimits::MaxComputeWorkGroupInvocations:
+    if (hasFeature(DeviceFeatures::Compute)) {
+#if defined(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS)
+      glContext_.getIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &tsize);
+      result = (size_t)tsize;
+#endif
+    } else {
+      result = 0;
+    }
+    return true;
+  // D3D12-specific descriptor heap limits - not applicable to OpenGL
+  case DeviceFeatureLimits::MaxDescriptorHeapCbvSrvUav:
+  case DeviceFeatureLimits::MaxDescriptorHeapSamplers:
+  case DeviceFeatureLimits::MaxDescriptorHeapRtvs:
+  case DeviceFeatureLimits::MaxDescriptorHeapDsvs:
+    result = 0;
+    return false;
+  case DeviceFeatureLimits::MaxVertexInputAttributes:
+    glContext_.getIntegerv(GL_MAX_VERTEX_ATTRIBS, &tsize);
+    result = (size_t)tsize;
+    return true;
+  case DeviceFeatureLimits::MaxColorAttachments:
+    glContext_.getIntegerv(GL_MAX_COLOR_ATTACHMENTS, &tsize);
+    result = (size_t)tsize;
     return true;
   default:
     IGL_DEBUG_ABORT(
@@ -1371,6 +1532,11 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getTextureFormatCapab
   case TextureFormat::R_UNorm16:
   case TextureFormat::RG_UNorm16:
     if (hasTextureFeature(TextureFeatures::ColorFormatRgUNorm16)) {
+      capabilities |= all;
+    }
+    break;
+  case TextureFormat::RGBA_UNorm16:
+    if (hasTextureFeature(TextureFeatures::ColorFormatRgbaUNorm16)) {
       capabilities |= all;
     }
     break;
@@ -1603,6 +1769,15 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getTextureFormatCapab
       capabilities |= compressed;
     }
     break;
+
+  case TextureFormat::Invalid:
+  case TextureFormat::YUV_NV12:
+  case TextureFormat::YUV_420p:
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
   default:
     // We are relying on the fact that TextureFormatCapabilities::Unsupported is 0
     return textureCapabilityCache_[format];

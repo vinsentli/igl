@@ -8,7 +8,6 @@
 #include <igl/metal/HWDevice.h>
 
 #import <Foundation/Foundation.h>
-
 #import <Metal/Metal.h>
 #include <igl/Macros.h>
 #include <igl/metal/Device.h>
@@ -89,6 +88,7 @@ std::vector<HWDeviceDesc> HWDevice::queryDevices(IGL_MAYBE_UNUSED const HWDevice
   NSArray<id<MTLDevice>>* deviceList = MTLCopyAllDevices();
 
   // Loop through all devices and return matching ones
+  // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
   for (id<MTLDevice> device in deviceList) {
     // We don't need __bridge_retained here as iOS always provides the same ptr
     const uintptr_t deviceNative = (uintptr_t)(__bridge void*)device;
@@ -139,7 +139,9 @@ std::unique_ptr<IDevice> HWDevice::create(const HWDeviceDesc& desc, Result* outR
     return nullptr;
   }
 
-  return createWithMTLDevice((__bridge id<MTLDevice>)(void*)desc.guid, outResult);
+  return createWithMTLDevice(
+      (__bridge id<MTLDevice>)(void*)desc.guid, // NOLINT(performance-no-int-to-ptr)
+      outResult);
 }
 
 std::unique_ptr<IDevice> HWDevice::createWithSystemDefaultDevice(Result* outResult) {

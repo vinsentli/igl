@@ -7,13 +7,12 @@
 
 #include <igl/opengl/Framebuffer.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <igl/RenderPass.h>
-#include <igl/opengl/Device.h>
+#include <igl/opengl/DeviceFeatureSet.h>
 #include <igl/opengl/DummyTexture.h>
-#include <igl/opengl/Errors.h>
-
-#include <algorithm>
+#include <igl/opengl/GLIncludes.h>
 #if !IGL_PLATFORM_ANDROID
 #include <string>
 #else
@@ -148,7 +147,7 @@ bool Framebuffer::isSwapchainBound() const {
   return frameBufferID_ == 0;
 }
 
-void Framebuffer::attachAsColor(igl::ITexture& texture,
+void Framebuffer::attachAsColor(ITexture& texture,
                                 uint32_t index,
                                 const Texture::AttachmentParams& params) const {
   static_cast<Texture&>(texture).attachAsColor(index, params);
@@ -160,8 +159,7 @@ void Framebuffer::attachAsColor(igl::ITexture& texture,
                                        params.mipLevel);
 }
 
-void Framebuffer::attachAsDepth(igl::ITexture& texture,
-                                const Texture::AttachmentParams& params) const {
+void Framebuffer::attachAsDepth(ITexture& texture, const Texture::AttachmentParams& params) const {
   static_cast<Texture&>(texture).attachAsDepth(params);
   depthCachedState_.updateCache(params.stereo ? FramebufferMode::Stereo : FramebufferMode::Mono,
                                 params.layer,
@@ -169,7 +167,7 @@ void Framebuffer::attachAsDepth(igl::ITexture& texture,
                                 params.mipLevel);
 }
 
-void Framebuffer::attachAsStencil(igl::ITexture& texture,
+void Framebuffer::attachAsStencil(ITexture& texture,
                                   const Texture::AttachmentParams& params) const {
   static_cast<Texture&>(texture).attachAsStencil(params);
   stencilCachedState_.updateCache(params.stereo ? FramebufferMode::Stereo : FramebufferMode::Mono,
@@ -215,7 +213,7 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* unused */,
 
   CustomFramebuffer extraFramebuffer(getContext());
 
-  auto& texture = static_cast<igl::opengl::Texture&>(*itexture);
+  auto& texture = static_cast<Texture&>(*itexture);
 
   if (isCustomFrameBuffer()){
     Result ret;
@@ -397,24 +395,24 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& /*cmdQueue*/,
 }
 
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
-bool Framebuffer::CachedState::needsUpdate(FramebufferMode mode,
-                                           uint8_t layer,
-                                           uint8_t face,
-                                           uint8_t mipLevel) {
+bool Framebuffer::CachedState::needsUpdate(FramebufferMode newMode,
+                                           uint8_t newLayer,
+                                           uint8_t newFace,
+                                           uint8_t newMipLevel) {
   // NOLINTEND(bugprone-easily-swappable-parameters)
-  return mode_ != mode || layer_ != layer || face_ != face || mipLevel_ != mipLevel;
+  return mode != newMode || layer != newLayer || face != newFace || mipLevel != newMipLevel;
 }
 
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
-void Framebuffer::CachedState::updateCache(FramebufferMode mode,
-                                           uint8_t layer,
-                                           uint8_t face,
-                                           uint8_t mipLevel) {
+void Framebuffer::CachedState::updateCache(FramebufferMode newMode,
+                                           uint8_t newLayer,
+                                           uint8_t newFace,
+                                           uint8_t newMipLevel) {
   // NOLINTEND(bugprone-easily-swappable-parameters)
-  mode_ = mode;
-  layer_ = layer;
-  face_ = face;
-  mipLevel_ = mipLevel;
+  mode = newMode;
+  layer = newLayer;
+  face = newFace;
+  mipLevel = newMipLevel;
 }
 
 ///--------------------------------------
@@ -467,7 +465,7 @@ FramebufferMode CustomFramebuffer::getMode() const {
 }
 
 void CustomFramebuffer::updateDrawable(std::shared_ptr<ITexture> texture) {
-  updateDrawableInternal({std::move(texture), nullptr}, false);
+  updateDrawableInternal({.color = std::move(texture), .depth = nullptr}, false);
 }
 
 void CustomFramebuffer::updateDrawable(SurfaceTextures surfaceTextures) {
@@ -475,8 +473,8 @@ void CustomFramebuffer::updateDrawable(SurfaceTextures surfaceTextures) {
 }
 
 void CustomFramebuffer::updateResolveAttachment(std::shared_ptr<ITexture> texture) {
-  if (resolveFramebuffer) {
-    resolveFramebuffer->updateDrawable(std::move(texture));
+  if (resolveFramebuffer_) {
+    resolveFramebuffer_->updateDrawable(std::move(texture));
   }
 }
 
@@ -644,9 +642,9 @@ void CustomFramebuffer::prepareResource(const std::string& debugName, Result* ou
   if (createResolveFramebuffer && maskColorResolveAttachments != maskColorAttachments) {
     IGL_DEBUG_ASSERT_NOT_REACHED();
     if (outResult) {
-      *outResult = igl::Result(igl::Result::Code::ArgumentInvalid,
-                               "If resolve texture is specified on a color attachment it must be "
-                               "specified on all of them");
+      *outResult = Result(igl::Result::Code::ArgumentInvalid,
+                          "If resolve texture is specified on a color attachment it must be "
+                          "specified on all of them");
     }
     return;
   }
@@ -666,7 +664,7 @@ void CustomFramebuffer::prepareResource(const std::string& debugName, Result* ou
     if (outResult) {
       *outResult = result;
     }
-    resolveFramebuffer = std::move(cfb);
+    resolveFramebuffer_ = std::move(cfb);
   }
 }
 
@@ -679,12 +677,12 @@ Viewport CustomFramebuffer::getViewport() const {
 
   if (texture == nullptr) {
     IGL_DEBUG_ABORT("No color/depth attachments in CustomFrameBuffer at index 0");
-    return {0, 0, 0, 0};
+    return {.x = 0, .y = 0, .width = 0, .height = 0};
   }
 
   // By default, we set viewport to dimensions of framebuffer
   const auto size = texture->getSize();
-  return {0, 0, size.width, size.height};
+  return {.x = 0, .y = 0, .width = size.width, .height = size.height};
 }
 
 void CustomFramebuffer::bind(const RenderPassDesc& renderPass) const {
@@ -695,11 +693,13 @@ void CustomFramebuffer::bind(const RenderPassDesc& renderPass) const {
 
   bindBuffer();
 
+  int targetCount = 0;
   for (size_t i = 0; i != IGL_COLOR_ATTACHMENTS_MAX; i++) {
     const auto& colorAttachment = renderTarget_.colorAttachments[i];
     if (!colorAttachment.texture) {
       continue;
     }
+    targetCount++;
 #if !IGL_OPENGL_ES
     // OpenGL ES doesn't need to call glEnable. All it needs is an sRGB framebuffer.
     if (getContext().deviceFeatures().hasFeature(DeviceFeatures::SRGB)) {
@@ -748,16 +748,30 @@ void CustomFramebuffer::bind(const RenderPassDesc& renderPass) const {
   }
   // clear the buffers if we're not loading previous contents
   GLbitfield clearMask = 0;
-  for (size_t index = 0; index != IGL_COLOR_ATTACHMENTS_MAX; index++) {
-    const auto& colorAttachment = renderTarget_.colorAttachments[index];
+  if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::ClearBufferfv) &&
+      targetCount > 1) {
+    for (size_t index = 0; index != IGL_COLOR_ATTACHMENTS_MAX; index++) {
+      const auto& colorAttachment = renderTarget_.colorAttachments[index];
 
-    if (colorAttachment.texture != nullptr &&
-        renderPass_.colorAttachments[index].loadAction == LoadAction::Clear) {
-      auto clearColor = renderPass_.colorAttachments[index].clearColor;
+      if (colorAttachment.texture != nullptr &&
+          renderPass_.colorAttachments[index].loadAction == LoadAction::Clear) {
+        auto clearColor = renderPass_.colorAttachments[index].clearColor;
+        getContext().colorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        getContext().clearBufferfv(GL_COLOR, (GLint)index, clearColor.toFloatPtr());
+      }
+    }
+  } else {
+    const auto& colorAttachment0 = renderTarget_.colorAttachments[0];
+
+    if (colorAttachment0.texture != nullptr &&
+        renderPass_.colorAttachments[0].loadAction == LoadAction::Clear) {
+      clearMask |= GL_COLOR_BUFFER_BIT;
+      auto clearColor = renderPass_.colorAttachments[0].clearColor;
       getContext().colorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-      getContext().clearBufferfv(GL_COLOR, (GLint)index, clearColor.toFloatPtr());
+      getContext().clearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
     }
   }
+
   if (renderTarget_.depthAttachment.texture != nullptr) {
     if (renderPass_.depthAttachment.loadAction == LoadAction::Clear) {
       clearMask |= GL_DEPTH_BUFFER_BIT;
@@ -823,8 +837,8 @@ CurrentFramebuffer::CurrentFramebuffer(IContext& context) : Super(context) {
   viewport_.height = static_cast<float>(viewport[3]);
 
   colorAttachment_ = std::make_shared<DummyTexture>(Size(viewport_.width, viewport_.height));
-  depthCachedState_.layer_ = -1;
-  stencilCachedState_.layer_ = -1;
+  depthCachedState_.layer = -1;
+  stencilCachedState_.layer = -1;
 }
 
 std::vector<size_t> CurrentFramebuffer::getColorAttachmentIndices() const {

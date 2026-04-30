@@ -7,14 +7,12 @@
 
 #include <igl/metal/CommandBuffer.h>
 
-#import <Foundation/Foundation.h>
-
+#import <Foundation/NSString.h>
 #import <Metal/Metal.h>
 #include <igl/metal/Buffer.h>
 #include <igl/metal/ComputeCommandEncoder.h>
 #include <igl/metal/RenderCommandEncoder.h>
 #include <igl/metal/Texture.h>
-
 namespace igl::metal {
 
 CommandBuffer::CommandBuffer(Device& device, id<MTLCommandBuffer> value, CommandBufferDesc desc) :

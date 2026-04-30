@@ -15,7 +15,7 @@ VulkanSemaphore::VulkanSemaphore(const VulkanFunctionTable& vf,
                                  VkDevice device,
                                  bool exportable,
                                  const char* debugName) :
-  vf_(&vf), device_(device) {
+  vf_(&vf), device_(device), exportable_(exportable) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
   const VkExportSemaphoreCreateInfo exportInfo = {
@@ -27,9 +27,9 @@ VulkanSemaphore::VulkanSemaphore(const VulkanFunctionTable& vf,
       .pNext = exportable ? &exportInfo : nullptr,
       .flags = 0,
   };
-  VK_ASSERT(vf_->vkCreateSemaphore(device, &ci, nullptr, &vkSemaphore_));
+  VK_ASSERT(vf_->vkCreateSemaphore(device_, &ci, nullptr, &vkSemaphore_));
   VK_ASSERT(ivkSetDebugObjectName(
-      vf_, device_, VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)vkSemaphore_, debugName));
+      vf_, device_, VK_OBJECT_TYPE_SEMAPHORE, reinterpret_cast<uint64_t>(vkSemaphore_), debugName));
 }
 
 VulkanSemaphore::VulkanSemaphore(const VulkanFunctionTable& vf,
@@ -37,7 +37,7 @@ VulkanSemaphore::VulkanSemaphore(const VulkanFunctionTable& vf,
                                  uint64_t initialValue,
                                  bool exportable,
                                  const char* debugName) :
-  vf_(&vf), device_(device) {
+  vf_(&vf), device_(device), exportable_(exportable) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
   const VkExportSemaphoreCreateInfo exportInfo = {
@@ -55,9 +55,9 @@ VulkanSemaphore::VulkanSemaphore(const VulkanFunctionTable& vf,
       .pNext = &semaphoreTypeCreateInfo,
       .flags = 0,
   };
-  VK_ASSERT(vf_->vkCreateSemaphore(device, &ci, nullptr, &vkSemaphore_));
+  VK_ASSERT(vf_->vkCreateSemaphore(device_, &ci, nullptr, &vkSemaphore_));
   VK_ASSERT(ivkSetDebugObjectName(
-      vf_, device_, VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)vkSemaphore_, debugName));
+      vf_, device_, VK_OBJECT_TYPE_SEMAPHORE, reinterpret_cast<uint64_t>(vkSemaphore_), debugName));
 }
 
 VulkanSemaphore ::~VulkanSemaphore() {
@@ -74,6 +74,7 @@ VulkanSemaphore::VulkanSemaphore(VulkanSemaphore&& other) noexcept {
   std::swap(vf_, other.vf_);
   std::swap(device_, other.device_);
   std::swap(vkSemaphore_, other.vkSemaphore_);
+  std::swap(exportable_, other.exportable_);
 }
 
 VulkanSemaphore& VulkanSemaphore::operator=(VulkanSemaphore&& other) noexcept {
@@ -81,6 +82,7 @@ VulkanSemaphore& VulkanSemaphore::operator=(VulkanSemaphore&& other) noexcept {
   std::swap(vf_, tmp.vf_);
   std::swap(device_, tmp.device_);
   std::swap(vkSemaphore_, tmp.vkSemaphore_);
+  std::swap(exportable_, tmp.exportable_);
   return *this;
 }
 
@@ -89,23 +91,24 @@ VkSemaphore VulkanSemaphore::getVkSemaphore() const noexcept {
 }
 
 // Exportable semaphores are not used right now, so exclude from coverage
-// @MARK:COVERAGE_EXCLUDE_START
+// FIXME_DEPRECATED_COVERAGE_EXCLUDE_START
 int VulkanSemaphore::getFileDescriptor() const noexcept {
-  // This is intentionally c++17 compatible and not c++20 style
-  // because there are libraries that rely on this code
-  // that are not yet moved forward to c++20
-  VkSemaphoreGetFdInfoKHR fdInfo;
-  fdInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR;
-  fdInfo.pNext = nullptr;
-  fdInfo.semaphore = vkSemaphore_;
-  fdInfo.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT;
+  if (!exportable_) {
+    return -1;
+  }
+  const VkSemaphoreGetFdInfoKHR fdInfo = {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR,
+      .pNext = nullptr,
+      .semaphore = vkSemaphore_,
+      .handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT,
+  };
   int fd = -1;
-  auto ok = vf_->vkGetSemaphoreFdKHR(device_, &fdInfo, &fd);
+  const VkResult ok = vf_->vkGetSemaphoreFdKHR(device_, &fdInfo, &fd);
   if (ok == VK_SUCCESS) {
     return fd;
   }
   return -1;
 }
-// @MARK:COVERAGE_EXCLUDE_END
+// FIXME_DEPRECATED_COVERAGE_EXCLUDE_END
 
 } // namespace igl::vulkan

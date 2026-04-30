@@ -9,6 +9,8 @@
 
 #import "AppDelegate.h"
 
+#import <Foundation/NSObjCRuntime.h>
+#import <UIKit/UIApplication.h>
 #import <shell/shared/platform/Platform.h>
 
 int main(int argc, char* argv[]) {

@@ -8,15 +8,12 @@
 #include "Framebuffer.h"
 
 #include <igl/CommandBuffer.h>
-#include <igl/RenderPass.h>
+#include <igl/CommandQueue.h>
 #include <igl/vulkan/CommandBuffer.h>
-#include <igl/vulkan/CommandQueue.h>
 #include <igl/vulkan/Common.h>
-#include <igl/vulkan/ComputePipelineState.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/Texture.h>
 #include <igl/vulkan/VulkanContext.h>
-#include <igl/vulkan/VulkanDevice.h>
 #include <igl/vulkan/VulkanFramebuffer.h>
 #include <igl/vulkan/VulkanImage.h>
 #include <igl/vulkan/VulkanStagingDevice.h>
@@ -82,8 +79,8 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* Not Used */,
   const auto& vkTex = static_cast<Texture&>(
       itexture->getSamples() == 1 ? *itexture : *getResolveColorAttachment(index));
   const VkRect2D imageRegion = {
-      VkOffset2D{static_cast<int32_t>(range.x), static_cast<int32_t>(range.y)},
-      VkExtent2D{range.width, range.height},
+      .offset = {.x = static_cast<int32_t>(range.x), .y = static_cast<int32_t>(range.y)},
+      .extent = {.width = range.width, .height = range.height},
   };
 
   if (bytesPerRow == 0) {
@@ -92,7 +89,7 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* Not Used */,
   // Vulkan uses array layer to represent either cube face or array layer. IGL's TextureRangeDesc
   // represents these separately. This gets the correct vulkan array layer for the either the
   // range's cube face or array layer.
-  const auto layer = getVkLayer(itexture->getType(), range.face, range.layer);
+  const uint32_t layer = getVkLayer(itexture->getType(), range.face, range.layer);
 
   const VulkanContext& ctx = device_.getVulkanContext();
   ctx.stagingDevice_->getImageData2D(vkTex.getVkImage(),
@@ -137,8 +134,8 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
   // Extract the underlying VkCommandBuffer
   const CommandBufferDesc cbDesc;
   const std::shared_ptr<ICommandBuffer> buffer = cmdQueue.createCommandBuffer(cbDesc, nullptr);
-  const auto& vulkanBuffer = static_cast<CommandBuffer&>(*buffer);
-  VkCommandBuffer cmdBuf = vulkanBuffer.getVkCommandBuffer();
+  const auto& vulkanBuffer = static_cast<const CommandBuffer&>(*buffer);
+  const VkCommandBuffer cmdBuf = vulkanBuffer.getVkCommandBuffer();
 
   const std::shared_ptr<ITexture>& srcTexture = getColorAttachment(index);
   if (!IGL_DEBUG_VERIFY(srcTexture)) {
@@ -174,11 +171,13 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
       VK_PIPELINE_STAGE_TRANSFER_BIT,
       VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
   // 3. Copy Image
-  const VkImageCopy copy =
-      ivkGetImageCopy2D(VkOffset2D{static_cast<int32_t>(range.x), static_cast<int32_t>(range.y)},
-                        VkImageSubresourceLayers{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                        VkImageSubresourceLayers{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                        VkExtent2D{range.width, range.height});
+  const VkImageCopy copy = {
+      .srcSubresource = VkImageSubresourceLayers{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+      .srcOffset = {.x = static_cast<int32_t>(range.x), .y = static_cast<int32_t>(range.y), .z = 0},
+      .dstSubresource = VkImageSubresourceLayers{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+      .dstOffset = {.x = static_cast<int32_t>(range.x), .y = static_cast<int32_t>(range.y), .z = 0},
+      .extent = {.width = range.width, .height = range.height, .depth = 1u},
+  };
 
   ctx.vf_.vkCmdCopyImage(cmdBuf,
                          srcVkTex.getVkImage(),
@@ -209,7 +208,7 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
 }
 
 void Framebuffer::updateDrawable(std::shared_ptr<ITexture> texture) {
-  updateDrawableInternal({std::move(texture), nullptr}, false);
+  updateDrawableInternal({.color = std::move(texture), .depth = nullptr}, false);
 }
 
 void Framebuffer::updateDrawable(SurfaceTextures surfaceTextures) {
@@ -258,6 +257,7 @@ void Framebuffer::updateDrawableInternal(SurfaceTextures surfaceTextures, bool u
 
 Framebuffer::Framebuffer(const Device& device, FramebufferDesc desc) :
   device_(device), desc_(std::move(desc)) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   validateAttachments();
 }
 
@@ -329,13 +329,13 @@ VkFramebuffer Framebuffer::getVkFramebuffer(uint32_t mipLevel,
     IGL_DEBUG_ASSERT(colorAttachment.texture);
 
     const auto& colorTexture = static_cast<Texture&>(*colorAttachment.texture);
-    attachments.attachments_.push_back(
+    attachments.attachments.push_back(
         colorTexture.getVkImageViewForFramebuffer(mipLevel, layer, desc_.mode));
     // handle color MSAA
     if (colorAttachment.resolveTexture) {
       IGL_DEBUG_ASSERT(mipLevel == 0);
       const auto& colorResolveTexture = static_cast<Texture&>(*colorAttachment.resolveTexture);
-      attachments.attachments_.push_back(
+      attachments.attachments.push_back(
           colorResolveTexture.getVkImageViewForFramebuffer(0, layer, desc_.mode));
     }
   }
@@ -343,7 +343,7 @@ VkFramebuffer Framebuffer::getVkFramebuffer(uint32_t mipLevel,
   {
     const auto* depthTexture = static_cast<Texture*>(desc_.depthAttachment.texture.get());
     if (depthTexture) {
-      attachments.attachments_.push_back(
+      attachments.attachments.push_back(
           depthTexture->getVkImageViewForFramebuffer(mipLevel, layer, desc_.mode));
     }
   }
@@ -352,7 +352,7 @@ VkFramebuffer Framebuffer::getVkFramebuffer(uint32_t mipLevel,
     const auto* depthResolveTexture =
         static_cast<Texture*>(desc_.depthAttachment.resolveTexture.get());
     if (depthResolveTexture) {
-      attachments.attachments_.push_back(
+      attachments.attachments.push_back(
           depthResolveTexture->getVkImageViewForFramebuffer(mipLevel, layer, desc_.mode));
     }
   }
@@ -369,14 +369,15 @@ VkFramebuffer Framebuffer::getVkFramebuffer(uint32_t mipLevel,
   const uint32_t fbWidth = std::max(width_ >> mipLevel, 1u);
   const uint32_t fbHeight = std::max(height_ >> mipLevel, 1u);
 
-  auto fb = std::make_shared<VulkanFramebuffer>(ctx,
-                                                ctx.device_->getVkDevice(),
-                                                fbWidth,
-                                                fbHeight,
-                                                pass,
-                                                (uint32_t)attachments.attachments_.size(),
-                                                attachments.attachments_.data(),
-                                                desc_.debugName.c_str());
+  auto fb =
+      std::make_shared<VulkanFramebuffer>(ctx,
+                                          ctx.getVkDevice(),
+                                          fbWidth,
+                                          fbHeight,
+                                          pass,
+                                          static_cast<uint32_t>(attachments.attachments.size()),
+                                          attachments.attachments.data(),
+                                          desc_.debugName.c_str());
 
   framebuffers_[attachments] = fb;
 
@@ -386,7 +387,7 @@ VkFramebuffer Framebuffer::getVkFramebuffer(uint32_t mipLevel,
 uint64_t Framebuffer::HashFunction::operator()(const Attachments& attachments) const {
   uint64_t hash = 0;
 
-  for (const auto& a : attachments.attachments_) {
+  for (const auto& a : attachments.attachments) {
     hash ^= std::hash<VkImageView>()(a);
   }
 
@@ -400,17 +401,19 @@ VkRenderPassBeginInfo Framebuffer::getRenderPassBeginInfo(VkRenderPass renderPas
                                                           const VkClearValue* clearValues) const {
   IGL_PROFILER_FUNCTION();
 
-  VkRenderPassBeginInfo bi = {};
-  bi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-  bi.pNext = nullptr;
-  bi.renderPass = renderPass;
-  bi.framebuffer = getVkFramebuffer(mipLevel, layer, renderPass);
-  bi.renderArea =
-      VkRect2D{VkOffset2D{0, 0},
-               VkExtent2D{std::max(width_ >> mipLevel, 1u), std::max(height_ >> mipLevel, 1u)}};
-  bi.clearValueCount = numClearValues;
-  bi.pClearValues = clearValues;
-  return bi;
+  return VkRenderPassBeginInfo{
+      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+      .renderPass = renderPass,
+      .framebuffer = getVkFramebuffer(mipLevel, layer, renderPass),
+      .renderArea =
+          {
+              .offset = {.x = 0, .y = 0},
+              .extent = {.width = std::max(width_ >> mipLevel, 1u),
+                         .height = std::max(height_ >> mipLevel, 1u)},
+          },
+      .clearValueCount = numClearValues,
+      .pClearValues = clearValues,
+  };
 }
 
 FramebufferMode Framebuffer::getMode() const {

@@ -6,8 +6,8 @@
  */
 
 #include "TestDevice.h"
-#include "Common.h"
 
+#include <igl/Device.h>
 #include <igl/tests/util/device/TestDevice.h>
 
 namespace igl::tests::util {
@@ -37,6 +37,8 @@ std::shared_ptr<IDevice> createTestDevice() {
     return device::createTestDevice(::igl::BackendType::Metal);
   } else if (backend == "vulkan") {
     return device::createTestDevice(::igl::BackendType::Vulkan);
+  } else if (backend == "d3d12") {
+    return device::createTestDevice(::igl::BackendType::D3D12);
   // @fb-only
     // @fb-only
   } else {

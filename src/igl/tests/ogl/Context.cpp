@@ -5,10 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gtest/gtest.h>
+
 #include "../util/TestDevice.h"
 
-#include <gtest/gtest.h>
-#include <igl/Macros.h>
+#include <igl/Common.h>
+#include <igl/DeviceFeatures.h>
+#include <igl/Texture.h>
 #include <igl/opengl/Device.h>
 #include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/IContext.h>
@@ -247,9 +250,7 @@ TEST_F(ContextOGLTest, CheckForErrorsInvalidOperation) {
 
   // Clean up
   context_->bindTexture(GL_TEXTURE_2D, textureMap);
-  std::vector<GLuint> textures;
-  textures.push_back(textureMap);
-  context_->deleteTextures(textures);
+  context_->deleteTextures(1, &textureMap);
 
   context_->bindFramebuffer(GL_FRAMEBUFFER, 0);
   context_->deleteFramebuffers(1, &framebufferId);
@@ -282,9 +283,7 @@ TEST_F(ContextOGLTest, CheckForErrorsInvalidValue) {
 
   // Clean up
   context_->bindTexture(GL_TEXTURE_2D, textureMap);
-  std::vector<GLuint> textures;
-  textures.push_back(textureMap);
-  context_->deleteTextures(textures);
+  context_->deleteTextures(1, &textureMap);
 
   context_->bindFramebuffer(GL_FRAMEBUFFER, 0);
   context_->deleteFramebuffers(1, &framebufferId);

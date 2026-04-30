@@ -26,12 +26,22 @@ class TinyRenderer final {
             ANativeWindow* nativeWindow,
             shell::IRenderSessionFactory& factor,
             BackendVersion backendVersion,
-            TextureFormat swapchainColorTextureFormat);
+            TextureFormat swapchainColorTextureFormat,
+            const std::vector<std::string>& args = {});
   void recreateSwapchain(ANativeWindow* nativeWindow, bool createSurface); // only for Vulkan
-  void render(float displayScale);
+
+  /// @brief Renders a frame
+  /// @param displayScale The display scale factor
+  /// @return true if the application should exit (e.g., benchmark timeout)
+  bool render(float displayScale);
+
   void onSurfacesChanged(ANativeWindow* nativeWindow, int width, int height);
   void touchEvent(bool isDown, float x, float y, float dx, float dy);
   void setClearColorValue(float r, float g, float b, float a);
+
+  [[nodiscard]] bool isHeadless() const noexcept {
+    return shellParams_.isHeadless;
+  }
 
   [[nodiscard]] const BackendVersion& backendVersion() const noexcept {
     return backendVersion_;
@@ -47,6 +57,22 @@ class TinyRenderer final {
   uint32_t height_ = 0;
   TextureFormat swapchainColorTextureFormat_ = TextureFormat::RGBA_UNorm8;
   ANativeWindow* nativeWindow_ = nullptr;
+
+  // Offscreen textures for headless rendering
+  std::shared_ptr<ITexture> offscreenColorTexture_;
+  std::shared_ptr<ITexture> offscreenDepthTexture_;
+
+  // Multiview stereo present resources (Vulkan only, used with --force-multiview)
+  std::shared_ptr<ITexture> multiviewColor_;
+  std::shared_ptr<ITexture> multiviewDepth_;
+  std::shared_ptr<ITexture> swapchainColor_;
+  std::shared_ptr<ICommandQueue> presentQueue_;
+  std::shared_ptr<IRenderPipelineState> presentPipeline_;
+  std::shared_ptr<ISamplerState> presentSampler_;
+  bool stereoPresentInitialized_ = false;
+
+  void initStereoPresent(IDevice& device);
+  void stereoPresent(IDevice& device);
 };
 
 } // namespace igl::samples

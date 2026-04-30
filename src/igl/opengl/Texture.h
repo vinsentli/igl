@@ -20,7 +20,11 @@ namespace opengl {
 // 2. render targets (attachments to framebuffers)
 class Texture : public WithContext, public ITexture {
  public:
-  Texture(IContext& context, TextureFormat format) : WithContext(context), ITexture(format) {}
+  Texture(IContext& context,
+          TextureFormat format,
+          TextureDesc::TextureMipmapGeneration mipmapGeneration =
+              TextureDesc::TextureMipmapGeneration::Manual) :
+    WithContext(context), ITexture(format), mipmapGeneration_(mipmapGeneration) {}
   ~Texture() override = default;
 
  public:
@@ -36,6 +40,8 @@ class Texture : public WithContext, public ITexture {
   [[nodiscard]] bool isRequiredGenerateMipmap() const override;
   [[nodiscard]] uint64_t getTextureId() const override;
   [[nodiscard]] bool isSwapchainTexture() const override;
+  [[nodiscard]] virtual bool canPresent() const noexcept;
+  [[nodiscard]] TextureDesc::TextureMipmapGeneration getMipmapGeneration() const;
 
   virtual Result create(const TextureDesc& desc, bool hasStorageAlready);
 
@@ -70,6 +76,11 @@ class Texture : public WithContext, public ITexture {
   // @fb-only
   // @fb-only
   [[nodiscard]] virtual GLuint getId() const = 0;
+
+  // IAttachmentInterop interface
+  [[nodiscard]] void* IGL_NULLABLE getNativeImage() const override;
+  [[nodiscard]] void* IGL_NULLABLE getNativeImageView() const override;
+  [[nodiscard]] const base::AttachmentInteropDesc& getDesc() const override;
 
   /// @brief Calculates a value for GL_PACK_ALIGNMENT or GL_UNPACK_ALIGNMENT for the given byte
   /// stride.
@@ -113,10 +124,10 @@ class Texture : public WithContext, public ITexture {
                              FormatDescGL& outFormatGL);
 
  protected:
-  IGL_INLINE GLsizei getWidth() const {
+  [[nodiscard]] IGL_INLINE GLsizei getWidth() const {
     return width_;
   }
-  IGL_INLINE GLsizei getHeight() const {
+  [[nodiscard]] IGL_INLINE GLsizei getHeight() const {
     return height_;
   }
   // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
@@ -133,6 +144,8 @@ class Texture : public WithContext, public ITexture {
   GLenum glInternalFormat_{};
   uint32_t numMipLevels_ = 1;
   TextureType type_ = TextureType::Invalid;
+  TextureDesc::TextureMipmapGeneration mipmapGeneration_ =
+      TextureDesc::TextureMipmapGeneration::Manual;
 
  private:
   size_t samplerHash_ = std::numeric_limits<size_t>::max();
@@ -142,6 +155,7 @@ class Texture : public WithContext, public ITexture {
   GLsizei numLayers_ = 1;
   uint32_t numSamples_ = 1;
   bool isCreated_ = false;
+  mutable base::AttachmentInteropDesc attachmentDesc_; // Cached for IAttachmentInterop::getDesc()
 };
 
 } // namespace opengl

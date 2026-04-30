@@ -7,8 +7,8 @@
 
 #pragma once
 
+#import <Metal/Metal.h>
 #include <igl/DeviceFeatures.h>
-#include <igl/metal/PlatformDevice.h>
 
 namespace igl::metal {
 
@@ -46,6 +46,7 @@ class DeviceFeatureSet final {
   size_t maxMultisampleCount_;
   size_t maxBufferLength_;
   bool supports32BitFloatFiltering_ = false;
+  bool supportsTimestampQueries_ = false;
 };
 
 } // namespace igl::metal

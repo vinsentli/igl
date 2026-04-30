@@ -8,7 +8,10 @@
 #include <igl/metal/RenderCommandEncoder.h>
 
 #import <Foundation/Foundation.h>
-#import <Metal/Metal.h>
+#import <Metal/MTLBuffer.h>
+#import <Metal/MTLRenderCommandEncoder.h>
+#import <Metal/MTLRenderPass.h>
+#import <Metal/MTLTypes.h>
 #include <igl/RenderPass.h>
 #include <igl/metal/Buffer.h>
 #include <igl/metal/DepthStencilState.h>
@@ -17,6 +20,7 @@
 #include <igl/metal/RenderPipelineState.h>
 #include <igl/metal/SamplerState.h>
 #include <igl/metal/Texture.h>
+#include <igl/metal/TimestampQueries.h>
 
 namespace igl::metal {
 RenderCommandEncoder::RenderCommandEncoder(const std::shared_ptr<CommandBuffer>& commandBuffer) :
@@ -122,6 +126,45 @@ void RenderCommandEncoder::initialize(const std::shared_ptr<CommandBuffer>& comm
     }
   }
 
+  // Attach counter sample buffer for GPU timestamp queries.
+  // Configure sampleBufferAttachments with sample indices for descriptor-based
+  // sampling (Tracy/Dawn pattern). Metal auto-samples at vertex start and fragment
+  // end.
+  // This is the ONLY approach that works on Apple GPUs (A-series, M-series).
+  if (@available(macOS 11.0, iOS 14.0, *)) {
+    if (renderPass.timestampQuery.queries) {
+      auto metalTsQueries =
+          std::static_pointer_cast<TimestampQueries>(renderPass.timestampQuery.queries);
+      if (metalTsQueries && metalTsQueries->sampleBuffer_ != nil) {
+        const uint32_t startSampleIdx =
+            renderPass.timestampQuery.slotIndex * TimestampQueries::kSamplesPerTimingSlot;
+        const uint32_t endSampleIdx = startSampleIdx + 1;
+        const uint32_t bufferSize =
+            metalTsQueries->maxTimestamps_ * TimestampQueries::kSamplesPerTimingSlot;
+        if (endSampleIdx < bufferSize) {
+          metalRenderPassDesc.sampleBufferAttachments[0].sampleBuffer =
+              metalTsQueries->sampleBuffer_;
+          metalRenderPassDesc.sampleBufferAttachments[0].startOfVertexSampleIndex = startSampleIdx;
+          metalRenderPassDesc.sampleBufferAttachments[0].endOfVertexSampleIndex =
+              MTLCounterDontSample;
+          metalRenderPassDesc.sampleBufferAttachments[0].startOfFragmentSampleIndex =
+              MTLCounterDontSample;
+          metalRenderPassDesc.sampleBufferAttachments[0].endOfFragmentSampleIndex = endSampleIdx;
+
+          // Advance currentIndex_ so resolveTimestamps knows how many samples to resolve.
+          uint32_t requiredCount = endSampleIdx + 1;
+          uint32_t current = metalTsQueries->currentIndex_.load(std::memory_order_relaxed);
+          while (current < requiredCount) {
+            if (metalTsQueries->currentIndex_.compare_exchange_weak(
+                    current, requiredCount, std::memory_order_relaxed)) {
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
   encoder_ = [commandBuffer->get() renderCommandEncoderWithDescriptor:metalRenderPassDesc];
 }
 
@@ -130,6 +173,7 @@ std::unique_ptr<RenderCommandEncoder> RenderCommandEncoder::create(
     const RenderPassDesc& renderPass,
     const std::shared_ptr<IFramebuffer>& framebuffer,
     Result* outResult) {
+  // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
   std::unique_ptr<RenderCommandEncoder> encoder(new RenderCommandEncoder(commandBuffer));
   encoder->initialize(commandBuffer, renderPass, framebuffer, outResult);
   return encoder;
@@ -268,10 +312,10 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
 
   IGL_DEBUG_ASSERT(encoder_);
   IGL_DEBUG_ASSERT(index < IGL_BUFFER_BINDINGS_MAX);
-    
-  auto iglBuffer = static_cast<Buffer*>(buffer);
+
+  auto* iglBuffer = static_cast<Buffer*>(buffer);
   auto metalBuffer = iglBuffer ? iglBuffer->get() : nil;
-    
+
   if ((bindTarget & BindTarget::kVertex) != 0) {
     [encoder_ setVertexBuffer:metalBuffer offset:offset atIndex:index];
   }
@@ -333,7 +377,7 @@ void RenderCommandEncoder::bindBytes(size_t index,
                                      size_t length) {
   IGL_DEBUG_ASSERT(encoder_);
   IGL_DEBUG_ASSERT(bindTarget == BindTarget::kVertex || bindTarget == BindTarget::kFragment ||
-                   bindTarget == BindTarget::kTask || bindTarget == BindTarget::kMesh ||
+                       bindTarget == BindTarget::kTask || bindTarget == BindTarget::kMesh ||
                        bindTarget == BindTarget::kAllGraphics,
                    "Bind target is not valid: %d",
                    bindTarget);
@@ -349,12 +393,14 @@ void RenderCommandEncoder::bindBytes(size_t index,
     if ((bindTarget & BindTarget::kFragment) != 0) {
       [encoder_ setFragmentBytes:data length:length atIndex:index];
     }
-    if (@available(iOS 16, *)) {
-      if ((bindTarget & BindTarget::kTask) != 0) {
-        [encoder_ setObjectBytes:data length:length atIndex:index];
-      }
-      if ((bindTarget & BindTarget::kMesh) != 0) {
-        [encoder_ setMeshBytes:data length:length atIndex:index];
+    if (@available(iOS 16, macOS 13, *)) {
+      if (device_.hasFeature(DeviceFeatures::MeshShaders)) {
+        if ((bindTarget & BindTarget::kTask) != 0) {
+          [encoder_ setObjectBytes:data length:length atIndex:index];
+        }
+        if ((bindTarget & BindTarget::kMesh) != 0) {
+          [encoder_ setMeshBytes:data length:length atIndex:index];
+        }
       }
     }
   }
@@ -369,7 +415,7 @@ void RenderCommandEncoder::bindPushConstants(const void* /*data*/,
 void RenderCommandEncoder::bindTexture(size_t index, uint8_t bindTarget, ITexture* texture) {
   IGL_DEBUG_ASSERT(encoder_);
   IGL_DEBUG_ASSERT(bindTarget == BindTarget::kVertex || bindTarget == BindTarget::kFragment ||
-                   bindTarget == BindTarget::kTask || bindTarget == BindTarget::kMesh ||
+                       bindTarget == BindTarget::kTask || bindTarget == BindTarget::kMesh ||
                        bindTarget == BindTarget::kAllGraphics,
                    "Bind target is not valid: %d",
                    bindTarget);
@@ -383,12 +429,14 @@ void RenderCommandEncoder::bindTexture(size_t index, uint8_t bindTarget, ITextur
   if ((bindTarget & BindTarget::kFragment) != 0) {
     [encoder_ setFragmentTexture:metalTexture atIndex:index];
   }
-  if (@available(iOS 16, *)) {
-    if ((bindTarget & BindTarget::kTask) != 0) {
-      [encoder_ setObjectTexture:metalTexture atIndex:index];
-    }
-    if ((bindTarget & BindTarget::kMesh) != 0) {
-      [encoder_ setMeshTexture:metalTexture atIndex:index];
+  if (@available(iOS 16, macOS 13, *)) {
+    if (device_.hasFeature(DeviceFeatures::MeshShaders)) {
+      if ((bindTarget & BindTarget::kTask) != 0) {
+        [encoder_ setObjectTexture:metalTexture atIndex:index];
+      }
+      if ((bindTarget & BindTarget::kMesh) != 0) {
+        [encoder_ setMeshTexture:metalTexture atIndex:index];
+      }
     }
   }
 }
@@ -408,7 +456,7 @@ void RenderCommandEncoder::bindSamplerState(size_t index,
                                             ISamplerState* samplerState) {
   IGL_DEBUG_ASSERT(encoder_);
   IGL_DEBUG_ASSERT(bindTarget == BindTarget::kVertex || bindTarget == BindTarget::kFragment ||
-                   bindTarget == BindTarget::kTask || bindTarget == BindTarget::kMesh ||
+                       bindTarget == BindTarget::kTask || bindTarget == BindTarget::kMesh ||
                        bindTarget == BindTarget::kAllGraphics,
                    "Bind target is not valid: %d",
                    bindTarget);
@@ -422,12 +470,14 @@ void RenderCommandEncoder::bindSamplerState(size_t index,
   if ((bindTarget & BindTarget::kFragment) != 0) {
     [encoder_ setFragmentSamplerState:metalSamplerState atIndex:index];
   }
-  if (@available(iOS 16, *)) {
-    if ((bindTarget & BindTarget::kTask) != 0) {
-      [encoder_ setObjectSamplerState:metalSamplerState atIndex:index];
-    }
-    if ((bindTarget & BindTarget::kMesh) != 0) {
-      [encoder_ setMeshSamplerState:metalSamplerState atIndex:index];
+  if (@available(iOS 16, macOS 13, *)) {
+    if (device_.hasFeature(DeviceFeatures::MeshShaders)) {
+      if ((bindTarget & BindTarget::kTask) != 0) {
+        [encoder_ setObjectSamplerState:metalSamplerState atIndex:index];
+      }
+      if ((bindTarget & BindTarget::kMesh) != 0) {
+        [encoder_ setMeshSamplerState:metalSamplerState atIndex:index];
+      }
     }
   }
 }
@@ -513,30 +563,33 @@ void RenderCommandEncoder::drawIndexed(size_t indexCount,
 #endif // IGL_PLATFORM_IOS
 }
 
-void RenderCommandEncoder::drawMesh(const Dimensions& threadgroupsPerGrid,
-                                    const Dimensions& threadsPerTaskThreadgroup,
-                                    const Dimensions& threadsPerMeshThreadgroup){
+void RenderCommandEncoder::drawMeshTasks(const Dimensions& threadgroupsPerGrid,
+                                         const Dimensions& threadsPerTaskThreadgroup,
+                                         const Dimensions& threadsPerMeshThreadgroup) {
   IGL_DEBUG_ASSERT(encoder_);
-    
-  if (@available(iOS 16, *)) {
+
+  if (!device_.hasFeature(DeviceFeatures::MeshShaders)) {
+    IGL_DEBUG_ASSERT(false, "Mesh shaders require Apple GPU Family 7 or higher (A14/M1 and later)");
+    return;
+  }
+
+  if (@available(iOS 16, macOS 13, *)) {
     MTLSize tgg;
     tgg.width = threadgroupsPerGrid.width;
     tgg.height = threadgroupsPerGrid.height;
     tgg.depth = threadgroupsPerGrid.depth;
-    
     MTLSize tgt;
     tgt.width = threadsPerTaskThreadgroup.width;
     tgt.height = threadsPerTaskThreadgroup.height;
     tgt.depth = threadsPerTaskThreadgroup.depth;
-    
     MTLSize tgm;
     tgm.width = threadsPerMeshThreadgroup.width;
     tgm.height = threadsPerMeshThreadgroup.height;
     tgm.depth = threadsPerMeshThreadgroup.depth;
-    
-    [encoder_ drawMeshThreadgroups:tgg threadsPerObjectThreadgroup:tgt threadsPerMeshThreadgroup:tgm];
-  } else {
-    IGL_DEBUG_ASSERT_NOT_REACHED();
+
+    [encoder_ drawMeshThreadgroups:tgg
+        threadsPerObjectThreadgroup:tgt
+          threadsPerMeshThreadgroup:tgm];
   }
 }
 
@@ -644,7 +697,7 @@ void RenderCommandEncoder::bindBindGroup(BindGroupTextureHandle handle) {
     return;
   }
 
-  const BindGroupTextureDesc* desc = device_.bindGroupTexturesPool_.get(handle);
+  const BindGroupTextureDesc* desc = device_.bindGroupTexturesPool.get(handle);
 
   for (uint32_t i = 0; i != IGL_TEXTURE_SAMPLERS_MAX; i++) {
     if (desc->textures[i]) {
@@ -662,7 +715,7 @@ void RenderCommandEncoder::bindBindGroup(BindGroupBufferHandle handle,
     return;
   }
 
-  const BindGroupBufferDesc* desc = device_.bindGroupBuffersPool_.get(handle);
+  const BindGroupBufferDesc* desc = device_.bindGroupBuffersPool.get(handle);
 
   uint32_t dynamicOffset = 0;
 

@@ -9,9 +9,9 @@
 
 #include <android/log.h>
 #include <android_native_app_glue.h>
+#include <igl/Device.h>
 #include <igl/IGL.h>
 #include <igl/vulkan/Common.h>
-#include <igl/vulkan/Device.h>
 #include <igl/vulkan/HWDevice.h>
 #include <igl/vulkan/PlatformDevice.h>
 #include <igl/vulkan/VulkanContext.h>
@@ -65,17 +65,17 @@ void main() {
 };
 )";
 
-void initWindow(ANativeWindow* window) {
+void initWindow(ANativeWindow* nativeWindow) {
   // Get the Window first
-  ANativeWindow_acquire(window);
-  window = window;
-  if (window == nullptr) {
+  ANativeWindow_acquire(nativeWindow);
+  window = nativeWindow;
+  if (nativeWindow == nullptr) {
     IGL_SAMPLE_LOG_ERROR("ANativeWindow is null");
     return;
   }
 
-  width = ANativeWindow_getWidth(window);
-  height = ANativeWindow_getHeight(window);
+  width = ANativeWindow_getWidth(nativeWindow);
+  height = ANativeWindow_getHeight(nativeWindow);
   IGL_SAMPLE_LOG_INFO("window size: [%d, %d]", width, height);
 }
 
@@ -153,8 +153,14 @@ void render() {
   CommandBufferDesc cbDesc;
   std::shared_ptr<ICommandBuffer> buffer = commandQueue->createCommandBuffer(cbDesc, nullptr);
 
-  const igl::Viewport viewport = {0.0f, 0.0f, (float)width, (float)height, 0.0f, +1.0f};
-  const igl::ScissorRect scissor = {0, 0, (uint32_t)width, (uint32_t)height};
+  const igl::Viewport viewport = {.x = 0.0f,
+                                  .y = 0.0f,
+                                  .width = (float)width,
+                                  .height = (float)height,
+                                  .minDepth = 0.0f,
+                                  .maxDepth = +1.0f};
+  const igl::ScissorRect scissor = {
+      .x = 0, .y = 0, .width = (uint32_t)width, .height = (uint32_t)height};
 
   // This will clear the framebuffer
   auto commands = buffer->createRenderCommandEncoder(renderPass, framebuffer);

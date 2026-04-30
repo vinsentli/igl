@@ -44,7 +44,7 @@ class Device final : public igl::IDevice {
 
   [[nodiscard]] std::shared_ptr<igl::ICommandQueue> createCommandQueue(
       const igl::CommandQueueDesc& desc,
-      igl::Result* IGL_NULLABLE outResult) final;
+      igl::Result* IGL_NULLABLE outResult) noexcept final;
   [[nodiscard]] std::unique_ptr<igl::IBuffer> createBuffer(const igl::BufferDesc& desc,
                                                            igl::Result* IGL_NULLABLE
                                                                outResult) const noexcept final;
@@ -76,10 +76,13 @@ class Device final : public igl::IDevice {
   [[nodiscard]] std::shared_ptr<igl::IFramebuffer> createFramebuffer(
       const igl::FramebufferDesc& desc,
       igl::Result* IGL_NULLABLE outResult) final;
+  [[nodiscard]] std::shared_ptr<igl::ITimer> createTimer(
+      igl::Result* IGL_NULLABLE outResult) const noexcept final;
   [[nodiscard]] const igl::IPlatformDevice& getPlatformDevice() const noexcept final;
   [[nodiscard]] bool verifyScope() final;
   [[nodiscard]] igl::BackendType getBackendType() const final;
   [[nodiscard]] size_t getCurrentDrawCount() const final;
+  [[nodiscard]] size_t getShaderCompilationCount() const final;
   [[nodiscard]] std::unique_ptr<igl::IShaderLibrary> createShaderLibrary(
       const igl::ShaderLibraryDesc& desc,
       igl::Result* IGL_NULLABLE outResult) const final;
@@ -87,6 +90,9 @@ class Device final : public igl::IDevice {
   [[nodiscard]] std::unique_ptr<igl::IShaderStages> createShaderStages(
       const igl::ShaderStagesDesc& desc,
       igl::Result* IGL_NULLABLE outResult) const final;
+  [[nodiscard]] void* IGL_NULLABLE getNativeDevice() const override {
+    return nullptr;
+  }
 
  private:
   PlatformDevice platformDevice_;

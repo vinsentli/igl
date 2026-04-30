@@ -6,12 +6,22 @@
  */
 
 #include <memory>
-#include <shell/shared/imageLoader/ImageLoader.h>
+#include <shell/shared/platform/Platform.h>
+#if IGL_PLATFORM_ANDROID
 #include <shell/shared/platform/android/PlatformAndroid.h>
+#endif
+#if IGL_PLATFORM_IOS
 #include <shell/shared/platform/ios/PlatformIos.h>
+#endif
+#if IGL_PLATFORM_LINUX
 #include <shell/shared/platform/linux/PlatformLinux.h>
+#endif
+#if IGL_PLATFORM_MACOSX
 #include <shell/shared/platform/mac/PlatformMac.h>
+#endif
+#if IGL_PLATFORM_WINDOWS
 #include <shell/shared/platform/win/PlatformWin.h>
+#endif
 #include <shell/shared/renderSession/ShellParams.h>
 #include <shell/shared/testShell/TestShell.h>
 #include <igl/tests/util/device/TestDevice.h>
@@ -20,7 +30,7 @@ namespace igl::shell {
 
 namespace {
 
-std::shared_ptr<::igl::IDevice> createTestDevice() {
+std::shared_ptr<IDevice> createTestDevice() {
   const std::string backend(IGL_BACKEND_TYPE);
 
   if (backend == "ogl") {
@@ -60,17 +70,17 @@ void ensureCommandLineArgsInitialized() {
 
 } // namespace
 
-void TestShellBase::SetUp(ScreenSize screenSize, bool needsRGBSwapchainSupport) {
+void TestShellBase::setUpInternal(ScreenSize screenSize, bool prefersRGB) {
   ensureCommandLineArgsInitialized();
 
   // Create igl device for requested backend
-  std::shared_ptr<igl::IDevice> iglDevice = createTestDevice();
+  std::shared_ptr<IDevice> iglDevice = createTestDevice();
   ASSERT_TRUE(iglDevice != nullptr);
   // Create platform shell to run the tests with
 #if defined(IGL_PLATFORM_MACOSX) && IGL_PLATFORM_MACOSX
   platform_ = std::make_shared<igl::shell::PlatformMac>(std::move(iglDevice));
 #elif defined(IGL_PLATFORM_IOS) && IGL_PLATFORM_IOS
-  platform_ = std::make_shared<igl::shell::PlatformIos>(std::move(iglDevice));
+  platform_ = std::make_shared<PlatformIos>(std::move(iglDevice));
 #elif defined(IGL_PLATFORM_WINDOWS) && IGL_PLATFORM_WINDOWS
   platform_ = std::make_shared<igl::shell::PlatformWin>(std::move(iglDevice));
 #elif defined(IGL_PLATFORM_ANDROID) && IGL_PLATFORM_ANDROID
@@ -89,22 +99,20 @@ void TestShellBase::SetUp(ScreenSize screenSize, bool needsRGBSwapchainSupport) 
     }
   }
   // Create an offscreen texture to render to
-  igl::Result ret;
-  auto hasNativeSwapchainSupport = platform_->getDevice().hasFeature(DeviceFeatures::SRGBSwapchain);
-  auto colorFormat = platform_->getDevice().getBackendType() == igl::BackendType::Metal
-                         ? igl::TextureFormat::BGRA_SRGB
-                         : igl::TextureFormat::RGBA_SRGB;
-  colorFormat = needsRGBSwapchainSupport && !hasNativeSwapchainSupport ? sRGBToUNorm(colorFormat)
-                                                                       : colorFormat;
-  igl::TextureDesc texDesc = igl::TextureDesc::new2D(
-      colorFormat,
-      screenSize.width,
-      screenSize.height,
-      igl::TextureDesc::TextureUsageBits::Sampled | igl::TextureDesc::TextureUsageBits::Attachment);
+  Result ret;
+  auto hasNativesRGBSupport = platform_->getDevice().hasFeature(DeviceFeatures::SRGB);
+  auto colorFormat = prefersRGB && hasNativesRGBSupport ? igl::TextureFormat::RGBA_SRGB
+                                                        : igl::TextureFormat::RGBA_UNorm8;
+
+  TextureDesc texDesc = igl::TextureDesc::new2D(colorFormat,
+                                                screenSize.width,
+                                                screenSize.height,
+                                                igl::TextureDesc::TextureUsageBits::Sampled |
+                                                    igl::TextureDesc::TextureUsageBits::Attachment);
   offscreenTexture_ = platform_->getDevice().createTexture(texDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_TRUE(offscreenTexture_ != nullptr);
-  igl::TextureDesc depthDextureDesc = igl::TextureDesc::new2D(
+  TextureDesc depthDextureDesc = igl::TextureDesc::new2D(
       igl::TextureFormat::Z_UNorm24,
       screenSize.width,
       screenSize.height,
@@ -115,13 +123,13 @@ void TestShellBase::SetUp(ScreenSize screenSize, bool needsRGBSwapchainSupport) 
   ASSERT_TRUE(offscreenDepthTexture_ != nullptr);
 }
 
-void TestShell::run(igl::shell::RenderSession& session, size_t numFrames) {
+void TestShell::run(RenderSession& session, size_t numFrames) {
   ShellParams shellParams;
   session.setShellParams(shellParams);
   session.initialize();
   for (size_t i = 0; i < numFrames; ++i) {
     const igl::DeviceScope scope(platform_->getDevice());
-    session.update({offscreenTexture_, offscreenDepthTexture_});
+    session.update({.color = offscreenTexture_, .depth = offscreenDepthTexture_});
   }
   session.teardown();
 }

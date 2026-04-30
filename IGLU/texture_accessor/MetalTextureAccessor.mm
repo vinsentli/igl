@@ -6,7 +6,9 @@
  */
 
 #include "MetalTextureAccessor.h"
+
 #include "ITextureAccessor.h"
+
 #include <igl/Buffer.h>
 #include <igl/Texture.h>
 #include <igl/metal/Buffer.h>
@@ -78,7 +80,7 @@ void MetalTextureAccessor::requestBytes(igl::ICommandQueue& commandQueue,
 
   [blitEncoder endEncoding];
 
-  lastRequestCommandBuffer = iglMtlCommandBuffer;
+  lastRequestCommandBuffer_ = iglMtlCommandBuffer;
   status_ = RequestStatus::InProgress;
 
   [metalCmdBuffer addCompletedHandler:^(id<MTLCommandBuffer> cb) {
@@ -107,7 +109,7 @@ RequestStatus MetalTextureAccessor::getRequestStatus() {
 
 std::vector<unsigned char>& MetalTextureAccessor::getBytes() {
   if (status_ == RequestStatus::InProgress) {
-    lastRequestCommandBuffer->waitUntilCompleted();
+    lastRequestCommandBuffer_->waitUntilCompleted();
   }
   return latestBytesRead_;
 }

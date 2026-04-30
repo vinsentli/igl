@@ -9,7 +9,7 @@
 
 #include <shell/openxr/mobile/opengl/XrAppImplGLES.h>
 
-#include <igl/HWDevice.h>
+#include <igl/Common.h>
 #include <igl/opengl/Device.h>
 #if IGL_WGL
 #include <igl/opengl/wgl/Context.h>
@@ -108,7 +108,7 @@ XrSession XrAppImplGLES::initXrSession(XrInstance instance,
       .systemId = systemId,
   };
 
-  XrResult xrResult;
+  XrResult xrResult(XR_SUCCESS);
   XrSession session = nullptr;
   XR_CHECK(xrResult = xrCreateSession(instance, &sessionCreateInfo, &session));
   if (xrResult != XR_SUCCESS) {

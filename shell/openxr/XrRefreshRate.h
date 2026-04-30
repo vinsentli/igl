@@ -7,9 +7,8 @@
 
 #pragma once
 
-#include <shell/openxr/XrPlatform.h>
-
 #include <cstdint>
+#include <shell/openxr/XrPlatform.h>
 #include <vector>
 
 namespace igl::shell::openxr {
@@ -46,7 +45,6 @@ class XrRefreshRate final {
   void queryCurrentRefreshRate() noexcept;
   void querySupportedRefreshRates() noexcept;
 
-  // NOLINTNEXTLINE(misc-misplaced-const)
   const XrSession session_;
 
   // API

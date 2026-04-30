@@ -5,10 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <igl/Buffer.h>
+
 #include "util/Common.h"
 
 #include <string>
-#include <igl/Buffer.h>
 #include <igl/Uniform.h>
 
 namespace igl::tests {
@@ -112,11 +113,13 @@ TEST_F(BufferTest, createWithDebugLabel) {
       3,
       2,
   };
-  BufferDesc bufferDesc = BufferDesc(BufferDesc::BufferTypeBits::Index,
-                                     kIndexData.data(),
-                                     sizeof(kIndexData),
-                                     ResourceStorage::Shared);
-  bufferDesc.debugName = "test";
+  const BufferDesc bufferDesc{
+      .type = BufferDesc::BufferTypeBits::Index,
+      .data = kIndexData.data(),
+      .length = sizeof(kIndexData),
+      .storage = ResourceStorage::Shared,
+      .debugName = "test",
+  };
 
   const std::shared_ptr<IBuffer> buffer = iglDev_->createBuffer(bufferDesc, &ret);
 
@@ -138,8 +141,12 @@ TEST_F(BufferTest, mapIndexBuffer) {
       3,
       2,
   };
-  const BufferDesc bufferDesc = BufferDesc(
-      BufferDesc::BufferTypeBits::Index, indexData, sizeof(indexData), ResourceStorage::Shared);
+  const BufferDesc bufferDesc{
+      .type = BufferDesc::BufferTypeBits::Index,
+      .data = indexData,
+      .length = sizeof(indexData),
+      .storage = ResourceStorage::Shared,
+  };
   const std::shared_ptr<IBuffer> buffer = iglDev_->createBuffer(bufferDesc, &ret);
 
   ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -174,8 +181,12 @@ TEST_F(BufferTest, mapBufferRangeIndexBuffer) {
       3,
       2,
   };
-  const BufferDesc bufferDesc = BufferDesc(
-      BufferDesc::BufferTypeBits::Index, indexData, sizeof(indexData), ResourceStorage::Shared);
+  const BufferDesc bufferDesc{
+      .type = BufferDesc::BufferTypeBits::Index,
+      .data = indexData,
+      .length = sizeof(indexData),
+      .storage = ResourceStorage::Shared,
+  };
   const std::shared_ptr<IBuffer> buffer = iglDev_->createBuffer(bufferDesc, &ret);
 
   ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -214,8 +225,12 @@ TEST_F(BufferTest, copyBytesErrorsIndexBuffer) {
       3,
       2,
   };
-  const BufferDesc bufferDesc = BufferDesc(
-      BufferDesc::BufferTypeBits::Index, indexData, sizeof(indexData), ResourceStorage::Shared);
+  const BufferDesc bufferDesc{
+      .type = BufferDesc::BufferTypeBits::Index,
+      .data = indexData,
+      .length = sizeof(indexData),
+      .storage = ResourceStorage::Shared,
+  };
   const std::shared_ptr<IBuffer> buffer = iglDev_->createBuffer(bufferDesc, &ret);
 
   ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -239,11 +254,11 @@ TEST_F(BufferTest, mapUniformBuffer) {
   Result ret;
 
   Color color = {1.0f, 5.0f, 7.0f, 1.0f};
-  BufferDesc bufferDesc;
-  bufferDesc.type = BufferDesc::BufferTypeBits::Uniform;
-  bufferDesc.data = &color;
-  bufferDesc.length = sizeof(color);
-
+  const BufferDesc bufferDesc{
+      .type = BufferDesc::BufferTypeBits::Uniform,
+      .data = &color,
+      .length = sizeof(color),
+  };
   const std::shared_ptr<IBuffer> buffer = iglDev_->createBuffer(bufferDesc, &ret);
 
   ASSERT_EQ(ret.code, Result::Code::Ok);

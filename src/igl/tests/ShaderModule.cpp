@@ -5,10 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gtest/gtest.h>
+
 #include "data/ShaderData.h"
 #include "util/Common.h"
 
-#include <gtest/gtest.h>
 #include <igl/Shader.h>
 #include <igl/ShaderCreator.h>
 
@@ -53,12 +54,16 @@ TEST_F(ShaderModuleTest, CompileShaderModuleReturnNull) {
   // Vulkan backend has hard coded asserts that we cannot get past.
   // Manually verified that it will assert if this test were to go
   // through, and therefore it's catching the failure.
-  if (backend_ == util::BACKEND_VUL) {
+  if (backend_ == util::kBackendVul) {
     return;
   }
 
-  auto shaderModule = ShaderModuleCreator::fromStringInput(
-      *iglDev_, "hello world", {ShaderStage::Vertex, "Mordor"}, "test", &ret);
+  auto shaderModule =
+      ShaderModuleCreator::fromStringInput(*iglDev_,
+                                           "hello world",
+                                           {.stage = ShaderStage::Vertex, .entryPoint = "Mordor"},
+                                           "test",
+                                           &ret);
   ASSERT_TRUE(!ret.isOk());
   ASSERT_TRUE(shaderModule == nullptr);
 }
@@ -66,8 +71,8 @@ TEST_F(ShaderModuleTest, CompileShaderModuleReturnNull) {
 TEST_F(ShaderModuleTest, CompileShaderModuleReturnNullWithEmptyInput) {
   Result ret;
 
-  auto shaderModule =
-      ShaderModuleCreator::fromStringInput(*iglDev_, "", {ShaderStage::Vertex, ""}, "test", &ret);
+  auto shaderModule = ShaderModuleCreator::fromStringInput(
+      *iglDev_, "", {.stage = ShaderStage::Vertex, .entryPoint = ""}, "test", &ret);
   ASSERT_TRUE(!ret.isOk());
   ASSERT_TRUE(shaderModule == nullptr);
 }
@@ -76,36 +81,125 @@ TEST_F(ShaderModuleTest, CompileShaderModule) {
   Result ret;
 
   const char* source = nullptr;
-  if (backend_ == util::BACKEND_OGL) {
-    source = data::shader::OGL_SIMPLE_VERT_SHADER;
-  } else if (backend_ == util::BACKEND_MTL) {
-    source = data::shader::MTL_SIMPLE_SHADER;
-  } else if (backend_ == util::BACKEND_VUL) {
-    source = data::shader::VULKAN_SIMPLE_VERT_SHADER;
+
+  const auto be = iglDev_->getBackendType();
+  if (be == BackendType::OpenGL) {
+    source = data::shader::kOglSimpleVertShader.data();
+  } else if (be == BackendType::Metal) {
+    source = data::shader::kMtlSimpleShader.data();
+  } else if (be == BackendType::Vulkan) {
+    source = data::shader::kVulkanSimpleVertShader.data();
+  } else if (be == BackendType::D3D12) {
+    // Minimal HLSL vertex shader for D3D12 backend
+    source = R"(
+struct VSIn { float4 position_in : POSITION; float2 uv_in : TEXCOORD0; };
+struct VSOut { float4 position : SV_POSITION; float2 uv : TEXCOORD0; };
+VSOut vertexShader(VSIn i) { VSOut o; o.position = i.position_in; o.uv = i.uv_in; return o; }
+VSOut main(VSIn i) { return vertexShader(i); }
+)";
   } else {
     ASSERT_TRUE(0);
   }
 
   auto shaderModule = ShaderModuleCreator::fromStringInput(
-      *iglDev_, source, {ShaderStage::Vertex, "vertexShader"}, "test", &ret);
+      *iglDev_,
+      source,
+      {.stage = ShaderStage::Vertex,
+       .entryPoint = (be == BackendType::D3D12) ? std::string("main")
+                                                : std::string("vertexShader")},
+      "test",
+      &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_TRUE(shaderModule != nullptr);
 }
 
+TEST_F(ShaderModuleTest, ShaderCompilerOptionsEquality) {
+  ShaderCompilerOptions options1;
+  ShaderCompilerOptions options2;
+
+  // Default values should be equal
+  EXPECT_TRUE(options1 == options2);
+  EXPECT_FALSE(options1 != options2);
+
+  // Modify one and they should be unequal
+  options2.fastMathEnabled = false;
+  EXPECT_FALSE(options1 == options2);
+  EXPECT_TRUE(options1 != options2);
+
+  // Make them equal again
+  options1.fastMathEnabled = false;
+  EXPECT_TRUE(options1 == options2);
+  EXPECT_FALSE(options1 != options2);
+}
+
+TEST_F(ShaderModuleTest, ShaderModuleDescEquality) {
+  ShaderModuleDesc desc1 = ShaderModuleDesc::fromStringInput(
+      "test source", {.stage = ShaderStage::Vertex, .entryPoint = "main"}, "debugName");
+  ShaderModuleDesc desc2 = ShaderModuleDesc::fromStringInput(
+      "test source", {.stage = ShaderStage::Vertex, .entryPoint = "main"}, "debugName");
+
+  // Same content should be equal
+  EXPECT_TRUE(desc1 == desc2);
+  EXPECT_FALSE(desc1 != desc2);
+
+  // Different debug name should be unequal
+  ShaderModuleDesc desc3 = ShaderModuleDesc::fromStringInput(
+      "test source", {.stage = ShaderStage::Vertex, .entryPoint = "main"}, "differentDebugName");
+  EXPECT_FALSE(desc1 == desc3);
+  EXPECT_TRUE(desc1 != desc3);
+}
+
+TEST_F(ShaderModuleTest, ShaderLibraryDescEquality) {
+  std::vector<ShaderModuleInfo> moduleInfo1 = {
+      {.stage = ShaderStage::Vertex, .entryPoint = "vertMain"}};
+  std::vector<ShaderModuleInfo> moduleInfo2 = {
+      {.stage = ShaderStage::Vertex, .entryPoint = "vertMain"}};
+
+  ShaderLibraryDesc desc1 =
+      ShaderLibraryDesc::fromStringInput("test source", moduleInfo1, "debugName");
+  ShaderLibraryDesc desc2 =
+      ShaderLibraryDesc::fromStringInput("test source", moduleInfo2, "debugName");
+
+  // Same content should be equal
+  EXPECT_TRUE(desc1 == desc2);
+  EXPECT_FALSE(desc1 != desc2);
+
+  // Different debug name should be unequal
+  ShaderLibraryDesc desc3 =
+      ShaderLibraryDesc::fromStringInput("test source", moduleInfo1, "differentDebugName");
+  EXPECT_FALSE(desc1 == desc3);
+  EXPECT_TRUE(desc1 != desc3);
+}
+
 TEST_F(ShaderModuleTest, CompileShaderModuleNoResult) {
   const char* source = nullptr;
-  if (backend_ == util::BACKEND_OGL) {
-    source = data::shader::OGL_SIMPLE_VERT_SHADER;
-  } else if (backend_ == util::BACKEND_MTL) {
-    source = data::shader::MTL_SIMPLE_SHADER;
-  } else if (backend_ == util::BACKEND_VUL) {
-    source = data::shader::VULKAN_SIMPLE_VERT_SHADER;
+  const auto be2 = iglDev_->getBackendType();
+  if (be2 == BackendType::OpenGL) {
+    source = data::shader::kOglSimpleVertShader.data();
+  } else if (be2 == BackendType::Metal) {
+    source = data::shader::kMtlSimpleShader.data();
+  } else if (be2 == BackendType::Vulkan) {
+    source = data::shader::kVulkanSimpleVertShader.data();
+  } else if (be2 == BackendType::D3D12) {
+    // Minimal HLSL vertex shader for D3D12 backend
+    source = R"(
+struct VSIn { float4 position_in : POSITION; float2 uv_in : TEXCOORD0; };
+struct VSOut { float4 position : SV_POSITION; float2 uv : TEXCOORD0; };
+VSOut vertexShader(VSIn i) { VSOut o; o.position = i.position_in; o.uv = i.uv_in; return o; }
+VSOut main(VSIn i) { return vertexShader(i); }
+)";
   } else {
     ASSERT_TRUE(0);
   }
 
   auto shaderModule = ShaderModuleCreator::fromStringInput(
-      *iglDev_, source, {ShaderStage::Vertex, "vertexShader"}, "test", nullptr);
+      *iglDev_,
+      source,
+      {.stage = ShaderStage::Vertex,
+       .entryPoint = (be2 == BackendType::D3D12) ? std::string("main")
+                                                 : std::string("vertexShader")},
+      "test",
+      nullptr);
   ASSERT_TRUE(shaderModule != nullptr);
 }
 } // namespace igl::tests

@@ -7,8 +7,11 @@
 
 // @fb-only
 
+#define GLFW_INCLUDE_NONE
+
 #include <GLFW/glfw3.h>
-#include <cassert>
+#include <igl/Config.h>
+
 #if !defined(_USE_MATH_DEFINES)
 #define _USE_MATH_DEFINES // NOLINT(bugprone-reserved-identifier)
 #endif // _USE_MATH_DEFINES
@@ -16,16 +19,21 @@
 #include <cstddef>
 #include <cstdio>
 #include <filesystem>
-#ifdef _WIN32
+
+#if defined(_XLESS_GLFW_)
+// do nothing
+#elif IGL_PLATFORM_WINDOWS
 #define GLFW_EXPOSE_NATIVE_WIN32
 #define GLFW_EXPOSE_NATIVE_WGL
-#elif __APPLE__
+#elif IGL_PLATFORM_APPLE
 #define GLFW_EXPOSE_NATIVE_COCOA
-#elif defined(__linux__)
+#elif IGL_PLATFORM_LINUX
 #define GLFW_EXPOSE_NATIVE_X11
+#define GLFW_EXPOSE_NATIVE_GLX
 #else
 #error Unsupported OS
 #endif
+// NOLINTNEXTLINE(facebook-unused-include-check)
 #include <GLFW/glfw3native.h>
 #include <glm/ext.hpp>
 #include <glm/gtc/random.hpp>
@@ -33,7 +41,6 @@
 #include <stb/stb_image_write.h>
 #include <igl/FPSCounter.h>
 #include <igl/IGL.h>
-#include <igl/ShaderCreator.h>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/HWDevice.h>
@@ -116,28 +123,28 @@ using glm::vec4;
 
 vec3 axis_[kNumCubes];
 
-GLFWwindow* window_ = nullptr;
-int width_ = 0;
-int height_ = 0;
+GLFWwindow* window = nullptr;
+int width_ = 1024;
+int height_ = 768;
 igl::FPSCounter fps_;
 bool saveScreenshot_ = false;
-[[maybe_unused]] igl::SubmitHandle screenshotSubmitHandle_ = {};
+[[maybe_unused]] igl::SubmitHandle screenshotSubmitHandle = {};
 
 constexpr uint32_t kNumBufferedFrames = 3;
 
-std::unique_ptr<IDevice> device_;
+std::unique_ptr<IDevice> device;
 std::shared_ptr<ICommandQueue> commandQueue_;
 RenderPassDesc renderPass_;
 FramebufferDesc framebufferDesc_;
-std::shared_ptr<IFramebuffer> framebuffer_;
+std::shared_ptr<IFramebuffer> framebuffer;
 std::shared_ptr<IRenderPipelineState> renderPipelineState_Mesh_;
 std::shared_ptr<IBuffer> vb0_, ib0_; // buffers for vertices and indices
 std::shared_ptr<IBuffer> screenCopy_;
-std::vector<std::shared_ptr<IBuffer>> ubPerFrame_, ubPerObject_;
+std::vector<std::shared_ptr<IBuffer>> ubPerFrame_, ubPerObject;
 std::shared_ptr<IVertexInputState> vertexInput0_;
 std::shared_ptr<IDepthStencilState> depthStencilState_;
 std::shared_ptr<ITexture> texture0_, texture1_;
-std::shared_ptr<ISamplerState> sampler_;
+std::shared_ptr<ISamplerState> sampler;
 
 struct VertexPosUvw {
   vec3 position;
@@ -153,40 +160,40 @@ struct UniformsPerObject {
   mat4 model;
 };
 
-const float half = 1.0f;
+const float kHalf = 1.0f;
 
 // UV-mapped cube with indices: 24 vertices, 36 indices
 const VertexPosUvw vertexData0[] = {
     // top
-    {{-half, -half, +half}, {0.0, 0.0, 1.0}, {0, 0}}, // 0
-    {{+half, -half, +half}, {1.0, 0.0, 1.0}, {1, 0}}, // 1
-    {{+half, +half, +half}, {1.0, 1.0, 1.0}, {1, 1}}, // 2
-    {{-half, +half, +half}, {0.0, 1.0, 1.0}, {0, 1}}, // 3
+    {.position = {-kHalf, -kHalf, +kHalf}, .color = {0.0, 0.0, 1.0}, .uv = {0, 0}}, // 0
+    {.position = {+kHalf, -kHalf, +kHalf}, .color = {1.0, 0.0, 1.0}, .uv = {1, 0}}, // 1
+    {.position = {+kHalf, +kHalf, +kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {1, 1}}, // 2
+    {.position = {-kHalf, +kHalf, +kHalf}, .color = {0.0, 1.0, 1.0}, .uv = {0, 1}}, // 3
     // bottom
-    {{-half, -half, -half}, {1.0, 1.0, 1.0}, {0, 0}}, // 4
-    {{-half, +half, -half}, {0.0, 1.0, 0.0}, {0, 1}}, // 5
-    {{+half, +half, -half}, {1.0, 1.0, 0.0}, {1, 1}}, // 6
-    {{+half, -half, -half}, {1.0, 0.0, 0.0}, {1, 0}}, // 7
+    {.position = {-kHalf, -kHalf, -kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {0, 0}}, // 4
+    {.position = {-kHalf, +kHalf, -kHalf}, .color = {0.0, 1.0, 0.0}, .uv = {0, 1}}, // 5
+    {.position = {+kHalf, +kHalf, -kHalf}, .color = {1.0, 1.0, 0.0}, .uv = {1, 1}}, // 6
+    {.position = {+kHalf, -kHalf, -kHalf}, .color = {1.0, 0.0, 0.0}, .uv = {1, 0}}, // 7
     // left
-    {{+half, +half, -half}, {1.0, 1.0, 0.0}, {1, 0}}, // 8
-    {{-half, +half, -half}, {0.0, 1.0, 0.0}, {0, 0}}, // 9
-    {{-half, +half, +half}, {0.0, 1.0, 1.0}, {0, 1}}, // 10
-    {{+half, +half, +half}, {1.0, 1.0, 1.0}, {1, 1}}, // 11
+    {.position = {+kHalf, +kHalf, -kHalf}, .color = {1.0, 1.0, 0.0}, .uv = {1, 0}}, // 8
+    {.position = {-kHalf, +kHalf, -kHalf}, .color = {0.0, 1.0, 0.0}, .uv = {0, 0}}, // 9
+    {.position = {-kHalf, +kHalf, +kHalf}, .color = {0.0, 1.0, 1.0}, .uv = {0, 1}}, // 10
+    {.position = {+kHalf, +kHalf, +kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {1, 1}}, // 11
     // right
-    {{-half, -half, -half}, {1.0, 1.0, 1.0}, {0, 0}}, // 12
-    {{+half, -half, -half}, {1.0, 0.0, 0.0}, {1, 0}}, // 13
-    {{+half, -half, +half}, {1.0, 0.0, 1.0}, {1, 1}}, // 14
-    {{-half, -half, +half}, {0.0, 0.0, 1.0}, {0, 1}}, // 15
+    {.position = {-kHalf, -kHalf, -kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {0, 0}}, // 12
+    {.position = {+kHalf, -kHalf, -kHalf}, .color = {1.0, 0.0, 0.0}, .uv = {1, 0}}, // 13
+    {.position = {+kHalf, -kHalf, +kHalf}, .color = {1.0, 0.0, 1.0}, .uv = {1, 1}}, // 14
+    {.position = {-kHalf, -kHalf, +kHalf}, .color = {0.0, 0.0, 1.0}, .uv = {0, 1}}, // 15
     // front
-    {{+half, -half, -half}, {1.0, 0.0, 0.0}, {0, 0}}, // 16
-    {{+half, +half, -half}, {1.0, 1.0, 0.0}, {1, 0}}, // 17
-    {{+half, +half, +half}, {1.0, 1.0, 1.0}, {1, 1}}, // 18
-    {{+half, -half, +half}, {1.0, 0.0, 1.0}, {0, 1}}, // 19
+    {.position = {+kHalf, -kHalf, -kHalf}, .color = {1.0, 0.0, 0.0}, .uv = {0, 0}}, // 16
+    {.position = {+kHalf, +kHalf, -kHalf}, .color = {1.0, 1.0, 0.0}, .uv = {1, 0}}, // 17
+    {.position = {+kHalf, +kHalf, +kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {1, 1}}, // 18
+    {.position = {+kHalf, -kHalf, +kHalf}, .color = {1.0, 0.0, 1.0}, .uv = {0, 1}}, // 19
     // back
-    {{-half, +half, -half}, {0.0, 1.0, 0.0}, {1, 0}}, // 20
-    {{-half, -half, -half}, {1.0, 1.0, 1.0}, {0, 0}}, // 21
-    {{-half, -half, +half}, {0.0, 0.0, 1.0}, {0, 1}}, // 22
-    {{-half, +half, +half}, {0.0, 1.0, 1.0}, {1, 1}}, // 23
+    {.position = {-kHalf, +kHalf, -kHalf}, .color = {0.0, 1.0, 0.0}, .uv = {1, 0}}, // 20
+    {.position = {-kHalf, -kHalf, -kHalf}, .color = {1.0, 1.0, 1.0}, .uv = {0, 0}}, // 21
+    {.position = {-kHalf, -kHalf, +kHalf}, .color = {0.0, 0.0, 1.0}, .uv = {0, 1}}, // 22
+    {.position = {-kHalf, +kHalf, +kHalf}, .color = {0.0, 1.0, 1.0}, .uv = {1, 1}}, // 23
 };
 
 const uint16_t indexData[] = {0,  1,  2,  2,  3,  0,  4,  5,  6,  6,  7,  4,
@@ -196,87 +203,90 @@ const uint16_t indexData[] = {0,  1,  2,  2,  3,  0,  4,  5,  6,  6,  7,  4,
 UniformsPerFrame perFrame;
 UniformsPerObject perObject[kNumCubes];
 
-bool initWindow(GLFWwindow** outWindow) {
+GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationLayers) {
   if (!glfwInit()) {
-    return false;
+    printf("glfwInit() failed");
+    return nullptr;
   }
 
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-  GLFWwindow* window = glfwCreateWindow(1280, 1024, "Vulkan Mesh", nullptr, nullptr);
+  GLFWwindow* window = isHeadless ? nullptr
+                                  : glfwCreateWindow(1280, 1024, "Vulkan Mesh", nullptr, nullptr);
 
-  if (!window) {
+  if (!isHeadless && !window) {
     glfwTerminate();
-    return false;
+    return nullptr;
   }
 
-  glfwSetErrorCallback([](int error, const char* description) {
-    printf("GLFW Error (%i): %s\n", error, description);
-  });
+  if (window) {
+    glfwSetErrorCallback([](int error, const char* description) {
+      printf("GLFW Error (%i): %s\n", error, description);
+    });
 
-  glfwSetKeyCallback(window, [](GLFWwindow* window, int key, int, int action, int) {
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-      glfwSetWindowShouldClose(window, GLFW_TRUE);
-    }
-    if (key == GLFW_KEY_T && action == GLFW_PRESS) {
-      texture1_.reset();
-    }
-    if (key == GLFW_KEY_C && action == GLFW_PRESS) {
-      saveScreenshot_ = true;
-    }
-  });
+    glfwSetKeyCallback(window, [](GLFWwindow* window, int key, int, int action, int) {
+      if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
+      }
+      if (key == GLFW_KEY_T && action == GLFW_PRESS) {
+        texture1_.reset();
+      }
+      if (key == GLFW_KEY_C && action == GLFW_PRESS) {
+        saveScreenshot_ = true;
+      }
+    });
 
-  // @lint-ignore CLANGTIDY
-  glfwSetWindowSizeCallback(window, [](GLFWwindow* /*window*/, int width, int height) {
-    printf("Window resized! width=%d, height=%d\n", width, height);
-    width_ = width;
-    height_ = height;
+    // @lint-ignore CLANGTIDY
+    glfwSetWindowSizeCallback(window, [](GLFWwindow* /*window*/, int width, int height) {
+      printf("Window resized! width=%d, height=%d\n", width, height);
+      width_ = width;
+      height_ = height;
 #if !USE_OPENGL_BACKEND
-    auto* vulkanDevice = static_cast<vulkan::Device*>(device_.get());
-    auto& ctx = vulkanDevice->getVulkanContext();
-    ctx.initSwapchain(width_, height_);
+      auto* vulkanDevice = static_cast<vulkan::Device*>(device.get());
+      auto& ctx = vulkanDevice->getVulkanContext();
+      ctx.initSwapchain(width_, height_);
 #endif
-  });
+    });
 
 #if IGL_WITH_IGLU
-  glfwSetCursorPosCallback(window, [](auto* window, double x, double y) {
-    inputDispatcher_.queueEvent(igl::shell::MouseMotionEvent(x, y, 0, 0));
-  });
-  glfwSetMouseButtonCallback(window, [](auto* window, int button, int action, int mods) {
-    double xpos = 0.0, ypos = 0.0;
-    glfwGetCursorPos(window, &xpos, &ypos);
-    using igl::shell::MouseButton;
-    const MouseButton iglButton =
-        (button == GLFW_MOUSE_BUTTON_LEFT)
-            ? MouseButton::Left
-            : (button == GLFW_MOUSE_BUTTON_RIGHT ? MouseButton::Right : MouseButton::Middle);
-    inputDispatcher_.queueEvent(
-        igl::shell::MouseButtonEvent(iglButton, action == GLFW_PRESS, (float)xpos, (float)ypos));
-  });
+    glfwSetCursorPosCallback(window, [](auto* window, double x, double y) {
+      inputDispatcher_.queueEvent(igl::shell::MouseMotionEvent(x, y, 0, 0));
+    });
+    glfwSetMouseButtonCallback(window, [](auto* window, int button, int action, int mods) {
+      double xpos = 0.0, ypos = 0.0;
+      glfwGetCursorPos(window, &xpos, &ypos);
+      using igl::shell::MouseButton;
+      const MouseButton iglButton =
+          (button == GLFW_MOUSE_BUTTON_LEFT)
+              ? MouseButton::Left
+              : (button == GLFW_MOUSE_BUTTON_RIGHT ? MouseButton::Right : MouseButton::Middle);
+      inputDispatcher_.queueEvent(
+          igl::shell::MouseButtonEvent(iglButton, action == GLFW_PRESS, (float)xpos, (float)ypos));
+    });
 #endif // IGL_WITH_IGLU
 
-  glfwGetWindowSize(window, &width_, &height_);
-
-  if (outWindow) {
-    *outWindow = window;
+    glfwGetWindowSize(window, &width_, &height_);
   }
 
-  return true;
-}
-
-void initIGL() {
   // create a device
   {
     const igl::vulkan::VulkanContextConfig cfg = {
         .terminateOnValidationError = true,
+        .enableValidation = enableVulkanValidationLayers,
+        .headless = isHeadless,
     };
 #ifdef _WIN32
-    auto ctx = vulkan::HWDevice::createContext(cfg, (void*)glfwGetWin32Window(window_));
-#elif __APPLE__
-    auto ctx = vulkan::HWDevice::createContext(cfg, (void*)glfwGetCocoaWindow(window_));
-#elif defined(__linux__)
-    auto ctx = vulkan::HWDevice::createContext(
-        cfg, (void*)glfwGetX11Window(window_), 0, nullptr, (void*)glfwGetX11Display());
+    auto ctx =
+        vulkan::HWDevice::createContext(cfg, window ? (void*)glfwGetWin32Window(window) : nullptr);
+#elif IGL_PLATFORM_APPLE
+    auto ctx =
+        vulkan::HWDevice::createContext(cfg, window ? (void*)glfwGetCocoaWindow(window) : nullptr);
+#elif defined(_XLESS_GLFW_)
+    auto ctx = vulkan::HWDevice::createContext(cfg, nullptr, nullptr);
+#elif IGL_PLATFORM_LINUX
+    auto ctx = vulkan::HWDevice::createContext(cfg,
+                                               window ? (void*)glfwGetX11Window(window) : nullptr,
+                                               window ? (void*)glfwGetX11Display() : nullptr);
 #else
 #error Unsupported OS
 #endif
@@ -287,50 +297,57 @@ void initIGL() {
       devices = vulkan::HWDevice::queryDevices(
           *ctx, HWDeviceQueryDesc(HWDeviceType::IntegratedGpu), nullptr);
     }
-    device_ =
+    if (devices.empty() || cfg.headless) {
+      // LavaPipe etc
+      devices = vulkan::HWDevice::queryDevices(
+          *ctx, HWDeviceQueryDesc(HWDeviceType::SoftwareGpu), nullptr);
+    }
+    device =
         vulkan::HWDevice::create(std::move(ctx), devices[0], (uint32_t)width_, (uint32_t)height_);
-    IGL_DEBUG_ASSERT(device_);
+    IGL_DEBUG_ASSERT(device);
   }
 
   // Vertex buffer, Index buffer and Vertex Input. Buffers are allocated in GPU memory.
-  vb0_ = device_->createBuffer(BufferDesc(BufferDesc::BufferTypeBits::Vertex,
-                                          vertexData0,
-                                          sizeof(vertexData0),
-                                          ResourceStorage::Private,
-                                          0,
-                                          "Buffer: vertex"),
-                               nullptr);
-  ib0_ = device_->createBuffer(BufferDesc(BufferDesc::BufferTypeBits::Index,
-                                          indexData,
-                                          sizeof(indexData),
-                                          ResourceStorage::Private,
-                                          0,
-                                          "Buffer: index"),
-                               nullptr);
-  screenCopy_ = device_->createBuffer(BufferDesc(BufferDesc::BufferTypeBits::Storage,
-                                                 nullptr,
-                                                 width_ * height_ * sizeof(uint32_t),
-                                                 ResourceStorage::Shared,
-                                                 0,
-                                                 "Buffer: screen copy"),
-                                      nullptr);
+  vb0_ = device->createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Vertex,
+                                         .data = vertexData0,
+                                         .length = sizeof(vertexData0),
+                                         .storage = ResourceStorage::Private,
+                                         .hint = 0,
+                                         .debugName = "Buffer: vertex"},
+                              nullptr);
+  ib0_ = device->createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Index,
+                                         .data = indexData,
+                                         .length = sizeof(indexData),
+                                         .storage = ResourceStorage::Private,
+                                         .hint = 0,
+                                         .debugName = "Buffer: index"},
+                              nullptr);
+  screenCopy_ = device->createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Storage,
+                                                .data = nullptr,
+                                                .length = width_ * height_ * sizeof(uint32_t),
+                                                .storage = ResourceStorage::Shared,
+                                                .hint = 0,
+                                                .debugName = "Buffer: screen copy"},
+                                     nullptr);
 
   // create an Uniform buffers to store uniforms for 2 objects
   for (uint32_t i = 0; i != kNumBufferedFrames; i++) {
-    ubPerFrame_.push_back(device_->createBuffer(BufferDesc(BufferDesc::BufferTypeBits::Uniform,
-                                                           &perFrame,
-                                                           sizeof(UniformsPerFrame),
-                                                           ResourceStorage::Shared,
-                                                           0,
-                                                           "Buffer: uniforms (per frame)"),
-                                                nullptr));
-    ubPerObject_.push_back(device_->createBuffer(BufferDesc(BufferDesc::BufferTypeBits::Uniform,
-                                                            perObject,
-                                                            kNumCubes * sizeof(UniformsPerObject),
-                                                            ResourceStorage::Shared,
-                                                            0,
-                                                            "Buffer: uniforms (per object)"),
-                                                 nullptr));
+    ubPerFrame_.push_back(
+        device->createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Uniform,
+                                        .data = &perFrame,
+                                        .length = sizeof(UniformsPerFrame),
+                                        .storage = ResourceStorage::Shared,
+                                        .hint = 0,
+                                        .debugName = "Buffer: uniforms (per frame)"},
+                             nullptr));
+    ubPerObject.push_back(
+        device->createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Uniform,
+                                        .data = perObject,
+                                        .length = kNumCubes * sizeof(UniformsPerObject),
+                                        .storage = ResourceStorage::Shared,
+                                        .hint = 0,
+                                        .debugName = "Buffer: uniforms (per object)"},
+                             nullptr));
   }
 
   {
@@ -350,14 +367,14 @@ void initIGL() {
     desc.attributes[2].location = 2;
     desc.numInputBindings = 1;
     desc.inputBindings[0].stride = sizeof(VertexPosUvw);
-    vertexInput0_ = device_->createVertexInputState(desc, nullptr);
+    vertexInput0_ = device->createVertexInputState(desc, nullptr);
   }
 
   {
     DepthStencilStateDesc desc;
     desc.isDepthWriteEnabled = true;
     desc.compareFunction = igl::CompareFunction::Less;
-    depthStencilState_ = device_->createDepthStencilState(desc, nullptr);
+    depthStencilState_ = device->createDepthStencilState(desc, nullptr);
   }
 
   {
@@ -368,7 +385,7 @@ void initIGL() {
                                                 texHeight,
                                                 TextureDesc::TextureUsageBits::Sampled,
                                                 "XOR pattern");
-    texture0_ = device_->createTexture(desc, nullptr);
+    texture0_ = device->createTexture(desc, nullptr);
     std::vector<uint32_t> pixels(texWidth * texHeight);
     for (uint32_t y = 0; y != texHeight; y++) {
       for (uint32_t x = 0; x != texWidth; x++) {
@@ -406,7 +423,7 @@ void initIGL() {
                                                 texHeight,
                                                 TextureDesc::TextureUsageBits::Sampled,
                                                 "wood_polished_01_diff.png");
-    texture1_ = device_->createTexture(desc, nullptr);
+    texture1_ = device->createTexture(desc, nullptr);
     texture1_->upload(TextureRangeDesc::new2D(0, 0, texWidth, texHeight), pixels);
     stbi_image_free(pixels);
   }
@@ -415,12 +432,12 @@ void initIGL() {
     desc.addressModeU = igl::SamplerAddressMode::Repeat;
     desc.addressModeV = igl::SamplerAddressMode::Repeat;
     desc.debugName = "Sampler: linear";
-    sampler_ = device_->createSamplerState(desc, nullptr);
+    sampler = device->createSamplerState(desc, nullptr);
   }
 
   // Command queue: backed by different types of GPU HW queues
   CommandQueueDesc desc{};
-  commandQueue_ = device_->createCommandQueue(desc, nullptr);
+  commandQueue_ = device->createCommandQueue(desc, nullptr);
 
   renderPass_.colorAttachments.push_back({
       .loadAction = LoadAction::Clear,
@@ -443,6 +460,8 @@ void initIGL() {
   for (auto& axi : axis_) {
     axi = glm::sphericalRand(1.0f);
   }
+
+  return window;
 }
 
 void createRenderPipeline() {
@@ -450,21 +469,21 @@ void createRenderPipeline() {
     return;
   }
 
-  IGL_DEBUG_ASSERT(framebuffer_);
+  IGL_DEBUG_ASSERT(framebuffer);
 
   RenderPipelineDesc desc;
 
   desc.targetDesc.colorAttachments.resize(1);
   desc.targetDesc.colorAttachments[0].textureFormat =
-      framebuffer_->getColorAttachment(0)->getFormat();
+      framebuffer->getColorAttachment(0)->getFormat();
 
-  if (framebuffer_->getDepthAttachment()) {
-    desc.targetDesc.depthAttachmentFormat = framebuffer_->getDepthAttachment()->getFormat();
+  if (framebuffer->getDepthAttachment()) {
+    desc.targetDesc.depthAttachmentFormat = framebuffer->getDepthAttachment()->getFormat();
   }
 
   desc.vertexInputState = vertexInput0_;
   desc.shaderStages = ShaderStagesCreator::fromModuleStringInput(
-      *device_, codeVS, "main", "", codeFS, "main", "", nullptr);
+      *device, codeVS, "main", "", codeFS, "main", "", nullptr);
 
 #if !TINY_TEST_USE_DEPTH_BUFFER
   desc.cullMode = igl::CullMode::Back;
@@ -472,11 +491,11 @@ void createRenderPipeline() {
 
   desc.frontFaceWinding = igl::WindingMode::Clockwise;
   desc.debugName = igl::genNameHandle("Pipeline: mesh");
-  renderPipelineState_Mesh_ = device_->createRenderPipeline(desc, nullptr);
+  renderPipelineState_Mesh_ = device->createRenderPipeline(desc, nullptr);
 }
 
 std::shared_ptr<ITexture> getVulkanNativeDrawable() {
-  const auto& vkPlatformDevice = device_->getPlatformDevice<igl::vulkan::PlatformDevice>();
+  const auto& vkPlatformDevice = device->getPlatformDevice<igl::vulkan::PlatformDevice>();
 
   IGL_DEBUG_ASSERT(vkPlatformDevice != nullptr);
 
@@ -488,7 +507,7 @@ std::shared_ptr<ITexture> getVulkanNativeDrawable() {
 }
 
 std::shared_ptr<ITexture> getVulkanNativeDepth() {
-  const auto& vkPlatformDevice = device_->getPlatformDevice<igl::vulkan::PlatformDevice>();
+  const auto& vkPlatformDevice = device->getPlatformDevice<igl::vulkan::PlatformDevice>();
 
   IGL_DEBUG_ASSERT(vkPlatformDevice != nullptr);
 
@@ -507,8 +526,8 @@ void createFramebuffer(const std::shared_ptr<ITexture>& nativeDrawable) {
   framebufferDesc_.depthAttachment.texture = getVulkanNativeDepth();
 #endif // TINY_TEST_USE_DEPTH_BUFFER
 
-  framebuffer_ = device_->createFramebuffer(framebufferDesc_, nullptr);
-  IGL_DEBUG_ASSERT(framebuffer_);
+  framebuffer = device->createFramebuffer(framebufferDesc_, nullptr);
+  IGL_DEBUG_ASSERT(framebuffer);
 }
 
 void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex) {
@@ -528,11 +547,11 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
   inputDispatcher_.processEvents();
 #endif // IGL_WITH_IGLU
 
-  const auto size = framebuffer_->getColorAttachment(0)->getSize();
+  const auto size = framebuffer->getColorAttachment(0)->getSize();
   if (size.width != width_ || size.height != height_) {
     createFramebuffer(nativeDrawable);
   } else {
-    framebuffer_->updateDrawable(nativeDrawable);
+    framebuffer->updateDrawable(nativeDrawable);
   }
 
   // from igl/shell/renderSessions/Textured3DCubeSession.cpp
@@ -541,7 +560,7 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
   perFrame.proj = glm::perspectiveLH(fov, aspectRatio, 0.1f, 500.0f);
   // place a "camera" behind the cubes, the distance depends on the total number of cubes
   perFrame.view =
-      glm::translate(mat4(1.0f), vec3(0.0f, 0.0f, sqrtf(kNumCubes / 16) * 20.0f * half));
+      glm::translate(mat4(1.0f), vec3(0.0f, 0.0f, sqrtf(kNumCubes / 16) * 20.0f * kHalf));
   ubPerFrame_[frameIndex]->upload(&perFrame, igl::BufferRange(sizeof(perFrame)));
 
   // rotate cubes around random axes
@@ -555,17 +574,23 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
         glm::rotate(glm::translate(mat4(1.0f), offset), direction * (float)glfwGetTime(), axis_[i]);
   }
 
-  ubPerObject_[frameIndex]->upload(&perObject, igl::BufferRange(sizeof(perObject)));
+  ubPerObject[frameIndex]->upload(&perObject, igl::BufferRange(sizeof(perObject)));
 
   // Command buffers (1-N per thread): create, submit and forget
   CommandBufferDesc cbDesc;
   std::shared_ptr<ICommandBuffer> buffer = commandQueue_->createCommandBuffer(cbDesc, nullptr);
 
-  const igl::Viewport viewport = {0.0f, 0.0f, (float)width_, (float)height_, 0.0f, +1.0f};
-  const igl::ScissorRect scissor = {0, 0, (uint32_t)width_, (uint32_t)height_};
+  const igl::Viewport viewport = {.x = 0.0f,
+                                  .y = 0.0f,
+                                  .width = (float)width_,
+                                  .height = (float)height_,
+                                  .minDepth = 0.0f,
+                                  .maxDepth = +1.0f};
+  const igl::ScissorRect scissor = {
+      .x = 0, .y = 0, .width = (uint32_t)width_, .height = (uint32_t)height_};
 
   // This will clear the framebuffer
-  auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
+  auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer);
 
   commands->bindRenderPipelineState(renderPipelineState_Mesh_);
   commands->bindViewport(viewport);
@@ -576,18 +601,18 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
   commands->bindBuffer(0, ubPerFrame_[frameIndex].get());
   commands->bindTexture(0, igl::BindTarget::kFragment, texture0_.get());
   commands->bindTexture(1, igl::BindTarget::kFragment, texture1_.get());
-  commands->bindSamplerState(0, igl::BindTarget::kFragment, sampler_.get());
-  commands->bindSamplerState(1, igl::BindTarget::kFragment, sampler_.get());
+  commands->bindSamplerState(0, igl::BindTarget::kFragment, sampler.get());
+  commands->bindSamplerState(1, igl::BindTarget::kFragment, sampler.get());
   // Draw 2 cubes: we use uniform buffer to update matrices
   commands->bindIndexBuffer(*ib0_, IndexFormat::UInt16);
   for (uint32_t i = 0; i != kNumCubes; i++) {
-    commands->bindBuffer(1, ubPerObject_[frameIndex].get(), i * sizeof(UniformsPerObject));
+    commands->bindBuffer(1, ubPerObject[frameIndex].get(), i * sizeof(UniformsPerObject));
     commands->drawIndexed(3u * 6u * 2u);
   }
   commands->popDebugGroupLabel();
 #if IGL_WITH_IGLU
   imguiSession_->drawFPS(fps_.getAverageFPS());
-  imguiSession_->endFrame(*device_, *commands);
+  imguiSession_->endFrame(*device, *commands);
 #endif // IGL_WITH_IGLU
   commands->endEncoding();
   if (saveScreenshot_) {
@@ -597,7 +622,7 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
 
   auto submitHandle = commandQueue_->submit(*buffer);
 
-  if (auto* pd = device_->getPlatformDevice<igl::vulkan::PlatformDevice>(); saveScreenshot_) {
+  if (auto* pd = device->getPlatformDevice<igl::vulkan::PlatformDevice>(); saveScreenshot_) {
     saveScreenshot_ = false;
 #if TINY_TEST_USE_ASYNC_SCREENSHOTS
     pd->deferredTask(std::packaged_task<void()>([]() {
@@ -610,13 +635,13 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
                      submitHandle);
 #else
     // store the submit handle from which we want to capture a screenshot
-    screenshotSubmitHandle_ = submitHandle;
-  } else if (screenshotSubmitHandle_ && // we poll the submit handle every frame until it's ready
-             pd->waitOnSubmitHandle(screenshotSubmitHandle_, 0)) {
+    screenshotSubmitHandle = submitHandle;
+  } else if (screenshotSubmitHandle && // we poll the submit handle every frame until it's ready
+             pd->waitOnSubmitHandle(screenshotSubmitHandle, 0)) {
     void* data = screenCopy_->map(BufferRange(screenCopy_->getSizeInBytes()), nullptr);
     stbi_write_bmp("screenshot.bmp", width_, height_, 4, data);
     screenCopy_->unmap();
-    screenshotSubmitHandle_ = {};
+    screenshotSubmitHandle = {};
     IGL_LOG_INFO("Screenshot saved.\n");
 #endif // TINY_TEST_USE_ASYNC_SCREENSHOTS
   }
@@ -625,14 +650,24 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
 } // namespace
 
 int main(int argc, char* argv[]) {
-  initWindow(&window_);
-  initIGL();
+  bool isHeadless = false;
+  bool enableVulkanValidationLayers = true;
+
+  for (int i = 1; i < argc; i++) {
+    if (!strcmp(argv[i], "--headless")) {
+      isHeadless = true;
+    } else if (!strcmp(argv[i], "--disable-vulkan-validation-layers")) {
+      enableVulkanValidationLayers = false;
+    }
+  }
+
+  window = initIGL(isHeadless, enableVulkanValidationLayers);
 
   createFramebuffer(getVulkanNativeDrawable());
   createRenderPipeline();
 
 #if IGL_WITH_IGLU
-  imguiSession_ = std::make_unique<iglu::imgui::Session>(*device_, inputDispatcher_);
+  imguiSession_ = std::make_unique<iglu::imgui::Session>(*device, inputDispatcher_);
 #endif // IGL_WITH_IGLU
 
   double prevTime = glfwGetTime();
@@ -640,13 +675,43 @@ int main(int argc, char* argv[]) {
   uint32_t frameIndex = 0;
 
   // Main loop
-  while (!glfwWindowShouldClose(window_)) {
+  while (!window || !glfwWindowShouldClose(window)) {
     const double newTime = glfwGetTime();
     fps_.updateFPS(newTime - prevTime);
     prevTime = newTime;
     render(getVulkanNativeDrawable(), frameIndex);
-    glfwPollEvents();
     frameIndex = (frameIndex + 1) % kNumBufferedFrames;
+    if (window) {
+      glfwPollEvents();
+    } else {
+      printf("We are running headless - breaking after 1 frame\n");
+      std::shared_ptr<ITexture> texture = framebuffer->getColorAttachment(0);
+      const Dimensions dim = texture->getDimensions();
+      std::vector<uint8_t> pixelsRGBA(dim.width * dim.height * 4);
+      std::vector<uint8_t> pixelsRGB(dim.width * dim.height * 3);
+      framebuffer->copyBytesColorAttachment(*commandQueue_,
+                                            0,
+                                            pixelsRGBA.data(),
+                                            TextureRangeDesc::new2D(0, 0, dim.width, dim.height));
+      if (texture->getFormat() == igl::TextureFormat::BGRA_UNorm8 ||
+          texture->getFormat() == igl::TextureFormat::BGRA_SRGB) {
+        // swap R-B
+        for (uint32_t i = 0; i < pixelsRGBA.size(); i += 4) {
+          std::swap(pixelsRGBA[i + 0], pixelsRGBA[i + 2]);
+        }
+      }
+      // convert to RGB
+      for (uint32_t i = 0; i < pixelsRGB.size() / 3; i++) {
+        pixelsRGB[3 * i + 0] = pixelsRGBA[4 * i + 0];
+        pixelsRGB[3 * i + 1] = pixelsRGBA[4 * i + 1];
+        pixelsRGB[3 * i + 2] = pixelsRGBA[4 * i + 2];
+      }
+      const char* fileName = "TinyMesh.png";
+      IGLLog(IGLLogInfo, "Writing screenshot to: '%s'\n", fileName);
+      stbi_flip_vertically_on_write(1);
+      stbi_write_png(fileName, (int)dim.width, (int)dim.height, 3, pixelsRGB.data(), 0);
+      break;
+    }
   }
 
 #if IGL_WITH_IGLU
@@ -658,16 +723,16 @@ int main(int argc, char* argv[]) {
   ib0_ = nullptr;
   screenCopy_ = nullptr;
   ubPerFrame_.clear();
-  ubPerObject_.clear();
+  ubPerObject.clear();
   renderPipelineState_Mesh_ = nullptr;
   texture0_ = nullptr;
   texture1_ = nullptr;
-  sampler_ = nullptr;
+  sampler = nullptr;
   framebufferDesc_ = {};
-  framebuffer_ = nullptr;
-  device_.reset(nullptr);
+  framebuffer = nullptr;
+  device.reset(nullptr);
 
-  glfwDestroyWindow(window_);
+  glfwDestroyWindow(window);
   glfwTerminate();
 
   return 0;

@@ -7,8 +7,8 @@
 
 #include <igl/opengl/Buffer.h>
 
-#include <igl/CommandBuffer.h>
-#include <igl/Device.h>
+#include <igl/Buffer.h>
+#include <igl/DeviceFeatures.h>
 
 namespace igl::opengl {
 
@@ -54,6 +54,8 @@ void ArrayBuffer::initialize(const BufferDesc& desc, Result* outResult) {
     usage = GL_STATIC_DRAW;
     isDynamic_ = false;
     break;
+  case ResourceStorage::Memoryless:
+  case ResourceStorage::Invalid:
   default:
     break;
   }
@@ -169,7 +171,7 @@ void ArrayBuffer::unbind() {
 
 void ArrayBuffer::bindBase(IGL_MAYBE_UNUSED size_t index, Result* outResult) {
   if (target_ != GL_SHADER_STORAGE_BUFFER) {
-    static const char* kErrorMsg = "Buffer should be GL_SHADER_STORAGE_BUFFER";
+    static constexpr const char* kErrorMsg = "Buffer should be GL_SHADER_STORAGE_BUFFER";
     IGL_SOFT_ERROR(kErrorMsg);
     Result::setResult(outResult, Result::Code::InvalidOperation, kErrorMsg);
     return;
@@ -190,7 +192,7 @@ void UniformBlockBuffer::setBlockBinding(GLuint pid, GLuint blockIndex, GLuint b
 void UniformBlockBuffer::bindBase(size_t index, Result* outResult) {
   if (getContext().deviceFeatures().hasFeature(DeviceFeatures::UniformBlocks)) {
     if (target_ != GL_UNIFORM_BUFFER) {
-      static const char* kErrorMsg = "Buffer should be GL_UNIFORM_BUFFER";
+      static constexpr const char* kErrorMsg = "Buffer should be GL_UNIFORM_BUFFER";
       IGL_SOFT_ERROR(kErrorMsg);
       Result::setResult(outResult, Result::Code::InvalidOperation, kErrorMsg);
       return;
@@ -198,7 +200,7 @@ void UniformBlockBuffer::bindBase(size_t index, Result* outResult) {
     getContext().bindBufferBase(target_, (GLuint)index, iD_);
     Result::setOk(outResult);
   } else {
-    static const char* kErrorMsg = "Uniform Blocks are not supported";
+    static constexpr const char* kErrorMsg = "Uniform Blocks are not supported";
     IGL_SOFT_ERROR(kErrorMsg);
     Result::setResult(outResult, Result::Code::Unimplemented, kErrorMsg);
   }
@@ -207,7 +209,7 @@ void UniformBlockBuffer::bindBase(size_t index, Result* outResult) {
 void UniformBlockBuffer::bindRange(size_t index, size_t offset, size_t size, Result* outResult) {
   if (getContext().deviceFeatures().hasFeature(DeviceFeatures::UniformBlocks)) {
     if (target_ != GL_UNIFORM_BUFFER) {
-      static const char* kErrorMsg = "Buffer should be GL_UNIFORM_BUFFER";
+      static constexpr const char* kErrorMsg = "Buffer should be GL_UNIFORM_BUFFER";
       IGL_SOFT_ERROR(kErrorMsg);
       Result::setResult(outResult, Result::Code::InvalidOperation, kErrorMsg);
       return;
@@ -222,7 +224,7 @@ void UniformBlockBuffer::bindRange(size_t index, size_t offset, size_t size, Res
         target_, (GLuint)index, iD_, (GLintptr)offset, size ? size : getSizeInBytes() - offset);
     Result::setOk(outResult);
   } else {
-    static const char* kErrorMsg = "Uniform Blocks are not supported";
+    static constexpr const char* kErrorMsg = "Uniform Blocks are not supported";
     IGL_SOFT_ERROR(kErrorMsg);
     Result::setResult(outResult, Result::Code::Unimplemented, kErrorMsg);
   }

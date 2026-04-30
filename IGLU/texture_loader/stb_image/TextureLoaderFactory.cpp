@@ -25,34 +25,34 @@ struct StbImageDeleter {
 namespace {
 class StbImageData : public IData {
  public:
-  StbImageData(uint8_t* data, uint32_t length);
+  StbImageData(uint8_t* data, uint64_t size);
 
   [[nodiscard]] const uint8_t* IGL_NONNULL data() const noexcept final;
-  [[nodiscard]] uint32_t length() const noexcept final;
+  [[nodiscard]] uint64_t size() const noexcept final;
 
   [[nodiscard]] ExtractedData extractData() noexcept final;
 
  private:
   std::unique_ptr<uint8_t, StbImageDeleter> data_;
-  uint32_t length_;
+  uint64_t size_;
 };
 
-StbImageData::StbImageData(uint8_t* data, uint32_t length) :
-  data_(std::unique_ptr<uint8_t, StbImageDeleter>(data)), length_(length) {}
+StbImageData::StbImageData(uint8_t* data, uint64_t size) :
+  data_(std::unique_ptr<uint8_t, StbImageDeleter>(data)), size_(size) {}
 
 [[nodiscard]] const uint8_t* IGL_NONNULL StbImageData::data() const noexcept {
   IGL_DEBUG_ASSERT(data_ != nullptr);
   return data_.get();
 }
 
-[[nodiscard]] uint32_t StbImageData::length() const noexcept {
-  return length_;
+[[nodiscard]] uint64_t StbImageData::size() const noexcept {
+  return size_;
 }
 
 IData::ExtractedData StbImageData::extractData() noexcept {
   return {
       .data = data_.release(),
-      .length = length_,
+      .size = size_,
       .deleter = &stbi_image_free,
   };
 }
@@ -109,8 +109,8 @@ bool TextureLoader::shouldGenerateMipmaps() const noexcept {
 std::unique_ptr<IData> TextureLoader::loadInternal(
     igl::Result* IGL_NULLABLE outResult) const noexcept {
   const auto r = reader();
-  const int length = r.length() > std::numeric_limits<int>::max() ? std::numeric_limits<int>::max()
-                                                                  : static_cast<int>(r.length());
+  const int length = r.size() > std::numeric_limits<int>::max() ? std::numeric_limits<int>::max()
+                                                                : static_cast<int>(r.size());
 
   int x = 0, y = 0, comp = 0;
   void* data = nullptr;
@@ -146,9 +146,9 @@ std::unique_ptr<ITextureLoader> TextureLoaderFactory::tryCreateInternal(
     DataReader reader,
     igl::TextureFormat preferredFormat,
     igl::Result* IGL_NULLABLE outResult) const noexcept {
-  const int length = reader.length() > std::numeric_limits<int>::max()
+  const int length = reader.size() > std::numeric_limits<int>::max()
                          ? std::numeric_limits<int>::max()
-                         : static_cast<int>(reader.length());
+                         : static_cast<int>(reader.size());
 
   int x = 0, y = 0, comp = 0;
   if (stbi_info_from_memory(reader.data(), length, &x, &y, &comp) == 0) {
@@ -162,7 +162,15 @@ std::unique_ptr<ITextureLoader> TextureLoaderFactory::tryCreateInternal(
     return nullptr;
   }
 
-  if (static_cast<uint64_t>(x) * static_cast<uint64_t>(y) > std::numeric_limits<uint32_t>::max()) {
+  // Ensure the raw decompressed data size won't overflow signed int range when stb_image computes
+  // it internally. PNG depth can be up to 16 bits, making the worst-case raw data size
+  // approximately 2 * x * y * comp + y bytes. stb_image passes this value as int to
+  // stbi_zlib_decode_malloc_guesssize_headerflag, so it must fit within INT_MAX to avoid
+  // sign-extension to a huge size_t in malloc.
+  const auto rawSizeEstimate =
+      static_cast<uint64_t>(x) * static_cast<uint64_t>(y) * static_cast<uint64_t>(comp) * 2 +
+      static_cast<uint64_t>(y);
+  if (rawSizeEstimate > static_cast<uint64_t>(std::numeric_limits<int>::max())) {
     igl::Result::setResult(outResult, igl::Result::Code::InvalidOperation, "Image is too large.");
     return nullptr;
   }

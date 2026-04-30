@@ -84,6 +84,30 @@ TEST_F(DeviceVulkanTest, PlatformDevice) {
   vulkanPlatformDevice.waitOnSubmitHandle(submitHandle);
 }
 
+TEST_F(DeviceVulkanTest, Semaphores) {
+  auto& device = static_cast<igl::vulkan::Device&>(*iglDev_);
+  auto& ctx = device.getVulkanContext();
+
+  // binary semaphore
+  {
+    auto semaphore = std::make_unique<igl::vulkan::VulkanSemaphore>(
+        ctx.vf_, ctx.getVkDevice(), false, "semaphore");
+
+    ASSERT_NE(semaphore, nullptr);
+    ASSERT_NE(semaphore->getVkSemaphore(), VK_NULL_HANDLE);
+    ASSERT_EQ(semaphore->getFileDescriptor(), -1);
+  }
+  // timeline semaphore
+  {
+    auto semaphore = std::make_unique<igl::vulkan::VulkanSemaphore>(
+        ctx.vf_, ctx.getVkDevice(), 0, false, "timelineSemaphore");
+
+    ASSERT_NE(semaphore, nullptr);
+    ASSERT_NE(semaphore->getVkSemaphore(), VK_NULL_HANDLE);
+    ASSERT_EQ(semaphore->getFileDescriptor(), -1);
+  }
+}
+
 TEST_F(DeviceVulkanTest, PlatformDeviceSampler) {
   Result ret;
   TextureDesc textureDesc = TextureDesc::new2D(
@@ -118,10 +142,6 @@ TEST_F(DeviceVulkanTest, StagingDeviceLargeBufferTest) {
 
   // create a GPU device-local storage buffer large enough to force Vulkan staging device to upload
   // it in multiple chunks
-  BufferDesc bufferDesc;
-  bufferDesc.type = BufferDesc::BufferTypeBits::Storage;
-  bufferDesc.storage = ResourceStorage::Private;
-
   igl::vulkan::VulkanContext& ctx =
       static_cast<igl::vulkan::Device*>(iglDev_.get())->getVulkanContext();
 
@@ -133,11 +153,16 @@ TEST_F(DeviceVulkanTest, StagingDeviceLargeBufferTest) {
   size_t maxBufferLength = 0;
   iglDev_->getFeatureLimits(DeviceFeatureLimits::MaxStorageBufferBytes, maxBufferLength);
 
-  for (auto kDesiredBufferSize : kDesiredBufferSizes) {
-    bufferDesc.length = std::min<VkDeviceSize>(kDesiredBufferSize, maxBufferLength);
+  for (const auto kDesiredBufferSize : kDesiredBufferSizes) {
+    const auto length = std::min<VkDeviceSize>(kDesiredBufferSize, maxBufferLength);
 
-    ASSERT_TRUE(bufferDesc.length % 2 == 0);
+    ASSERT_TRUE(length % 2 == 0);
 
+    const BufferDesc bufferDesc{
+        .type = BufferDesc::BufferTypeBits::Storage,
+        .length = static_cast<size_t>(length),
+        .storage = ResourceStorage::Private,
+    };
     const std::shared_ptr<IBuffer> buffer = iglDev_->createBuffer(bufferDesc, &ret);
 
     ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -145,27 +170,26 @@ TEST_F(DeviceVulkanTest, StagingDeviceLargeBufferTest) {
 
     // upload
     {
-      std::vector<uint16_t> bufferData(bufferDesc.length / 2);
+      std::vector<uint16_t> bufferData(length / 2);
 
       uint16_t* data = bufferData.data();
 
-      for (size_t i = 0; i != bufferDesc.length / 2; i++) {
+      for (size_t i = 0; i != length / 2; i++) {
         data[i] = uint16_t(i & 0xffff);
       }
 
-      ret = buffer->upload(data, BufferRange(bufferDesc.length, 0));
+      ret = buffer->upload(data, BufferRange(length, 0));
 
       ASSERT_EQ(ret.code, Result::Code::Ok);
     }
     // download
     {
       // map() will create a CPU-copy of data
-      const auto* data =
-          static_cast<uint16_t*>(buffer->map(BufferRange(bufferDesc.length, 0), &ret));
+      const auto* data = static_cast<uint16_t*>(buffer->map(BufferRange(length, 0), &ret));
 
       ASSERT_EQ(ret.code, Result::Code::Ok);
 
-      for (size_t i = 0; i != bufferDesc.length / 2; i++) {
+      for (size_t i = 0; i != length / 2; i++) {
         ASSERT_EQ(data[i], uint16_t(i & 0xffff));
       }
 
@@ -208,12 +232,12 @@ TEST_F(DeviceVulkanTest, UpdateGlslangResource) {
   const igl::vulkan::VulkanContext& ctx =
       static_cast<const igl::vulkan::Device*>(iglDev_.get())->getVulkanContext();
 
-  ivkUpdateGlslangResource(nullptr, nullptr);
+  ivkUpdateGlslangResource(nullptr, nullptr, nullptr);
 
   glslang_resource_t res = {};
   const VkPhysicalDeviceProperties& props = ctx.getVkPhysicalDeviceProperties();
 
-  ivkUpdateGlslangResource(&res, &props);
+  ivkUpdateGlslangResource(&res, &props, nullptr);
 
   ASSERT_EQ(res.max_vertex_attribs, (int)props.limits.maxVertexInputAttributes);
   ASSERT_EQ(res.max_clip_distances, (int)props.limits.maxClipDistances);
@@ -244,65 +268,23 @@ TEST_F(DeviceVulkanTest, UpdateGlslangResource) {
             (int)props.limits.maxCombinedClipAndCullDistances);
 }
 
-GTEST_TEST(VulkanContext, BufferDeviceAddress) {
-  std::shared_ptr<IDevice> iglDev = nullptr;
+TEST_F(DeviceVulkanTest, BufferDeviceAddress) {
+  const igl::vulkan::VulkanContext& ctx =
+      static_cast<const igl::vulkan::Device*>(iglDev_.get())->getVulkanContext();
 
-  igl::vulkan::VulkanContextConfig config;
-#if IGL_PLATFORM_MACOSX
-  config.terminateOnValidationError = false;
-#elif IGL_DEBUG
-  config.enableValidation = true;
-  config.terminateOnValidationError = true;
-#else
-  config.enableValidation = true;
-  config.terminateOnValidationError = false;
-#endif
-#ifdef IGL_DISABLE_VALIDATION
-  config.enableValidation = false;
-  config.terminateOnValidationError = false;
-#endif
-  config.enableExtraLogs = true;
-
-  auto ctx = igl::vulkan::HWDevice::createContext(config, nullptr);
-
-  ASSERT_NE(ctx, nullptr);
-
-  Result ret;
-
-  std::vector<HWDeviceDesc> devices =
-      igl::vulkan::HWDevice::queryDevices(*ctx, HWDeviceQueryDesc(HWDeviceType::Unknown), &ret);
-
-  ASSERT_TRUE(!devices.empty());
-
-  if (ret.isOk()) {
-    if (!ctx->features().has_VK_KHR_buffer_device_address) {
-      return;
-    }
-
-    iglDev = igl::vulkan::HWDevice::create(std::move(ctx),
-                                           devices[0],
-                                           0, // width
-                                           0, // height,
-                                           0,
-                                           nullptr,
-                                           nullptr,
-                                           "DeviceVulkanTest",
-                                           &ret);
-
-    if (!ret.isOk()) {
-      iglDev = nullptr;
-    }
-  }
-
-  EXPECT_TRUE(ret.isOk());
-  ASSERT_NE(iglDev, nullptr);
-
-  if (!iglDev) {
+  if (!ctx.features().has_VK_KHR_buffer_device_address) {
     return;
   }
 
-  auto buffer = iglDev->createBuffer(
-      BufferDesc(BufferDesc::BufferTypeBits::Uniform, nullptr, 256, ResourceStorage::Shared), &ret);
+  Result ret;
+
+  auto buffer = iglDev_->createBuffer(
+      BufferDesc{
+          .type = BufferDesc::BufferTypeBits::Uniform,
+          .length = 256,
+          .storage = ResourceStorage::Shared,
+      },
+      &ret);
 
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(buffer, nullptr);
@@ -315,24 +297,29 @@ GTEST_TEST(VulkanContext, BufferDeviceAddress) {
 }
 
 GTEST_TEST(VulkanContext, DescriptorIndexing) {
-  std::shared_ptr<IDevice> iglDev = nullptr;
-
-  igl::vulkan::VulkanContextConfig config;
+  const igl::vulkan::VulkanContextConfig config = {
 #if IGL_PLATFORM_MACOSX
-  config.terminateOnValidationError = false;
+      .terminateOnValidationError = false,
 #elif IGL_DEBUG
-  config.enableValidation = true;
-  config.terminateOnValidationError = true;
-#else
-  config.enableValidation = true;
-  config.terminateOnValidationError = false;
-#endif
+      .terminateOnValidationError = true,
 #ifdef IGL_DISABLE_VALIDATION
-  config.enableValidation = false;
-  config.terminateOnValidationError = false;
+      .enableValidation = false,
+#else
+      .enableValidation = true,
+#endif // IGL_DISABLE_VALIDATION
+#else
+      .terminateOnValidationError = false,
+#ifdef IGL_DISABLE_VALIDATION
+      .enableValidation = false,
+#else
+      .enableValidation = true,
+#endif // IGL_DISABLE_VALIDATION
 #endif
-  config.enableExtraLogs = true;
-  config.enableDescriptorIndexing = true;
+      .enableExtraLogs = true,
+      .enableDescriptorIndexing = true,
+  };
+
+  std::unique_ptr<igl::vulkan::Device> iglDev = nullptr;
 
   auto ctx = igl::vulkan::HWDevice::createContext(config, nullptr);
 
@@ -345,7 +332,9 @@ GTEST_TEST(VulkanContext, DescriptorIndexing) {
 
   if (ret.isOk()) {
     igl::vulkan::VulkanFeatures features(config);
-    features.populateWithAvailablePhysicalDeviceFeatures(*ctx, (VkPhysicalDevice)devices[0].guid);
+    features.populateWithAvailablePhysicalDeviceFeatures(
+        *ctx,
+        (VkPhysicalDevice)devices[0].guid); // NOLINT(performance-no-int-to-ptr)
 
     const VkPhysicalDeviceDescriptorIndexingFeaturesEXT& dif = features.featuresDescriptorIndexing;
     if (!dif.shaderSampledImageArrayNonUniformIndexing ||
@@ -358,7 +347,6 @@ GTEST_TEST(VulkanContext, DescriptorIndexing) {
       return;
     }
 
-    const std::vector<const char*> extraDeviceExtensions;
     iglDev = igl::vulkan::HWDevice::create(std::move(ctx),
                                            devices[0],
                                            0, // width
@@ -368,7 +356,6 @@ GTEST_TEST(VulkanContext, DescriptorIndexing) {
                                            &features,
                                            "VulkanContext Test",
                                            &ret);
-
     if (!ret.isOk()) {
       iglDev = nullptr;
     }
@@ -403,13 +390,12 @@ TEST_F(DeviceVulkanTest, UniformBlockRingBufferTest) {
 
   // Create uniform buffer with ring buffer hint
   const size_t bufferSize = 256;
-  BufferDesc bufferDesc;
-  bufferDesc.type = BufferDesc::BufferTypeBits::Uniform;
-  bufferDesc.length = bufferSize;
-  bufferDesc.storage = ResourceStorage::Shared;
-  bufferDesc.hint =
-      BufferDesc::BufferAPIHintBits::Ring | BufferDesc::BufferAPIHintBits::UniformBlock;
-
+  const BufferDesc bufferDesc{
+      .type = BufferDesc::BufferTypeBits::Uniform,
+      .length = bufferSize,
+      .storage = ResourceStorage::Shared,
+      .hint = BufferDesc::BufferAPIHintBits::Ring | BufferDesc::BufferAPIHintBits::UniformBlock,
+  };
   auto buffer = iglDev_->createBuffer(bufferDesc, &ret);
   ASSERT_TRUE(ret.isOk());
   ASSERT_NE(buffer, nullptr);

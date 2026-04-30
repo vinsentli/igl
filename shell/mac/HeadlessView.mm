@@ -11,19 +11,26 @@
 
 #import "ViewController.h"
 
-#import <Foundation/Foundation.h>
+#import <AppKit/NSApplication.h>
+#import <AppKit/NSTabViewController.h>
+#import <AppKit/NSTabViewItem.h>
+#import <AppKit/NSTrackingArea.h>
+#import <AppKit/NSWindow.h>
+#import <CoreVideo/CVDisplayLink.h>
 
 @interface HeadlessView () {
-  CVDisplayLinkRef displayLink_; // display link for managing rendering thread
-  NSTrackingArea* trackingArea_; // needed for mouseMoved: events
+  CVDisplayLinkRef _displayLink; // display link for managing rendering thread
+  NSTrackingArea* _trackingArea; // needed for mouseMoved: events
 }
 @property (weak) ViewController* viewController;
 @end
 
 @implementation HeadlessView
 
+@synthesize viewController = _viewController;
+
 - (void)dealloc {
-  CVDisplayLinkRelease(displayLink_);
+  CVDisplayLinkRelease(_displayLink);
 }
 
 - (void)prepareHeadless {
@@ -40,13 +47,14 @@
   [self startTimer];
 }
 
-static CVReturn DisplayLinkCallback(CVDisplayLinkRef /*displayLink*/,
-                                    const CVTimeStamp* /*now*/,
-                                    const CVTimeStamp* /*outputTime*/,
-                                    CVOptionFlags /*flagsIn*/,
-                                    CVOptionFlags* /*flagsOut*/,
+static CVReturn displayLinkCallback(
+    CVDisplayLinkRef /*displayLink*/, // NOLINT(readability-identifier-naming)
+    const CVTimeStamp* /*now*/,
+    const CVTimeStamp* /*outputTime*/,
+    CVOptionFlags /*flagsIn*/,
+    CVOptionFlags* /*flagsOut*/,
 
-                                    void* userdata) {
+    void* userdata) {
   auto view = (__bridge HeadlessView*)userdata;
   [view.viewController performSelectorOnMainThread:@selector(render)
                                         withObject:nil
@@ -56,32 +64,32 @@ static CVReturn DisplayLinkCallback(CVDisplayLinkRef /*displayLink*/,
 
 - (void)initTimer {
   // Create a display link capable of being used with all active displays
-  CVDisplayLinkCreateWithActiveCGDisplays(&displayLink_);
+  CVDisplayLinkCreateWithActiveCGDisplays(&_displayLink);
 
   // Set the renderer output callback function
-  CVDisplayLinkSetOutputCallback(displayLink_, &DisplayLinkCallback, (__bridge void*)self);
+  CVDisplayLinkSetOutputCallback(_displayLink, &displayLinkCallback, (__bridge void*)self);
 }
 
 - (void)startTimer {
-  CVDisplayLinkStart(displayLink_);
+  CVDisplayLinkStart(_displayLink);
 }
 
 - (void)stopTimer {
-  CVDisplayLinkStop(displayLink_);
+  CVDisplayLinkStop(_displayLink);
 }
 
 - (void)addFullScreenTrackingArea {
-  trackingArea_ =
+  _trackingArea =
       [[NSTrackingArea alloc] initWithRect:self.bounds
                                    options:NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved |
                                            NSTrackingActiveInKeyWindow
                                      owner:self
                                   userInfo:nil];
-  [self addTrackingArea:trackingArea_];
+  [self addTrackingArea:_trackingArea];
 }
 
 - (void)updateTrackingAreas {
-  [self removeTrackingArea:trackingArea_];
+  [self removeTrackingArea:_trackingArea];
   [self addFullScreenTrackingArea];
 }
 

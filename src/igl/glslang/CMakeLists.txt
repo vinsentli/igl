@@ -32,6 +32,11 @@ igl_set_folder(SPIRV              "third-party/glslang")
 target_link_libraries(IGLGlslang PUBLIC SPIRV glslang-default-resource-limits)
 #target_link_libraries(IGLGlslang PUBLIC glslang SPIRV glslang-default-resource-limits)
 
+# explicit include directories for glslang headers
+target_include_directories(IGLGlslang PRIVATE
+  "${IGL_ROOT_DIR}/third-party/deps/src/glslang"
+  "${IGL_ROOT_DIR}/third-party/deps/src/glslang/glslang/Include")
+
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   target_compile_options(IGLGlslang PRIVATE "-Wno-nullability-completeness")
   target_compile_options(MachineIndependent PRIVATE "-Wno-unused-but-set-variable")

@@ -7,10 +7,7 @@
 
 #include <igl/vulkan/CommandQueue.h>
 
-#include <igl/vulkan/Buffer.h>
 #include <igl/vulkan/CommandBuffer.h>
-#include <igl/vulkan/EnhancedShaderDebuggingStore.h>
-#include <igl/vulkan/RenderCommandEncoder.h>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanSwapchain.h>
 
@@ -23,31 +20,32 @@
 
 namespace igl::vulkan {
 
-CommandQueue::CommandQueue(Device& device, const CommandQueueDesc& /*desc*/) : device_(device) {}
+CommandQueue::CommandQueue(Device& device, const CommandQueueDesc& /*desc*/) : device_(device) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+}
 
 std::shared_ptr<ICommandBuffer> CommandQueue::createCommandBuffer(const CommandBufferDesc& desc,
-                                                                  Result* /*outResult*/) {
+                                                                  Result* IGL_NULLABLE
+                                                                  /*outResult*/) {
   IGL_PROFILER_FUNCTION();
 
-  // for now, we want only 1 command buffer
-  // IGL_DEBUG_ASSERT(!isInsideFrame_);
+  VulkanContext& ctx = device_.getVulkanContext();
+  IGL_ENSURE_VULKAN_CONTEXT_THREAD(&ctx);
 
-  isInsideFrame_ = true;
+  ++numBuffersLeftToSubmit_;
 
-  return std::make_shared<CommandBuffer>(device_.getVulkanContext(), desc);
+  return std::make_shared<CommandBuffer>(ctx, desc);
 }
 
 SubmitHandle CommandQueue::submit(const ICommandBuffer& cmdBuffer, bool /* endOfFrame */) {
-  IGL_PROFILER_FUNCTION();
-  VulkanContext& ctx = device_.getVulkanContext();
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_SUBMIT);
 
-  if (ctx.enhancedShaderDebuggingStore_) {
-    ctx.enhancedShaderDebuggingStore_->installBufferBarrier(cmdBuffer);
-  }
+  VulkanContext& ctx = device_.getVulkanContext();
+  IGL_ENSURE_VULKAN_CONTEXT_THREAD(&ctx);
 
   incrementDrawCount(cmdBuffer.getCurrentDrawCount());
 
-  // IGL_DEBUG_ASSERT(isInsideFrame_);
+  --numBuffersLeftToSubmit_;
 
   auto* vkCmdBuffer =
       const_cast<CommandBuffer*>(static_cast<const vulkan::CommandBuffer*>(&cmdBuffer));
@@ -72,15 +70,10 @@ SubmitHandle CommandQueue::submit(const ICommandBuffer& cmdBuffer, bool /* endOf
   ivkCmdInsertDebugUtilsLabel(&ctx.vf_,
                               vkCmdBuffer->getVkCommandBuffer(),
                               labelName,
-                              kColorCommandBufferSubmissionWithFence.toFloatPtr());
+                              K_COLOR_COMMAND_BUFFER_SUBMISSION_WITH_FENCE.toFloatPtr());
 #endif // IGL_COMMAND_QUEUE_DEBUG_FENCES
 
-  const bool presentIfNotDebugging = ctx.enhancedShaderDebuggingStore_ == nullptr;
-  auto submitHandle = endCommandBuffer(ctx, vkCmdBuffer, presentIfNotDebugging);
-
-  if (ctx.enhancedShaderDebuggingStore_) {
-    ctx.enhancedShaderDebuggingStore_->enhancedShaderDebuggingPass(*this, vkCmdBuffer);
-  }
+  auto submitHandle = endCommandBuffer(ctx, vkCmdBuffer, true);
 
   return submitHandle;
 }
@@ -88,7 +81,8 @@ SubmitHandle CommandQueue::submit(const ICommandBuffer& cmdBuffer, bool /* endOf
 SubmitHandle CommandQueue::endCommandBuffer(VulkanContext& ctx,
                                             CommandBuffer* cmdBuffer,
                                             bool present) {
-  IGL_PROFILER_FUNCTION();
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_SUBMIT);
+  IGL_ENSURE_VULKAN_CONTEXT_THREAD(&ctx);
 
   // Submit to the graphics queue.
   const bool shouldPresent = ctx.hasSwapchain() && cmdBuffer->isFromSwapchain() && present;
@@ -99,7 +93,7 @@ SubmitHandle CommandQueue::endCommandBuffer(VulkanContext& ctx,
       const uint64_t signalValue =
           ctx.swapchain_->getFrameNumber() + ctx.swapchain_->getNumSwapchainImages();
       // we wait for this value next time we want to acquire this swapchain image
-      ctx.swapchain_->timelineWaitValues_[ctx.swapchain_->getCurrentImageIndex()] = signalValue;
+      ctx.swapchain_->timelineWaitValues[ctx.swapchain_->getCurrentImageIndex()] = signalValue;
       ctx.immediate_->signalSemaphore(ctx.timelineSemaphore_->getVkSemaphore(), signalValue);
     } else {
       // this can be removed once we switch to timeline semaphores
@@ -134,8 +128,6 @@ SubmitHandle CommandQueue::endCommandBuffer(VulkanContext& ctx,
   ctx.syncMarkSubmitted(cmdBuffer->lastSubmitHandle_);
   ctx.processDeferredTasks();
   ctx.stagingDevice_->mergeRegionsAndFreeBuffers();
-
-  isInsideFrame_ = false;
 
   return cmdBuffer->lastSubmitHandle_.handle();
 }

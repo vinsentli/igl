@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <memory>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanHelpers.h>
 
@@ -31,16 +30,18 @@ class VulkanDescriptorSetLayout final {
 
   VulkanDescriptorSetLayout(const VulkanDescriptorSetLayout&) = delete;
   VulkanDescriptorSetLayout& operator=(const VulkanDescriptorSetLayout&) = delete;
+  VulkanDescriptorSetLayout(VulkanDescriptorSetLayout&&) = delete;
+  VulkanDescriptorSetLayout& operator=(VulkanDescriptorSetLayout&&) = delete;
 
   [[nodiscard]] VkDescriptorSetLayout getVkDescriptorSetLayout() const {
-    return vkDescriptorSetLayout_;
+    return vkDescriptorSetLayout;
   }
 
  public:
-  const VulkanContext& ctx_;
-  VkDescriptorSetLayout vkDescriptorSetLayout_ = VK_NULL_HANDLE;
-  VkDeviceSize layoutSize_{};
-  uint32_t numBindings_ = 0;
+  const VulkanContext& ctx;
+  VkDescriptorSetLayout vkDescriptorSetLayout = VK_NULL_HANDLE;
+  VkDeviceSize layoutSize = 0;
+  uint32_t numBindings = 0;
 };
 
 } // namespace igl::vulkan

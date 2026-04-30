@@ -10,14 +10,11 @@
 #include <shell/openxr/mobile/opengl/XrSwapchainProviderImplGLES.h>
 
 #include <algorithm>
-
+#include <iterator>
+#include <shell/openxr/XrLog.h>
 #include <igl/opengl/Device.h>
 #include <igl/opengl/PlatformDevice.h>
 #include <igl/opengl/TextureBufferExternal.h>
-
-#include <shell/openxr/XrLog.h>
-
-#include <iterator>
 
 namespace igl::shell::openxr::mobile {
 namespace {
@@ -59,11 +56,17 @@ std::shared_ptr<ITexture> getSurfaceTexture(IDevice& device,
                                             TextureFormat externalTextureFormat,
                                             std::vector<std::shared_ptr<ITexture>>& inOutTextures) {
   uint32_t imageIndex = 0;
-  const XrSwapchainImageAcquireInfo acquireInfo{XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
+  const XrSwapchainImageAcquireInfo acquireInfo{
+      .type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO,
+      .next = nullptr,
+  };
   XR_CHECK(xrAcquireSwapchainImage(swapchain, &acquireInfo, &imageIndex));
 
-  XrSwapchainImageWaitInfo waitInfo{XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
-  waitInfo.timeout = XR_INFINITE_DURATION;
+  const XrSwapchainImageWaitInfo waitInfo{
+      .type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
+      .next = nullptr,
+      .timeout = XR_INFINITE_DURATION,
+  };
   XR_CHECK(xrWaitSwapchainImage(swapchain, &waitInfo));
 
   const auto glTexture = images[imageIndex];
@@ -113,7 +116,7 @@ void XrSwapchainProviderImplGLES::enumerateImages(
     XrSwapchain colorSwapchain,
     XrSwapchain depthSwapchain,
     const impl::SwapchainImageInfo& /* swapchainImageInfo */,
-    uint8_t /* numViews */) noexcept {
+    uint8_t /* numViews */) noexcept { // NOLINT(bugprone-exception-escape)
   enumerateSwapchainImages(colorSwapchain, colorImages_);
   enumerateSwapchainImages(depthSwapchain, depthImages_);
 }
@@ -123,7 +126,7 @@ SurfaceTextures XrSwapchainProviderImplGLES::getSurfaceTextures(
     XrSwapchain colorSwapchain,
     XrSwapchain depthSwapchain,
     const impl::SwapchainImageInfo& swapchainImageInfo,
-    uint8_t numViews) noexcept {
+    uint8_t numViews) noexcept { // NOLINT(bugprone-exception-escape)
   // Assume sized format so format / type are not needed.
   auto iglColorFormat = igl::opengl::Texture::glInternalFormatToTextureFormat(
       static_cast<GLuint>(swapchainImageInfo.colorFormat), 0, 0);
@@ -145,6 +148,6 @@ SurfaceTextures XrSwapchainProviderImplGLES::getSurfaceTextures(
                                         iglDepthFormat,
                                         depthTextures_);
 
-  return {colorTexture, depthTexture};
+  return {.color = colorTexture, .depth = depthTexture};
 }
 } // namespace igl::shell::openxr::mobile

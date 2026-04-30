@@ -5,11 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <igl/vulkan/Device.h>
 #include <igl/vulkan/SamplerState.h>
-#include <igl/vulkan/VulkanContext.h>
 
-#define IGL_VULKAN_DEBUG_SAMPLER_STATE 1
+#include <igl/vulkan/Device.h>
+#include <igl/vulkan/VulkanContext.h>
 
 namespace {
 VkFilter samplerMinMagFilterToVkFilter(igl::SamplerMinMagFilter filter) {
@@ -19,7 +18,7 @@ VkFilter samplerMinMagFilterToVkFilter(igl::SamplerMinMagFilter filter) {
   case igl::SamplerMinMagFilter::Linear:
     return VK_FILTER_LINEAR;
   }
-  IGL_DEBUG_ABORT("SamplerMinMagFilter value not handled: %d", (int)filter);
+  IGL_DEBUG_ABORT("SamplerMinMagFilter value not handled: %d", static_cast<int>(filter));
   return VK_FILTER_LINEAR;
 }
 
@@ -31,7 +30,7 @@ VkSamplerMipmapMode samplerMipFilterToVkSamplerMipmapMode(igl::SamplerMipFilter 
   case igl::SamplerMipFilter::Linear:
     return VK_SAMPLER_MIPMAP_MODE_LINEAR;
   }
-  IGL_DEBUG_ABORT("SamplerMipFilter value not handled: %d", (int)filter);
+  IGL_DEBUG_ABORT("SamplerMipFilter value not handled: %d", static_cast<int>(filter));
   return VK_SAMPLER_MIPMAP_MODE_NEAREST;
 }
 
@@ -43,8 +42,10 @@ VkSamplerAddressMode samplerAddressModeToVkSamplerAddressMode(igl::SamplerAddres
     return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
   case igl::SamplerAddressMode::MirrorRepeat:
     return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+  case igl::SamplerAddressMode::ClampToBorder:
+    return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
   }
-  IGL_DEBUG_ABORT("SamplerAddressMode value not handled: %d", (int)mode);
+  IGL_DEBUG_ABORT("SamplerAddressMode value not handled: %d", static_cast<int>(mode));
   return VK_SAMPLER_ADDRESS_MODE_REPEAT;
 }
 
@@ -52,8 +53,8 @@ VkSamplerCreateInfo samplerStateDescToVkSamplerCreateInfo(const igl::SamplerStat
                                                           const VkPhysicalDeviceLimits& limits) {
   IGL_DEBUG_ASSERT(desc.mipLodMax >= desc.mipLodMin,
                    "mipLodMax (%d) must be greater than or equal to mipLodMin (%d)",
-                   (int)desc.mipLodMax,
-                   (int)desc.mipLodMin);
+                   static_cast<int>(desc.mipLodMax),
+                   static_cast<int>(desc.mipLodMin));
 
   VkSamplerCreateInfo ci = {
       .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -76,7 +77,11 @@ VkSamplerCreateInfo samplerStateDescToVkSamplerCreateInfo(const igl::SamplerStat
       .maxLod = desc.mipFilter == igl::SamplerMipFilter::Disabled
                     ? 0.0f
                     : static_cast<float>(desc.mipLodMax),
-      .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+      .borderColor = (desc.addressModeU == igl::SamplerAddressMode::ClampToBorder ||
+                      desc.addressModeV == igl::SamplerAddressMode::ClampToBorder ||
+                      desc.addressModeW == igl::SamplerAddressMode::ClampToBorder)
+                         ? VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK
+                         : VK_BORDER_COLOR_INT_OPAQUE_BLACK,
       .unnormalizedCoordinates = VK_FALSE,
   };
 
@@ -86,15 +91,14 @@ VkSamplerCreateInfo samplerStateDescToVkSamplerCreateInfo(const igl::SamplerStat
                      "Anisotropic filtering is not supported by the device.");
     ci.anisotropyEnable = isAnisotropicFilteringSupported ? VK_TRUE : VK_FALSE;
 
-#ifdef IGL_VULKAN_DEBUG_SAMPLER_STATE
     if (limits.maxSamplerAnisotropy < desc.maxAnisotropic) {
       IGL_LOG_INFO(
           "Supplied sampler anisotropic value greater than max supported by the device, setting to "
           "%.0f",
           static_cast<double>(limits.maxSamplerAnisotropy));
     }
-#endif
-    ci.maxAnisotropy = std::min((float)limits.maxSamplerAnisotropy, (float)desc.maxAnisotropic);
+    ci.maxAnisotropy = std::min(static_cast<float>(limits.maxSamplerAnisotropy),
+                                static_cast<float>(desc.maxAnisotropic));
   }
 
   return ci;
@@ -107,11 +111,12 @@ namespace igl::vulkan {
 SamplerState::SamplerState(Device& device) : device_(device) {}
 
 Result SamplerState::create(const SamplerStateDesc& desc) {
-  IGL_PROFILER_FUNCTION();
-
-  desc_ = desc;
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
   const VulkanContext& ctx = device_.getVulkanContext();
+  IGL_ENSURE_VULKAN_CONTEXT_THREAD(&ctx);
+
+  desc_ = desc;
 
   Result result;
   sampler_ =

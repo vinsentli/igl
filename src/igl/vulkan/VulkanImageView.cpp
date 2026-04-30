@@ -13,54 +13,19 @@
 namespace igl::vulkan {
 
 VulkanImageView::VulkanImageView(const VulkanContext& ctx,
-                                 VkImage image,
-                                 VkImageViewType type,
-                                 VkFormat format,
-                                 VkImageAspectFlags aspectMask,
-                                 uint32_t baseLevel,
-                                 uint32_t numLevels,
-                                 uint32_t baseLayer,
-                                 uint32_t numLayers,
-                                 const char* debugName) :
-  ctx_(&ctx), aspectMask_(aspectMask) {
-  IGL_DEBUG_ASSERT(ctx_);
-  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
-
-  VkDevice device = ctx_->getVkDevice();
-
-  VkImageViewCreateInfo ci = ivkGetImageViewCreateInfo(
-      image,
-      type,
-      format,
-      VkImageSubresourceRange{aspectMask, baseLevel, numLevels, baseLayer, numLayers});
-
-  VkSamplerYcbcrConversionInfo info{};
-
-  if (igl::vulkan::getNumImagePlanes(format) > 1) {
-    info = ctx.getOrCreateYcbcrConversionInfo(format);
-    ci.pNext = &info;
-  }
-
-  VK_ASSERT(ctx_->vf_.vkCreateImageView(device, &ci, nullptr, &vkImageView_));
-
-  VK_ASSERT(ivkSetDebugObjectName(
-      &ctx_->vf_, device, VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)vkImageView_, debugName));
-}
-
-VulkanImageView::VulkanImageView(const VulkanContext& ctx,
-                                 VkDevice /*device*/,
-                                 VkImage image,
-                                 const VulkanImageViewCreateInfo& createInfo,
+                                 const VulkanImageViewCreateInfo& ci,
                                  const char* debugName) :
   VulkanImageView(ctx,
-                  image,
-                  createInfo.type,
-                  createInfo.format,
-                  createInfo.aspectMask,
-                  createInfo.baseLevel,
-                  createInfo.numLevels,
-                  createInfo.baseLayer,
-                  createInfo.numLayers,
+                  VkImageViewCreateInfo{
+                      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                      .pNext = nullptr,
+                      .flags = 0,
+                      .image = ci.image,
+                      .viewType = ci.viewType,
+                      .format = ci.format,
+                      .components = ci.components,
+                      .subresourceRange = ci.subresourceRange,
+                  },
                   debugName) {}
 
 VulkanImageView::~VulkanImageView() {
@@ -69,29 +34,40 @@ VulkanImageView::~VulkanImageView() {
 }
 
 VulkanImageView::VulkanImageView(const VulkanContext& ctx,
-                                 const VkImageViewCreateInfo& createInfo,
+                                 const VkImageViewCreateInfo& ci,
                                  const char* debugName) :
-  ctx_(&ctx), aspectMask_(createInfo.subresourceRange.aspectMask) {
-  VkDevice device = ctx_->getVkDevice();
-  VK_ASSERT(ctx_->vf_.vkCreateImageView(device, &createInfo, nullptr, &vkImageView_));
+  ctx(&ctx), aspectMask(ci.subresourceRange.aspectMask) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+
+  VkImageViewCreateInfo ciCopy(ci);
+
+  VkSamplerYcbcrConversionInfo info{};
+
+  if (!ci.pNext && igl::vulkan::getNumImagePlanes(ci.format) > 1) {
+    info = ctx.getOrCreateYcbcrConversionInfo(ci.format);
+    ciCopy.pNext = &info;
+  }
+
+  const VkDevice device = this->ctx->getVkDevice();
+  VK_ASSERT(this->ctx->vf_.vkCreateImageView(device, &ciCopy, nullptr, &vkImageView));
 
   VK_ASSERT(ivkSetDebugObjectName(
-      &ctx_->vf_, device, VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)vkImageView_, debugName));
+      &this->ctx->vf_, device, VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)vkImageView, debugName));
 }
 
 VulkanImageView& VulkanImageView::operator=(VulkanImageView&& other) noexcept {
   destroy();
-  ctx_ = other.ctx_;
-  vkImageView_ = other.vkImageView_;
-  aspectMask_ = other.aspectMask_;
-  other.ctx_ = nullptr;
-  other.vkImageView_ = VK_NULL_HANDLE;
-  other.aspectMask_ = 0;
+  ctx = other.ctx;
+  vkImageView = other.vkImageView;
+  aspectMask = other.aspectMask;
+  other.ctx = nullptr;
+  other.vkImageView = VK_NULL_HANDLE;
+  other.aspectMask = 0;
   return *this;
 }
 
 [[nodiscard]] bool VulkanImageView::valid() const {
-  return ctx_ != nullptr;
+  return ctx != nullptr;
 }
 
 void VulkanImageView::destroy() {
@@ -99,15 +75,15 @@ void VulkanImageView::destroy() {
     return;
   }
 
-  IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
+  IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx);
 
-  ctx_->deferredTask(std::packaged_task<void()>(
-      [vf = &ctx_->vf_, device = ctx_->getVkDevice(), imageView = vkImageView_]() {
+  ctx->deferredTask(std::packaged_task<void()>(
+      [vf = &ctx->vf_, device = ctx->getVkDevice(), imageView = vkImageView]() {
         vf->vkDestroyImageView(device, imageView, nullptr);
       }));
 
-  vkImageView_ = VK_NULL_HANDLE;
-  ctx_ = nullptr;
+  vkImageView = VK_NULL_HANDLE;
+  ctx = nullptr;
 }
 
 } // namespace igl::vulkan

@@ -12,29 +12,9 @@
 #include <igl/Common.h>
 #include <igl/ITrackedResource.h>
 #include <igl/TextureFormat.h>
+#include <igl/base/IAttachmentInterop.h>
 
 namespace igl {
-
-/**
- * @brief TextureType denotes the possible storage components of the underlying surface for the
- * texture. For example, TwoD corresponds to 2-dimensional textures.
- *
- *  Invalid          - Undefined,
- *  TwoD             - Single layer, two dimensional: (Width, Height)
- *  TwoDArray        - Multiple layers, two dimensional: (Width, Height)
- *  ThreeD           - 3 dimensional textures: (Width, Height, Depth)
- *  Cube             - Special case of 3 dimensional textures: (Width, Height, Depth), along with 6
- *                     cube faces
- *  ExternalImage    - Externally provided images, EXTERNAL_OES on OpenGLES
- */
-enum class TextureType : uint8_t {
-  Invalid,
-  TwoD,
-  TwoDArray,
-  ThreeD,
-  Cube,
-  ExternalImage,
-};
 
 /**
  * @brief TextureCubeFace denotes side of the face in a cubemap setting.
@@ -222,12 +202,14 @@ struct TextureRangeDesc {
  *  minBlocksY         - Minimum number of blocks in the Y direction for compressed textures
  *  minBlocksZ         - Minimum number of blocks in the Z direction for compressed textures
  *  flags              - Additional boolean flags for the format:
- *                        - Depth:      Depth texture format
- *                        - Stencil:    Stencil texture format
- *                        - Compressed: Compressed texture format
- *                        - sRGB:       sRGB texture format
- *                        - Integer:    Integer formats do not support sampling via
- *                                      float samplers `texture2D` (require `utexture2D`)
+ *                        - Depth:          Depth texture format
+ *                        - Stencil:        Stencil texture format
+ *                        - Compressed:     Compressed texture format
+ *                        - sRGB:           sRGB texture format
+ *                        - Integer:        Integer formats do not support sampling via
+ *                                          float samplers `texture2D` (require `utexture2D`)
+ *                        - HDR:            More than 8 bits per component
+ *                        - VariableLength: Variable length blocks
  */
 struct TextureFormatProperties {
   static TextureFormatProperties fromTextureFormat(TextureFormat format);
@@ -239,6 +221,7 @@ struct TextureFormatProperties {
     sRGB = 1 << 3,
     Integer = 1 << 4,
     HDR = 1 << 5, // Color format with more than 8 bits per component
+    VariableLength = 1 << 6, // Variable length blocks
   };
 
   const char* IGL_NONNULL name = "Invalid";
@@ -318,6 +301,10 @@ struct TextureFormatProperties {
    */
   [[nodiscard]] bool isDepthOrStencil() const noexcept {
     return (flags & Flags::Depth) != 0 || (flags & Flags::Stencil) != 0;
+  }
+
+  [[nodiscard]] bool isVariableLength() const noexcept {
+    return (flags & Flags::VariableLength) != 0;
   }
 
   /**
@@ -499,10 +486,15 @@ struct TextureViewDesc {
  *  numLayers          - Number of layers for array texture
  *  numSamples         - Number of samples for multisampling
  *  usage              - Bitwise flag for containing a mask of TextureUsageBits
- *  options            - Bitwise flag for containing other options
  *  numMipLevels       - Number of mipmaps to generate
+ *  type               - The type of texture (2D, 3D, Cube, etc.)
  *  format             - Internal texture format type
  *  storage            - Internal resource storage type
+ *  tiling             - Image layout for texture storage (Optimal or Linear)
+ *  exportability      - Whether the texture can be exported (NoExport or Exportable)
+ *  mipmapGeneration   - Specifies when and how mipmaps should be generated (Manual,
+ *                       AutoGenerateOnUpload)
+ *  debugName          - Optional debug name for the texture
  */
 struct TextureDesc {
   /**
@@ -532,6 +524,18 @@ struct TextureDesc {
 
   enum class TextureExportability : uint8_t { NoExport, Exportable };
 
+  /**
+   * @brief Flag to specify whether IGL needs to generate mipmaps and when
+   *
+   *  Manual - Mip levels are expected to be generated after the texture
+   *           is created and uploaded by the caller by calling one of IGL's
+   *           mipmap generation functions OR provided during upload.
+   *
+   *  AutoGenerateOnUpload - IGL will generate mipmaps when the texture
+   *                         is uploaded to the device
+   */
+  enum class TextureMipmapGeneration : uint8_t { Manual, AutoGenerateOnUpload };
+
   uint32_t width = 1;
   uint32_t height = 1;
   uint32_t depth = 1;
@@ -544,6 +548,7 @@ struct TextureDesc {
   ResourceStorage storage = ResourceStorage::Invalid;
   TextureTiling tiling = TextureTiling::Optimal;
   TextureExportability exportability = TextureExportability::NoExport;
+  TextureMipmapGeneration mipmapGeneration = TextureMipmapGeneration::Manual;
 
   std::string debugName;
 
@@ -565,19 +570,15 @@ struct TextureDesc {
                            uint32_t height,
                            TextureUsage usage,
                            const char* IGL_NULLABLE debugName = nullptr) {
-    return TextureDesc{width,
-                       height,
-                       1,
-                       1,
-                       1,
-                       usage,
-                       1,
-                       TextureType::TwoD,
-                       format,
-                       ResourceStorage::Invalid,
-                       TextureTiling::Optimal,
-                       TextureExportability::NoExport,
-                       debugName ? debugName : ""};
+    return TextureDesc{
+        .width = width,
+        .height = height,
+        .usage = usage,
+        .type = TextureType::TwoD,
+        .format = format,
+        .debugName = debugName != nullptr ? std::string(static_cast<const char*>(debugName))
+                                          : std::string(),
+    };
   }
 
   /**
@@ -598,19 +599,14 @@ struct TextureDesc {
                                 TextureUsage usage,
                                 const char* IGL_NULLABLE debugName = nullptr) {
     return TextureDesc{
-        width,
-        height,
-        1,
-        numLayers,
-        1,
-        usage,
-        1,
-        TextureType::TwoDArray,
-        format,
-        ResourceStorage::Invalid,
-        TextureTiling::Optimal,
-        TextureExportability::NoExport,
-        debugName ? debugName : "",
+        .width = width,
+        .height = height,
+        .numLayers = numLayers,
+        .usage = usage,
+        .type = TextureType::TwoDArray,
+        .format = format,
+        .debugName = debugName != nullptr ? std::string(static_cast<const char*>(debugName))
+                                          : std::string(),
     };
   }
 
@@ -629,19 +625,15 @@ struct TextureDesc {
                              uint32_t height,
                              TextureUsage usage,
                              const char* IGL_NULLABLE debugName = nullptr) {
-    return TextureDesc{width,
-                       height,
-                       1,
-                       1,
-                       1,
-                       usage,
-                       1,
-                       TextureType::Cube,
-                       format,
-                       ResourceStorage::Invalid,
-                       TextureTiling::Optimal,
-                       TextureExportability::NoExport,
-                       debugName ? debugName : ""};
+    return TextureDesc{
+        .width = width,
+        .height = height,
+        .usage = usage,
+        .type = TextureType::Cube,
+        .format = format,
+        .debugName = debugName != nullptr ? std::string(static_cast<const char*>(debugName))
+                                          : std::string(),
+    };
   }
 
   /**
@@ -661,19 +653,16 @@ struct TextureDesc {
                            uint32_t depth,
                            TextureUsage usage,
                            const char* IGL_NULLABLE debugName = nullptr) {
-    return TextureDesc{width,
-                       height,
-                       depth,
-                       1,
-                       1,
-                       usage,
-                       1,
-                       TextureType::ThreeD,
-                       format,
-                       ResourceStorage::Invalid,
-                       TextureTiling::Optimal,
-                       TextureExportability::NoExport,
-                       debugName ? debugName : ""};
+    return TextureDesc{
+        .width = width,
+        .height = height,
+        .depth = depth,
+        .usage = usage,
+        .type = TextureType::ThreeD,
+        .format = format,
+        .debugName = debugName != nullptr ? std::string(static_cast<const char*>(debugName))
+                                          : std::string(),
+    };
   }
 
   /**
@@ -690,19 +679,15 @@ struct TextureDesc {
                                       uint32_t height,
                                       TextureUsage usage,
                                       const char* IGL_NULLABLE debugName = nullptr) {
-    return TextureDesc{width,
-                       height,
-                       1,
-                       1,
-                       1,
-                       usage,
-                       1,
-                       TextureType::ExternalImage,
-                       format,
-                       ResourceStorage::Invalid,
-                       TextureTiling::Optimal,
-                       TextureExportability::NoExport,
-                       debugName ? debugName : ""};
+    return TextureDesc{
+        .width = width,
+        .height = height,
+        .usage = usage,
+        .type = TextureType::ExternalImage,
+        .format = format,
+        .debugName = debugName != nullptr ? std::string(static_cast<const char*>(debugName))
+                                          : std::string(),
+    };
   }
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
@@ -721,19 +706,16 @@ struct TextureDesc {
                                             uint32_t width,
                                             uint32_t height,
                                             const char* IGL_NULLABLE debugName = nullptr) {
-    return TextureDesc{width,
-                       height,
-                       1,
-                       1,
-                       1,
-                       usage,
-                       1,
-                       TextureType::TwoD,
-                       format,
-                       ResourceStorage::Shared,
-                       TextureTiling::Optimal,
-                       TextureExportability::NoExport,
-                       debugName ? debugName : ""};
+    return TextureDesc{
+        .width = width,
+        .height = height,
+        .usage = usage,
+        .type = TextureType::TwoD,
+        .format = format,
+        .storage = ResourceStorage::Shared,
+        .debugName = debugName != nullptr ? std::string(static_cast<const char*>(debugName))
+                                          : std::string(),
+    };
   }
 #endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
@@ -752,7 +734,20 @@ struct TextureDesc {
    * @param depth The depth of the texture
    * @return uint32_t
    */
-  static uint32_t calcNumMipLevels(uint32_t width, uint32_t height, uint32_t depth = 1);
+  static constexpr uint32_t calcNumMipLevels(uint32_t width, uint32_t height, uint32_t depth = 1) {
+    if (!width || !height || !depth) {
+      return 0;
+    }
+
+    uint32_t levels = 1;
+
+    const size_t combinedValue = width | height | depth;
+    while (combinedValue >> levels) {
+      levels++;
+    }
+
+    return levels;
+  }
 };
 
 /**
@@ -760,7 +755,7 @@ struct TextureDesc {
  * This should only be used for the purpose of getting information about the texture using the
  * gettor methods defined below.
  */
-class ITexture : public ITrackedResource<ITexture> {
+class ITexture : public ITrackedResource<ITexture>, public base::IAttachmentInterop {
  public:
   explicit ITexture(TextureFormat format) :
     properties_(TextureFormatProperties::fromTextureFormat(format)) {}
@@ -794,11 +789,13 @@ class ITexture : public ITrackedResource<ITexture> {
    * providing data.
    * @param bytesPerRow Number of bytes per row. If 0, it will be autocalculated assuming no
    * padding.
+   * @param mipLevelBytes Number of bytes per mip level. If nullptr, it will be autocalculated
    * @return Result      A flag for the result of operation
    */
   Result upload(const TextureRangeDesc& range,
                 const void* IGL_NULLABLE data,
-                size_t bytesPerRow = 0) const;
+                size_t bytesPerRow = 0,
+                const uint32_t* IGL_NULLABLE mipLevelBytes = nullptr) const;
 
   // Texture Accessor Methods
   /**
@@ -1033,10 +1030,12 @@ class ITexture : public ITrackedResource<ITexture> {
     return false;
   }
 
-  [[nodiscard]] virtual Result uploadInternal(IGL_MAYBE_UNUSED TextureType type,
-                                              IGL_MAYBE_UNUSED const TextureRangeDesc& range,
-                                              IGL_MAYBE_UNUSED const void* IGL_NULLABLE data,
-                                              IGL_MAYBE_UNUSED size_t bytesPerRow = 0) const {
+  [[nodiscard]] virtual Result uploadInternal(
+      IGL_MAYBE_UNUSED TextureType type,
+      IGL_MAYBE_UNUSED const TextureRangeDesc& range,
+      IGL_MAYBE_UNUSED const void* IGL_NULLABLE data,
+      IGL_MAYBE_UNUSED size_t bytesPerRow = 0,
+      IGL_MAYBE_UNUSED const uint32_t* IGL_NULLABLE mipLevelBytes = nullptr) const {
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
     return Result{Result::Code::Unimplemented, "Upload not implemented."};
   }

@@ -6,9 +6,10 @@
  */
 
 #include <gtest/gtest.h>
+
 #include <memory>
 #include <shell/shared/renderSession/RenderSession.h>
-#include <igl/IGL.h>
+#include <igl/Texture.h>
 
 namespace igl::shell {
 
@@ -23,9 +24,9 @@ class TestShellBase {
 
   virtual ~TestShellBase() = default;
 
-  void SetUp(ScreenSize screenSize = {1, 1}, bool needsRGBSwapchainSupport = false);
-
-  void TearDown() {};
+ protected:
+  void setUpInternal(ScreenSize screenSize = {.width = 1, .height = 1}, bool prefersRGB = true);
+  void tearDownInternal() {}
 
   std::shared_ptr<Platform> platform_;
   std::shared_ptr<ITexture> offscreenTexture_;
@@ -35,11 +36,11 @@ class TestShellBase {
 class TestShell : public ::testing::Test, public TestShellBase {
  public:
   void SetUp() override {
-    igl::shell::TestShellBase::SetUp();
+    setUpInternal();
   }
 
   void TearDown() override {
-    igl::shell::TestShellBase::TearDown();
+    tearDownInternal();
   }
 
   void run(RenderSession& session, size_t numFrames);

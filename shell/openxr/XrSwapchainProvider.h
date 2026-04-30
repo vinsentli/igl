@@ -12,7 +12,6 @@
 #include <shell/openxr/XrPlatform.h>
 #include <shell/openxr/impl/XrSwapchainProviderImpl.h>
 #include <shell/shared/platform/Platform.h>
-
 #include <igl/Device.h>
 #include <igl/Texture.h>
 
@@ -28,6 +27,10 @@ class XrSwapchainProvider {
                       impl::SwapchainImageInfo swapchainImageInfo,
                       uint8_t numViews) noexcept;
   ~XrSwapchainProvider() noexcept;
+  XrSwapchainProvider(const XrSwapchainProvider&) = delete;
+  XrSwapchainProvider& operator=(const XrSwapchainProvider&) = delete;
+  XrSwapchainProvider(XrSwapchainProvider&&) = delete;
+  XrSwapchainProvider& operator=(XrSwapchainProvider&&) = delete;
 
   [[nodiscard]] bool initialize() noexcept;
 

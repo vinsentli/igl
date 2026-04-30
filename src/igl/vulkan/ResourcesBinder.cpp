@@ -5,9 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <igl/vulkan/ResourcesBinder.h>
+
 #include <igl/vulkan/Buffer.h>
 #include <igl/vulkan/PipelineState.h>
-#include <igl/vulkan/ResourcesBinder.h>
 #include <igl/vulkan/SamplerState.h>
 #include <igl/vulkan/Texture.h>
 #include <igl/vulkan/VulkanBuffer.h>
@@ -25,7 +26,10 @@ ResourcesBinder::ResourcesBinder(const CommandBuffer* commandBuffer,
   cmdBuffer_(commandBuffer ? commandBuffer->getVkCommandBuffer() : VK_NULL_HANDLE),
   bindPoint_(bindPoint),
   nextSubmitHandle_(commandBuffer ? commandBuffer->getNextSubmitHandle()
-                                  : VulkanImmediateCommands::SubmitHandle{}) {}
+                                  : VulkanImmediateCommands::SubmitHandle{}) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+  IGL_ENSURE_VULKAN_CONTEXT_THREAD(&ctx_);
+}
 
 void ResourcesBinder::bindBuffer(uint32_t index,
                                  Buffer* buffer,
@@ -66,10 +70,12 @@ void ResourcesBinder::bindBuffer(uint32_t index,
     slot = {
         .buffer = buf,
         .offset = bufferOffset,
-        .range = bufferSize ? bufferSize : buffer->getSizeInBytes(),
+        .range = bufferSize ? bufferSize : (buffer ? buffer->getSizeInBytes() : VK_WHOLE_SIZE),
     };
-    bindingsBuffers_.addresses[index] = buffer ? buffer->gpuAddress(bufferOffset)
-                                               : ctx_.dummyUniformBuffer_->getVkDeviceAddress();
+    if (ctx_.features().has_VK_KHR_buffer_device_address) {
+      bindingsBuffers_.addresses[index] = buffer ? buffer->gpuAddress(bufferOffset)
+                                                 : ctx_.dummyUniformBuffer_->getVkDeviceAddress();
+    }
     isDirtyFlags_ |= DirtyFlagBits_Buffers;
   }
 }
@@ -116,7 +122,7 @@ void ResourcesBinder::bindTexture(uint32_t index, Texture* tex) {
 
   VulkanTexture* newTexture = tex ? &tex->getVulkanTexture() : nullptr;
 
-#if IGL_DEBUG
+#if IGL_DEBUG_ABORT_ENABLED
   if (newTexture) {
     const igl::vulkan::VulkanImage& img = newTexture->image_;
     IGL_DEBUG_ASSERT(img.samples_ == VK_SAMPLE_COUNT_1_BIT,
@@ -132,7 +138,7 @@ void ResourcesBinder::bindTexture(uint32_t index, Texture* tex) {
                        img.imageLayout_ == VK_IMAGE_LAYOUT_GENERAL);
     }
   }
-#endif // IGL_DEBUG
+#endif // IGL_DEBUG_ABORT_ENABLED
 
   // multisampled images cannot be directly accessed from shaders
   const bool isTextureAvailable =
@@ -140,8 +146,7 @@ void ResourcesBinder::bindTexture(uint32_t index, Texture* tex) {
       ((newTexture->image_.samples_ & VK_SAMPLE_COUNT_1_BIT) == VK_SAMPLE_COUNT_1_BIT);
   const bool isSampledImage = isTextureAvailable && newTexture->image_.isSampledImage();
 
-  //NOCA:NullPointer(误报)
-  VkImageView imageView = isSampledImage ? newTexture->imageView_.vkImageView_ : VK_NULL_HANDLE;
+  VkImageView imageView = isSampledImage ? newTexture->imageView_.vkImageView : VK_NULL_HANDLE;
 
   if (bindingsTextures_.textures[index] != imageView) {
     bindingsTextures_.textures[index] = imageView;
@@ -168,7 +173,7 @@ void ResourcesBinder::bindStorageImage(uint32_t index, Texture* tex) {
 
   VulkanTexture* newTexture = tex ? &tex->getVulkanTexture() : nullptr;
 
-#if IGL_DEBUG
+#if IGL_DEBUG_ABORT_ENABLED
   if (newTexture) {
     const igl::vulkan::VulkanImage& img = newTexture->image_;
     IGL_DEBUG_ASSERT(img.samples_ == VK_SAMPLE_COUNT_1_BIT,
@@ -179,7 +184,7 @@ void ResourcesBinder::bindStorageImage(uint32_t index, Texture* tex) {
     // VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
     IGL_DEBUG_ASSERT(img.imageLayout_ == VK_IMAGE_LAYOUT_GENERAL);
   }
-#endif // IGL_DEBUG
+#endif // IGL_DEBUG_ABORT_ENABLED
 
   // multisampled images cannot be directly accessed from shaders
   const bool isTextureAvailable =
@@ -187,8 +192,7 @@ void ResourcesBinder::bindStorageImage(uint32_t index, Texture* tex) {
       ((newTexture->image_.samples_ & VK_SAMPLE_COUNT_1_BIT) == VK_SAMPLE_COUNT_1_BIT);
   const bool isStorageImage = isTextureAvailable && newTexture->image_.isStorageImage();
 
-  //NOCA:NullPointer(误报)
-  VkImageView imageView = isStorageImage ? newTexture->imageView_.vkImageView_ : VK_NULL_HANDLE;
+  VkImageView imageView = isStorageImage ? newTexture->imageView_.vkImageView : VK_NULL_HANDLE;
 
   if (bindingsStorageImages_.images[index] != imageView) {
     bindingsStorageImages_.images[index] = imageView;
@@ -197,11 +201,8 @@ void ResourcesBinder::bindStorageImage(uint32_t index, Texture* tex) {
 }
 
 void ResourcesBinder::updateBindings(VkPipelineLayout layout, const vulkan::PipelineState& state) {
-  if (ctx_.features().has_VK_EXT_descriptor_buffer) {
-    updateBindingsByDescriptorBuffer(layout, state);
-  } else {
-    updateBindingsByDescriptorSet(layout, state);
-  }
+  ctx_.features().has_VK_EXT_descriptor_buffer ? updateBindingsByDescriptorBuffer(layout, state)
+                                               : updateBindingsByDescriptorSet(layout, state);
 }
 
 void ResourcesBinder::updateBindingsByDescriptorBuffer(VkPipelineLayout layout,
@@ -216,8 +217,8 @@ void ResourcesBinder::updateBindingsByDescriptorBuffer(VkPipelineLayout layout,
                                                   bindPoint_,
                                                   nextSubmitHandle_,
                                                   bindingsTextures_,
-                                                  *state.dslCombinedImageSamplers_,
-                                                  state.info_);
+                                                  *state.dslCombinedImageSamplers,
+                                                  state.info);
   }
   if (isDirtyFlags_ & DirtyFlagBits_Buffers) {
     ctx_.updateBindingsBuffersByDescriptorBuffer(cmdBuffer_,
@@ -225,8 +226,8 @@ void ResourcesBinder::updateBindingsByDescriptorBuffer(VkPipelineLayout layout,
                                                  bindPoint_,
                                                  nextSubmitHandle_,
                                                  bindingsBuffers_,
-                                                 *state.dslBuffers_,
-                                                 state.info_);
+                                                 *state.dslBuffers,
+                                                 state.info);
   }
   if (isDirtyFlags_ & DirtyFlagBits_StorageImages) {
     ctx_.updateBindingsStorageImagesByDescriptorBuffer(cmdBuffer_,
@@ -234,8 +235,8 @@ void ResourcesBinder::updateBindingsByDescriptorBuffer(VkPipelineLayout layout,
                                                        bindPoint_,
                                                        nextSubmitHandle_,
                                                        bindingsStorageImages_,
-                                                       *state.dslStorageImages_,
-                                                       state.info_);
+                                                       *state.dslStorageImages,
+                                                       state.info);
   }
 
   isDirtyFlags_ = 0;
@@ -253,8 +254,8 @@ void ResourcesBinder::updateBindingsByDescriptorSet(VkPipelineLayout layout,
                                 bindPoint_,
                                 nextSubmitHandle_,
                                 bindingsTextures_,
-                                *state.dslCombinedImageSamplers_,
-                                state.info_);
+                                *state.dslCombinedImageSamplers,
+                                state.info);
   }
   if (isDirtyFlags_ & DirtyFlagBits_Buffers) {
     ctx_.updateBindingsBuffers(cmdBuffer_,
@@ -262,8 +263,8 @@ void ResourcesBinder::updateBindingsByDescriptorSet(VkPipelineLayout layout,
                                bindPoint_,
                                nextSubmitHandle_,
                                bindingsBuffers_,
-                               *state.dslBuffers_,
-                               state.info_);
+                               *state.dslBuffers,
+                               state.info);
   }
   if (isDirtyFlags_ & DirtyFlagBits_StorageImages) {
     ctx_.updateBindingsStorageImages(cmdBuffer_,
@@ -271,8 +272,8 @@ void ResourcesBinder::updateBindingsByDescriptorSet(VkPipelineLayout layout,
                                      bindPoint_,
                                      nextSubmitHandle_,
                                      bindingsStorageImages_,
-                                     *state.dslStorageImages_,
-                                     state.info_);
+                                     *state.dslStorageImages,
+                                     state.info);
   }
 
   isDirtyFlags_ = 0;

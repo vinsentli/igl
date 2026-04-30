@@ -11,7 +11,7 @@
 #include <igl/Device.h>
 #include <igl/Uniform.h>
 #if IGL_BACKEND_OPENGL
-#include <igl/opengl/RenderCommandEncoder.h>
+// RenderPipelineState.h is included below for OpenGL-specific functionality
 #include <igl/opengl/RenderPipelineState.h>
 #endif
 #if defined(IGL_CMAKE_BUILD)
@@ -21,6 +21,7 @@
 #endif
 
 #include <cstdlib>
+#include <limits>
 #include <memory>
 #include <string>
 
@@ -29,7 +30,7 @@ namespace {
 // For Suballocated uniform buffers, try to allocate at most a buffer of size 64K.
 // We will clamp the size to the limits of the device.
 // For example, on the Quest 2 GPU, maxUniformBufferSize is 64k, so we are using it all.
-constexpr size_t MAX_SUBALLOCATED_BUFFER_SIZE_BYTES = 65536;
+constexpr size_t kMaxSuballocatedBufferSizeBytes = 65536;
 
 uint8_t bindTargetForShaderStage(igl::ShaderStage stage) {
   switch (stage) {
@@ -37,6 +38,7 @@ uint8_t bindTargetForShaderStage(igl::ShaderStage stage) {
     return igl::BindTarget::kVertex;
   case igl::ShaderStage::Fragment:
     return igl::BindTarget::kFragment;
+  case igl::ShaderStage::Compute:
   default:
     IGL_DEBUG_ABORT("invalid shader stage for rendering: %d", (int)stage);
     return 0;
@@ -66,11 +68,11 @@ ShaderUniforms::ShaderUniforms(igl::IDevice& device,
   for (const igl::BufferArgDesc& iglDesc : reflection.allUniformBuffers()) {
     const size_t length = iglDesc.bufferDataSize;
     IGL_DEBUG_ASSERT(length > 0, "unexpected buffer with size 0");
-    IGL_DEBUG_ASSERT(length <= MAX_SUBALLOCATED_BUFFER_SIZE_BYTES &&
+    IGL_DEBUG_ASSERT(length <= kMaxSuballocatedBufferSizeBytes &&
                          (uniformBufferLimit == 0 || length <= uniformBufferLimit),
                      "buffer size exceeds limits");
     const size_t bufferAllocationLength =
-        std::min(isSuballocated ? MAX_SUBALLOCATED_BUFFER_SIZE_BYTES : length,
+        std::min(isSuballocated ? kMaxSuballocatedBufferSizeBytes : length,
                  uniformBufferLimit != 0 ? uniformBufferLimit : std::numeric_limits<size_t>::max());
     const std::string vertexBufferPrefix = "vertexBuffer.";
     if (device.getBackendType() == igl::BackendType::Metal &&
@@ -87,23 +89,26 @@ ShaderUniforms::ShaderUniforms(igl::IDevice& device,
     } else if (device_.getBackendType() == igl::BackendType::Metal) {
       // On Metal, need to create buffers only when data > 4kb
       createBuffer = !hasBindBytesFeature || length > bindBytesLimit;
+    } else if (device_.getBackendType() == igl::BackendType::D3D12) {
+      // D3D12 does not support bindBytes, always create buffers
+      createBuffer = true;
     }
 
     std::shared_ptr<igl::IBuffer> buffer = nullptr;
     if (createBuffer) {
-      igl::BufferDesc desc;
-      desc.length = bufferAllocationLength;
-      desc.data = nullptr;
-      desc.storage = igl::ResourceStorage::Shared;
-      desc.type = igl::BufferDesc::BufferTypeBits::Uniform;
-      desc.hint = igl::BufferDesc::BufferAPIHintBits::UniformBlock;
-      if (device_.getBackendType() == igl::BackendType::Metal ||
-          device_.getBackendType() == igl::BackendType::Vulkan) {
-        desc.hint |= igl::BufferDesc::BufferAPIHintBits::Ring;
-      }
+      const auto backendType = device_.getBackendType();
+      const igl::BufferDesc desc{
+          .type = igl::BufferDesc::BufferTypeBits::Uniform,
+          .length = bufferAllocationLength,
+          .storage = igl::ResourceStorage::Shared,
+          .hint = static_cast<igl::BufferDesc::BufferAPIHint>(
+              igl::BufferDesc::BufferAPIHintBits::UniformBlock |
+              ((backendType == igl::BackendType::Metal || backendType == igl::BackendType::Vulkan ||
+                backendType == igl::BackendType::D3D12)
+                   ? igl::BufferDesc::BufferAPIHintBits::Ring
+                   : 0)),
+      };
       buffer = device.createBuffer(desc, nullptr);
-    } else {
-      buffer = nullptr;
     }
 
     // All uniform updates will be made to this malloc'ed data block,
@@ -113,7 +118,7 @@ ShaderUniforms::ShaderUniforms(igl::IDevice& device,
       continue;
     }
     auto allocation = std::make_shared<BufferAllocation>(data, bufferAllocationLength, buffer);
-    _allocations.push_back(allocation);
+    allocations_.push_back(allocation);
 
     std::shared_ptr<BufferDesc> bufferDesc = std::make_shared<BufferDesc>();
     bufferDesc->iglBufferDesc = iglDesc;
@@ -132,23 +137,23 @@ ShaderUniforms::ShaderUniforms(igl::IDevice& device,
 
     for (int i = 0; i < static_cast<int>(iglDesc.members.size()); ++i) {
       const auto& uniformDesc = iglDesc.members[i];
-      const UniformDesc uniform{uniformDesc, bufferDesc};
-      _allUniformsByName.insert({uniformDesc.name, uniform});
+      const UniformDesc uniform{.iglMemberDesc = uniformDesc, .buffer = bufferDesc};
+      allUniformsByName_.insert({uniformDesc.name, uniform});
       bufferDesc->uniforms.push_back(uniform);
       bufferDesc->memberIndices[uniformDesc.name] = i;
     }
 
-    _bufferDescs.insert({iglDesc.name, std::move(bufferDesc)});
+    bufferDescs_.insert({iglDesc.name, std::move(bufferDesc)});
   }
 
   for (const igl::TextureArgDesc& iglDesc : reflection.allTextures()) {
-    _textureDescs.push_back(iglDesc);
-    _allTexturesByName[iglDesc.name] = TextureSlot{nullptr, nullptr};
+    textureDescs_.push_back(iglDesc);
+    allTexturesByName_[iglDesc.name] = TextureSlot{.texture = nullptr, .rawTexture = nullptr};
   }
 }
 
 ShaderUniforms::~ShaderUniforms() {
-  for (auto& allocation : _allocations) {
+  for (auto& allocation : allocations_) {
     free(allocation->ptr);
   }
 }
@@ -272,7 +277,7 @@ void ShaderUniforms::setUniformBytes(const igl::NameHandle& blockTypeName,
       getPossibleBufferAndMemberNames(blockTypeName, blockInstanceName, memberName);
 
   for (auto& [bufferName, bufferMemberName] : possibleBufferNames) {
-    auto range = _bufferDescs.equal_range(bufferName);
+    auto range = bufferDescs_.equal_range(bufferName);
     if (range.first == range.second) {
       continue;
     }
@@ -298,7 +303,7 @@ void ShaderUniforms::setUniformBytes(const igl::NameHandle& name,
                                      size_t elementSize,
                                      size_t count,
                                      size_t arrayIndex) {
-  auto range = _allUniformsByName.equal_range(name);
+  auto range = allUniformsByName_.equal_range(name);
   if (range.first == range.second) {
     IGL_LOG_ERROR_ONCE("[IGL][Error] Invalid uniform name: %s\n", name.c_str());
     return;
@@ -568,7 +573,7 @@ void ShaderUniforms::setFloat3x3(const igl::NameHandle& blockTypeName,
                                  const iglu::simdtypes::float3x3& value,
                                  size_t arrayIndex) {
   const bool isOglBlock = device_.getBackendType() == igl::BackendType::OpenGL &&
-                          _bufferDescs.find(blockTypeName) != _bufferDescs.end();
+                          bufferDescs_.find(blockTypeName) != bufferDescs_.end();
   if (device_.getBackendType() == igl::BackendType::Metal ||
       device_.getBackendType() == igl::BackendType::Vulkan || isOglBlock) {
     setUniformBytes(blockTypeName,
@@ -633,7 +638,7 @@ void ShaderUniforms::setFloat3x3Array(const igl::NameHandle& blockTypeName,
                                       size_t count,
                                       size_t arrayIndex) {
   auto isOglBlock = device_.getBackendType() == igl::BackendType::OpenGL &&
-                    _bufferDescs.find(blockTypeName) != _bufferDescs.end();
+                    bufferDescs_.find(blockTypeName) != bufferDescs_.end();
 
   if (device_.getBackendType() == igl::BackendType::Metal ||
       device_.getBackendType() == igl::BackendType::Vulkan || isOglBlock) {
@@ -781,37 +786,37 @@ void ShaderUniforms::setTexture(const std::string& name,
                                 const std::shared_ptr<igl::ISamplerState>& sampler,
                                 IGL_MAYBE_UNUSED size_t arrayIndex) {
   IGL_DEBUG_ASSERT(arrayIndex == 0, "texture arrays not supported");
-  auto it = _allTexturesByName.find(name);
-  if (it == _allTexturesByName.end()) {
+  auto it = allTexturesByName_.find(name);
+  if (it == allTexturesByName_.end()) {
     IGL_LOG_ERROR_ONCE("[IGL][Error] Invalid texture name: %s\n", name.c_str());
     return;
   }
-  _allTexturesByName[name] = TextureSlot{value, value.get()};
-  _allSamplersByName[name] = SamplerSlot{sampler, sampler.get()};
+  allTexturesByName_[name] = TextureSlot{.texture = value, .rawTexture = value.get()};
+  allSamplersByName_[name] = SamplerSlot{.sampler = sampler, .rawSampler = sampler.get()};
 }
 
 void ShaderUniforms::setTexture(const std::string& name,
                                 igl::ITexture* value,
                                 const std::shared_ptr<igl::ISamplerState>& sampler) {
-  auto it = _allTexturesByName.find(name);
-  if (it == _allTexturesByName.end()) {
+  auto it = allTexturesByName_.find(name);
+  if (it == allTexturesByName_.end()) {
     IGL_LOG_ERROR_ONCE("[IGL][Error] Invalid texture name: %s\n", name.c_str());
     return;
   }
-  _allTexturesByName[name] = TextureSlot{nullptr, value}; // non-owning
-  _allSamplersByName[name] = SamplerSlot{sampler, sampler.get()}; // owning
+  allTexturesByName_[name] = TextureSlot{.texture = nullptr, .rawTexture = value}; // non-owning
+  allSamplersByName_[name] = SamplerSlot{.sampler = sampler, .rawSampler = sampler.get()}; // owning
 }
 
 void ShaderUniforms::setTexture(const std::string& name,
                                 igl::ITexture* value,
                                 igl::ISamplerState* sampler) {
-  auto it = _allTexturesByName.find(name);
-  if (it == _allTexturesByName.end()) {
+  auto it = allTexturesByName_.find(name);
+  if (it == allTexturesByName_.end()) {
     IGL_LOG_ERROR_ONCE("[IGL][Error] Invalid texture name: %s\n", name.c_str());
     return;
   }
-  _allTexturesByName[name] = TextureSlot{nullptr, value}; // non-owning
-  _allSamplersByName[name] = SamplerSlot{nullptr, sampler}; // non-owning
+  allTexturesByName_[name] = TextureSlot{.texture = nullptr, .rawTexture = value}; // non-owning
+  allSamplersByName_[name] = SamplerSlot{.sampler = nullptr, .rawSampler = sampler}; // non-owning
 }
 
 #if IGL_BACKEND_OPENGL
@@ -820,12 +825,13 @@ void ShaderUniforms::bindUniformOpenGL(const igl::NameHandle& uniformName,
                                        const igl::IRenderPipelineState& pipelineState,
                                        igl::IRenderCommandEncoder& encoder) {
   const igl::BufferArgDesc::BufferMemberDesc& iglMemberDesc = uniformDesc.iglMemberDesc;
-  igl::UniformDesc desc;
-  desc.location = pipelineState.getIndexByName(uniformName, igl::ShaderStage::Fragment);
-  desc.type = iglMemberDesc.type;
-  desc.offset = iglMemberDesc.offset;
-  desc.numElements = iglMemberDesc.arrayLength;
-  desc.elementStride = igl::sizeForUniformType(iglMemberDesc.type);
+  igl::UniformDesc desc{
+      .location = pipelineState.getIndexByName(uniformName, igl::ShaderStage::Fragment),
+      .type = iglMemberDesc.type,
+      .numElements = iglMemberDesc.arrayLength,
+      .offset = iglMemberDesc.offset,
+      .elementStride = igl::sizeForUniformType(iglMemberDesc.type),
+  };
 
   if (desc.location >= 0) {
     auto strongBuffer = uniformDesc.buffer.lock();
@@ -896,7 +902,7 @@ void ShaderUniforms::bind(igl::IDevice& device,
                           const igl::IRenderPipelineState& pipelineState,
                           igl::IRenderCommandEncoder& encoder,
                           const igl::NameHandle& uniformName) {
-  auto range = _allUniformsByName.equal_range(uniformName);
+  auto range = allUniformsByName_.equal_range(uniformName);
   if (range.first == range.second) {
     IGL_LOG_ERROR_ONCE("[IGL][Error] Invalid uniform name: %s\n", uniformName.c_str());
     return;
@@ -917,7 +923,7 @@ void ShaderUniforms::bind(igl::IDevice& device,
   auto possibleBufferNames =
       getPossibleBufferAndMemberNames(blockName, blockInstanceName, memberName);
   for (auto& [bufferName, bufferMemberName] : possibleBufferNames) {
-    auto range = _bufferDescs.equal_range(bufferName);
+    auto range = bufferDescs_.equal_range(bufferName);
     for (auto bufferDescIt = range.first; bufferDescIt != range.second; ++bufferDescIt) {
       bindBuffer(device, pipelineState, encoder, bufferDescIt->second.get());
     }
@@ -927,26 +933,26 @@ void ShaderUniforms::bind(igl::IDevice& device,
 void ShaderUniforms::bind(igl::IDevice& device,
                           const igl::IRenderPipelineState& pipelineState,
                           igl::IRenderCommandEncoder& encoder) {
-  for (auto& [name, bufferDesc] : _bufferDescs) {
+  for (auto& [name, bufferDesc] : bufferDescs_) {
     bindBuffer(device, pipelineState, encoder, bufferDesc.get());
   }
 
-  for (auto& _textureDesc : _textureDescs) {
-    auto textureIt = _allTexturesByName.find(_textureDesc.name);
-    auto samplerIt = _allSamplersByName.find(_textureDesc.name);
-    if (textureIt == _allTexturesByName.end() || samplerIt == _allSamplersByName.end()) {
+  for (auto& textureDesc : textureDescs_) {
+    auto textureIt = allTexturesByName_.find(textureDesc.name);
+    auto samplerIt = allSamplersByName_.find(textureDesc.name);
+    if (textureIt == allTexturesByName_.end() || samplerIt == allSamplersByName_.end()) {
       IGL_LOG_ERROR_ONCE("[IGL][Warning] No texture set for sampler: %s\n",
-                         _textureDesc.name.c_str());
+                         textureDesc.name.c_str());
       continue;
     }
-    encoder.bindTexture(_textureDesc.textureIndex,
-                        bindTargetForShaderStage(_textureDesc.shaderStage),
+    encoder.bindTexture(textureDesc.textureIndex,
+                        bindTargetForShaderStage(textureDesc.shaderStage),
                         textureIt->second.rawTexture ? textureIt->second.rawTexture
                                                      : textureIt->second.texture.get());
 
     // Assumption: each texture has an associated sampler at the same index in Metal
-    encoder.bindSamplerState(_textureDesc.textureIndex,
-                             bindTargetForShaderStage(_textureDesc.shaderStage),
+    encoder.bindSamplerState(textureDesc.textureIndex,
+                             bindTargetForShaderStage(textureDesc.shaderStage),
                              samplerIt->second.rawSampler ? samplerIt->second.rawSampler
                                                           : samplerIt->second.sampler.get());
   }
@@ -963,7 +969,7 @@ igl::Result ShaderUniforms::setSuballocationIndex(const igl::NameHandle& name, i
                        "Invalid argument, index cannot be < 0");
   }
 
-  auto range = _allUniformsByName.equal_range(name);
+  auto range = allUniformsByName_.equal_range(name);
   if (range.first == range.second) {
     return igl::Result(igl::Result::Code::RuntimeError,
                        "Could not find uniform " + name.toString());
@@ -1018,8 +1024,8 @@ bool ShaderUniforms::containsUniform(const igl::NameHandle& blockTypeName,
       getPossibleBufferAndMemberNames(blockTypeName, blockInstanceName, memberName);
 
   for (auto& [bufferName, bufferMemberName] : possibleBufferNames) {
-    auto bufferDescIt = _bufferDescs.find(bufferName);
-    if (bufferDescIt == _bufferDescs.end()) {
+    auto bufferDescIt = bufferDescs_.find(bufferName);
+    if (bufferDescIt == bufferDescs_.end()) {
       continue;
     }
     auto& bufferDesc = bufferDescIt->second;

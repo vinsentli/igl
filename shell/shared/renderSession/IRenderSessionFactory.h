@@ -8,10 +8,10 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 #include <shell/shared/renderSession/RenderSessionConfig.h>
 #include <shell/shared/renderSession/RenderSessionWindowConfig.h>
 #include <shell/shared/renderSession/ShellType.h>
-#include <vector>
 
 namespace igl::shell {
 
@@ -45,6 +45,11 @@ class IRenderSessionFactory {
 
   virtual std::unique_ptr<RenderSession> createRenderSession(
       std::shared_ptr<Platform> platform) noexcept = 0;
+
+  // Used on Android to get the system properties prefix for reading shell params
+  [[nodiscard]] virtual const char* getAndroidSystemPropsPrefix() const noexcept {
+    return "debug.iglshell.renderSession";
+  }
 };
 
 } // namespace igl::shell

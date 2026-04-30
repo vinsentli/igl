@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <igl/IGLSafeC.h>
 #include <igl/metal/Buffer.h>
+
+#include <igl/IGLSafeC.h>
 #include <igl/metal/BufferSynchronizationManager.h>
 
 namespace {
@@ -15,8 +16,8 @@ igl::Result upload(const std::vector<id<MTLBuffer>>& buffers,
                    size_t bufferIdx,
                    const void* data,
                    const igl::BufferRange& range,
-                   MTLResourceOptions resourceOptions,
-                   igl::BufferDesc::BufferAPIHint acceptedApiHints) {
+                   MTLResourceOptions mtlResourceOptions,
+                   igl::BufferDesc::BufferAPIHint bufferAcceptedApiHints) {
   IGL_DEBUG_ASSERT(bufferIdx < buffers.size());
   const auto& buffer = buffers[bufferIdx];
   auto length = [buffer length];
@@ -25,7 +26,7 @@ igl::Result upload(const std::vector<id<MTLBuffer>>& buffers,
   }
 
   if (data == nullptr) {
-    if (!(acceptedApiHints & igl::BufferDesc::BufferAPIHintBits::NoCopy)) {
+    if (!(bufferAcceptedApiHints & igl::BufferDesc::BufferAPIHintBits::NoCopy)) {
       return igl::Result(igl::Result::Code::ArgumentInvalid);
     }
   } else {
@@ -34,11 +35,11 @@ igl::Result upload(const std::vector<id<MTLBuffer>>& buffers,
   }
 
 #if IGL_PLATFORM_MACOSX
-  if ((resourceOptions & MTLResourceStorageModeMask) == MTLResourceStorageModeManaged) {
+  if ((mtlResourceOptions & MTLResourceStorageModeMask) == MTLResourceStorageModeManaged) {
     [buffer didModifyRange:NSMakeRange(range.offset, range.size)];
   }
 #else
-  (void)resourceOptions; // silence unused member warning
+  (void)mtlResourceOptions; // silence unused member warning
 #endif
   return igl::Result();
 }

@@ -5,10 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <igl/Common.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <igl/Common.h>
 #include <igl/Device.h>
 
 namespace igl {
@@ -27,6 +28,8 @@ std::string BackendTypeToString(BackendType backendType) {
     return "Metal";
   case BackendType::Vulkan:
     return "Vulkan";
+  case BackendType::D3D12:
+    return "D3D12";
   // @fb-only
     // @fb-only
   case BackendType::Custom:

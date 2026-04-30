@@ -13,7 +13,31 @@ if(WIN32)
 endif()
 
 file(GLOB SHELL_SHARED_SRC_FILES LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
-     shared/fileLoader/*.cpp shared/imageLoader/*.cpp shared/extension/*.cpp shared/input/*.cpp shared/platform/*.cpp shared/renderSession/*.cpp shared/netservice/*.cpp)
+     shared/fileLoader/*.cpp
+     shared/imageLoader/*.cpp
+     shared/extension/*.cpp
+     shared/input/*.cpp
+     shared/platform/*.cpp
+     shared/renderSession/*.cpp
+     shared/netservice/*.cpp)
+
+if(APPLE)
+  file(GLOB SHELL_FILELOADER_PLATFORM_SRC LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+       shared/fileLoader/apple/*.cpp)
+elseif(ANDROID)
+  file(GLOB SHELL_FILELOADER_PLATFORM_SRC LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+       shared/fileLoader/android/*.cpp)
+elseif(UNIX AND NOT APPLE)
+  file(GLOB SHELL_FILELOADER_PLATFORM_SRC LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+       shared/fileLoader/linux/*.cpp)
+elseif(WIN32)
+  file(GLOB SHELL_FILELOADER_PLATFORM_SRC LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+       shared/fileLoader/win/*.cpp)
+else()
+  set(SHELL_FILELOADER_PLATFORM_SRC)
+endif()
+
+list(APPEND SHELL_SHARED_SRC_FILES ${SHELL_FILELOADER_PLATFORM_SRC})
 file(GLOB SHELL_SHARED_HEADER_FILES LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
      shared/fileLoader/*.h shared/imageLoader/*.h shared/extension/*.h shared/input/*.h shared/platform/*.h shared/renderSession/*.h shared/netservice/*.h)
 
@@ -83,19 +107,31 @@ endmacro()
 if(IGL_WITH_SAMPLES)
   add_shell_session(BasicFramebufferSession "")
   add_shell_session(BindGroupSession "")
+  add_shell_session(BindlessBufferSession "")
+  add_shell_session(BufferMappingSession "")
+  add_shell_session(CheckerboardMipmapSession "")
   add_shell_session(ColorSession "")
-  add_shell_session(EmptySession "")
-  add_shell_session(GPUStressSession "")
-  add_shell_session(HelloWorldSession "")
+  add_shell_session(CopyOperationsSession "")
+  add_shell_session(DepthBiasSession "")
   add_shell_session(DrawInstancedSession "")
+  add_shell_session(EmptySession "")
+  add_shell_session(FireworksSession "")
+  add_shell_session(GPUStressSession "")
+  add_shell_session(GPUTimerSession "")
+  add_shell_session(HelloWorldSession "")
   add_shell_session(ImguiSession "")
+  add_shell_session(MeshShaderTriangleSession "")
   add_shell_session(MRTSession "")
+  add_shell_session(MultiDrawIndexedIndirectSession "")
+  add_shell_session(ScissorTestSession "")
+  add_shell_session(StencilOutlineSession "")
   add_shell_session(Textured3DCubeSession "")
   add_shell_session(TextureViewSession "")
   add_shell_session(TinyMeshBindGroupSession "")
   add_shell_session(TinyMeshSession "")
   add_shell_session(TQMultiRenderPassSession "")
   add_shell_session(TQSession "")
+  add_shell_session(WireframeSession "")
   add_shell_session(YUVColorSession "")
   if(IGL_WITH_OPENXR)
     if(ANDROID)

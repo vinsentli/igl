@@ -7,9 +7,6 @@
 
 #include <shell/shared/platform/android/PlatformAndroid.h>
 
-// @fb-only
-// @fb-only
-// @fb-only
 #include <shell/shared/fileLoader/android/FileLoaderAndroid.h>
 #include <shell/shared/imageLoader/ImageLoader.h>
 #include <shell/shared/imageWriter/ImageWriter.h>
@@ -19,57 +16,15 @@
 #include <glm/ext.hpp>
 #include <shell/shared/platform/DisplayContext.h>
 #include <igl/vulkan/Device.h>
-#include <igl/vulkan/HWDevice.h>
 #include <igl/vulkan/VulkanContext.h>
 #endif
-
-namespace {
-// @fb-only
-  // @fb-only// Try to get ActivityThread so we can get a Context
-  // @fb-only
-  // @fb-only
-    // @fb-only
-  // @fb-only
-  // @fb-only
-  // @fb-only // Get an Application (a Context) object from ActivityThread
-  // @fb-only
-      // @fb-only
-      // @fb-only
-      // @fb-only
-  // @fb-only
-    // @fb-only
-  // @fb-only
-  // @fb-only
-  // @fb-only
-// @fb-only
-  // @fb-only
-// @fb-only
-  // @fb-only
-    // @fb-only
-  // @fb-only
-  // @fb-only
-  // @fb-only
-  // @fb-only
-      // @fb-only
-          // @fb-only
-          // @fb-only
-          // @fb-only
-  // @fb-only
-  // @fb-only
-  // @fb-only
-  // @fb-only
-// @fb-only
-} // namespace
 
 namespace igl::shell {
 
 PlatformAndroid::PlatformAndroid(std::shared_ptr<IDevice> device, bool useFakeLoader) :
-  device_(std::move(device)) {
-  // @fb-only
-  fileLoader_ = std::make_unique<FileLoaderAndroid>();
-  // @fb-only
-      // @fb-only
-  imageLoader_ = std::make_unique<ImageLoader>(*fileLoader_);
+  device_(std::move(device)),
+  fileLoader_(std::make_unique<FileLoaderAndroid>()),
+  imageLoader_(std::make_unique<ImageLoader>(*fileLoader_)) {
   if (!useFakeLoader) {
     imageWriter_ = std::make_unique<ImageWriterAndroid>();
   }
@@ -98,7 +53,6 @@ void PlatformAndroid::updatePreRotationMatrix() {
     case VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR:
     default:
       return glm::mat4(1.0f);
-      break;
     }
     return glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0.0f, 0.0f, 1.0f));
   }();

@@ -7,7 +7,8 @@
 
 #pragma once
 
-#include <igl/Common.h>
+#include <cstdint>
+#include <string>
 #include <igl/DepthStencilState.h>
 #include <igl/ITrackedResource.h>
 #include <igl/TextureFormat.h>
@@ -40,8 +41,9 @@ enum class SamplerMipFilter : uint8_t { Disabled = 0, Nearest, Linear };
  * Clamp        : Sampling locations < 0 are clamped to 0. Sampling locations > 1 are clamped to 1.
  * MirrorRepeat : The texture repeats outside the range [0, 1]. Every other repetition is a mirror
  *                image.
+ * ClampToBorder : Sampling locations outside [0, 1] return the border color (default: 0, 0, 0, 0).
  */
-enum class SamplerAddressMode : uint8_t { Repeat = 0, Clamp, MirrorRepeat };
+enum class SamplerAddressMode : uint8_t { Repeat = 0, Clamp, MirrorRepeat, ClampToBorder };
 
 /**
  * @brief Describes the texture sampling configuration for a texture.
@@ -131,11 +133,12 @@ struct SamplerStateDesc {
    * All other parameters have their default value.
    */
   static SamplerStateDesc newLinear() {
-    SamplerStateDesc desc;
-    desc.minFilter = desc.magFilter = SamplerMinMagFilter::Linear;
-    desc.mipFilter = SamplerMipFilter::Disabled;
-    desc.debugName = "newLinear()";
-    return desc;
+    return SamplerStateDesc{
+        .minFilter = SamplerMinMagFilter::Linear,
+        .magFilter = SamplerMinMagFilter::Linear,
+        .mipFilter = SamplerMipFilter::Disabled,
+        .debugName = "newLinear()",
+    };
   }
 
   /**
@@ -147,26 +150,28 @@ struct SamplerStateDesc {
    * All other parameters have their default value.
    */
   static SamplerStateDesc newLinearMipmapped() {
-    SamplerStateDesc desc;
-    desc.minFilter = desc.magFilter = SamplerMinMagFilter::Linear;
-    desc.mipFilter = SamplerMipFilter::Linear;
-    desc.debugName = "newLinearMipmapped()";
-    return desc;
+    return SamplerStateDesc{
+        .minFilter = SamplerMinMagFilter::Linear,
+        .magFilter = SamplerMinMagFilter::Linear,
+        .mipFilter = SamplerMipFilter::Linear,
+        .debugName = "newLinearMipmapped()",
+    };
   }
 
   /**
    * @brief Creates a new SamplerStateDesc instance set up for YUV conversion
    */
   static SamplerStateDesc newYUV(TextureFormat yuvFormat, const char* debugName) {
-    SamplerStateDesc desc;
-    desc.minFilter = desc.magFilter = SamplerMinMagFilter::Linear;
-    desc.mipFilter = SamplerMipFilter::Disabled;
-    desc.addressModeU = SamplerAddressMode::Clamp;
-    desc.addressModeV = SamplerAddressMode::Clamp;
-    desc.addressModeW = SamplerAddressMode::Clamp;
-    desc.debugName = debugName;
-    desc.yuvFormat = yuvFormat;
-    return desc;
+    return SamplerStateDesc{
+        .minFilter = SamplerMinMagFilter::Linear,
+        .magFilter = SamplerMinMagFilter::Linear,
+        .mipFilter = SamplerMipFilter::Disabled,
+        .addressModeU = SamplerAddressMode::Clamp,
+        .addressModeV = SamplerAddressMode::Clamp,
+        .addressModeW = SamplerAddressMode::Clamp,
+        .debugName = debugName,
+        .yuvFormat = yuvFormat,
+    };
   }
 
   /**
@@ -197,6 +202,12 @@ class ISamplerState : public ITrackedResource<ISamplerState> {
  public:
   ~ISamplerState() = default;
 
+  /**
+   * @brief Returns whether this sampler state is configured for YUV color space conversion.
+   * Required for Vulkan to take proper care of immutable samplers
+   *
+   * @return true if the sampler is configured for YUV format, false otherwise.
+   */
   [[nodiscard]] virtual bool isYUV() const noexcept = 0;
 };
 

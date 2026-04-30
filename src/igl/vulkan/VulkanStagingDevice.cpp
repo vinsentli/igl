@@ -11,7 +11,6 @@
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanBuffer.h>
 #include <igl/vulkan/VulkanContext.h>
-#include <igl/vulkan/VulkanDevice.h>
 #include <igl/vulkan/VulkanImage.h>
 #include <igl/vulkan/VulkanImmediateCommands.h>
 
@@ -31,14 +30,14 @@ VulkanStagingDevice::VulkanStagingDevice(VulkanContext& ctx) : ctx_(ctx) {
   // Use value of 256MB (limited by some architectures), and clamp it to the max limits
   maxStagingBufferSize_ = std::min(limits.maxStorageBufferRange, 256u * 1024u * 1024u);
 
-  immediate_ = std::make_unique<VulkanImmediateCommands>(
+  immediate = std::make_unique<VulkanImmediateCommands>(
       ctx_.vf_,
-      ctx_.device_->getVkDevice(),
+      ctx_.getVkDevice(),
       ctx_.deviceQueues_.graphicsQueueFamilyIndex,
       ctx_.config_.exportableFences,
       ctx_.features_.has_VK_KHR_timeline_semaphore && ctx_.features_.has_VK_KHR_synchronization2,
       "VulkanStagingDevice::immediate_");
-  IGL_DEBUG_ASSERT(immediate_.get());
+  IGL_DEBUG_ASSERT(immediate.get());
 }
 
 void VulkanStagingDevice::bufferSubData(VulkanBuffer& buffer,
@@ -48,6 +47,22 @@ void VulkanStagingDevice::bufferSubData(VulkanBuffer& buffer,
   IGL_PROFILER_FUNCTION();
   if (buffer.isMapped()) {
     buffer.bufferSubData(dstOffset, size, data);
+    return;
+  }
+
+  // Use vkCmdUpdateBuffer() for small buffers (up to 64KB) when alignment requirements are met.
+  // Per Vulkan spec: dstOffset and dataSize must be multiples of 4, and dataSize <= 65536.
+  // This avoids staging buffer allocation and an extra memcpy for small uploads.
+  constexpr size_t kMaxUpdateBufferSize = 65536;
+  if (data && size <= kMaxUpdateBufferSize && (dstOffset % 4 == 0) && (size % 4 == 0)) {
+    IGL_DEBUG_ASSERT(buffer.getBufferUsageFlags() & VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    const auto& wrapper = immediate->acquire();
+    ctx_.vf_.vkCmdUpdateBuffer(wrapper.cmdBuf,
+                               buffer.getVkBuffer(),
+                               static_cast<VkDeviceSize>(dstOffset),
+                               static_cast<VkDeviceSize>(size),
+                               data);
+    immediate->submit(wrapper);
     return;
   }
 
@@ -73,28 +88,32 @@ void VulkanStagingDevice::bufferSubData(VulkanBuffer& buffer,
     stagingBuffer->bufferSubData(memoryChunk.offset, copySize, copyData);
 
     // do the transfer
-    const VkBufferCopy copy = {memoryChunk.offset, chunkDstOffset, copySize};
+    const VkBufferCopy copy = {
+        .srcOffset = memoryChunk.offset,
+        .dstOffset = chunkDstOffset,
+        .size = copySize,
+    };
 
-    const auto& wrapper = immediate_->acquire();
+    const auto& wrapper = immediate->acquire();
     ctx_.vf_.vkCmdCopyBuffer(
-        wrapper.cmdBuf_, stagingBuffer->getVkBuffer(), buffer.getVkBuffer(), 1, &copy);
-    memoryChunk.handle = immediate_->submit(wrapper); // store the submit handle with the allocation
+        wrapper.cmdBuf, stagingBuffer->getVkBuffer(), buffer.getVkBuffer(), 1, &copy);
+    memoryChunk.handle = immediate->submit(wrapper); // store the submit handle with the allocation
     regions_.push_back(memoryChunk);
 
     size -= copySize;
-    copyData = (uint8_t*)copyData + copySize;
+    copyData = static_cast<uint8_t*>(copyData) + copySize;
     chunkDstOffset += copySize;
   }
 }
 
 void VulkanStagingDevice::mergeRegionsAndFreeBuffers() {
   uint32_t regionIndex = 0;
-  while (regionIndex < regions_.size() && immediate_->isReady(regions_[regionIndex].handle)) {
+  while (regionIndex < regions_.size() && immediate->isReady(regions_[regionIndex].handle)) {
     auto& currRegion = regions_[regionIndex];
 
     // set empty handle for a region, if it has finished processing
     // so handle.empty() check can be done later
-    if (!currRegion.handle.empty() && immediate_->isReady(currRegion.handle)) {
+    if (!currRegion.handle.empty() && immediate->isReady(currRegion.handle)) {
       currRegion.handle = VulkanImmediateCommands::SubmitHandle();
       freeStagingBufferSize_ += currRegion.size;
     }
@@ -109,11 +128,13 @@ void VulkanStagingDevice::mergeRegionsAndFreeBuffers() {
                                      (nextRegion.size + nextRegion.offset) == currRegion.offset;
 
         if (adjacentRegions) {
-          const MemoryRegion newRegion = {std::min(currRegion.offset, nextRegion.offset),
-                                          currRegion.size + nextRegion.size,
-                                          currRegion.alignedSize,
-                                          VulkanImmediateCommands::SubmitHandle(),
-                                          currRegion.stagingBufferIndex};
+          const MemoryRegion newRegion = {
+              .offset = std::min(currRegion.offset, nextRegion.offset),
+              .size = currRegion.size + nextRegion.size,
+              .alignedSize = currRegion.alignedSize,
+              .handle = VulkanImmediateCommands::SubmitHandle(),
+              .stagingBufferIndex = currRegion.stagingBufferIndex,
+          };
           nextRegion = newRegion;
           regions_.erase(regions_.begin() + regionIndex);
           continue;
@@ -176,7 +197,7 @@ VulkanStagingDevice::MemoryRegion VulkanStagingDevice::nextFreeBlock(VkDeviceSiz
   while (regionItr != regions_.end()) {
     // if requested size is available or if contiguous memory is not requested
     if ((regionItr->size >= requestedAlignedSize || !contiguous) &&
-        (immediate_->isReady(regionItr->handle))) {
+        (immediate->isReady(regionItr->handle))) {
       allocatedSize = std::min(regionItr->size, requestedAlignedSize);
       break;
     }
@@ -190,20 +211,24 @@ VulkanStagingDevice::MemoryRegion VulkanStagingDevice::nextFreeBlock(VkDeviceSiz
     const uint32_t newOffset = regionItr->offset + allocatedSize;
     const uint32_t stagingBufferIndex = regionItr->stagingBufferIndex;
 
-    const MemoryRegion allocatedRegion = {regionItr->offset,
-                                          allocatedSize,
-                                          regionItr->alignedSize,
-                                          VulkanImmediateCommands::SubmitHandle(),
-                                          stagingBufferIndex};
+    const MemoryRegion allocatedRegion = {
+        .offset = regionItr->offset,
+        .size = allocatedSize,
+        .alignedSize = regionItr->alignedSize,
+        .handle = VulkanImmediateCommands::SubmitHandle(),
+        .stagingBufferIndex = stagingBufferIndex,
+    };
 
     // Return this region and add the remaining unused size to the regions_ deque
     IGL_SCOPE_EXIT {
       if (newSize > 0) {
-        *regionItr = {newOffset,
-                      newSize,
-                      regionItr->alignedSize,
-                      VulkanImmediateCommands::SubmitHandle(),
-                      stagingBufferIndex};
+        *regionItr = {
+            .offset = newOffset,
+            .size = newSize,
+            .alignedSize = regionItr->alignedSize,
+            .handle = VulkanImmediateCommands::SubmitHandle(),
+            .stagingBufferIndex = stagingBufferIndex,
+        };
       } else {
         regions_.erase(regionItr);
       }
@@ -256,24 +281,28 @@ void VulkanStagingDevice::getBufferSubData(const VulkanBuffer& buffer,
     const VkDeviceSize copySize = std::min(static_cast<VkDeviceSize>(size), memoryChunk.size);
 
     // do the transfer
-    const VkBufferCopy copy = {chunkSrcOffset, memoryChunk.offset, copySize};
+    const VkBufferCopy copy = {
+        .srcOffset = chunkSrcOffset,
+        .dstOffset = memoryChunk.offset,
+        .size = copySize,
+    };
 
-    const auto& wrapper = immediate_->acquire();
+    const auto& wrapper = immediate->acquire();
 
     auto& stagingBuffer = stagingBuffers_[memoryChunk.stagingBufferIndex];
 
     ctx_.vf_.vkCmdCopyBuffer(
-        wrapper.cmdBuf_, buffer.getVkBuffer(), stagingBuffer->getVkBuffer(), 1, &copy);
+        wrapper.cmdBuf, buffer.getVkBuffer(), stagingBuffer->getVkBuffer(), 1, &copy);
 
     // Wait for command to finish
-    immediate_->wait(immediate_->submit(wrapper), ctx_.config_.fenceTimeoutNanoseconds);
+    immediate->wait(immediate->submit(wrapper), ctx_.config_.fenceTimeoutNanoseconds);
 
     // Copy data into data
     const uint8_t* src = stagingBuffer->getMappedPtr() + memoryChunk.offset;
     checked_memcpy(dstData, bufferSize - chunkSrcOffset, src, copySize);
 
     size -= copySize;
-    dstData = (uint8_t*)dstData + copySize;
+    dstData += copySize;
     chunkSrcOffset += copySize;
 
     regions_.push_back(memoryChunk);
@@ -292,7 +321,6 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
   const bool is420 = (image.imageFormat_ == VK_FORMAT_G8_B8R8_2PLANE_420_UNORM) ||
                      (image.imageFormat_ == VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM);
 
-  // @fb-only
   const uint32_t storageSize =
       is420 ? image.extent_.width * image.extent_.height * 3u / 2u
             : static_cast<uint32_t>(properties.getBytesPerRange(range, bytesPerRow));
@@ -317,14 +345,13 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
   // 1. Copy the pixel data into the host visible staging buffer
   stagingBuffer->bufferSubData(memoryChunk.offset, storageSize, data);
 
-  const auto& wrapper = immediate_->acquire();
+  const auto& wrapper = immediate->acquire();
   const uint32_t initialLayer = getVkLayer(type, range.face, range.layer);
   const uint32_t numLayers = getVkLayer(type, range.numFaces, range.numLayers);
 
   std::vector<VkBufferImageCopy> copyRegions;
   copyRegions.reserve(range.numMipLevels);
 
-  // @fb-only
   if (is420) {
     // this is a prototype support implemented for a couple of multiplanar image formats
     IGL_DEBUG_ASSERT(range.face == 0 && range.layer == 0 && range.mipLevel == 0);
@@ -335,39 +362,67 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
     const uint32_t w = image.extent_.width;
     const uint32_t h = image.extent_.height;
     ivkCmdBeginDebugUtilsLabel(&ctx_.vf_,
-                               wrapper.cmdBuf_,
+                               wrapper.cmdBuf,
                                "VulkanStagingDevice::imageData (upload YUV image data)",
-                               kColorUploadImage.toFloatPtr());
+                               K_COLOR_UPLOAD_IMAGE.toFloatPtr());
     VkImageAspectFlags imageAspect = VK_IMAGE_ASPECT_PLANE_0_BIT;
 
     // Luminance (1 plane)
-    copyRegions.emplace_back(
-        ivkGetBufferImageCopy2D(memoryChunk.offset,
-                                0,
-                                ivkGetRect2D(0, 0, w, h),
-                                VkImageSubresourceLayers{VK_IMAGE_ASPECT_PLANE_0_BIT, 0, 0, 1}));
+    copyRegions.emplace_back(VkBufferImageCopy{
+        .bufferOffset = memoryChunk.offset,
+        .imageSubresource =
+            VkImageSubresourceLayers{
+                .aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT,
+                .mipLevel = 0,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        .imageOffset = {0, 0, 0},
+        .imageExtent = {w, h, 1u},
+    });
     // Chrominance (in 1 or 2 planes, 420 subsampled)
     const VkDeviceSize planeSize0 = static_cast<VkDeviceSize>(w) * static_cast<VkDeviceSize>(h);
     const VkDeviceSize planeSize1 = planeSize0 / 4; // subsampled
     if (image.imageFormat_ == VK_FORMAT_G8_B8R8_2PLANE_420_UNORM) {
       imageAspect |= VK_IMAGE_ASPECT_PLANE_1_BIT;
-      copyRegions.emplace_back(
-          ivkGetBufferImageCopy2D(memoryChunk.offset + planeSize0,
-                                  0,
-                                  ivkGetRect2D(0, 0, w / 2, h / 2),
-                                  VkImageSubresourceLayers{VK_IMAGE_ASPECT_PLANE_1_BIT, 0, 0, 1}));
+      copyRegions.emplace_back(VkBufferImageCopy{
+          .bufferOffset = memoryChunk.offset + planeSize0,
+          .imageSubresource =
+              VkImageSubresourceLayers{
+                  .aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT,
+                  .mipLevel = 0,
+                  .baseArrayLayer = 0,
+                  .layerCount = 1,
+              },
+          .imageOffset = {0, 0, 0},
+          .imageExtent = {w / 2, h / 2, 1u},
+      });
     } else if (image.imageFormat_ == VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM) {
       imageAspect |= VK_IMAGE_ASPECT_PLANE_1_BIT | VK_IMAGE_ASPECT_PLANE_2_BIT;
-      copyRegions.emplace_back(
-          ivkGetBufferImageCopy2D(memoryChunk.offset + planeSize0,
-                                  0,
-                                  ivkGetRect2D(0, 0, w / 2, h / 2),
-                                  VkImageSubresourceLayers{VK_IMAGE_ASPECT_PLANE_1_BIT, 0, 0, 1}));
-      copyRegions.emplace_back(
-          ivkGetBufferImageCopy2D(memoryChunk.offset + planeSize0 + planeSize1,
-                                  0,
-                                  ivkGetRect2D(0, 0, w / 2, h / 2),
-                                  VkImageSubresourceLayers{VK_IMAGE_ASPECT_PLANE_2_BIT, 0, 0, 1}));
+      copyRegions.emplace_back(VkBufferImageCopy{
+          .bufferOffset = memoryChunk.offset + planeSize0,
+          .imageSubresource =
+              VkImageSubresourceLayers{
+                  .aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT,
+                  .mipLevel = 0,
+                  .baseArrayLayer = 0,
+                  .layerCount = 1,
+              },
+          .imageOffset = {0, 0, 0},
+          .imageExtent = {w / 2, h / 2, 1u},
+      });
+      copyRegions.emplace_back(VkBufferImageCopy{
+          .bufferOffset = memoryChunk.offset + planeSize0 + planeSize1,
+          .imageSubresource =
+              VkImageSubresourceLayers{
+                  .aspectMask = VK_IMAGE_ASPECT_PLANE_2_BIT,
+                  .mipLevel = 0,
+                  .baseArrayLayer = 0,
+                  .layerCount = 1,
+              },
+          .imageOffset = {0, 0, 0},
+          .imageExtent = {w / 2, h / 2, 1u},
+      });
 
     } else {
       IGL_DEBUG_ABORT("Unimplemented multiplanar image format");
@@ -375,10 +430,15 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
     }
 
     const VkImageSubresourceRange subresourceRange = {
-        imageAspect, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS};
+        .aspectMask = imageAspect,
+        .baseMipLevel = 0,
+        .levelCount = VK_REMAINING_MIP_LEVELS,
+        .baseArrayLayer = 0,
+        .layerCount = VK_REMAINING_ARRAY_LAYERS,
+    };
     // 1. Transition initial image layout into TRANSFER_DST_OPTIMAL
     ivkImageMemoryBarrier(&ctx_.vf_,
-                          wrapper.cmdBuf_,
+                          wrapper.cmdBuf,
                           image.getVkImage(),
                           0,
                           VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -390,9 +450,9 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
 
     // 2. Copy the pixel data from the staging buffer into the image
 #if IGL_VULKAN_PRINT_COMMANDS
-    IGL_LOG_INFO("%p vkCmdCopyBufferToImage()\n", wrapper.cmdBuf_);
+    IGL_LOG_INFO("%p vkCmdCopyBufferToImage()\n", wrapper.cmdBuf);
 #endif // IGL_VULKAN_PRINT_COMMANDS
-    ctx_.vf_.vkCmdCopyBufferToImage(wrapper.cmdBuf_,
+    ctx_.vf_.vkCmdCopyBufferToImage(wrapper.cmdBuf,
                                     stagingBuffer->getVkBuffer(),
                                     image.getVkImage(),
                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -403,7 +463,7 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
 
     // 3. Transition TRANSFER_DST_OPTIMAL into `targetLayout`
     ivkImageMemoryBarrier(&ctx_.vf_,
-                          wrapper.cmdBuf_,
+                          wrapper.cmdBuf,
                           image.getVkImage(),
                           VK_ACCESS_TRANSFER_WRITE_BIT,
                           VK_ACCESS_SHADER_READ_BIT,
@@ -411,16 +471,16 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
                           targetLayout,
                           VK_PIPELINE_STAGE_TRANSFER_BIT,
                           VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-                          VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
-                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                              VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+                              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                           subresourceRange);
 
     image.imageLayout_ = targetLayout;
 
-    ivkCmdEndDebugUtilsLabel(&ctx_.vf_, wrapper.cmdBuf_);
+    ivkCmdEndDebugUtilsLabel(&ctx_.vf_, wrapper.cmdBuf);
 
     // Store the allocated block with the SubmitHandle at the end of the deque
-    memoryChunk.handle = immediate_->submit(wrapper);
+    memoryChunk.handle = immediate->submit(wrapper);
     regions_.push_back(memoryChunk);
 
     return;
@@ -435,53 +495,65 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
                            : (image.isStencilFormat_ ? VK_IMAGE_ASPECT_STENCIL_BIT : aspectFlags);
 
   ivkCmdBeginDebugUtilsLabel(&ctx_.vf_,
-                             wrapper.cmdBuf_,
+                             wrapper.cmdBuf,
                              "VulkanStagingDevice::imageData (upload image data)",
-                             kColorUploadImage.toFloatPtr());
+                             K_COLOR_UPLOAD_IMAGE.toFloatPtr());
 
-  for (auto mipLevel = range.mipLevel; mipLevel < range.mipLevel + range.numMipLevels; ++mipLevel) {
+  for (uint32_t mipLevel = range.mipLevel; mipLevel < range.mipLevel + range.numMipLevels;
+       ++mipLevel) {
     const auto mipRange = range.atMipLevel(mipLevel);
     const uint32_t offset =
         static_cast<uint32_t>(properties.getSubRangeByteOffset(range, mipRange, bytesPerRow));
     const uint32_t texelsPerRow = bytesPerRow / static_cast<uint32_t>(properties.bytesPerBlock);
 
     if (image.type_ == VK_IMAGE_TYPE_2D) {
-      const VkRect2D region = ivkGetRect2D(static_cast<int32_t>(mipRange.x),
-                                           static_cast<int32_t>(mipRange.y),
-                                           static_cast<uint32_t>(mipRange.width),
-                                           static_cast<uint32_t>(mipRange.height));
-      copyRegions.emplace_back(ivkGetBufferImageCopy2D(
-          memoryChunk.offset + offset,
-          texelsPerRow,
-          region,
-          VkImageSubresourceLayers{
-              aspectMask, static_cast<uint32_t>(mipLevel), initialLayer, numLayers}));
+      copyRegions.emplace_back(VkBufferImageCopy{
+          .bufferOffset = memoryChunk.offset + offset,
+          .bufferRowLength = texelsPerRow,
+          .imageSubresource =
+              VkImageSubresourceLayers{
+                  .aspectMask = aspectMask,
+                  .mipLevel = static_cast<uint32_t>(mipLevel),
+                  .baseArrayLayer = initialLayer,
+                  .layerCount = numLayers,
+              },
+          .imageOffset = {static_cast<int32_t>(mipRange.x), static_cast<int32_t>(mipRange.y), 0},
+          .imageExtent = {static_cast<uint32_t>(mipRange.width),
+                          static_cast<uint32_t>(mipRange.height),
+                          1u},
+      });
     } else {
-      copyRegions.emplace_back(ivkGetBufferImageCopy3D(
-          memoryChunk.offset + offset,
-          texelsPerRow,
-          VkOffset3D{static_cast<int32_t>(mipRange.x),
-                     static_cast<int32_t>(mipRange.y),
-                     static_cast<int32_t>(mipRange.z)},
-          VkExtent3D{static_cast<uint32_t>(mipRange.width),
-                     static_cast<uint32_t>(mipRange.height),
-                     static_cast<uint32_t>(mipRange.depth)},
-          VkImageSubresourceLayers{
-              aspectMask, static_cast<uint32_t>(mipLevel), initialLayer, numLayers}));
+      copyRegions.emplace_back(
+          VkBufferImageCopy{.bufferOffset = memoryChunk.offset + offset,
+                            .bufferRowLength = texelsPerRow,
+                            .bufferImageHeight = 0,
+                            .imageSubresource =
+                                VkImageSubresourceLayers{
+                                    .aspectMask = aspectMask,
+                                    .mipLevel = static_cast<uint32_t>(mipLevel),
+                                    .baseArrayLayer = initialLayer,
+                                    .layerCount = numLayers,
+                                },
+                            .imageOffset = VkOffset3D{static_cast<int32_t>(mipRange.x),
+                                                      static_cast<int32_t>(mipRange.y),
+                                                      static_cast<int32_t>(mipRange.z)},
+                            .imageExtent = VkExtent3D{static_cast<uint32_t>(mipRange.width),
+                                                      static_cast<uint32_t>(mipRange.height),
+                                                      static_cast<uint32_t>(mipRange.depth)}});
     }
   }
 
   // image memory barriers should have combined image aspect flags (depth/stencil)
   const VkImageSubresourceRange subresourceRange = {
-      aspectFlags,
-      static_cast<uint32_t>(0u),
-      static_cast<uint32_t>(VK_REMAINING_MIP_LEVELS),
-      initialLayer,
-      numLayers,
+      .aspectMask = aspectFlags,
+      .baseMipLevel = 0,
+      .levelCount = VK_REMAINING_MIP_LEVELS,
+      .baseArrayLayer = initialLayer,
+      .layerCount = numLayers,
   };
   // 1. Transition initial image layout into TRANSFER_DST_OPTIMAL
   ivkImageMemoryBarrier(&ctx_.vf_,
-                        wrapper.cmdBuf_,
+                        wrapper.cmdBuf,
                         image.getVkImage(),
                         0,
                         VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -493,9 +565,9 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
 
   // 2. Copy the pixel data from the staging buffer into the image
 #if IGL_VULKAN_PRINT_COMMANDS
-  IGL_LOG_INFO("%p vkCmdCopyBufferToImage()\n", wrapper.cmdBuf_);
+  IGL_LOG_INFO("%p vkCmdCopyBufferToImage()\n", wrapper.cmdBuf);
 #endif // IGL_VULKAN_PRINT_COMMANDS
-  ctx_.vf_.vkCmdCopyBufferToImage(wrapper.cmdBuf_,
+  ctx_.vf_.vkCmdCopyBufferToImage(wrapper.cmdBuf,
                                   stagingBuffer->getVkBuffer(),
                                   image.getVkImage(),
                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -535,20 +607,20 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
   // SHADER_READ_ONLY_OPTIMAL. The image will require a subsequent transition before use as an
   // attachment or storage, so covering only the shader stages is correct for the post-upload case.
   const VkPipelineStageFlags dstStageMask =
-            isSampled
-            ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
-              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-            : (isStorage
-               ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-               : (isColorAttachment
-                  ? VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-                  : (isDepthStencilAttachment ? VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
-                                                VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
-                                              : VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)));
+      isSampled
+          ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+          : (isStorage
+                 ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+                 : (isColorAttachment
+                        ? VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                        : (isDepthStencilAttachment ? VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                                                          VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
+                                                    : VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)));
 
   // 3. Transition TRANSFER_DST_OPTIMAL into `targetLayout`
   ivkImageMemoryBarrier(&ctx_.vf_,
-                        wrapper.cmdBuf_,
+                        wrapper.cmdBuf,
                         image.getVkImage(),
                         VK_ACCESS_TRANSFER_WRITE_BIT,
                         dstAccessMask,
@@ -560,10 +632,10 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
 
   image.imageLayout_ = targetLayout;
 
-  ivkCmdEndDebugUtilsLabel(&ctx_.vf_, wrapper.cmdBuf_);
+  ivkCmdEndDebugUtilsLabel(&ctx_.vf_, wrapper.cmdBuf);
 
   // Store the allocated block with the SubmitHandle at the end of the deque
-  memoryChunk.handle = immediate_->submit(wrapper);
+  memoryChunk.handle = immediate->submit(wrapper);
   regions_.push_back(memoryChunk);
 }
 
@@ -601,11 +673,11 @@ void VulkanStagingDevice::getImageData2D(VkImage srcImage,
   const MemoryRegion memoryChunk = nextFreeBlock(storageSize, true);
 
   IGL_DEBUG_ASSERT(memoryChunk.size >= storageSize);
-  const auto& wrapper1 = immediate_->acquire();
+  const auto& wrapper1 = immediate->acquire();
 
   // 1. Transition to VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
   ivkImageMemoryBarrier(&ctx_.vf_,
-                        wrapper1.cmdBuf_,
+                        wrapper1.cmdBuf,
                         srcImage,
                         0, // srcAccessMask
                         VK_ACCESS_TRANSFER_READ_BIT, // dstAccessMask
@@ -613,18 +685,32 @@ void VulkanStagingDevice::getImageData2D(VkImage srcImage,
                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, // wait for any previous operation
                         VK_PIPELINE_STAGE_TRANSFER_BIT, // dstStageMask
-                        VkImageSubresourceRange{aspectFlags, level, 1, layer, 1});
+                        VkImageSubresourceRange{
+                            .aspectMask = aspectFlags,
+                            .baseMipLevel = level,
+                            .levelCount = 1,
+                            .baseArrayLayer = layer,
+                            .layerCount = 1,
+                        });
 
   auto& stagingBuffer = stagingBuffers_[memoryChunk.stagingBufferIndex];
 
   // 2.  Copy the pixel data from the image into the staging buffer
-  const VkBufferImageCopy copy = ivkGetBufferImageCopy2D(
-      memoryChunk.offset,
-      mustRepack ? 0
-                 : bytesPerRow / static_cast<uint32_t>(properties.bytesPerBlock), // bufferRowLength
-      imageRegion,
-      VkImageSubresourceLayers{aspectFlags, level, layer, 1});
-  ctx_.vf_.vkCmdCopyImageToBuffer(wrapper1.cmdBuf_,
+  const VkBufferImageCopy copy = {
+      .bufferOffset = memoryChunk.offset,
+      .bufferRowLength = mustRepack ? 0
+                                    : bytesPerRow / static_cast<uint32_t>(properties.bytesPerBlock),
+      .imageSubresource =
+          VkImageSubresourceLayers{
+              .aspectMask = aspectFlags,
+              .mipLevel = level,
+              .baseArrayLayer = layer,
+              .layerCount = 1,
+          },
+      .imageOffset = {imageRegion.offset.x, imageRegion.offset.y, 0},
+      .imageExtent = {imageRegion.extent.width, imageRegion.extent.height, 1u},
+  };
+  ctx_.vf_.vkCmdCopyImageToBuffer(wrapper1.cmdBuf,
                                   srcImage,
                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                   stagingBuffer->getVkBuffer(),
@@ -632,7 +718,7 @@ void VulkanStagingDevice::getImageData2D(VkImage srcImage,
                                   &copy);
 
   // Wait for command to finish
-  immediate_->wait(immediate_->submit(wrapper1), ctx_.config_.fenceTimeoutNanoseconds);
+  immediate->wait(immediate->submit(wrapper1), ctx_.config_.fenceTimeoutNanoseconds);
 
   // 3. Copy data from staging buffer into data
   if (!IGL_DEBUG_VERIFY(stagingBuffer->getMappedPtr())) {
@@ -656,10 +742,10 @@ void VulkanStagingDevice::getImageData2D(VkImage srcImage,
   }
 
   // 4. Transition back to the initial image layout
-  const auto& wrapper2 = immediate_->acquire();
+  const auto& wrapper2 = immediate->acquire();
 
   ivkImageMemoryBarrier(&ctx_.vf_,
-                        wrapper2.cmdBuf_,
+                        wrapper2.cmdBuf,
                         srcImage,
                         VK_ACCESS_TRANSFER_READ_BIT, // srcAccessMask
                         0, // dstAccessMask
@@ -667,10 +753,16 @@ void VulkanStagingDevice::getImageData2D(VkImage srcImage,
                         layout,
                         VK_PIPELINE_STAGE_TRANSFER_BIT, // srcStageMask
                         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, // dstStageMask
-                        VkImageSubresourceRange{aspectFlags, level, 1, layer, 1});
+                        VkImageSubresourceRange{
+                            .aspectMask = aspectFlags,
+                            .baseMipLevel = level,
+                            .levelCount = 1,
+                            .baseArrayLayer = layer,
+                            .layerCount = 1,
+                        });
 
   // the data should be available as we get out of this function
-  immediate_->wait(immediate_->submit(wrapper2), ctx_.config_.fenceTimeoutNanoseconds);
+  immediate->wait(immediate->submit(wrapper2), ctx_.config_.fenceTimeoutNanoseconds);
 
   regions_.push_back(memoryChunk);
   freeStagingBufferSize_ += memoryChunk.size;
@@ -685,7 +777,7 @@ void VulkanStagingDevice::waitAndReset() {
   IGL_PROFILER_FUNCTION();
 
   for (const auto region : regions_) {
-    immediate_->wait(region.handle, ctx_.config_.fenceTimeoutNanoseconds);
+    immediate->wait(region.handle, ctx_.config_.fenceTimeoutNanoseconds);
   }
 
   regions_.clear();
@@ -735,7 +827,7 @@ void VulkanStagingDevice::allocateStagingBuffer(VkDeviceSize minimumSize) {
   IGL_LOG_INFO("Allocating a new staging buffer of size %u bytes\n", minimumSize);
 #endif
 
-  const auto stagingBufferSize = minimumSize;
+  const VkDeviceSize stagingBufferSize = minimumSize;
 
   // Increment the id used for naming the staging buffer
   ++stagingBufferCounter_;
@@ -743,7 +835,7 @@ void VulkanStagingDevice::allocateStagingBuffer(VkDeviceSize minimumSize) {
   // Create a new staging buffer with the new size
   stagingBuffers_.emplace_back(std::make_unique<VulkanBuffer>(
       ctx_,
-      ctx_.device_->getVkDevice(),
+      ctx_.getVkDevice(),
       stagingBufferSize,
       VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
@@ -752,11 +844,13 @@ void VulkanStagingDevice::allocateStagingBuffer(VkDeviceSize minimumSize) {
   IGL_DEBUG_ASSERT(stagingBuffers_.back().get());
 
   // Add region that represents the entire buffer
-  regions_.push_front({0,
-                       stagingBufferSize,
-                       stagingBufferSize,
-                       VulkanImmediateCommands::SubmitHandle(),
-                       static_cast<uint32_t>(stagingBuffers_.size()) - 1});
+  regions_.push_front({
+      .offset = 0,
+      .size = stagingBufferSize,
+      .alignedSize = stagingBufferSize,
+      .handle = VulkanImmediateCommands::SubmitHandle(),
+      .stagingBufferIndex = static_cast<uint32_t>(stagingBuffers_.size()) - 1,
+  });
 
   freeStagingBufferSize_ += stagingBufferSize;
 }

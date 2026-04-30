@@ -9,6 +9,7 @@
 
 #include <igl/Common.h>
 #include <igl/RenderCommandEncoder.h>
+#include <igl/TimestampQueries.h>
 #include <igl/opengl/Framebuffer.h>
 #include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/IContext.h>
@@ -56,7 +57,11 @@ class RenderCommandEncoder final : public IRenderCommandEncoder, public WithCont
   // The data pointer must remain valid until the commandBuffer's execution has been completed by
   // CommandQueue::submit()
   void bindUniform(const UniformDesc& uniformDesc, const void* data) override;
-  void bindBuffer(uint32_t index, uint8_t target, IBuffer* buffer, size_t bufferOffset, size_t bufferSize) override;
+  void bindBuffer(uint32_t index,
+                  uint8_t target,
+                  IBuffer* buffer,
+                  size_t bufferOffset,
+                  size_t bufferSize) override;
   void bindBuffer(uint32_t index, IBuffer* buffer, size_t bufferOffset, size_t bufferSize) override;
   void bindVertexBuffer(uint32_t index, IBuffer& buffer, size_t bufferOffset) override;
   void bindIndexBuffer(IBuffer& buffer, IndexFormat format, size_t bufferOffset, bool bindVAO) override;
@@ -80,6 +85,9 @@ class RenderCommandEncoder final : public IRenderCommandEncoder, public WithCont
                    uint32_t firstIndex,
                    int32_t vertexOffset,
                    uint32_t baseInstance) override;
+  void drawMeshTasks(const Dimensions& threadgroupsPerGrid,
+                     const Dimensions& threadsPerTaskThreadgroup,
+                     const Dimensions& threadsPerMeshThreadgroup) override;
   void multiDrawIndirect(IBuffer& indirectBuffer,
                          size_t indirectBufferOffset,
                          uint32_t drawCount,
@@ -100,6 +108,11 @@ class RenderCommandEncoder final : public IRenderCommandEncoder, public WithCont
   void* indexBufferOffset_ = nullptr;
   std::shared_ptr<Framebuffer> resolveFramebuffer_;
   std::shared_ptr<Framebuffer> framebuffer_;
+
+  /// GPU timing: descriptor-based elapsed query from RenderPassDesc.
+  /// When set, GL_TIME_ELAPSED query is started in beginEncoding()
+  /// and ended in endEncoding().
+  std::shared_ptr<ITimestampQueries> timestampQueries_;
 };
 
 } // namespace opengl

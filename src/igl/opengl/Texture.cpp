@@ -8,9 +8,6 @@
 #include <igl/opengl/Texture.h>
 
 #include <algorithm>
-#include <igl/opengl/CommandBuffer.h>
-#include <igl/opengl/Device.h>
-#include <igl/opengl/Errors.h>
 #include <igl/opengl/util/TextureFormat.h>
 
 namespace igl::opengl {
@@ -52,8 +49,22 @@ uint64_t Texture::getTextureId() const {
   return 0;
 }
 
+TextureDesc::TextureMipmapGeneration Texture::getMipmapGeneration() const {
+  return mipmapGeneration_;
+}
+
 bool Texture::isSwapchainTexture() const {
   return isImplicitStorage();
+}
+
+bool Texture::canPresent() const noexcept {
+#if IGL_PLATFORM_IOS
+  // On iOS, presentRenderbuffer is only supported for textures created with EAGLContext's
+  // renderbufferStorage method.
+  return false;
+#else
+  return true;
+#endif
 }
 
 Result Texture::create(const TextureDesc& desc, bool hasStorageAlready) {
@@ -84,6 +95,7 @@ Result Texture::create(const TextureDesc& desc, bool hasStorageAlready) {
     numLayers_ = desc.numLayers;
     numSamples_ = desc.numSamples;
     numMipLevels_ = desc.numMipLevels;
+    mipmapGeneration_ = desc.mipmapGeneration;
     if (!getContext().deviceFeatures().hasFeature(DeviceFeatures::TexturePartialMipChain)) {
       // For ES 2.0, we have to ignore numMipLevels_
       const auto maxNumMipLevels = TextureDesc::calcNumMipLevels(width_, height_, depth_);
@@ -213,10 +225,10 @@ bool Texture::toFormatDescGL(const IContext& ctx,
   }
 
   const bool sampled = (usage & TextureDesc::TextureUsageBits::Sampled) != 0;
-  bool attachment = (usage & TextureDesc::TextureUsageBits::Attachment) != 0;
+  const bool attachment = (usage & TextureDesc::TextureUsageBits::Attachment) != 0;
   const bool storage = (usage & TextureDesc::TextureUsageBits::Storage) != 0;
-  bool sampledAttachment = sampled && attachment;
-  bool sampledOnly = sampled && !attachment;
+  const bool sampledAttachment = sampled && attachment;
+  const bool sampledOnly = sampled && !attachment;
   bool attachmentOnly = attachment && !sampled;
 
   // Sanity check capabilities
@@ -263,9 +275,7 @@ bool Texture::toFormatDescGL(const IContext& ctx,
       IGL_LOG_INFO(
           "Texture format %s does not support SampledAttachment usage. Falling back to Sampled.\n",
           TextureFormatProperties::fromTextureFormat(textureFormat).name);
-      sampledAttachment = false;
       attachmentOnly = false;
-      attachment = false;
     } else {
       IGL_LOG_ERROR("Texture format %s does not support SampledAttachment usage.\n",
                     TextureFormatProperties::fromTextureFormat(textureFormat).name);
@@ -530,6 +540,12 @@ bool Texture::toFormatDescGL(const IContext& ctx,
   case TextureFormat::RG_UNorm16:
     internalFormat = GL_RG16;
     format = GL_RG;
+    type = GL_UNSIGNED_SHORT;
+    return true;
+
+  case TextureFormat::RGBA_UNorm16:
+    internalFormat = GL_RGBA16;
+    format = GL_RGBA;
     type = GL_UNSIGNED_SHORT;
     return true;
 
@@ -935,10 +951,43 @@ bool Texture::toFormatDescGL(const IContext& ctx,
     return true;
   case TextureFormat::YUV_NV12:
   case TextureFormat::YUV_420p:
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
     return false;
   }
 
   return false;
+}
+
+// IAttachmentInterop interface implementation
+void* Texture::getNativeImage() const {
+  // OpenGL uses integer handles to identify textures. If someone needs to return
+  // it as a pointer, it might be implemented.
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
+  return nullptr;
+}
+
+void* Texture::getNativeImageView() const {
+  // OpenGL doesn't have a separate image view concept
+  return nullptr;
+}
+
+const base::AttachmentInteropDesc& Texture::getDesc() const {
+  // Update cached attachment descriptor
+  const auto dims = getDimensions();
+  attachmentDesc_.width = dims.width;
+  attachmentDesc_.height = dims.height;
+  attachmentDesc_.depth = dims.depth;
+  attachmentDesc_.numLayers = numLayers_;
+  attachmentDesc_.numSamples = numSamples_;
+  attachmentDesc_.numMipLevels = numMipLevels_;
+  attachmentDesc_.type = type_;
+  attachmentDesc_.format = getFormat();
+  attachmentDesc_.isSampled = true; // OpenGL textures are generally sampled
+  return attachmentDesc_;
 }
 
 } // namespace igl::opengl

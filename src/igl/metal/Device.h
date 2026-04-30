@@ -7,7 +7,8 @@
 
 #pragma once
 
-#import <Metal/Metal.h>
+@protocol MTLDevice;
+#import <Metal/MTLTypes.h>
 #include <igl/CommandEncoder.h>
 #include <igl/Device.h>
 #include <igl/metal/DeviceFeatureSet.h>
@@ -25,20 +26,21 @@ class Device : public IDevice {
   explicit Device(id<MTLDevice> IGL_NONNULL device);
   ~Device() override;
 
-  [[nodiscard]] Holder<igl::BindGroupTextureHandle> createBindGroup(
+  [[nodiscard]] Holder<BindGroupTextureHandle> createBindGroup(
       const BindGroupTextureDesc& desc,
       const IRenderPipelineState* IGL_NULLABLE compatiblePipeline,
       Result* IGL_NULLABLE outResult) override;
-  [[nodiscard]] Holder<igl::BindGroupBufferHandle> createBindGroup(const BindGroupBufferDesc& desc,
-                                                                   Result* IGL_NULLABLE
-                                                                       outResult) override;
-  void destroy(igl::BindGroupTextureHandle handle) override;
-  void destroy(igl::BindGroupBufferHandle handle) override;
-  void destroy(igl::SamplerHandle handle) override;
+  [[nodiscard]] Holder<BindGroupBufferHandle> createBindGroup(const BindGroupBufferDesc& desc,
+                                                              Result* IGL_NULLABLE
+                                                                  outResult) override;
+  void destroy(BindGroupTextureHandle handle) override;
+  void destroy(BindGroupBufferHandle handle) override;
+  void destroy(SamplerHandle handle) override;
 
   // Command Queue
   std::shared_ptr<ICommandQueue> createCommandQueue(const CommandQueueDesc& desc,
-                                                    Result* IGL_NULLABLE outResult) override;
+                                                    Result* IGL_NULLABLE
+                                                        outResult) noexcept override;
 
   // Resources
   std::unique_ptr<IBuffer> createBuffer(const BufferDesc& desc,
@@ -54,6 +56,12 @@ class Device : public IDevice {
                                               const TextureViewDesc& desc,
                                               Result* IGL_NULLABLE
                                                   outResult) const noexcept override;
+
+  std::shared_ptr<ITimer> createTimer(Result* IGL_NULLABLE outResult) const noexcept override;
+
+  std::shared_ptr<ITimestampQueries> createTimestampQueries(uint32_t maxTimestamps,
+                                                            Result* IGL_NULLABLE
+                                                                outResult) const noexcept override;
 
   std::shared_ptr<IVertexInputState> createVertexInputState(const VertexInputStateDesc& desc,
                                                             Result* IGL_NULLABLE
@@ -97,7 +105,12 @@ class Device : public IDevice {
   //@tencent only
   void * IGL_NONNULL getImpl() override { return (__bridge void *)device_;}
 
+  [[nodiscard]] void* IGL_NULLABLE getNativeDevice() const override {
+    return (__bridge void*)device_;
+  }
+
   // ICapabilities
+  [[nodiscard]] bool isAppleGpu() const;
   [[nodiscard]] bool hasFeature(DeviceFeatures feature) const override;
   [[nodiscard]] bool hasRequirement(DeviceRequirement requirement) const override;
   bool getFeatureLimits(DeviceFeatureLimits featureLimits, size_t& result) const override;
@@ -111,9 +124,16 @@ class Device : public IDevice {
   // Device Statistics
   [[nodiscard]] size_t getCurrentDrawCount() const override;
 
+  [[nodiscard]] size_t getShaderCompilationCount() const override;
+
+  [[nodiscard]] size_t getGPUMemoryUsage() const override;
+
   [[nodiscard]] BackendType getBackendType() const override {
     return BackendType::Metal;
   }
+
+  [[nodiscard]] base::IFramebufferInterop* IGL_NULLABLE
+  createFramebufferInterop(const base::FramebufferInteropDesc& desc) override;
 
   [[nodiscard]] NormalizedZRange getNormalizedZRange() const override {
     return NormalizedZRange::ZeroToOne;
@@ -122,9 +142,11 @@ class Device : public IDevice {
   static MTLStorageMode toMTLStorageMode(ResourceStorage storage);
   static MTLResourceOptions toMTLResourceStorageMode(ResourceStorage storage);
 
+  std::shared_ptr<ICommandQueue> getMostRecentCommandQueue() const noexcept;
+
  public:
-  Pool<BindGroupBufferTag, BindGroupBufferDesc> bindGroupBuffersPool_;
-  Pool<BindGroupTextureTag, BindGroupTextureDesc> bindGroupTexturesPool_;
+  Pool<BindGroupBufferTag, BindGroupBufferDesc> bindGroupBuffersPool;
+  Pool<BindGroupTextureTag, BindGroupTextureDesc> bindGroupTexturesPool;
 
  private:
   std::unique_ptr<IBuffer> createRingBuffer(const BufferDesc& desc,
@@ -132,21 +154,22 @@ class Device : public IDevice {
 
   std::unique_ptr<IBuffer> createBufferNoCopy(const BufferDesc& desc,
                                               Result* IGL_NULLABLE outResult) const;
-                                            
-  std::shared_ptr<IRenderPipelineState> createTraditionalRenderPipeline(const RenderPipelineDesc& desc,
-                                                                        Result* IGL_NULLABLE
-                                                                        outResult) const;   
+
+  std::shared_ptr<IRenderPipelineState> createTraditionalRenderPipeline(
+      const RenderPipelineDesc& desc,
+      Result* IGL_NULLABLE outResult) const;
 
   std::shared_ptr<IRenderPipelineState> createMeshRenderPipeline(const RenderPipelineDesc& desc,
                                                                  Result* IGL_NULLABLE
-                                                                 outResult) const;                                                                                                             
+                                                                     outResult) const;
 
   id<MTLDevice> IGL_NONNULL device_;
   PlatformDevice platformDevice_;
 
   DeviceFeatureSet deviceFeatureSet_;
   std::shared_ptr<BufferSynchronizationManager> bufferSyncManager_;
-  DeviceStatistics deviceStatistics_;
+  mutable DeviceStatistics deviceStatistics_;
+  std::shared_ptr<ICommandQueue> mostRecentCommandQueue_;
 };
 
 } // namespace igl::metal

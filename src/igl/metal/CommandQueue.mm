@@ -8,10 +8,12 @@
 #include <igl/metal/CommandQueue.h>
 
 #include <Foundation/Foundation.h>
-
+#include <igl/IGLFolly.h>
 #include <igl/metal/BufferSynchronizationManager.h>
 #include <igl/metal/CommandBuffer.h>
 #include <igl/metal/DeviceStatistics.h>
+#include <igl/metal/Timer.h>
+#include <igl/metal/TimestampQueries.h>
 
 // @brief Number of command buffers to be automatically captured for GPU debugging. Zero (0)
 // means no command buffers will be recorded and the capture code is deactivated.
@@ -56,7 +58,35 @@ SubmitHandle CommandQueue::submit(const igl::ICommandBuffer& commandBuffer, bool
     bufferSyncManager_->markCommandBufferAsEndOfFrame(commandBuffer);
   }
 
-  [static_cast<const CommandBuffer&>(commandBuffer).get() commit];
+  const auto& metalCommandBuffer = static_cast<const CommandBuffer&>(commandBuffer);
+  std::shared_ptr<ITimer> timer = metalCommandBuffer.desc.timer;
+  if (timer) {
+    [metalCommandBuffer.get() addCompletedHandler:^(id<MTLCommandBuffer> cb) {
+      CFTimeInterval gpuDuration = cb.GPUEndTime - cb.GPUStartTime;
+      static_cast<Timer&>(*timer).executionTime_ =
+          static_cast<uint64_t>(gpuDuration * 1e9); // Convert to nanoseconds
+    }];
+  }
+
+  if (@available(macOS 10.15, iOS 14.0, *)) {
+    std::shared_ptr<ITimestampQueries> tsQueries = metalCommandBuffer.desc.timestampQueries;
+    if (tsQueries) {
+      auto metalTsQueries = std::static_pointer_cast<TimestampQueries>(tsQueries);
+      id<MTLCounterSampleBuffer> csb = metalTsQueries->sampleBuffer_;
+      uint64_t gen = metalTsQueries->generation_.load(std::memory_order_seq_cst);
+      [metalCommandBuffer.get() addCompletedHandler:^(id<MTLCommandBuffer> /*cb*/) {
+        @try {
+          if (metalTsQueries->generation_.load(std::memory_order_acquire) == gen) {
+            metalTsQueries->resolveTimestamps(csb);
+          }
+        } @catch (NSException*) {
+          // GPU reset or counter sample buffer invalidated -- silently skip.
+        }
+      }];
+    }
+  }
+
+  [metalCommandBuffer.get() commit];
 
   if (endOfFrame) {
     bufferSyncManager_->manageEndOfFrameSync();
@@ -67,7 +97,12 @@ SubmitHandle CommandQueue::submit(const igl::ICommandBuffer& commandBuffer, bool
     if ((currentCommandBuffer + 1) == kIGLMetalBeginCommandBufferToCapture) {
       // Start capturing one command buffer earlier
       startCapture(value_);
+      FOLLY_PUSH_WARNING
+      FOLLY_CLANG_DISABLE_WARNING("-Wtautological-compare")
+      // Disable warning; local debug builds may set kIGLMetalEndCommandBufferToCapture to a
+      // non-zero value
     } else if (currentCommandBuffer >= kIGLMetalEndCommandBufferToCapture) {
+      FOLLY_POP_WARNING
       stopCapture();
     }
     ++currentCommandBuffer;

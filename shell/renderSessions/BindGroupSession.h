@@ -9,12 +9,10 @@
 
 #pragma once
 
-#include <shell/shared/renderSession/RenderSession.h>
-
 #include <IGLU/imgui/Session.h>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
+#include <glm/ext/matrix_float4x4.hpp>
 #include <shell/shared/platform/Platform.h>
+#include <shell/shared/renderSession/RenderSession.h>
 #include <igl/FPSCounter.h>
 #include <igl/RenderPass.h>
 
@@ -31,7 +29,6 @@ class BindGroupSession : public RenderSession {
   void update(SurfaceTextures surfaceTextures) noexcept override;
 
  private:
-  std::shared_ptr<ICommandQueue> commandQueue_;
   RenderPassDesc renderPass_;
   FramebufferDesc framebufferDesc_;
   std::shared_ptr<IRenderPipelineState> pipelineState_;

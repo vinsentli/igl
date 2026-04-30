@@ -7,14 +7,26 @@
 
 #pragma once
 
-#include <glm/glm.hpp>
+#include <glm/ext/vector_float3.hpp>
 
 namespace igl::shell {
+
+enum class Button : int {
+  Unknown = -1,
+  LeftTrigger = 0,
+  RightTrigger = 1,
+  A = 2,
+  B = 3,
+  X = 4,
+  Y = 5,
+  Count = 6,
+};
 
 struct RayEvent {
   glm::vec3 start;
   glm::vec3 end;
   bool buttonPressed = false;
+  Button button = Button::Unknown;
 };
 
 class IRayListener {

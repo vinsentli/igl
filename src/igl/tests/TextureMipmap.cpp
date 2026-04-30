@@ -6,7 +6,6 @@
  */
 
 #include "Texture.h"
-
 #include "util/TextureValidationHelpers.h"
 
 #include <cstddef>
@@ -97,8 +96,8 @@ TEST_F(TextureTest, RenderToMip) {
     renderPass_.colorAttachments[0].mipLevel = mipLevel;
 
     auto cmds = cmdBuf_->createRenderCommandEncoder(renderPass_, fb);
-    cmds->bindVertexBuffer(data::shader::simplePosIndex, *vb_);
-    cmds->bindVertexBuffer(data::shader::simpleUvIndex, *uv_);
+    cmds->bindVertexBuffer(data::shader::kSimplePosIndex, *vb_);
+    cmds->bindVertexBuffer(data::shader::kSimpleUvIndex, *uv_);
 
     cmds->bindRenderPipelineState(pipelineState);
 
@@ -217,11 +216,8 @@ void testGenerateMipmap(IDevice& device, ICommandQueue& cmdQueue, bool withComma
   //---------------------------------------------------------------------
   // Create texture with mip levels
   //---------------------------------------------------------------------
-  TextureDesc texDesc = TextureDesc::new2D(TextureFormat::RGBA_UNorm8,
-                                           kTexWidth,
-                                           kTexWidth,
-                                           TextureDesc::TextureUsageBits::Sampled |
-                                               TextureDesc::TextureUsageBits::Attachment);
+  TextureDesc texDesc = TextureDesc::new2D(
+      TextureFormat::RGBA_UNorm8, kTexWidth, kTexWidth, TextureDesc::TextureUsageBits::Sampled);
   texDesc.numMipLevels = kNumMipLevels;
   auto tex = device.createTexture(texDesc, &ret);
   ASSERT_EQ(ret.code, Result::Code::Ok) << ret.message;

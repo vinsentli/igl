@@ -28,6 +28,10 @@ class VulkanSwapchain final {
  public:
   VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t height);
   ~VulkanSwapchain();
+  VulkanSwapchain(const VulkanSwapchain&) = delete;
+  VulkanSwapchain& operator=(const VulkanSwapchain&) = delete;
+  VulkanSwapchain(VulkanSwapchain&&) = delete;
+  VulkanSwapchain& operator=(VulkanSwapchain&&) = delete;
 
   Result acquireNextImage();
   Result present(VkSemaphore waitSemaphore);
@@ -100,17 +104,16 @@ class VulkanSwapchain final {
   void lazyAllocateDepthBuffer() const;
 
  public:
-  std::vector<VulkanSemaphore> acquireSemaphores_;
+  std::vector<VulkanSemaphore> acquireSemaphores;
   // Used to check whether the acquire semaphore can be used for acquiring
   // Based on
   // https://github.com/corporateshark/lightweightvk/blob/36597fae5c79ad6b310e4ed8c00e8acfa38b5aca/lvk/vulkan/VulkanClasses.h#L146
-  std::vector<VulkanFence> acquireFences_; // this can be removed once we switch to timeline
-                                           // semaphores
-  std::vector<uint64_t> timelineWaitValues_;
+  std::vector<VulkanFence> acquireFences; // this can be removed once we switch to timeline
+                                          // semaphores
+  std::vector<uint64_t> timelineWaitValues;
 
  private:
-  VulkanContext& ctx_;
-  VkDevice device_;
+  const VulkanContext& ctx_;
   VkQueue graphicsQueue_;
   uint32_t width_ = 0;
   uint32_t height_ = 0;

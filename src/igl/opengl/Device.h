@@ -7,11 +7,8 @@
 
 #pragma once
 
-#include <cstdio>
-#include <cstring>
 #include <igl/Device.h>
 #include <igl/opengl/DeviceFeatureSet.h>
-#include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/IContext.h>
 #include <igl/opengl/PlatformDevice.h>
 #include <igl/opengl/UnbindPolicy.h>
@@ -40,11 +37,17 @@ class Device : public IDevice {
 
   // Command Queue
   std::shared_ptr<ICommandQueue> createCommandQueue(const CommandQueueDesc& desc,
-                                                    Result* IGL_NULLABLE outResult) override;
+                                                    Result* IGL_NULLABLE
+                                                        outResult) noexcept override;
 
   // Backend type query
   [[nodiscard]] BackendType getBackendType() const override {
     return BackendType::OpenGL;
+  }
+
+  // OpenGL doesn't have a single native device handle
+  [[nodiscard]] void* IGL_NULLABLE getNativeDevice() const override {
+    return nullptr;
   }
 
   // Resources
@@ -86,7 +89,18 @@ class Device : public IDevice {
                                                     Result* IGL_NULLABLE outResult) const override;
 
   std::shared_ptr<IFramebuffer> createFramebuffer(const FramebufferDesc& desc,
-                                                  Result* IGL_NULLABLE outResult) override;
+                                                  Result* IGL_NULLABLE outResult) noexcept override;
+
+  [[nodiscard]] base::IFramebufferInterop* IGL_NULLABLE
+  createFramebufferInterop(const base::FramebufferInteropDesc& desc) override;
+
+  // Timers
+  std::shared_ptr<ITimer> createTimer(Result* IGL_NULLABLE outResult) const noexcept override;
+
+  // Timestamp Queries
+  std::shared_ptr<ITimestampQueries> createTimestampQueries(uint32_t maxTimestamps,
+                                                            Result* IGL_NULLABLE
+                                                                outResult) const noexcept override;
 
 #ifndef NOT_USE_UPSCALER
   // Spatial Scaler (not supported on OpenGL)
@@ -124,6 +138,7 @@ class Device : public IDevice {
 
   // Device Statistics
   [[nodiscard]] size_t getCurrentDrawCount() const override;
+  [[nodiscard]] size_t getShaderCompilationCount() const override;
 
   bool verifyScope() override;
 
@@ -145,7 +160,7 @@ class Device : public IDevice {
   // on OpenGL we only need one command queue
   std::shared_ptr<CommandQueue> commandQueue_;
   const DeviceFeatureSet& deviceFeatureSet_;
-  UnbindPolicy cachedUnbindPolicy_;
+  UnbindPolicy cachedUnbindPolicy_{};
 };
 
 } // namespace igl::opengl

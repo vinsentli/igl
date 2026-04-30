@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <igl/opengl/Buffer.h>
 #include <igl/opengl/UniformAdapter.h>
+
+#include <igl/opengl/Buffer.h>
 #include <igl/opengl/UniformBuffer.h>
 
 namespace igl::opengl {
@@ -18,7 +19,7 @@ UniformAdapter::UniformAdapter(const IContext& context, PipelineType type) : pip
   uniforms_.reserve(kLikelyMaximumNumUniforms);
 
   const auto& deviceFeatures = context.deviceFeatures();
-  if (pipelineType_ == Render) {
+  if (pipelineType_ == PipelineType::Render) {
     maxUniforms_ = deviceFeatures.getMaxVertexUniforms() + deviceFeatures.getMaxFragmentUniforms();
   } else {
     maxUniforms_ = deviceFeatures.getMaxComputeUniforms();
@@ -33,11 +34,11 @@ UniformAdapter::UniformAdapter(const IContext& context, PipelineType type) : pip
 }
 
 void UniformAdapter::shrinkUniformUsage() {
-  static constexpr uint32_t maxUniformBytes = 32 * 1024;
-  static constexpr uint32_t maxShrinkUniformCounter = 1000;
-  if (uniformData_.size() > maxUniformBytes && usedUniformDataBytes_ < uniformData_.size() / 2) {
+  static constexpr uint32_t kMaxUniformBytes = 32 * 1024;
+  static constexpr uint32_t kMaxShrinkUniformCounter = 1000;
+  if (uniformData_.size() > kMaxUniformBytes && usedUniformDataBytes_ < uniformData_.size() / 2) {
     shrinkUniformDataCounter_++;
-    if (shrinkUniformDataCounter_ > maxShrinkUniformCounter) {
+    if (shrinkUniformDataCounter_ > kMaxShrinkUniformCounter) {
       uniformData_.resize(uniformData_.size() / 2);
       shrinkUniformDataCounter_ = 0;
     }
@@ -137,7 +138,7 @@ void UniformAdapter::setUniformBuffer(IBuffer* buffer,
                    IGL_UNIFORM_BLOCKS_BINDING_MAX);
   IGL_DEBUG_ASSERT(buffer, "invalid buffer passed to setUniformBuffer");
   if (bindingIndex < IGL_UNIFORM_BLOCKS_BINDING_MAX && buffer) {
-    uniformBufferBindingMap_[bindingIndex] = {buffer, offset, size};
+    uniformBufferBindingMap_[bindingIndex] = {.buffer = buffer, .offset = offset, .size = size};
     uniformBuffersDirtyMask_ |= 1 << bindingIndex;
     Result::setOk(outResult);
   } else {

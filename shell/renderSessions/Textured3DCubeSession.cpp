@@ -7,15 +7,14 @@
 
 // @fb-only
 
-#include <IGLU/managedUniformBuffer/ManagedUniformBuffer.h>
 #include <shell/renderSessions/Textured3DCubeSession.h>
+
+#include <IGLU/managedUniformBuffer/ManagedUniformBuffer.h>
+#include <cstddef>
 #include <shell/shared/renderSession/ShellParams.h>
 #include <igl/NameHandle.h>
 #include <igl/ShaderCreator.h>
-#include <igl/opengl/Device.h>
-#include <igl/opengl/RenderCommandEncoder.h>
-
-#include <cstddef>
+#include <igl/opengl/Version.h> // IWYU pragma: keep
 
 namespace igl::shell {
 
@@ -27,18 +26,18 @@ struct VertexPosUvw {
 };
 
 const float kHalf = 1.0f;
-VertexPosUvw vertexData0[] = {
-    {{-kHalf, kHalf, -kHalf}, {0.0, 1.0, 0.0}},
-    {{kHalf, kHalf, -kHalf}, {1.0, 1.0, 0.0}},
-    {{-kHalf, -kHalf, -kHalf}, {0.0, 0.0, 0.0}},
-    {{kHalf, -kHalf, -kHalf}, {1.0, 0.0, 0.0}},
-    {{kHalf, kHalf, kHalf}, {1.0, 1.0, 1.0}},
-    {{-kHalf, kHalf, kHalf}, {0.0, 1.0, 1.0}},
-    {{kHalf, -kHalf, kHalf}, {1.0, 0.0, 1.0}},
-    {{-kHalf, -kHalf, kHalf}, {0.0, 0.0, 1.0}},
+const VertexPosUvw kVertexData0[] = {
+    {.position = {-kHalf, kHalf, -kHalf}, .uvw = {0.0, 1.0, 0.0}},
+    {.position = {kHalf, kHalf, -kHalf}, .uvw = {1.0, 1.0, 0.0}},
+    {.position = {-kHalf, -kHalf, -kHalf}, .uvw = {0.0, 0.0, 0.0}},
+    {.position = {kHalf, -kHalf, -kHalf}, .uvw = {1.0, 0.0, 0.0}},
+    {.position = {kHalf, kHalf, kHalf}, .uvw = {1.0, 1.0, 1.0}},
+    {.position = {-kHalf, kHalf, kHalf}, .uvw = {0.0, 1.0, 1.0}},
+    {.position = {kHalf, -kHalf, kHalf}, .uvw = {1.0, 0.0, 1.0}},
+    {.position = {-kHalf, -kHalf, kHalf}, .uvw = {0.0, 0.0, 1.0}},
 };
-uint16_t indexData[] = {0, 1, 2, 1, 3, 2, 1, 4, 3, 4, 6, 3, 4, 5, 6, 5, 7, 6,
-                        5, 0, 7, 0, 2, 7, 5, 4, 0, 4, 1, 0, 2, 3, 7, 3, 6, 7};
+const uint16_t kIndexData[] = {0, 1, 2, 1, 3, 2, 1, 4, 3, 4, 6, 3, 4, 5, 6, 5, 7, 6,
+                               5, 0, 7, 0, 2, 7, 5, 4, 0, 4, 1, 0, 2, 3, 7, 3, 6, 7};
 
 std::string getProlog(IDevice& device) {
 #if IGL_BACKEND_OPENGL
@@ -169,7 +168,25 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
                                                            "main",
                                                            "",
                                                            nullptr);
-    return nullptr;
+  case igl::BackendType::D3D12: {
+    static const char* kVS = R"(
+      cbuffer VertexUniforms : register(b1) { float4x4 mvpMatrix; float scaleZ; };
+      struct VSIn { float3 position : POSITION; float3 uvw : TEXCOORD0; };
+      struct VSOut { float4 position : SV_POSITION; float3 uvw : TEXCOORD0; };
+      VSOut main(VSIn v) {
+        VSOut o; o.position = mul(mvpMatrix, float4(v.position,1.0));
+        o.uvw = float3(v.uvw.x, v.uvw.y, (v.uvw.z - 0.5f)*scaleZ + 0.5f);
+        return o; }
+    )";
+    static const char* kPS = R"(
+      Texture3D<float4> inputVolume : register(t0);
+      SamplerState linearSampler : register(s0);
+      struct PSIn { float4 position : SV_POSITION; float3 uvw : TEXCOORD0; };
+      float4 main(PSIn i) : SV_TARGET { return inputVolume.Sample(linearSampler, i.uvw); }
+    )";
+    return igl::ShaderStagesCreator::fromModuleStringInput(
+        device, kVS, "main", "", kPS, "main", "", nullptr);
+  }
   case igl::BackendType::Custom:
     IGL_DEBUG_ABORT("IGLSamples not set up for Custom");
     return nullptr;
@@ -201,13 +218,16 @@ bool isDeviceCompatible(IDevice& device) noexcept {
 
 void Textured3DCubeSession::createSamplerAndTextures(const igl::IDevice& device) {
   // Sampler & Texture
-  SamplerStateDesc samplerDesc;
-  samplerDesc.minFilter = samplerDesc.magFilter = SamplerMinMagFilter::Linear;
-  samplerDesc.addressModeU = SamplerAddressMode::MirrorRepeat;
-  samplerDesc.addressModeV = SamplerAddressMode::MirrorRepeat;
-  samplerDesc.addressModeW = SamplerAddressMode::MirrorRepeat;
-  samplerDesc.debugName = "Sampler: linear (MirrorRepeat)";
-  samp0_ = device.createSamplerState(samplerDesc, nullptr);
+  samp0_ = device.createSamplerState(
+      SamplerStateDesc{
+          .minFilter = SamplerMinMagFilter::Linear,
+          .magFilter = SamplerMinMagFilter::Linear,
+          .addressModeU = SamplerAddressMode::MirrorRepeat,
+          .addressModeV = SamplerAddressMode::MirrorRepeat,
+          .addressModeW = SamplerAddressMode::MirrorRepeat,
+          .debugName = "Sampler: linear (MirrorRepeat)",
+      },
+      nullptr);
 
   const uint32_t width = 256;
   const uint32_t height = 256;
@@ -278,45 +298,53 @@ void Textured3DCubeSession::initialize() noexcept {
     return;
   }
   // Vertex buffer, Index buffer and Vertex Input
-  const BufferDesc vb0Desc =
-      BufferDesc(BufferDesc::BufferTypeBits::Vertex, vertexData0, sizeof(vertexData0));
-  vb0_ = device.createBuffer(vb0Desc, nullptr);
-  const BufferDesc ibDesc =
-      BufferDesc(BufferDesc::BufferTypeBits::Index, indexData, sizeof(indexData));
-  ib0_ = device.createBuffer(ibDesc, nullptr);
+  vb0_ = device.createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Vertex,
+                                        .data = kVertexData0,
+                                        .length = sizeof(kVertexData0)},
+                             nullptr);
+  ib0_ = device.createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Index,
+                                        .data = kIndexData,
+                                        .length = sizeof(kIndexData)},
+                             nullptr);
 
-  VertexInputStateDesc inputDesc;
-  inputDesc.numAttributes = 2;
-  inputDesc.attributes[0].format = VertexAttributeFormat::Float3;
-  inputDesc.attributes[0].offset = offsetof(VertexPosUvw, position);
-  inputDesc.attributes[0].bufferIndex = 0;
-  inputDesc.attributes[0].name = "position";
-  inputDesc.attributes[0].location = 0;
-  inputDesc.attributes[1].format = VertexAttributeFormat::Float3;
-  inputDesc.attributes[1].offset = offsetof(VertexPosUvw, uvw);
-  inputDesc.attributes[1].bufferIndex = 0;
-  inputDesc.attributes[1].name = "uvw_in";
-  inputDesc.attributes[1].location = 1;
-  inputDesc.numInputBindings = 1;
-  inputDesc.inputBindings[0].stride = sizeof(VertexPosUvw);
+  const VertexInputStateDesc inputDesc = {
+      .numAttributes = 2,
+      .attributes = {{
+                         .bufferIndex = 0,
+                         .format = VertexAttributeFormat::Float3,
+                         .offset = offsetof(VertexPosUvw, position),
+                         .name = "position",
+                         .location = 0,
+                     },
+                     {
+                         .bufferIndex = 0,
+                         .format = VertexAttributeFormat::Float3,
+                         .offset = offsetof(VertexPosUvw, uvw),
+                         .name = "uvw_in",
+                         .location = 1,
+                     }},
+      .numInputBindings = 1,
+      .inputBindings = {{.stride = sizeof(VertexPosUvw)}},
+  };
   vertexInput0_ = device.createVertexInputState(inputDesc, nullptr);
 
   createSamplerAndTextures(device);
   shaderStages_ = getShaderStagesForBackend(device);
 
   // Command queue: backed by different types of GPU HW queues
-  const CommandQueueDesc desc{};
-  commandQueue_ = device.createCommandQueue(desc, nullptr);
+  commandQueue_ = device.createCommandQueue({}, nullptr);
 
   // Set up vertex uniform data
   vertexParameters_.scaleZ = 1.0f;
 
-  renderPass_.colorAttachments.resize(1);
-  renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
-  renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPass_.colorAttachments[0].clearColor = getPreferredClearColor();
-  renderPass_.depthAttachment.loadAction = LoadAction::Clear;
-  renderPass_.depthAttachment.clearDepth = 1.0;
+  renderPass_ = {
+      .colorAttachments = {{
+          .loadAction = LoadAction::Clear,
+          .storeAction = StoreAction::Store,
+          .clearColor = getPreferredClearColor(),
+      }},
+      .depthAttachment = {.loadAction = LoadAction::Clear, .clearDepth = 1.0},
+  };
 }
 
 void Textured3DCubeSession::setVertexParams(float aspectRatio) {
@@ -352,11 +380,12 @@ void Textured3DCubeSession::update(SurfaceTextures surfaceTextures) noexcept {
 
   Result ret;
   if (framebuffer_ == nullptr) {
-    FramebufferDesc framebufferDesc;
-    framebufferDesc.colorAttachments[0].texture = surfaceTextures.color;
-    framebufferDesc.depthAttachment.texture = surfaceTextures.depth;
-
-    framebuffer_ = getPlatform().getDevice().createFramebuffer(framebufferDesc, &ret);
+    framebuffer_ = getPlatform().getDevice().createFramebuffer(
+        FramebufferDesc{
+            .colorAttachments = {{.texture = surfaceTextures.color}},
+            .depthAttachment = {.texture = surfaceTextures.depth},
+        },
+        &ret);
     IGL_DEBUG_ASSERT(ret.isOk());
     IGL_DEBUG_ASSERT(framebuffer_ != nullptr);
   } else {
@@ -367,23 +396,23 @@ void Textured3DCubeSession::update(SurfaceTextures surfaceTextures) noexcept {
   if (pipelineState_ == nullptr) {
     // Graphics pipeline: state batch that fully configures GPU for rendering
 
-    RenderPipelineDesc graphicsDesc;
-    graphicsDesc.vertexInputState = vertexInput0_;
-    graphicsDesc.shaderStages = shaderStages_;
-    graphicsDesc.targetDesc.colorAttachments.resize(1);
-    graphicsDesc.targetDesc.colorAttachments[0].textureFormat =
-        framebuffer_->getColorAttachment(0)->getProperties().format;
-    graphicsDesc.targetDesc.depthAttachmentFormat =
-        framebuffer_->getDepthAttachment()->getProperties().format;
-    graphicsDesc.fragmentUnitSamplerMap[textureUnit] = IGL_NAMEHANDLE("inputVolume");
-    graphicsDesc.cullMode = igl::CullMode::Back;
-    graphicsDesc.frontFaceWinding = igl::WindingMode::Clockwise;
+    const RenderPipelineDesc graphicsDesc = {
+        .vertexInputState = vertexInput0_,
+        .shaderStages = shaderStages_,
+        .targetDesc = {.colorAttachments =
+                           {{.textureFormat =
+                                 framebuffer_->getColorAttachment(0)->getProperties().format}},
+                       .depthAttachmentFormat =
+                           framebuffer_->getDepthAttachment()->getProperties().format},
+        .cullMode = igl::CullMode::Back,
+        .frontFaceWinding = igl::WindingMode::Clockwise,
+        .fragmentUnitSamplerMap = {{textureUnit, IGL_NAMEHANDLE("inputVolume")}},
+    };
     pipelineState_ = getPlatform().getDevice().createRenderPipeline(graphicsDesc, nullptr);
   }
 
   // Command buffers (1-N per thread): create, submit and forget
-  const CommandBufferDesc cbDesc;
-  auto buffer = commandQueue_->createCommandBuffer(cbDesc, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
 
   const std::shared_ptr<IRenderCommandEncoder> commands =
       buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
@@ -391,25 +420,29 @@ void Textured3DCubeSession::update(SurfaceTextures surfaceTextures) noexcept {
   commands->bindVertexBuffer(0, *vb0_);
 
   // Bind Vertex Uniform Data
-  iglu::ManagedUniformBufferInfo info;
-  info.index = 1;
-  info.length = sizeof(VertexFormat);
-  info.uniforms = std::vector<UniformDesc>{UniformDesc{
-                                               "mvpMatrix",
-                                               -1,
-                                               igl::UniformType::Mat4x4,
-                                               1,
-                                               offsetof(VertexFormat, mvpMatrix),
-                                               0,
-                                           },
-                                           UniformDesc{
-                                               "scaleZ",
-                                               -1,
-                                               igl::UniformType::Float,
-                                               1,
-                                               offsetof(VertexFormat, scaleZ),
-                                               0,
-                                           }};
+  const iglu::ManagedUniformBufferInfo info = {
+      .index = 1,
+      .length = sizeof(VertexFormat),
+      .uniforms =
+          {
+              {
+                  .name = "mvpMatrix",
+                  .location = -1,
+                  .type = igl::UniformType::Mat4x4,
+                  .numElements = 1,
+                  .offset = offsetof(VertexFormat, mvpMatrix),
+                  .elementStride = 0,
+              },
+              {
+                  .name = "scaleZ",
+                  .location = -1,
+                  .type = igl::UniformType::Float,
+                  .numElements = 1,
+                  .offset = offsetof(VertexFormat, scaleZ),
+                  .elementStride = 0,
+              },
+          },
+  };
 
   const std::shared_ptr<iglu::ManagedUniformBuffer> vertUniformBuffer =
       std::make_shared<iglu::ManagedUniformBuffer>(device, info);

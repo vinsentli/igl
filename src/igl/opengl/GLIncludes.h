@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <igl/opengl/Macros.h>
+#include <igl/opengl/Config.h> // IWYU pragma: export
 
 // clang-format off
 #if IGL_PLATFORM_IOS_SIMULATOR
@@ -47,33 +47,9 @@
   #include <GL/glew.h> // IWYU pragma: export
 #endif
 #elif IGL_PLATFORM_ANDROID
-#if defined(SUPPORT_ES31_IGL_OPENGL_ANDROID)
   #include <GLES3/gl31.h> // IWYU pragma: export
   #include <GLES3/gl3ext.h> // IWYU pragma: export
   #include <GLES2/gl2ext.h> // GL_EXT_memory_object // IWYU pragma: export
-#elif IGL_ANGLE
-  #include <GLES3/gl31.h> // IWYU pragma: export
-  #include <GLES3/gl3ext.h> // IWYU pragma: export
-  #include <GLES2/gl2ext.h> // GL_EXT_memory_object // IWYU pragma: export
-#else
-  // We only support GLES3 on 64-bit Android.
-  #if defined(_M_ARM64) \
-      || defined(__AARCH64EL__) \
-      || defined(__AARCH64EB__) \
-      || defined(__aarch64__) \
-      || defined(_M_X64) \
-      || defined(_M_AMD64) \
-      || defined(__x86_64__) \
-      || defined(__AMD64__) \
-      || defined(__amd64__)
-    #include <GLES3/gl31.h> // IWYU pragma: export
-    #include <GLES3/gl3.h> // IWYU pragma: export
-    #include <GLES3/gl3ext.h> // IWYU pragma: export
-  #else
-    #include <GLES2/gl2.h> // IWYU pragma: export
-  #endif
-  #include <GLES2/gl2ext.h> // IWYU pragma: export
-#endif
 #elif IGL_PLATFORM_LINUX
   #if IGL_PLATFORM_LINUX_USE_EGL
     #include <GLES3/gl3.h> // IWYU pragma: export
@@ -103,6 +79,9 @@
 #ifndef GL_ALPHA8
 #define GL_ALPHA8 0x803C
 #endif
+#ifndef GL_ATOMIC_COUNTER_BARRIER_BIT
+#define GL_ATOMIC_COUNTER_BARRIER_BIT 0x1000
+#endif
 #ifndef GL_BLUE
 #define GL_BLUE 0x1905
 #endif
@@ -124,14 +103,26 @@
 #ifndef GL_BUFFER
 #define GL_BUFFER 0x82e0
 #endif
+#ifndef GL_BUFFER_BINDING
+#define GL_BUFFER_BINDING 0x9302
+#endif
 #ifndef GL_BUFFER_OBJECT_EXT
 #define GL_BUFFER_OBJECT_EXT 0x9151
 #endif
 #ifndef GL_BUFFER_UPDATE_BARRIER_BIT
 #define GL_BUFFER_UPDATE_BARRIER_BIT 0x200
 #endif
+#ifndef GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT
+#define GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT 0x4000
+#endif
+#ifndef GL_CLAMP_TO_BORDER
+#define GL_CLAMP_TO_BORDER 0x812D
+#endif
 #ifndef GL_COLOR_ATTACHMENT1
 #define GL_COLOR_ATTACHMENT1 0x8ce1
+#endif
+#ifndef GL_COMMAND_BARRIER_BIT
+#define GL_COMMAND_BARRIER_BIT 0x40
 #endif
 #ifndef GL_COMPARE_REF_TO_TEXTURE
 #define GL_COMPARE_REF_TO_TEXTURE 0x884e
@@ -415,6 +406,9 @@
 #ifndef GL_FRAMEBUFFER_ATTACHMENT_STENCIL_SIZE
 #define GL_FRAMEBUFFER_ATTACHMENT_STENCIL_SIZE 0x8217
 #endif
+#ifndef GL_FRAMEBUFFER_BARRIER_BIT
+#define GL_FRAMEBUFFER_BARRIER_BIT 0x400
+#endif
 #ifndef GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS
 #define GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS 0x8CD9
 #endif
@@ -490,8 +484,29 @@
 #ifndef GL_LUMINANCE8_ALPHA8
 #define GL_LUMINANCE8_ALPHA8 0x8045
 #endif
+#ifndef GL_MAP_COHERENT_BIT
+#define GL_MAP_COHERENT_BIT 0x80
+#endif
+#ifndef GL_MAP_FLUSH_EXPLICIT_BIT
+#define GL_MAP_FLUSH_EXPLICIT_BIT 0x10
+#endif
+#ifndef GL_MAP_INVALIDATE_BUFFER_BIT
+#define GL_MAP_INVALIDATE_BUFFER_BIT 0x8
+#endif
+#ifndef GL_MAP_INVALIDATE_RANGE_BIT
+#define GL_MAP_INVALIDATE_RANGE_BIT 0x4
+#endif
+#ifndef GL_MAP_PERSISTENT_BIT
+#define GL_MAP_PERSISTENT_BIT 0x40
+#endif
 #ifndef GL_MAP_READ_BIT
 #define GL_MAP_READ_BIT 0x1
+#endif
+#ifndef GL_MAP_WRITE_BIT
+#define GL_MAP_WRITE_BIT 0x2
+#endif
+#ifndef GL_MAP_UNSYNCHRONIZED_BIT
+#define GL_MAP_UNSYNCHRONIZED_BIT 0x20
 #endif
 #ifndef GL_MAX
 #define GL_MAX 0x8008
@@ -517,6 +532,12 @@
 #ifndef GL_MAX_SHADER_STORAGE_BLOCK_SIZE
 #define GL_MAX_SHADER_STORAGE_BLOCK_SIZE 0x90de
 #endif
+#ifndef GL_MAX_TEXTURE_LOD_BIAS
+#define GL_MAX_TEXTURE_LOD_BIAS 0x84FD
+#endif
+#ifndef GL_MAX_TEXTURE_MAX_ANISOTROPY
+#define GL_MAX_TEXTURE_MAX_ANISOTROPY 0x84FF
+#endif
 #ifndef GL_MAX_UNIFORM_BLOCK_SIZE
 #define GL_MAX_UNIFORM_BLOCK_SIZE 0x8a30
 #endif
@@ -535,6 +556,9 @@
 #ifndef GL_PACK_ROW_LENGTH
 #define GL_PACK_ROW_LENGTH 0x0d02
 #endif
+#ifndef GL_PIXEL_BUFFER_BARRIER_BIT
+#define GL_PIXEL_BUFFER_BARRIER_BIT 0x80
+#endif
 #ifndef GL_PIXEL_PACK_BUFFER
 #define GL_PIXEL_PACK_BUFFER 0x88eb
 #endif
@@ -546,6 +570,9 @@
 #endif
 #ifndef GL_PROGRAM_OBJECT_EXT
 #define GL_PROGRAM_OBJECT_EXT 0x8B40
+#endif
+#ifndef GL_QUERY_BUFFER_BARRIER_BIT
+#define GL_QUERY_BUFFER_BARRIER_BIT 0x8000
 #endif
 #ifndef GL_R16
 #define GL_R16 0x822A
@@ -571,6 +598,9 @@
 #ifndef GL_READ_FRAMEBUFFER_BINDING
 #define GL_READ_FRAMEBUFFER_BINDING 0x8CAA
 #endif
+#ifndef GL_READ_ONLY
+#define GL_READ_ONLY 0x88b8
+#endif
 #ifndef GL_READ_WRITE
 #define GL_READ_WRITE 0x88ba
 #endif
@@ -591,6 +621,9 @@
 #endif
 #ifndef GL_RG16F
 #define GL_RG16F 0x822F
+#endif
+#ifndef GL_RGBA16
+#define GL_RGBA16 0x805B
 #endif
 #ifndef GL_RG32F
 #define GL_RG32F 0x8230
@@ -649,6 +682,9 @@
 #ifndef GL_SAMPLER_2D_ARRAY
 #define GL_SAMPLER_2D_ARRAY 0x8dc1
 #endif
+#ifndef GL_SAMPLER_2D_MULTISAMPLE
+#define GL_SAMPLER_2D_MULTISAMPLE 0x9108
+#endif
 #ifndef GL_SAMPLER_3D
 #define GL_SAMPLER_3D 0x8B5F
 #endif
@@ -657,6 +693,9 @@
 #endif
 #ifndef GL_SHADER
 #define GL_SHADER 0x82e1
+#endif
+#ifndef GL_SHADER_IMAGE_ACCESS_BARRIER_BIT
+#define GL_SHADER_IMAGE_ACCESS_BARRIER_BIT 0x20
 #endif
 #ifndef GL_SHADER_OBJECT_EXT
 #define GL_SHADER_OBJECT_EXT 0x8B48
@@ -669,6 +708,9 @@
 #endif
 #ifndef GL_SHADER_STORAGE_BUFFER
 #define GL_SHADER_STORAGE_BUFFER 0x90d2
+#endif
+#ifndef GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT
+#define GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT 0x90df
 #endif
 #ifndef GL_SIGNALED
 #define GL_SIGNALED 0x9119
@@ -751,6 +793,12 @@
 #ifndef GL_TEXTURE_FETCH_BARRIER_BIT
 #define GL_TEXTURE_FETCH_BARRIER_BIT 0x8
 #endif
+#ifndef GL_TEXTURE_LOD_BIAS
+#define GL_TEXTURE_LOD_BIAS 0x8501
+#endif
+#ifndef GL_TEXTURE_MAX_ANISOTROPY
+#define GL_TEXTURE_MAX_ANISOTROPY 0x84FE
+#endif
 #ifndef GL_TEXTURE_MAX_LEVEL
 #define GL_TEXTURE_MAX_LEVEL 0x813d
 #endif
@@ -760,26 +808,23 @@
 #ifndef GL_TEXTURE_MIN_LOD
 #define GL_TEXTURE_MIN_LOD 0x813a
 #endif
-#ifndef GL_TEXTURE_MAX_ANISOTROPY
-#define GL_TEXTURE_MAX_ANISOTROPY 0x84FE
-#endif
-#ifndef GL_MAX_TEXTURE_MAX_ANISOTROPY
-#define GL_MAX_TEXTURE_MAX_ANISOTROPY 0x84FF
-#endif
-#ifndef GL_MAX_TEXTURE_LOD_BIAS
-#define GL_MAX_TEXTURE_LOD_BIAS 0x84FD
-#endif
-#ifndef GL_TEXTURE_LOD_BIAS
-#define GL_TEXTURE_LOD_BIAS 0x8501
-#endif
 #ifndef GL_TEXTURE_RECTANGLE
 #define GL_TEXTURE_RECTANGLE 0x84F5
+#endif
+#ifndef GL_TEXTURE_UPDATE_BARRIER_BIT
+#define GL_TEXTURE_UPDATE_BARRIER_BIT 0x100
 #endif
 #ifndef GL_TEXTURE_WRAP_R
 #define GL_TEXTURE_WRAP_R 0x8072
 #endif
+#ifndef GL_TRANSFORM_FEEDBACK_BARRIER_BIT
+#define GL_TRANSFORM_FEEDBACK_BARRIER_BIT 0x800
+#endif
 #ifndef GL_TRANSFORM_FEEDBACK_BUFFER
 #define GL_TRANSFORM_FEEDBACK_BUFFER 0x8c8e
+#endif
+#ifndef GL_UNIFORM_BARRIER_BIT
+#define GL_UNIFORM_BARRIER_BIT 0x4
 #endif
 #ifndef GL_UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES
 #define GL_UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES 0x8a43
@@ -795,6 +840,12 @@
 #endif
 #ifndef GL_UNIFORM_BUFFER
 #define GL_UNIFORM_BUFFER 0x8a11
+#endif
+#ifndef GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT
+#define GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT 0x8a34
+#endif
+#ifndef GL_UNIFORM_NAME_LENGTH
+#define GL_UNIFORM_NAME_LENGTH 0x8a39
 #endif
 #ifndef GL_UNIFORM_OFFSET
 #define GL_UNIFORM_OFFSET 0x8a3b
@@ -837,4 +888,7 @@
 #endif
 #ifndef GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
 #define GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT 0x1
+#endif
+#ifndef GL_WRITE_ONLY
+#define GL_WRITE_ONLY 0x88b9
 #endif

@@ -7,16 +7,15 @@
 
 #pragma once
 
-#include <shell/shared/platform/Platform.h>
-
 #include <memory>
+#include <shell/shared/platform/Platform.h>
 
 namespace igl {
 class IFramebuffer;
 } // namespace igl
 
 namespace igl::shell {
-void SaveFrameBufferToPng(const char* absoluteFilename,
+void saveFrameBufferToPng(const char* absoluteFilename,
                           const std::shared_ptr<IFramebuffer>& framebuffer,
                           Platform& platform);
 

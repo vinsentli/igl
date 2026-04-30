@@ -7,11 +7,10 @@
 
 #pragma once
 
-#include <shell/openxr/XrPlatform.h>
-#include <shell/shared/renderSession/Hands.h>
-
 #include <array>
+#include <shell/openxr/XrPlatform.h>
 #include <vector>
+#include <shell/shared/renderSession/Hands.h>
 
 namespace igl::shell::openxr {
 
@@ -19,6 +18,10 @@ class XrHands final {
  public:
   XrHands(XrInstance instance, XrSession session, bool handMeshSupported) noexcept;
   ~XrHands() noexcept;
+  XrHands(const XrHands&) = delete;
+  XrHands& operator=(const XrHands&) = delete;
+  XrHands(XrHands&&) = delete;
+  XrHands& operator=(XrHands&&) = delete;
 
   [[nodiscard]] static const std::vector<const char*>& getExtensions() noexcept;
 

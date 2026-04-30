@@ -7,12 +7,10 @@
 
 #include <igl/opengl/ios/Context.h>
 
-#import <Foundation/Foundation.h>
-
+#import <Foundation/NSValue.h>
 #include <OpenGLES/EAGL.h>
 #include <QuartzCore/CAEAGLLayer.h>
 #import <objc/runtime.h>
-#include <igl/opengl/Errors.h>
 #include <igl/opengl/Texture.h>
 
 namespace igl::opengl::ios {
@@ -40,7 +38,7 @@ void* getOrGenerateContextUniqueID(EAGLContext* context) {
   static const void* uniqueIdKey = &uniqueIdKey;
   static uint64_t idCounter = 0;
   NSNumber* key = objc_getAssociatedObject(context, &uniqueIdKey);
-  uint64_t contextId;
+  uint64_t contextId = 0;
   if (key == nullptr) {
     // Generate and set id if it doesn't exist
     contextId = idCounter++;
@@ -48,7 +46,7 @@ void* getOrGenerateContextUniqueID(EAGLContext* context) {
   } else {
     contextId = key.integerValue;
   }
-  return (void*)contextId;
+  return (void*)contextId; // NOLINT(performance-no-int-to-ptr)
 }
 } // namespace
 
@@ -60,7 +58,7 @@ Context::Context(BackendVersion backendVersion) : context_(createEAGLContext(bac
   initialize();
 }
 
-Context::Context(BackendVersion backendVersion, Result* result) :
+Context::Context(BackendVersion backendVersion, Result* IGL_NULLABLE result) :
   context_(createEAGLContext(backendVersion, nil)) {
   if (context_ != nil) {
     IContext::registerContext(getOrGenerateContextUniqueID(context_), this);
@@ -71,14 +69,15 @@ Context::Context(BackendVersion backendVersion, Result* result) :
   initialize(result);
 }
 
-Context::Context(EAGLContext* context) : context_(context) {
+Context::Context(EAGLContext* IGL_NULLABLE context) : context_(context) {
   if (context_ != nil) {
     IContext::registerContext(getOrGenerateContextUniqueID(context_), this);
   }
   initialize();
 }
 
-Context::Context(EAGLContext* context, Result* result) : context_(context) {
+Context::Context(EAGLContext* IGL_NULLABLE context, Result* IGL_NULLABLE result) :
+  context_(context) {
   if (context_ != nil) {
     IContext::registerContext(getOrGenerateContextUniqueID(context_), this);
   } else {
@@ -104,8 +103,13 @@ Context::~Context() {
 }
 
 void Context::present(std::shared_ptr<ITexture> surface) const {
-  static_cast<Texture&>(*surface).bind();
-  [context_ presentRenderbuffer:GL_RENDERBUFFER];
+  auto* texture = static_cast<Texture*>(surface.get());
+  // Some automated tests assume they can call present on an offscreen texture.
+  // This is not supported on iOS, so we just ignore it.
+  if (IGL_DEBUG_VERIFY(texture) && texture->canPresent()) {
+    texture->bind();
+    [context_ presentRenderbuffer:GL_RENDERBUFFER];
+  }
 }
 
 void Context::setCurrent() {

@@ -7,9 +7,11 @@
 
 #include "Common.h"
 
+#include <array>
 #include <cstdlib>
 
 // clang-format off
+// NOLINTBEGIN(facebook-unused-include-check)
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
   #ifndef WIN32_LEAN_AND_MEAN
     #define WIN32_LEAN_AND_MEAN
@@ -18,12 +20,12 @@
 #else
   #include <dlfcn.h>
 #endif
+// NOLINTEND(facebook-unused-include-check)
 // clang-format on
 
 #include <igl/vulkan/ShaderModule.h>
 #include <igl/vulkan/Texture.h>
 #include <igl/vulkan/VulkanContext.h>
-#include <igl/vulkan/VulkanHelpers.h>
 #include <igl/vulkan/VulkanImage.h>
 #include <igl/vulkan/VulkanShaderModule.h>
 #include <igl/vulkan/VulkanTexture.h>
@@ -61,7 +63,7 @@ Result getResultFromVkResult(VkResult result) {
   return res;
 }
 
-void setResultFrom(Result* outResult, VkResult result) {
+void setResultFrom(Result* IGL_NULLABLE outResult, VkResult result) {
   if (!outResult) {
     return;
   }
@@ -140,6 +142,8 @@ VkFormat textureFormatToVkFormat(TextureFormat format) {
     return VK_FORMAT_R8G8_UNORM;
   case TextureFormat::RG_UNorm16:
     return VK_FORMAT_R16G16_UNORM;
+  case TextureFormat::RGBA_UNorm16:
+    return VK_FORMAT_R16G16B16A16_UNORM;
   case TextureFormat::R4G2B2_UNorm_Apple:
     return VK_FORMAT_UNDEFINED;
   case TextureFormat::R4G2B2_UNorm_Rev_Apple:
@@ -291,6 +295,12 @@ VkFormat textureFormatToVkFormat(TextureFormat format) {
     return VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
   case TextureFormat::YUV_420p:
     return VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM;
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+    // @fb-only
   }
   IGL_UNREACHABLE_RETURN(VK_FORMAT_UNDEFINED)
 }
@@ -309,7 +319,9 @@ TextureFormat vkFormatToTextureFormat(VkFormat format) {
   return util::vkTextureFormatToTextureFormat(static_cast<int32_t>(format));
 }
 
-VkMemoryPropertyFlags resourceStorageToVkMemoryPropertyFlags(ResourceStorage resourceStorage) {
+VkMemoryPropertyFlags resourceStorageToVkMemoryPropertyFlags(
+    ResourceStorage resourceStorage,
+    const VkPhysicalDeviceMemoryProperties* IGL_NULLABLE memProperties) {
   VkMemoryPropertyFlags memFlags{0};
 
   switch (resourceStorage) {
@@ -325,9 +337,23 @@ VkMemoryPropertyFlags resourceStorageToVkMemoryPropertyFlags(ResourceStorage res
   case ResourceStorage::Managed:
     memFlags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     break;
-  case ResourceStorage::Memoryless:
-    memFlags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT;
+  case ResourceStorage::Memoryless: {
+    memFlags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    if (!memProperties) {
+      break;
+    }
+    constexpr VkMemoryPropertyFlags targetFlags =
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT;
+    const auto* const memoryTypesEnd = memProperties->memoryTypes + memProperties->memoryTypeCount;
+    if (std::find_if(
+            memProperties->memoryTypes, memoryTypesEnd, [](const VkMemoryType& memoryType) {
+              return (memoryType.propertyFlags & targetFlags) == targetFlags;
+            }) != memoryTypesEnd) {
+      memFlags |= VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT;
+    }
+
     break;
+  }
   }
 
   return memFlags;
@@ -352,50 +378,50 @@ VkCompareOp compareFunctionToVkCompareOp(CompareFunction func) {
   case igl::CompareFunction::AlwaysPass:
     return VK_COMPARE_OP_ALWAYS;
   }
-  IGL_DEBUG_ABORT("CompareFunction value not handled: %d", (int)func);
+  IGL_DEBUG_ABORT("CompareFunction value not handled: %d", static_cast<int>(func));
   return VK_COMPARE_OP_ALWAYS;
 }
 
 VkColorSpaceKHR colorSpaceToVkColorSpace(ColorSpace colorSpace) {
   switch (colorSpace) {
-  case ColorSpace::SRGB_LINEAR:
+  case ColorSpace::SRGBLinear:
     return VkColorSpaceKHR::VK_COLOR_SPACE_BT709_LINEAR_EXT; // closest thing to linear srgb
-  case ColorSpace::SRGB_NONLINEAR:
+  case ColorSpace::SRGBNonlinear:
     return VkColorSpaceKHR::VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-  case ColorSpace::DISPLAY_P3_NONLINEAR:
+  case ColorSpace::DisplayP3Nonlinear:
     return VkColorSpaceKHR::VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT;
-  case ColorSpace::DISPLAY_P3_LINEAR:
+  case ColorSpace::DisplayP3Linear:
     return VkColorSpaceKHR::VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT;
-  case ColorSpace::EXTENDED_SRGB_LINEAR:
+  case ColorSpace::ExtendedSRGBLinear:
     return VkColorSpaceKHR::VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;
-  case ColorSpace::DCI_P3_NONLINEAR:
+  case ColorSpace::DCIP3Nonlinear:
     return VkColorSpaceKHR::VK_COLOR_SPACE_DCI_P3_NONLINEAR_EXT;
-  case ColorSpace::BT709_LINEAR:
+  case ColorSpace::BT709Linear:
     return VkColorSpaceKHR::VK_COLOR_SPACE_BT709_LINEAR_EXT;
-  case ColorSpace::BT709_NONLINEAR:
+  case ColorSpace::BT709Nonlinear:
     return VkColorSpaceKHR::VK_COLOR_SPACE_BT709_NONLINEAR_EXT;
-  case ColorSpace::BT2020_LINEAR:
+  case ColorSpace::BT2020Linear:
     return VkColorSpaceKHR::VK_COLOR_SPACE_BT2020_LINEAR_EXT;
-  case ColorSpace::HDR10_ST2084:
+  case ColorSpace::HDR10St2084:
     return VkColorSpaceKHR::VK_COLOR_SPACE_HDR10_ST2084_EXT;
-  case ColorSpace::DOLBYVISION:
+  case ColorSpace::DolbyVision:
     return VkColorSpaceKHR::VK_COLOR_SPACE_DOLBYVISION_EXT;
-  case ColorSpace::HDR10_HLG:
+  case ColorSpace::HDR10HLG:
     return VkColorSpaceKHR::VK_COLOR_SPACE_HDR10_HLG_EXT;
-  case ColorSpace::ADOBERGB_LINEAR:
+  case ColorSpace::AdobeRGBLinear:
     return VkColorSpaceKHR::VK_COLOR_SPACE_ADOBERGB_LINEAR_EXT;
-  case ColorSpace::ADOBERGB_NONLINEAR:
+  case ColorSpace::AdobeRGBNonlinear:
     return VkColorSpaceKHR::VK_COLOR_SPACE_ADOBERGB_NONLINEAR_EXT;
-  case ColorSpace::PASS_THROUGH:
+  case ColorSpace::PassThrough:
     return VkColorSpaceKHR::VK_COLOR_SPACE_PASS_THROUGH_EXT;
-  case ColorSpace::EXTENDED_SRGB_NONLINEAR:
+  case ColorSpace::ExtendedSRGBNonlinear:
     return VkColorSpaceKHR::VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT;
-  case ColorSpace::DISPLAY_NATIVE_AMD:
+  case ColorSpace::DisplayNativeAMD:
     return VkColorSpaceKHR::VK_COLOR_SPACE_DISPLAY_NATIVE_AMD;
-  case ColorSpace::BT2020_NONLINEAR:
-  case ColorSpace::BT601_NONLINEAR:
-  case ColorSpace::BT2100_HLG_NONLINEAR:
-  case ColorSpace::BT2100_PQ_NONLINEAR:
+  case ColorSpace::BT2020Nonlinear:
+  case ColorSpace::BT601Nonlinear:
+  case ColorSpace::BT2100HLGNonlinear:
+  case ColorSpace::BT2100PQNonlinear:
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
     return VkColorSpaceKHR::VK_COLOR_SPACE_BT709_NONLINEAR_EXT;
   }
@@ -405,40 +431,40 @@ VkColorSpaceKHR colorSpaceToVkColorSpace(ColorSpace colorSpace) {
 ColorSpace vkColorSpaceToColorSpace(VkColorSpaceKHR colorSpace) {
   switch (colorSpace) {
   case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR:
-    return ColorSpace::SRGB_NONLINEAR;
+    return ColorSpace::SRGBNonlinear;
   case VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT:
-    return ColorSpace::DISPLAY_P3_NONLINEAR;
+    return ColorSpace::DisplayP3Nonlinear;
   case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT:
-    return ColorSpace::EXTENDED_SRGB_LINEAR;
+    return ColorSpace::ExtendedSRGBLinear;
   case VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT:
-    return ColorSpace::DISPLAY_P3_LINEAR;
+    return ColorSpace::DisplayP3Linear;
   case VK_COLOR_SPACE_DCI_P3_NONLINEAR_EXT:
-    return ColorSpace::DCI_P3_NONLINEAR;
+    return ColorSpace::DCIP3Nonlinear;
   case VK_COLOR_SPACE_BT709_LINEAR_EXT:
-    return ColorSpace::BT709_LINEAR;
+    return ColorSpace::BT709Linear;
   case VK_COLOR_SPACE_BT709_NONLINEAR_EXT:
-    return ColorSpace::BT709_NONLINEAR;
+    return ColorSpace::BT709Nonlinear;
   case VK_COLOR_SPACE_BT2020_LINEAR_EXT:
-    return ColorSpace::BT2020_LINEAR;
+    return ColorSpace::BT2020Linear;
   case VK_COLOR_SPACE_HDR10_ST2084_EXT:
-    return ColorSpace::HDR10_ST2084;
+    return ColorSpace::HDR10St2084;
   case VK_COLOR_SPACE_DOLBYVISION_EXT:
-    return ColorSpace::DOLBYVISION;
+    return ColorSpace::DolbyVision;
   case VK_COLOR_SPACE_HDR10_HLG_EXT:
-    return ColorSpace::HDR10_HLG;
+    return ColorSpace::HDR10HLG;
   case VK_COLOR_SPACE_ADOBERGB_LINEAR_EXT:
-    return ColorSpace::ADOBERGB_LINEAR;
+    return ColorSpace::AdobeRGBLinear;
   case VK_COLOR_SPACE_ADOBERGB_NONLINEAR_EXT:
-    return ColorSpace::ADOBERGB_NONLINEAR;
+    return ColorSpace::AdobeRGBNonlinear;
   case VK_COLOR_SPACE_PASS_THROUGH_EXT:
-    return ColorSpace::PASS_THROUGH;
+    return ColorSpace::PassThrough;
   case VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT:
-    return ColorSpace::EXTENDED_SRGB_NONLINEAR;
+    return ColorSpace::ExtendedSRGBNonlinear;
   case VK_COLOR_SPACE_DISPLAY_NATIVE_AMD:
-    return ColorSpace::DISPLAY_NATIVE_AMD;
+    return ColorSpace::DisplayNativeAMD;
   default:
     IGL_DEBUG_ASSERT_NOT_REACHED();
-    return ColorSpace::SRGB_NONLINEAR;
+    return ColorSpace::SRGBNonlinear;
   }
 }
 
@@ -650,6 +676,37 @@ void ensureShaderModule(IShaderModule* sm) {
   }
 }
 
+VkComponentMapping componentMappingToVkComponentMapping(const ComponentMapping& mapping) {
+  auto swizzleToVkSwizzle = [](Swizzle swizzle) -> VkComponentSwizzle {
+    switch (swizzle) {
+    case Swizzle_Default:
+      return VK_COMPONENT_SWIZZLE_IDENTITY;
+    case Swizzle_0:
+      return VK_COMPONENT_SWIZZLE_ZERO;
+    case Swizzle_1:
+      return VK_COMPONENT_SWIZZLE_ONE;
+    case Swizzle_R:
+      return VK_COMPONENT_SWIZZLE_R;
+    case Swizzle_G:
+      return VK_COMPONENT_SWIZZLE_G;
+    case Swizzle_B:
+      return VK_COMPONENT_SWIZZLE_B;
+    case Swizzle_A:
+      return VK_COMPONENT_SWIZZLE_A;
+    default:
+      IGL_DEBUG_ASSERT_NOT_REACHED();
+      return VK_COMPONENT_SWIZZLE_IDENTITY;
+    }
+  };
+
+  return VkComponentMapping{
+      .r = swizzleToVkSwizzle(mapping.r),
+      .g = swizzleToVkSwizzle(mapping.g),
+      .b = swizzleToVkSwizzle(mapping.b),
+      .a = swizzleToVkSwizzle(mapping.a),
+  };
+}
+
 uint32_t getNumImagePlanes(VkFormat format) {
   switch (format) {
   case VK_FORMAT_UNDEFINED:
@@ -674,17 +731,16 @@ bool hasStencil(VkFormat format) {
          (format == VK_FORMAT_D24_UNORM_S8_UINT) || (format == VK_FORMAT_D32_SFLOAT_S8_UINT);
 }
 
-std::shared_ptr<VulkanSpecializationInfo> createSpecializationInfo(const std::map<uint8_t, int>& constantValues){
+std::shared_ptr<VulkanSpecializationInfo> createSpecializationInfo(const std::vector<int>& constantValues){
     if (constantValues.empty())
         return nullptr;
 
     std::shared_ptr<VulkanSpecializationInfo> info = std::make_shared<VulkanSpecializationInfo>();
-
     info->entries.resize(constantValues.size());
 
     int offset = 0;
-    for (auto& [index, value] : constantValues) {
-        info->datas.emplace_back(value);
+    for (size_t index = 0; index != constantValues.size(); ++index) {
+        info->datas.emplace_back(constantValues[index]);
         info->entries[index].constantID = index;
         info->entries[index].offset = offset;
         info->entries[index].size = sizeof(int);
@@ -705,31 +761,128 @@ namespace igl::vulkan::functions {
 
 namespace {
 PFN_vkGetInstanceProcAddr getVkGetInstanceProcAddr() {
-#if defined(_WIN32)
+#if defined(FORCE_USE_STATIC_VULKAN_LOADER) && !defined(FORCE_USE_STATIC_VULKAN_LOADER_DISABLED)
+  return nullptr;
+#elif defined(_WIN32)
   HMODULE lib = LoadLibraryA("vulkan-1.dll");
   if (!lib) {
+    DWORD dw = GetLastError();
+    LPVOID lpMsgBuf = nullptr;
+
+    if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+                          FORMAT_MESSAGE_IGNORE_INSERTS,
+                      NULL,
+                      dw,
+                      MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                      (LPTSTR)&lpMsgBuf,
+                      0,
+                      NULL) != 0) {
+      IGL_LOG_ERROR("Failed to open vulkan-1.dll: %s\n", (LPCTSTR)lpMsgBuf);
+      LocalFree(lpMsgBuf);
+    } else {
+      IGL_LOG_ERROR("Failed to open vulkan-1.dll");
+    }
+
     return nullptr;
   }
   return (PFN_vkGetInstanceProcAddr)GetProcAddress(lib, "vkGetInstanceProcAddr");
 #elif defined(__APPLE__)
   void* lib = dlopen("libvulkan.dylib", RTLD_NOW | RTLD_LOCAL);
+  IGL_LOG_INFO("Loading libvulkan.dylib\n");
   if (!lib) {
+    IGL_LOG_INFO("Opening libvulkan.dylib failed: %s. Loading libvulkan.1.dylib instead\n",
+                 dlerror());
     lib = dlopen("libvulkan.1.dylib", RTLD_NOW | RTLD_LOCAL);
   }
   if (!lib) {
+    IGL_LOG_INFO("Opening libvulkan.1.dylib failed: %s. Loading libMoltenVK.dylib instead\n",
+                 dlerror());
     lib = dlopen("libMoltenVK.dylib", RTLD_NOW | RTLD_LOCAL);
   }
   if (!lib) {
+    IGL_LOG_ERROR("Failed to open libMoltenVK.dylib: %s\n", dlerror());
     return nullptr;
   }
   return (PFN_vkGetInstanceProcAddr)dlsym(lib, "vkGetInstanceProcAddr");
 #else
-  void* lib = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
-  if (!lib) {
-    IGL_LOG_DEBUG("dlopen failed: %s\n", dlerror());
-    lib = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+  // Preload libraries that Vulkan ICD drivers commonly depend on.
+  // This ensures they're available when the Vulkan loader dlopens() ICD drivers.
+  // Libraries must be preloaded in dependency order (leaf dependencies first).
+  // This is required because Buck2 uses a custom dynamic linker that doesn't search
+  // standard system library paths (/lib64, /usr/lib64). We cannot use LD_LIBRARY_PATH
+  // or RPATH because they would interfere with Buck2's hermetic build environment.
+#if IGL_PLATFORM_LINUX && !defined(IGL_CMAKE_BUILD)
+  const std::array<const char*, 25> kPreloadLibs = {
+      // Base system libraries (leaf dependencies)
+      "/lib64/libtinfo.so.6", // Required by libedit
+      "/lib64/liblzma.so.5", // Required by libxml2
+      "/lib64/libz.so.1", // Required by libLLVM, libxml2, Intel drivers
+      "/usr/lib64/libzstd.so.1", // Required by libLLVM, Intel drivers
+      "/usr/lib64/libffi.so.8", // Required by libLLVM
+      "/lib64/libelf.so.1", // Required by Radeon driver
+      // Mid-level dependencies
+      "/lib64/libedit.so.0", // Required by libLLVM (depends on libtinfo)
+      "/lib64/libxml2.so.2", // Required by libLLVM (depends on liblzma, libz)
+      "/lib64/libexpat.so.1", // Required by Mesa drivers
+      "/lib64/libXau.so.6", // Required by libxcb
+      // X11/XCB libraries (for Intel and other hardware drivers)
+      "/lib64/libxcb.so.1", // Required by Mesa drivers (depends on libXau)
+      "/lib64/libxcb-randr.so.0", // Required by Lavapipe and all drivers
+      "/lib64/libxcb-present.so.0", // Required by all Mesa Vulkan drivers
+      "/lib64/libxcb-sync.so.1", // Required by Mesa drivers
+      "/lib64/libxcb-xfixes.so.0", // Required by Mesa drivers
+      "/lib64/libxcb-shm.so.0", // Required by Mesa drivers
+      "/lib64/libX11-xcb.so.1", // Required by Intel drivers
+      "/lib64/libxshmfence.so.1", // Required by Intel drivers
+      "/lib64/libwayland-client.so.0", // Required by Intel drivers
+      // DRM libraries
+      "/lib64/libdrm.so.2", // Required by all hardware drivers
+      "/usr/lib64/libdrm_amdgpu.so.1", // Required by Radeon driver
+      // High-level dependencies
+      "/lib64/libLLVM.so.20.1", // Required by Lavapipe and Radeon drivers
+      "/lib64/libSPIRV-Tools.so", // Required by Lavapipe
+      "/lib64/libSPIRV-Tools-opt.so", // Required by libVkLayer_khronos_validation
+      // Additional X11 libraries for Intel drivers
+      "/lib64/libxcb-dri3.so.0", // Required by Intel drivers
+  };
+  for (const char* preload : kPreloadLibs) {
+    // First try loading just the library name (allows LD_LIBRARY_PATH to work)
+    const char* libName = strrchr(preload, '/');
+    libName = libName ? libName + 1 : preload;
+
+    const void* handle = dlopen(libName, RTLD_NOW | RTLD_GLOBAL | RTLD_NODELETE);
+    if (handle) {
+      IGL_LOG_DEBUG("IGL/Vulkan: preloaded `%s` (via library name).\n", libName);
+    } else {
+      // Fall back to full path if library name didn't work
+      handle = dlopen(preload, RTLD_NOW | RTLD_GLOBAL | RTLD_NODELETE);
+      if (handle) {
+        IGL_LOG_DEBUG("IGL/Vulkan: preloaded `%s` (via full path).\n", preload);
+      } else {
+        // Log but continue - not all systems will have all drivers
+        IGL_LOG_DEBUG(
+            "IGL/Vulkan: failed to preload `%s`: %s (not critical).\n", preload, dlerror());
+      }
+    }
   }
+#endif // IGL_PLATFORM_LINUX && !defined(IGL_CMAKE_BUILD)
+  const std::array<const char*, 4> libs = {
+      "libvulkan.so.1",
+      "libvulkan.so",
+      "/lib64/libvulkan.so.1",
+      "/lib64/libvulkan.so",
+  };
+  void* lib = nullptr;
+  for (const char* name : libs) {
+    lib = dlopen(name, RTLD_NOW | RTLD_LOCAL);
+    if (lib) {
+      break;
+    }
+    IGL_LOG_INFO("IGL/Vulkan: opening `%s` failed: %s.\n", name, dlerror());
+  }
+
   if (!lib) {
+    IGL_LOG_ERROR("IGL/Vulkan: no Vulkan library was found.\n");
     return nullptr;
   }
   return (PFN_vkGetInstanceProcAddr)dlsym(lib, "vkGetInstanceProcAddr");

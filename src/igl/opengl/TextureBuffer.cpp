@@ -9,7 +9,6 @@
 
 #include <array>
 #include <utility>
-#include <igl/opengl/Errors.h>
 
 namespace igl::opengl {
 
@@ -22,9 +21,7 @@ constexpr std::array<GLenum, 6> kCubeFaceTargets = {GL_TEXTURE_CUBE_MAP_POSITIVE
                                                     GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
                                                     GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
                                                     GL_TEXTURE_CUBE_MAP_NEGATIVE_Z};
-void swapTextureChannelsForFormat(igl::opengl::IContext& context,
-                                  GLuint target,
-                                  igl::TextureFormat iglFormat) {
+void swapTextureChannelsForFormat(IContext& context, GLuint target, TextureFormat iglFormat) {
   if (iglFormat == igl::TextureFormat::A_UNorm8 &&
       context.deviceFeatures().hasInternalRequirement(
           InternalRequirement::SwizzleAlphaTexturesReq)) {
@@ -41,12 +38,12 @@ void swapTextureChannelsForFormat(igl::opengl::IContext& context,
 } // namespace
 
 TextureBuffer::~TextureBuffer() {
-  const GLuint textureID = getId();
-  if (textureID != 0) {
+  const GLuint textureId = getId();
+  if (textureId != 0) {
     if (textureHandle_ != 0) {
       getContext().makeTextureHandleNonResident(textureHandle_);
     }
-    getContext().deleteTextures({textureID});
+    getContext().deleteTextures(1, &textureId);
   }
 }
 
@@ -203,6 +200,8 @@ Result TextureBuffer::initializeWithTexStorage() const {
     getContext().texStorage2D(
         target, range.numMipLevels, glInternalFormat_, (GLsizei)range.width, (GLsizei)range.height);
     break;
+  case TextureType::ExternalImage:
+  case TextureType::Invalid:
   default:
     IGL_DEBUG_ABORT("Unknown texture type");
     return Result{Result::Code::InvalidOperation, "Unknown texture type"};
@@ -424,7 +423,8 @@ bool TextureBuffer::needsRepacking(const TextureRangeDesc& range, size_t bytesPe
 Result TextureBuffer::uploadInternal(TextureType /*type*/,
                                      const TextureRangeDesc& range,
                                      const void* IGL_NULLABLE data,
-                                     size_t bytesPerRow) const {
+                                     size_t bytesPerRow,
+                                     const uint32_t* IGL_NULLABLE /*mipLevelBytes*/) const {
   if (data == nullptr) {
     return Result{};
   }
@@ -496,6 +496,8 @@ Result TextureBuffer::uploadInternal(GLenum target,
       case TextureType::Cube:
         result = upload2D(kCubeFaceTargets[faceRange.face], faceRange, texImage, faceData);
         break;
+      case TextureType::ExternalImage:
+      case TextureType::Invalid:
       default:
         stateReset();
         return Result{Result::Code::InvalidOperation, "Unknown texture type"};
@@ -511,6 +513,16 @@ Result TextureBuffer::uploadInternal(GLenum target,
   }
     
   stateReset();
+
+  if (mipmapGeneration_ == TextureDesc::TextureMipmapGeneration::AutoGenerateOnUpload) {
+    if (range.mipLevel != 0) {
+      return Result{Result::Code::InvalidOperation,
+                    "AutoGenerateOnUpload requires mipLevel to be uploaded to be 0"};
+    }
+    generateMipmap();
+    mipmapsAreAvailableAndUploaded_ = true;
+  }
+
   return result;
 }
 

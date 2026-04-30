@@ -10,6 +10,7 @@
 #import <Foundation/Foundation.h>
 #include <sstream>
 #include <unordered_set>
+#include <igl/FramebufferWrapper.h>
 #include <igl/metal/Buffer.h>
 #include <igl/metal/BufferSynchronizationManager.h>
 #include <igl/metal/CommandQueue.h>
@@ -23,6 +24,8 @@
 #include <igl/metal/Shader.h>
 #include <igl/metal/SpatialScaler.h>
 #include <igl/metal/Texture.h>
+#include <igl/metal/Timer.h>
+#include <igl/metal/TimestampQueries.h>
 #include <igl/metal/VertexInputState.h>
 
 namespace igl::metal {
@@ -39,11 +42,15 @@ Device::Device(id<MTLDevice> device) :
 
 Device::~Device() = default;
 
-std::shared_ptr<ICommandQueue> Device::createCommandQueue(const CommandQueueDesc& /*desc*/,
-                                                          Result* outResult) {
+std::shared_ptr<ICommandQueue> Device::createCommandQueue( // NOLINT(bugprone-exception-escape)
+    const CommandQueueDesc& /*desc*/,
+    Result* outResult) noexcept {
   id<MTLCommandQueue> metalObject = [device_ newCommandQueue];
   auto resource =
       std::make_shared<CommandQueue>(*this, metalObject, bufferSyncManager_, deviceStatistics_);
+
+  mostRecentCommandQueue_ = resource;
+
   Result::setOk(outResult);
   return resource;
 }
@@ -63,16 +70,17 @@ id<MTLBuffer> createMetalBuffer(id<MTLDevice> device,
 }
 } // namespace
 
-std::unique_ptr<IBuffer> Device::createBuffer(const BufferDesc& desc,
-                                              Result* outResult) const noexcept {
+std::unique_ptr<IBuffer> Device::createBuffer( // NOLINT(bugprone-exception-escape)
+    const BufferDesc& desc,
+    Result* outResult) const noexcept {
   if (desc.hint & BufferDesc::BufferAPIHintBits::Ring) {
     return createRingBuffer(desc, outResult);
   }
   if (desc.hint & BufferDesc::BufferAPIHintBits::NoCopy) {
     return createBufferNoCopy(desc, outResult);
   }
-  const MTLStorageMode storage = toMTLStorageMode(desc.storage);
-  const MTLResourceOptions options = MTLResourceOptionCPUCacheModeDefault | storage;
+  const MTLResourceOptions storage = toMTLResourceStorageMode(desc.storage);
+  const MTLResourceOptions options = MTLResourceCPUCacheModeDefaultCache | storage;
 
 //  id<MTLBuffer> metalObject = createMetalBuffer(device_, desc, options);
     id<MTLBuffer> metalObject = nil;
@@ -92,10 +100,11 @@ std::unique_ptr<IBuffer> Device::createBuffer(const BufferDesc& desc,
   return resource;
 }
 
-std::unique_ptr<IBuffer> Device::createRingBuffer(const BufferDesc& desc,
-                                                  Result* outResult) const noexcept {
-  const MTLStorageMode storage = toMTLStorageMode(desc.storage);
-  const MTLResourceOptions options = MTLResourceOptionCPUCacheModeDefault | storage;
+std::unique_ptr<IBuffer> Device::createRingBuffer( // NOLINT(bugprone-exception-escape)
+    const BufferDesc& desc,
+    Result* outResult) const noexcept {
+  const MTLResourceOptions storage = toMTLResourceStorageMode(desc.storage);
+  const MTLResourceOptions options = MTLResourceCPUCacheModeDefaultCache | storage;
 
   // Create a ring of buffers
   std::vector<id<MTLBuffer>> bufferRing;
@@ -115,11 +124,11 @@ std::unique_ptr<IBuffer> Device::createRingBuffer(const BufferDesc& desc,
 
 std::unique_ptr<IBuffer> Device::createBufferNoCopy(const BufferDesc& desc,
                                                     Result* outResult) const {
-  const MTLStorageMode storage = toMTLStorageMode(desc.storage);
+  const MTLResourceOptions storage = toMTLResourceStorageMode(desc.storage);
 
   using Deallocator = void (^)(void*, NSUInteger);
   const Deallocator deallocator = nil;
-  const MTLResourceOptions options = MTLResourceOptionCPUCacheModeDefault | storage;
+  const MTLResourceOptions options = MTLResourceCPUCacheModeDefaultCache | storage;
   id<MTLBuffer> metalObject = [device_ newBufferWithBytesNoCopy:const_cast<void*>(desc.data)
                                                          length:desc.length
                                                         options:options
@@ -139,8 +148,9 @@ std::shared_ptr<ISamplerState> Device::createSamplerState(const SamplerStateDesc
   return platformDevice_.createSamplerState(desc, outResult);
 }
 
-std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
-                                                Result* outResult) const noexcept {
+std::shared_ptr<ITexture> Device::createTexture( // NOLINT(bugprone-exception-escape)
+    const TextureDesc& desc,
+    Result* outResult) const noexcept {
   const auto sanitized = sanitize(desc);
   if (desc.numLayers > 1 && desc.type != TextureType::TwoDArray) {
     Result::setResult(outResult,
@@ -207,7 +217,7 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
     return nullptr;
   }
   metalObject.label = [NSString stringWithUTF8String:desc.debugName.c_str()];
-  auto iglObject = std::make_shared<Texture>(metalObject, *this);
+  auto iglObject = std::make_shared<Texture>(metalObject, *this, desc.mipmapGeneration);
   if (hasResourceTracker()) {
     iglObject->initResourceTracker(getResourceTracker(), desc.debugName);
   }
@@ -220,15 +230,67 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
   return iglObject;
 }
 
-std::shared_ptr<ITexture> Device::createTextureView(std::shared_ptr<ITexture> texture,
-                                                    const TextureViewDesc& desc,
-                                                    Result* IGL_NULLABLE outResult) const noexcept {
+std::shared_ptr<ITexture> Device::createTextureView( // NOLINT(bugprone-exception-escape)
+    std::shared_ptr<ITexture> texture,
+    const TextureViewDesc& desc,
+    Result* IGL_NULLABLE outResult) const noexcept {
   IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
 
   Result::setResult(
       outResult, Result::Code::Unimplemented, "Texture views are not (yet) implemented");
 
   return nullptr;
+}
+
+std::shared_ptr<ITimer> Device::createTimer(Result* IGL_NULLABLE outResult) const noexcept {
+  if (outResult) {
+    Result::setOk(outResult);
+  }
+  return std::make_shared<Timer>();
+}
+
+std::shared_ptr<ITimestampQueries> Device::createTimestampQueries(uint32_t maxTimestamps,
+                                                                  Result* IGL_NULLABLE
+                                                                      outResult) const noexcept {
+  if (@available(macOS 10.15, iOS 14.0, *)) {
+    // Find the timestamp counter set
+    id<MTLCounterSet> timestampCounterSet = nil;
+    for (id<MTLCounterSet> counterSet = nullptr in device_.counterSets) {
+      if ([counterSet.name isEqualToString:MTLCommonCounterSetTimestamp]) {
+        timestampCounterSet = counterSet;
+        break;
+      }
+    }
+    if (!timestampCounterSet) {
+      Result::setResult(
+          outResult, Result::Code::Unsupported, "Device does not support timestamp counters");
+      return nullptr;
+    }
+
+    MTLCounterSampleBufferDescriptor* descriptor = [[MTLCounterSampleBufferDescriptor alloc] init];
+    descriptor.counterSet = timestampCounterSet;
+    descriptor.sampleCount = maxTimestamps * TimestampQueries::kSamplesPerTimingSlot;
+    descriptor.storageMode = MTLStorageModeShared;
+    descriptor.label = @"IGL TimestampQueries";
+
+    NSError* error = nil;
+    id<MTLCounterSampleBuffer> csb = [device_ newCounterSampleBufferWithDescriptor:descriptor
+                                                                             error:&error];
+    if (!csb || error) {
+      Result::setResult(outResult,
+                        Result::Code::RuntimeError,
+                        error ? [error.localizedDescription UTF8String]
+                              : "Failed to create counter sample buffer");
+      return nullptr;
+    }
+
+    Result::setOk(outResult);
+    return std::make_shared<TimestampQueries>(csb, maxTimestamps);
+  } else {
+    Result::setResult(
+        outResult, Result::Code::Unsupported, "TimestampQueries require macOS 10.15+ or iOS 14+");
+    return nullptr;
+  }
 }
 
 std::shared_ptr<IVertexInputState> Device::createVertexInputState(const VertexInputStateDesc& desc,
@@ -387,22 +449,23 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipeline(const RenderP
                                                                    Result* outResult) const {
   if (!IGL_DEBUG_VERIFY(desc.shaderStages)) {
     Result::setResult(
-      outResult, Result::Code::RuntimeError, "RenderPipeline requires shader stages");
+        outResult, Result::Code::RuntimeError, "RenderPipeline requires shader stages");
     return nullptr;
   }
-  
+
   if (desc.shaderStages->getType() == ShaderStagesType::Render) {
     return createTraditionalRenderPipeline(desc, outResult);
-  } else if (desc.shaderStages->getType() == ShaderStagesType::MeshRender){
+  } else if (desc.shaderStages->getType() == ShaderStagesType::RenderMeshShader) {
     return createMeshRenderPipeline(desc, outResult);
-  } else{
+  } else {
     IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
   }
 }
 
-std::shared_ptr<IRenderPipelineState> Device::createTraditionalRenderPipeline(const RenderPipelineDesc& desc,
-                                                                              Result* outResult) const {
+std::shared_ptr<IRenderPipelineState> Device::createTraditionalRenderPipeline(
+    const RenderPipelineDesc& desc,
+    Result* outResult) const {
   // TODO
   //  Size drawableSize = IGLNativeDrawableSize(layer_);
   //  graphicsDesc.viewportState.viewportCount = 1;
@@ -481,6 +544,11 @@ std::shared_ptr<IRenderPipelineState> Device::createTraditionalRenderPipeline(co
   metalDesc.stencilAttachmentPixelFormat =
       Texture::textureFormatToMTLPixelFormat(desc.targetDesc.stencilAttachmentFormat);
 
+  if (!device_) {
+    Result::setResult(outResult, Result::Code::RuntimeError, "Metal device is null");
+    return nullptr;
+  }
+
   MTLRenderPipelineReflection* reflection = nil;
 
   // Create reflection for use later in binding, etc.
@@ -495,66 +563,86 @@ std::shared_ptr<IRenderPipelineState> Device::createTraditionalRenderPipeline(co
     IGL_LOG_ERROR("%s\n", [error.localizedDescription UTF8String]);
     return nullptr;
   }
+  if (!metalObject) {
+    Result::setResult(outResult,
+                      Result::Code::RuntimeError,
+                      "Metal pipeline state creation returned nil without error");
+    return nullptr;
+  }
 
   return std::make_shared<RenderPipelineState>(metalObject, reflection, desc);
 }
 
-std::shared_ptr<IRenderPipelineState> Device::createMeshRenderPipeline(const RenderPipelineDesc& desc,
-                                                                       Result* outResult) const {
-  if (@available(iOS 16, *)) {
+std::shared_ptr<IRenderPipelineState> Device::createMeshRenderPipeline(
+    const RenderPipelineDesc& desc,
+    Result* outResult) const {
+  if (@available(iOS 16, macOS 13, *)) {
+    // Check if the device supports mesh shaders
+    // Mesh shaders require Apple GPU Family 7 or higher (A14/M1 and later)
+    if (@available(iOS 16, macOS 13, *)) {
+      if (![device_ supportsFamily:MTLGPUFamilyApple7]) {
+        Result::setResult(outResult,
+                          Result::Code::Unsupported,
+                          "Mesh shaders require Apple GPU Family 7 or higher (A14/M1 and later)");
+        return nullptr;
+      }
+    }
+
     NSError* error = nil;
     MTLMeshRenderPipelineDescriptor* metalDesc = [MTLMeshRenderPipelineDescriptor new];
-    
+
     metalDesc.label = [NSString stringWithUTF8String:desc.debugName.c_str()];
-    
+
     metalDesc.rasterSampleCount = desc.sampleCount;
-    
+
     if (!IGL_DEBUG_VERIFY(desc.shaderStages)) {
       Result::setResult(
-                        outResult, Result::Code::RuntimeError, "RenderPipeline requires shader stages");
+          outResult, Result::Code::RuntimeError, "RenderPipeline requires shader stages");
       return nullptr;
     }
-    if (!IGL_DEBUG_VERIFY(desc.shaderStages->getType() == ShaderStagesType::MeshRender)) {
-      Result::setResult(outResult, Result::Code::ArgumentInvalid, "Shader stages not for mesh render");
+    if (!IGL_DEBUG_VERIFY(desc.shaderStages->getType() == ShaderStagesType::RenderMeshShader)) {
+      Result::setResult(
+          outResult, Result::Code::ArgumentInvalid, "Shader stages not for mesh render");
       return nullptr;
     }
-    
+
     // Mesh shader is required
     auto meshModule = desc.shaderStages->getMeshModule();
     if (!IGL_DEBUG_VERIFY(meshModule)) {
       Result::setResult(
-                        outResult, Result::Code::RuntimeError, "MeshRenderPipeline requires mesh module");
+          outResult, Result::Code::RuntimeError, "MeshRenderPipeline requires mesh module");
       return nullptr;
     }
-    
+
     auto* meshFunc = static_cast<ShaderModule*>(meshModule.get());
     metalDesc.meshFunction = meshFunc->get();
-    
+
     if (!IGL_DEBUG_VERIFY(metalDesc.meshFunction)) {
       Result::setResult(
-                        outResult, Result::Code::RuntimeError, "RenderPipeline requires non-null mesh function");
+          outResult, Result::Code::RuntimeError, "RenderPipeline requires non-null mesh function");
       return nullptr;
     }
-    
+
     // Task shader is optional
     auto taskModule = desc.shaderStages->getTaskModule();
     if (taskModule) {
       auto* taskFunc = static_cast<ShaderModule*>(taskModule.get());
       metalDesc.objectFunction = taskFunc->get();
     }
-    
     // Fragment shader is optional
     auto fragmentModule = desc.shaderStages->getFragmentModule();
     if (fragmentModule) {
       auto* fragmentFunc = static_cast<ShaderModule*>(fragmentModule.get());
       metalDesc.fragmentFunction = fragmentFunc->get();
     }
-    
+
     // Framebuffer
     for (uint32_t i = 0; i < desc.targetDesc.colorAttachments.size(); ++i) {
       const auto& src = desc.targetDesc.colorAttachments[i];
-      if (igl::TextureFormat::Invalid == src.textureFormat)
-          continue;
+      if (igl::TextureFormat::Invalid == src.textureFormat) {
+        continue;
+      }
+
       MTLRenderPipelineColorAttachmentDescriptor* dst = metalDesc.colorAttachments[i];
       dst.pixelFormat = Texture::textureFormatToMTLPixelFormat(src.textureFormat);
       dst.writeMask = RenderPipelineState::convertColorWriteMask(src.colorWriteMask);
@@ -566,27 +654,27 @@ std::shared_ptr<IRenderPipelineState> Device::createMeshRenderPipeline(const Ren
       dst.destinationRGBBlendFactor = MTLBlendFactor(src.dstRGBBlendFactor);
       dst.destinationAlphaBlendFactor = MTLBlendFactor(src.dstAlphaBlendFactor);
     }
-    
+
     // Depth and Stencil
     metalDesc.depthAttachmentPixelFormat =
-    Texture::textureFormatToMTLPixelFormat(desc.targetDesc.depthAttachmentFormat);
+        Texture::textureFormatToMTLPixelFormat(desc.targetDesc.depthAttachmentFormat);
     metalDesc.stencilAttachmentPixelFormat =
-    Texture::textureFormatToMTLPixelFormat(desc.targetDesc.stencilAttachmentFormat);
-    
+        Texture::textureFormatToMTLPixelFormat(desc.targetDesc.stencilAttachmentFormat);
+
     MTLRenderPipelineReflection* reflection = nil;
-    
+
     // Create reflection for use later in binding, etc.
     id<MTLRenderPipelineState> metalObject =
-    [device_ newRenderPipelineStateWithMeshDescriptor:metalDesc
-                                              options:MTLPipelineOptionArgumentInfo | MTLPipelineOptionBufferTypeInfo
-                                           reflection:&reflection
-                                                error:&error];
+        [device_ newRenderPipelineStateWithMeshDescriptor:metalDesc
+                                                  options:MTLPipelineOptionArgumentInfo |
+                                                          MTLPipelineOptionBufferTypeInfo
+                                               reflection:&reflection
+                                                    error:&error];
     setResultFrom(outResult, error);
     if (error != nil) {
       IGL_LOG_ERROR("%s\n", [error.localizedDescription UTF8String]);
       return nullptr;
     }
-    
     return std::make_shared<RenderPipelineState>(metalObject, reflection, desc);
   } else {
     IGL_DEBUG_ASSERT_NOT_REACHED();
@@ -649,10 +737,10 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
 
     NSString* shaderSource = [NSString stringWithUTF8String:desc.input.source];
     metalLibrary = [device_ newLibraryWithSource:shaderSource options:compileOpts error:&error];
+    deviceStatistics_.incrementShaderCompilationCount();
   }
 
   if (!metalLibrary) {
-    IGL_DEBUG_ASSERT(!error, "%s\n", [error.localizedDescription UTF8String]);
     setResultFrom(outResult, error);
     return nullptr;
   }
@@ -671,11 +759,11 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
       
     MTLFunctionConstantValues * constValues = [MTLFunctionConstantValues new];
 
-    for (auto& [index, value] : info.functionConstantValues){
-      [constValues setConstantValue:&value type:MTLDataTypeInt atIndex:index];
+    for (size_t index = 0; index != info.functionConstantValues.size(); ++index){
+      [constValues setConstantValue:&info.functionConstantValues[index] type:MTLDataTypeInt atIndex:index];
     }
 
-    auto metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint constantValues:constValues error:nil];
+    auto metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint constantValues:constValues error:&error];
     if (!metalFunction) {
       IGL_DEBUG_ABORT("Could not find function '%s' in library\n", info.entryPoint.c_str());
       Result::setResult(
@@ -729,6 +817,20 @@ std::unique_ptr<IShaderStages> Device::createShaderStages(const ShaderStagesDesc
 
 const PlatformDevice& Device::getPlatformDevice() const noexcept {
   return platformDevice_;
+}
+
+bool Device::isAppleGpu() const {
+#if IGL_PLATFORM_IOS
+  return true;
+#else
+  if (@available(macOS 10.15, *)) {
+    std::string gpuName = [device_.name UTF8String];
+    return gpuName.find("Apple") != std::string::npos;
+  } else {
+    // Apple Macs didn't exist yet.
+    return false;
+  }
+#endif
 }
 
 bool Device::hasFeature(DeviceFeatures feature) const {
@@ -803,7 +905,7 @@ ShaderVersion Device::getShaderVersion() const {
 
 BackendVersion Device::getBackendVersion() const {
   if (@available(macOS 13.0, iOS 16.0, *)) {
-    return {BackendFlavor::Metal, 3, 0};
+    return {.flavor = BackendFlavor::Metal, .majorVersion = 3, .minorVersion = 0};
   }
 #if TARGET_OS_OSX
 #if TARGET_CPU_ARM64
@@ -817,7 +919,7 @@ BackendVersion Device::getBackendVersion() const {
 #endif
 #endif
 
-  return {BackendFlavor::Metal, 1, 0};
+  return {.flavor = BackendFlavor::Metal, .majorVersion = 1, .minorVersion = 0};
 }
 
 std::string Device::getDeviceName() const{
@@ -828,6 +930,14 @@ size_t Device::getCurrentDrawCount() const {
   return deviceStatistics_.getDrawCount();
 }
 
+size_t Device::getShaderCompilationCount() const {
+  return deviceStatistics_.getShaderCompilationCount();
+}
+
+size_t Device::getGPUMemoryUsage() const {
+  return [device_ currentAllocatedSize];
+}
+
 MTLStorageMode Device::toMTLStorageMode(ResourceStorage storage) {
   switch (storage) {
   case ResourceStorage::Private:
@@ -836,11 +946,15 @@ MTLStorageMode Device::toMTLStorageMode(ResourceStorage storage) {
     return MTLStorageModeShared;
 #if IGL_PLATFORM_MACOSX || IGL_PLATFORM_MACCATALYST
   case ResourceStorage::Managed:
+  case ResourceStorage::Memoryless:
+  case ResourceStorage::Invalid:
   default:
     return MTLStorageModeManaged;
 #else
   case ResourceStorage::Memoryless:
     return MTLStorageModeMemoryless;
+  case ResourceStorage::Managed:
+  case ResourceStorage::Invalid:
   default:
     return MTLStorageModeShared;
 #endif
@@ -855,15 +969,23 @@ MTLResourceOptions Device::toMTLResourceStorageMode(ResourceStorage storage) {
     return MTLResourceStorageModeShared;
 #if IGL_PLATFORM_MACOSX || IGL_PLATFORM_MACCATALYST
   case ResourceStorage::Managed:
+  case ResourceStorage::Memoryless:
+  case ResourceStorage::Invalid:
   default:
     return MTLResourceStorageModeManaged;
 #else
   case ResourceStorage::Memoryless:
     return MTLResourceStorageModeMemoryless;
+  case ResourceStorage::Managed:
+  case ResourceStorage::Invalid:
   default:
     return MTLResourceStorageModeShared;
 #endif
   }
+}
+
+std::shared_ptr<ICommandQueue> Device::getMostRecentCommandQueue() const noexcept {
+  return mostRecentCommandQueue_;
 }
 
 Holder<BindGroupTextureHandle> Device::createBindGroup(
@@ -874,7 +996,7 @@ Holder<BindGroupTextureHandle> Device::createBindGroup(
 
   BindGroupTextureDesc description(desc);
 
-  const auto handle = bindGroupTexturesPool_.create(std::move(description));
+  const auto handle = bindGroupTexturesPool.create(std::move(description));
 
   Result::setResult(outResult,
                     handle.empty() ? Result(Result::Code::RuntimeError, "Cannot create bind group")
@@ -889,7 +1011,7 @@ Holder<BindGroupBufferHandle> Device::createBindGroup(const BindGroupBufferDesc&
 
   BindGroupBufferDesc description(desc);
 
-  const auto handle = bindGroupBuffersPool_.create(std::move(description));
+  const auto handle = bindGroupBuffersPool.create(std::move(description));
 
   Result::setResult(outResult,
                     handle.empty() ? Result(Result::Code::RuntimeError, "Cannot create bind group")
@@ -903,7 +1025,7 @@ void Device::destroy(BindGroupTextureHandle handle) {
     return;
   }
 
-  bindGroupTexturesPool_.destroy(handle);
+  bindGroupTexturesPool.destroy(handle);
 }
 
 void Device::destroy(BindGroupBufferHandle handle) {
@@ -911,12 +1033,21 @@ void Device::destroy(BindGroupBufferHandle handle) {
     return;
   }
 
-  bindGroupBuffersPool_.destroy(handle);
+  bindGroupBuffersPool.destroy(handle);
 }
 
 void Device::destroy(SamplerHandle handle) {
   (void)handle;
   // IGL/Metal is not using sampler handles
+}
+
+base::IFramebufferInterop* IGL_NULLABLE
+Device::createFramebufferInterop(const base::FramebufferInteropDesc& desc) {
+  auto framebuffer = createFramebufferFromBaseDesc(desc);
+  if (!framebuffer) {
+    return nullptr;
+  }
+  return new (std::nothrow) FramebufferWrapper(std::move(framebuffer));
 }
 
 #ifndef NOT_USE_UPSCALER

@@ -7,11 +7,9 @@
 
 #include <igl/opengl/CommandQueue.h>
 
-#include <igl/Texture.h>
 #include <igl/opengl/CommandBuffer.h>
-#include <igl/opengl/Device.h>
 #include <igl/opengl/IContext.h>
-#include <igl/opengl/RenderPipelineState.h>
+#include <igl/opengl/Timer.h>
 
 namespace igl::opengl {
 
@@ -39,6 +37,9 @@ std::shared_ptr<ICommandBuffer> CommandQueue::createCommandBuffer(const CommandB
 SubmitHandle CommandQueue::submit(const ICommandBuffer& commandBuffer, bool /* endOfFrame */) {
   const auto& cb = static_cast<const CommandBuffer&>(commandBuffer);
   incrementDrawCount(cb.getCurrentDrawCount());
+  if (commandBuffer.desc.timer) {
+    static_cast<Timer&>(*commandBuffer.desc.timer).end();
+  }
 
   activeCommandBuffers_--;
 

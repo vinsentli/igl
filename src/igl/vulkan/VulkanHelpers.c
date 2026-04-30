@@ -12,6 +12,10 @@
 #include <windows.h>
 #endif
 
+#if defined(VK_USE_PLATFORM_XLIB_KHR)
+#include <X11/Xlib.h>
+#endif
+
 #include "VulkanHelpers.h"
 
 #include <assert.h>
@@ -145,11 +149,14 @@ VkResult ivkAllocateMemory(const struct VulkanFunctionTable* vt,
       .flags = enableBufferDeviceAddress ? VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT_KHR : 0,
   };
 
+  VkPhysicalDeviceMemoryProperties memProperties;
+  vt->vkGetPhysicalDeviceMemoryProperties(physDev, &memProperties);
+
   const VkMemoryAllocateInfo ai = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
       .pNext = &memoryAllocateFlagsInfo,
       .allocationSize = memRequirements->size,
-      .memoryTypeIndex = ivkFindMemoryType(vt, physDev, memRequirements->memoryTypeBits, props),
+      .memoryTypeIndex = ivkFindMemoryType(&memProperties, memRequirements->memoryTypeBits, props),
   };
 
   return vt->vkAllocateMemory(device, &ai, NULL, outMemory);
@@ -169,65 +176,29 @@ VkResult ivkAllocateMemory2(const struct VulkanFunctionTable* vt,
       .flags = enableBufferDeviceAddress ? VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT_KHR : 0,
   };
 
+  VkPhysicalDeviceMemoryProperties memProperties;
+  vt->vkGetPhysicalDeviceMemoryProperties(physDev, &memProperties);
+
   const VkMemoryAllocateInfo ai = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
       .pNext = &memoryAllocateFlagsInfo,
       .allocationSize = memRequirements->memoryRequirements.size,
-      .memoryTypeIndex =
-          ivkFindMemoryType(vt, physDev, memRequirements->memoryRequirements.memoryTypeBits, props),
+      .memoryTypeIndex = ivkFindMemoryType(
+          &memProperties, memRequirements->memoryRequirements.memoryTypeBits, props),
   };
 
   return vt->vkAllocateMemory(device, &ai, NULL, outMemory);
 }
 
-VkImagePlaneMemoryRequirementsInfo ivkGetImagePlaneMemoryRequirementsInfo(
-    VkImageAspectFlagBits plane) {
-  const VkImagePlaneMemoryRequirementsInfo info = {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_PLANE_MEMORY_REQUIREMENTS_INFO,
-      .pNext = NULL,
-      .planeAspect = plane,
-  };
-  return info;
-}
-
-VkImageMemoryRequirementsInfo2 ivkGetImageMemoryRequirementsInfo2(
-    const VkImagePlaneMemoryRequirementsInfo* next,
-    VkImage image) {
-  const VkImageMemoryRequirementsInfo2 info = {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
-      .pNext = next,
-      .image = image,
-  };
-  return info;
-}
-
-VkBindImageMemoryInfo ivkGetBindImageMemoryInfo(const VkBindImagePlaneMemoryInfo* next,
-                                                VkImage image,
-                                                VkDeviceMemory memory) {
-  const VkBindImageMemoryInfo info = {
-      .sType = VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO,
-      .pNext = next,
-      .image = image,
-      .memory = memory,
-      .memoryOffset = 0,
-  };
-  return info;
-}
-
-bool ivkIsHostVisibleSingleHeapMemory(const struct VulkanFunctionTable* vt,
-                                      VkPhysicalDevice physDev) {
-  VkPhysicalDeviceMemoryProperties memProperties;
-
-  vt->vkGetPhysicalDeviceMemoryProperties(physDev, &memProperties);
-
-  if (memProperties.memoryHeapCount != 1) {
+bool ivkIsHostVisibleSingleHeapMemory(const VkPhysicalDeviceMemoryProperties* memProps) {
+  if (memProps->memoryHeapCount != 1) {
     return false;
   }
 
   const uint32_t flag = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-  for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-    if ((memProperties.memoryTypes[i].propertyFlags & flag) == flag) {
+  for (uint32_t i = 0; i < memProps->memoryTypeCount; i++) {
+    if ((memProps->memoryTypes[i].propertyFlags & flag) == flag) {
       return true;
     }
   }
@@ -251,15 +222,11 @@ bool iFindMemoryType(const struct VulkanFunctionTable* vt,
     return false;
 }
 
-uint32_t ivkFindMemoryType(const struct VulkanFunctionTable* vt,
-                           VkPhysicalDevice physDev,
+uint32_t ivkFindMemoryType(const VkPhysicalDeviceMemoryProperties* memProps,
                            uint32_t memoryTypeBits,
                            VkMemoryPropertyFlags flags) {
-  VkPhysicalDeviceMemoryProperties memProperties;
-  vt->vkGetPhysicalDeviceMemoryProperties(physDev, &memProperties);
-
-  for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-    const bool hasProperties = (memProperties.memoryTypes[i].propertyFlags & flags) == flags;
+  for (uint32_t i = 0; i < memProps->memoryTypeCount; i++) {
+    const bool hasProperties = (memProps->memoryTypes[i].propertyFlags & flags) == flags;
     if ((memoryTypeBits & (1 << i)) && hasProperties) {
       return i;
     }
@@ -318,7 +285,7 @@ VkResult ivkCreateDevice(const struct VulkanFunctionTable* vt,
   return vt->vkCreateDevice(physicalDevice, &ci, NULL, outDevice);
 }
 
-#if defined(VK_EXT_debug_utils) && !IGL_PLATFORM_MACCATALYST
+#if !IGL_PLATFORM_MACCATALYST
 #define VK_EXT_DEBUG_UTILS_SUPPORTED 1
 #else
 #define VK_EXT_DEBUG_UTILS_SUPPORTED 0
@@ -475,189 +442,6 @@ VkResult ivkCreateSwapchain(const struct VulkanFunctionTable* vt,
   return vt->vkCreateSwapchainKHR(device, &ci, NULL, outSwapchain);
 }
 
-VkResult ivkCreateHeadlessSurface(const struct VulkanFunctionTable* vt,
-                                  VkInstance instance,
-                                  VkSurfaceKHR* outSurface) {
-  const VkHeadlessSurfaceCreateInfoEXT ci = {
-      .sType = VK_STRUCTURE_TYPE_HEADLESS_SURFACE_CREATE_INFO_EXT,
-      .pNext = NULL,
-      .flags = 0,
-  };
-
-  return vt->vkCreateHeadlessSurfaceEXT(instance, &ci, NULL, outSurface);
-}
-
-VkImageViewCreateInfo ivkGetImageViewCreateInfo(VkImage image,
-                                                VkImageViewType type,
-                                                VkFormat imageFormat,
-                                                VkImageSubresourceRange range) {
-  const VkImageViewCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-      .image = image,
-      .viewType = type,
-      .format = imageFormat,
-      .components = {.r = VK_COMPONENT_SWIZZLE_IDENTITY,
-                     .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-                     .b = VK_COMPONENT_SWIZZLE_IDENTITY,
-                     .a = VK_COMPONENT_SWIZZLE_IDENTITY},
-      .subresourceRange = range,
-  };
-  return ci;
-}
-
-VkResult ivkCreateFramebuffer(const struct VulkanFunctionTable* vt,
-                              VkDevice device,
-                              uint32_t width,
-                              uint32_t height,
-                              VkRenderPass renderPass,
-                              size_t numAttachments,
-                              const VkImageView* attachments,
-                              VkFramebuffer* outFramebuffer) {
-  const VkFramebufferCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-      .renderPass = renderPass,
-      .attachmentCount = (uint32_t)numAttachments,
-      .pAttachments = attachments,
-      .width = width,
-      .height = height,
-      .layers = 1,
-  };
-  return vt->vkCreateFramebuffer(device, &ci, NULL, outFramebuffer);
-}
-
-VkAttachmentDescription2 ivkGetAttachmentDescriptionColor(VkFormat format,
-                                                          VkAttachmentLoadOp loadOp,
-                                                          VkAttachmentStoreOp storeOp,
-                                                          VkImageLayout initialLayout,
-                                                          VkImageLayout finalLayout) {
-  const VkAttachmentDescription2 desc = {
-      .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-      .format = format,
-      .samples = VK_SAMPLE_COUNT_1_BIT,
-      .loadOp = loadOp,
-      .storeOp = storeOp,
-      .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-      .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-      .initialLayout = initialLayout,
-      .finalLayout = finalLayout,
-  };
-  return desc;
-}
-
-VkAttachmentReference2 ivkGetAttachmentReferenceColor(uint32_t idx) {
-  const VkAttachmentReference2 ref = {
-    .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-    .attachment = idx,
-    .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-  };
-  return ref;
-}
-
-VkResult ivkCreateRenderPass(const struct VulkanFunctionTable* vt,
-                             VkDevice device,
-                             uint32_t numAttachments,
-                             const VkAttachmentDescription* attachments,
-                             const VkSubpassDescription* subpass,
-                             const VkSubpassDependency* dependency,
-                             const VkRenderPassMultiviewCreateInfo* renderPassMultiview,
-                             VkRenderPass* outRenderPass) {
-  const VkRenderPassCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-      .pNext = renderPassMultiview,
-      .attachmentCount = numAttachments,
-      .pAttachments = attachments,
-      .subpassCount = 1,
-      .pSubpasses = subpass,
-      .dependencyCount = 1,
-      .pDependencies = dependency,
-  };
-  return vt->vkCreateRenderPass(device, &ci, NULL, outRenderPass);
-}
-
-VkDescriptorSetLayoutBinding ivkGetDescriptorSetLayoutBinding(uint32_t binding,
-                                                              VkDescriptorType descriptorType,
-                                                              uint32_t descriptorCount,
-                                                              VkShaderStageFlags stageFlags) {
-  const VkDescriptorSetLayoutBinding bind = {
-      .binding = binding,
-      .descriptorType = descriptorType,
-      .descriptorCount = descriptorCount,
-      .stageFlags = stageFlags,
-      .pImmutableSamplers = NULL,
-  };
-  return bind;
-}
-
-VkAttachmentDescription ivkGetAttachmentDescription(VkFormat format,
-                                                    VkAttachmentLoadOp loadOp,
-                                                    VkAttachmentStoreOp storeOp,
-                                                    VkImageLayout initialLayout,
-                                                    VkImageLayout finalLayout,
-                                                    VkSampleCountFlagBits samples) {
-  const VkAttachmentDescription desc = {
-      .flags = 0,
-      .format = format,
-      .samples = samples,
-      .loadOp = loadOp,
-      .storeOp = storeOp,
-      .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-      .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-      .initialLayout = initialLayout,
-      .finalLayout = finalLayout,
-  };
-  return desc;
-}
-
-VkAttachmentReference ivkGetAttachmentReference(uint32_t attachment, VkImageLayout layout) {
-  const VkAttachmentReference ref = {
-      .attachment = attachment,
-      .layout = layout,
-  };
-  return ref;
-}
-
-VkSubpassDescription ivkGetSubpassDescription(uint32_t numColorAttachments,
-                                              const VkAttachmentReference* refsColor,
-                                              const VkAttachmentReference* refsColorResolve,
-                                              const VkAttachmentReference* refDepth) {
-  const VkSubpassDescription desc = {
-      .flags = 0,
-      .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-      .colorAttachmentCount = numColorAttachments,
-      .pColorAttachments = refsColor,
-      .pResolveAttachments = refsColorResolve,
-      .pDepthStencilAttachment = refDepth,
-  };
-  return desc;
-}
-
-VkSubpassDependency ivkGetSubpassDependency(void) {
-  const VkSubpassDependency dep = {
-      .srcSubpass = 0,
-      .dstSubpass = VK_SUBPASS_EXTERNAL,
-      .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-      .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-  };
-  return dep;
-}
-
-VkRenderPassMultiviewCreateInfo ivkGetRenderPassMultiviewCreateInfo(
-    const uint32_t* viewMask,
-    const uint32_t* correlationMask) {
-  const VkRenderPassMultiviewCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO,
-      .subpassCount = 1,
-      .pViewMasks = viewMask,
-      .correlationMaskCount = 1,
-      .pCorrelationMasks = correlationMask,
-  };
-
-  return ci;
-}
-
 VkResult ivkCreateDescriptorSetLayout(const struct VulkanFunctionTable* vt,
                                       VkDevice device,
                                       VkDescriptorSetLayoutCreateFlags flags,
@@ -678,7 +462,7 @@ VkResult ivkCreateDescriptorSetLayout(const struct VulkanFunctionTable* vt,
   const VkDescriptorSetLayoutCreateInfo ci = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 #if !IGL_PLATFORM_ANDROID
-      .pNext = &setLayoutBindingFlagsCI,
+      .pNext = bindingFlags ? &setLayoutBindingFlagsCI : NULL,
 #endif
       .flags = flags,
       .bindingCount = numBindings,
@@ -718,273 +502,11 @@ VkResult ivkCreateDescriptorPool(const struct VulkanFunctionTable* vt,
   return vt->vkCreateDescriptorPool(device, &ci, NULL, outDescriptorPool);
 }
 
-VkSubmitInfo ivkGetSubmitInfo(const VkCommandBuffer* buffer,
-                              uint32_t numWaitSemaphores,
-                              const VkSemaphore* waitSemaphores,
-                              const VkPipelineStageFlags* waitStageMasks,
-                              const VkSemaphore* releaseSemaphore) {
-  const VkSubmitInfo si = {
-      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-      .waitSemaphoreCount = numWaitSemaphores,
-      .pWaitSemaphores = numWaitSemaphores ? waitSemaphores : NULL,
-      .pWaitDstStageMask = waitStageMasks,
-      .commandBufferCount = 1,
-      .pCommandBuffers = buffer,
-      .signalSemaphoreCount = releaseSemaphore ? 1 : 0,
-      .pSignalSemaphores = releaseSemaphore,
-  };
-  return si;
-}
-
-VkClearValue ivkGetClearColorValue(float r, float g, float b, float a) {
-  const VkClearValue value = {
-      .color = {.float32 = {r, g, b, a}},
-  };
-  return value;
-}
-
-VkClearValue ivkGetClearDepthStencilValue(float depth, uint32_t stencil) {
-  const VkClearValue value = {
-      .depthStencil = {.depth = depth, .stencil = stencil},
-  };
-  return value;
-}
-
-VkBufferCreateInfo ivkGetBufferCreateInfo(uint64_t size, VkBufferUsageFlags usage) {
-  const VkBufferCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-      .pNext = NULL,
-      .flags = 0,
-      .size = size,
-      .usage = usage,
-      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-      .queueFamilyIndexCount = 0,
-      .pQueueFamilyIndices = NULL,
-  };
-  return ci;
-}
-
-VkImageCreateInfo ivkGetImageCreateInfo(VkImageType type,
-                                        VkFormat imageFormat,
-                                        VkImageTiling tiling,
-                                        VkImageUsageFlags usage,
-                                        VkExtent3D extent,
-                                        uint32_t mipLevels,
-                                        uint32_t arrayLayers,
-                                        VkImageCreateFlags flags,
-                                        VkSampleCountFlags samples) {
-  const VkImageCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-      .pNext = NULL,
-      .flags = flags,
-      .imageType = type,
-      .format = imageFormat,
-      .extent = extent,
-      .mipLevels = mipLevels,
-      .arrayLayers = arrayLayers,
-      .samples = samples,
-      .tiling = tiling,
-      .usage = usage,
-      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-      .queueFamilyIndexCount = 0,
-      .pQueueFamilyIndices = NULL,
-      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-  };
-  return ci;
-}
-
-VkPipelineVertexInputStateCreateInfo ivkGetPipelineVertexInputStateCreateInfo_Empty(void) {
-  return ivkGetPipelineVertexInputStateCreateInfo(0, NULL, 0, NULL);
-}
-
-VkPipelineVertexInputStateCreateInfo ivkGetPipelineVertexInputStateCreateInfo(
-    uint32_t vbCount,
-    const VkVertexInputBindingDescription* bindings,
-    uint32_t vaCount,
-    const VkVertexInputAttributeDescription* attributes) {
-  const VkPipelineVertexInputStateCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-      .vertexBindingDescriptionCount = vbCount,
-      .pVertexBindingDescriptions = bindings,
-      .vertexAttributeDescriptionCount = vaCount,
-      .pVertexAttributeDescriptions = attributes};
-  return ci;
-}
-
-VkPipelineInputAssemblyStateCreateInfo ivkGetPipelineInputAssemblyStateCreateInfo(
-    VkPrimitiveTopology topology,
-    VkBool32 enablePrimitiveRestart) {
-  const VkPipelineInputAssemblyStateCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-      .flags = 0,
-      .topology = topology,
-      .primitiveRestartEnable = enablePrimitiveRestart,
-  };
-  return ci;
-}
-
-VkPipelineDynamicStateCreateInfo ivkGetPipelineDynamicStateCreateInfo(
-    uint32_t numDynamicStates,
-    const VkDynamicState* dynamicStates) {
-  const VkPipelineDynamicStateCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-      .dynamicStateCount = numDynamicStates,
-      .pDynamicStates = dynamicStates,
-  };
-  return ci;
-}
-
-VkPipelineViewportStateCreateInfo ivkGetPipelineViewportStateCreateInfo(const VkViewport* viewport,
-                                                                        const VkRect2D* scissor) {
-  // viewport and scissor can be NULL if the viewport state is dynamic
-  // https://www.khronos.org/registry/vulkan/specs/1.3-extensions/man/html/VkPipelineViewportStateCreateInfo.html
-  const VkPipelineViewportStateCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-      .viewportCount = 1,
-      .pViewports = viewport,
-      .scissorCount = 1,
-      .pScissors = scissor,
-  };
-  return ci;
-}
-
-VkPipelineRasterizationStateCreateInfo ivkGetPipelineRasterizationStateCreateInfo(
-    VkPolygonMode polygonMode,
-    VkCullModeFlags cullModeFlags) {
-  const VkPipelineRasterizationStateCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-      .flags = 0,
-      .depthClampEnable = VK_FALSE,
-      .rasterizerDiscardEnable = VK_FALSE,
-      .polygonMode = polygonMode,
-      .cullMode = cullModeFlags,
-      .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-      .depthBiasEnable = VK_FALSE,
-      .depthBiasConstantFactor = 0.0f,
-      .depthBiasClamp = 0.0f,
-      .depthBiasSlopeFactor = 0.0f,
-      .lineWidth = 1.0f,
-  };
-  return ci;
-}
-
-VkPipelineMultisampleStateCreateInfo ivkGetPipelineMultisampleStateCreateInfo_Empty(void) {
-  const VkPipelineMultisampleStateCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-      .pNext = NULL,
-      .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-      .sampleShadingEnable = VK_FALSE,
-      .minSampleShading = 1.0f,
-      .pSampleMask = NULL,
-      .alphaToCoverageEnable = VK_FALSE,
-      .alphaToOneEnable = VK_FALSE,
-  };
-  return ci;
-}
-
-VkPipelineDepthStencilStateCreateInfo ivkGetPipelineDepthStencilStateCreateInfo_NoDepthStencilTests(
-    void) {
-  const VkPipelineDepthStencilStateCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-      .pNext = NULL,
-      .flags = 0,
-      .depthTestEnable = VK_FALSE,
-      .depthWriteEnable = VK_FALSE,
-      .depthCompareOp = VK_COMPARE_OP_LESS,
-      .depthBoundsTestEnable = VK_FALSE,
-      .stencilTestEnable = VK_FALSE,
-      .front =
-          {
-              .failOp = VK_STENCIL_OP_KEEP,
-              .passOp = VK_STENCIL_OP_KEEP,
-              .depthFailOp = VK_STENCIL_OP_KEEP,
-              .compareOp = VK_COMPARE_OP_NEVER,
-              .compareMask = 0,
-              .writeMask = 0,
-              .reference = 0,
-          },
-      .back =
-          {
-              .failOp = VK_STENCIL_OP_KEEP,
-              .passOp = VK_STENCIL_OP_KEEP,
-              .depthFailOp = VK_STENCIL_OP_KEEP,
-              .compareOp = VK_COMPARE_OP_NEVER,
-              .compareMask = 0,
-              .writeMask = 0,
-              .reference = 0,
-          },
-      .minDepthBounds = 0.0f,
-      .maxDepthBounds = 1.0f,
-  };
-  return ci;
-}
-
-VkPipelineColorBlendAttachmentState ivkGetPipelineColorBlendAttachmentState_NoBlending(void) {
-  const VkPipelineColorBlendAttachmentState state = {
-      .blendEnable = VK_FALSE,
-      .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
-      .dstColorBlendFactor = VK_BLEND_FACTOR_ZERO,
-      .colorBlendOp = VK_BLEND_OP_ADD,
-      .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-      .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-      .alphaBlendOp = VK_BLEND_OP_ADD,
-      .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-  };
-  return state;
-}
-
-VkPipelineColorBlendAttachmentState ivkGetPipelineColorBlendAttachmentState(
-    bool blendEnable,
-    VkBlendFactor srcColorBlendFactor,
-    VkBlendFactor dstColorBlendFactor,
-    VkBlendOp colorBlendOp,
-    VkBlendFactor srcAlphaBlendFactor,
-    VkBlendFactor dstAlphaBlendFactor,
-    VkBlendOp alphaBlendOp,
-    VkColorComponentFlags colorWriteMask) {
-  const VkPipelineColorBlendAttachmentState state = {
-      .blendEnable = blendEnable,
-      .srcColorBlendFactor = srcColorBlendFactor,
-      .dstColorBlendFactor = dstColorBlendFactor,
-      .colorBlendOp = colorBlendOp,
-      .srcAlphaBlendFactor = srcAlphaBlendFactor,
-      .dstAlphaBlendFactor = dstAlphaBlendFactor,
-      .alphaBlendOp = alphaBlendOp,
-      .colorWriteMask = colorWriteMask,
-  };
-  return state;
-}
-
-VkPipelineColorBlendStateCreateInfo ivkGetPipelineColorBlendStateCreateInfo(
-    uint32_t numAttachments,
-    const VkPipelineColorBlendAttachmentState* colorBlendAttachmentStates) {
-  const VkPipelineColorBlendStateCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-      .logicOpEnable = VK_FALSE,
-      .logicOp = VK_LOGIC_OP_COPY,
-      .attachmentCount = numAttachments,
-      .pAttachments = colorBlendAttachmentStates,
-  };
-  return ci;
-}
-
-VkImageSubresourceRange ivkGetImageSubresourceRange(VkImageAspectFlags aspectMask) {
-  const VkImageSubresourceRange range = {
-      .aspectMask = aspectMask,
-      .baseMipLevel = 0,
-      .levelCount = 1,
-      .baseArrayLayer = 0,
-      .layerCount = 1,
-  };
-  return range;
-}
-
-VkWriteDescriptorSet ivkGetWriteDescriptorSet_ImageInfo(VkDescriptorSet dstSet,
-                                                        uint32_t dstBinding,
-                                                        VkDescriptorType descriptorType,
-                                                        uint32_t numDescriptors,
-                                                        const VkDescriptorImageInfo* pImageInfo) {
+VkWriteDescriptorSet ivkGetWriteDescriptorSetImageInfo(VkDescriptorSet dstSet,
+                                                       uint32_t dstBinding,
+                                                       VkDescriptorType descriptorType,
+                                                       uint32_t numDescriptors,
+                                                       const VkDescriptorImageInfo* pImageInfo) {
   const VkWriteDescriptorSet set = {
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .pNext = NULL,
@@ -1000,12 +522,11 @@ VkWriteDescriptorSet ivkGetWriteDescriptorSet_ImageInfo(VkDescriptorSet dstSet,
   return set;
 }
 
-VkWriteDescriptorSet ivkGetWriteDescriptorSet_BufferInfo(
-    VkDescriptorSet dstSet,
-    uint32_t dstBinding,
-    VkDescriptorType descriptorType,
-    uint32_t numDescriptors,
-    const VkDescriptorBufferInfo* pBufferInfo) {
+VkWriteDescriptorSet ivkGetWriteDescriptorSetBufferInfo(VkDescriptorSet dstSet,
+                                                        uint32_t dstBinding,
+                                                        VkDescriptorType descriptorType,
+                                                        uint32_t numDescriptors,
+                                                        const VkDescriptorBufferInfo* pBufferInfo) {
   const VkWriteDescriptorSet set = {
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .pNext = NULL,
@@ -1019,53 +540,6 @@ VkWriteDescriptorSet ivkGetWriteDescriptorSet_BufferInfo(
       .pTexelBufferView = NULL,
   };
   return set;
-}
-
-VkPipelineLayoutCreateInfo ivkGetPipelineLayoutCreateInfo(uint32_t numLayouts,
-                                                          const VkDescriptorSetLayout* layouts,
-                                                          const VkPushConstantRange* range) {
-  const VkPipelineLayoutCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-      .setLayoutCount = numLayouts,
-      .pSetLayouts = layouts,
-      .pushConstantRangeCount = range ? 1u : 0u,
-      .pPushConstantRanges = range,
-  };
-  return ci;
-}
-
-VkPushConstantRange ivkGetPushConstantRange(VkShaderStageFlags stageFlags,
-                                            size_t offset,
-                                            size_t size) {
-  const VkPushConstantRange range = {
-      .stageFlags = stageFlags,
-      .offset = (uint32_t)offset,
-      .size = (uint32_t)size,
-  };
-  return range;
-}
-
-VkPipelineShaderStageCreateInfo ivkGetPipelineShaderStageCreateInfo(VkShaderStageFlagBits stage,
-                                                                    VkShaderModule shaderModule,
-                                                                    const char* entryPoint,
-                                                                    VkSpecializationInfo* specializationInfo) {
-  const VkPipelineShaderStageCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-      .flags = 0,
-      .stage = stage,
-      .module = shaderModule,
-      .pName = entryPoint ? entryPoint : "main",
-      .pSpecializationInfo = specializationInfo,
-  };
-  return ci;
-}
-
-VkRect2D ivkGetRect2D(int32_t x, int32_t y, uint32_t width, uint32_t height) {
-  const VkRect2D rect = {
-      .offset = {.x = x, .y = y},
-      .extent = {.width = width, .height = height},
-  };
-  return rect;
 }
 
 VkResult ivkCreateGraphicsPipeline(const struct VulkanFunctionTable* vt,
@@ -1108,25 +582,6 @@ VkResult ivkCreateGraphicsPipeline(const struct VulkanFunctionTable* vt,
       .basePipelineIndex = -1,
   };
   return vt->vkCreateGraphicsPipelines(device, pipelineCache, 1, &ci, NULL, outPipeline);
-}
-
-VkResult ivkCreateComputePipeline(const struct VulkanFunctionTable* vt,
-                                  VkDevice device,
-                                  VkPipelineCache pipelineCache,
-                                  VkPipelineCreateFlags flags,
-                                  const VkPipelineShaderStageCreateInfo* shaderStage,
-                                  VkPipelineLayout pipelineLayout,
-                                  VkPipeline* outPipeline) {
-  const VkComputePipelineCreateInfo ci = {
-      .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-      .pNext = NULL,
-      .flags = flags,
-      .stage = *shaderStage,
-      .layout = pipelineLayout,
-      .basePipelineHandle = VK_NULL_HANDLE,
-      .basePipelineIndex = -1,
-  };
-  return vt->vkCreateComputePipelines(device, pipelineCache, 1, &ci, NULL, outPipeline);
 }
 
 void ivkImageMemoryBarrier(const struct VulkanFunctionTable* vt,
@@ -1344,53 +799,6 @@ VkVertexInputAttributeDescription ivkGetVertexInputAttributeDescription(uint32_t
   return desc;
 }
 
-VkBufferImageCopy ivkGetBufferImageCopy2D(uint32_t bufferOffset,
-                                          uint32_t bufferRowLength,
-                                          const VkRect2D imageRegion,
-                                          VkImageSubresourceLayers imageSubresource) {
-  const VkBufferImageCopy copy = {
-      .bufferOffset = bufferOffset,
-      .bufferRowLength = bufferRowLength,
-      .bufferImageHeight = 0,
-      .imageSubresource = imageSubresource,
-      .imageOffset = {.x = imageRegion.offset.x, .y = imageRegion.offset.y, .z = 0},
-      .imageExtent = {.width = imageRegion.extent.width,
-                      .height = imageRegion.extent.height,
-                      .depth = 1u},
-  };
-  return copy;
-}
-
-VkBufferImageCopy ivkGetBufferImageCopy3D(uint32_t bufferOffset,
-                                          uint32_t bufferRowLength,
-                                          const VkOffset3D offset,
-                                          const VkExtent3D extent,
-                                          VkImageSubresourceLayers imageSubresource) {
-  const VkBufferImageCopy copy = {
-      .bufferOffset = bufferOffset,
-      .bufferRowLength = bufferRowLength,
-      .bufferImageHeight = 0,
-      .imageSubresource = imageSubresource,
-      .imageOffset = offset,
-      .imageExtent = extent,
-  };
-  return copy;
-}
-
-VkImageCopy ivkGetImageCopy2D(VkOffset2D srcDstOffset,
-                              VkImageSubresourceLayers srcImageSubresource,
-                              VkImageSubresourceLayers dstImageSubresource,
-                              const VkExtent2D imageRegion) {
-  const VkImageCopy copy = {
-      .srcSubresource = srcImageSubresource,
-      .srcOffset = {.x = srcDstOffset.x, .y = srcDstOffset.y, .z = 0},
-      .dstSubresource = dstImageSubresource,
-      .dstOffset = {.x = srcDstOffset.x, .y = srcDstOffset.y, .z = 0},
-      .extent = {.width = imageRegion.width, .height = imageRegion.height, .depth = 1u},
-  };
-  return copy;
-}
-
 VkResult ivkVmaCreateAllocator(const struct VulkanFunctionTable* vt,
                                VkPhysicalDevice physDev,
                                VkDevice device,
@@ -1450,7 +858,9 @@ VkResult ivkVmaCreateAllocator(const struct VulkanFunctionTable* vt,
 }
 
 #if IGL_USE_GLSLANG
-void ivkUpdateGlslangResource(glslang_resource_t* res, const VkPhysicalDeviceProperties* props) {
+void ivkUpdateGlslangResource(glslang_resource_t* res,
+                              const VkPhysicalDeviceProperties* props,
+                              const VkPhysicalDeviceMeshShaderPropertiesEXT* meshShaderProps) {
   const VkPhysicalDeviceLimits* limits = props ? &props->limits : NULL;
   if (!limits || !res) {
     return;
@@ -1480,5 +890,17 @@ void ivkUpdateGlslangResource(glslang_resource_t* res, const VkPhysicalDevicePro
   res->max_viewports = (int)limits->maxViewports;
   res->max_cull_distances = (int)limits->maxCullDistances;
   res->max_combined_clip_and_cull_distances = (int)limits->maxCombinedClipAndCullDistances;
+
+  if (meshShaderProps) {
+    res->max_mesh_output_vertices_ext = meshShaderProps->maxMeshOutputVertices;
+    res->max_mesh_output_primitives_ext = meshShaderProps->maxMeshOutputPrimitives;
+    res->max_mesh_work_group_size_x_ext = meshShaderProps->maxMeshWorkGroupSize[0];
+    res->max_mesh_work_group_size_y_ext = meshShaderProps->maxMeshWorkGroupSize[1];
+    res->max_mesh_work_group_size_z_ext = meshShaderProps->maxMeshWorkGroupSize[2];
+    res->max_task_work_group_size_x_ext = meshShaderProps->maxTaskWorkGroupSize[0];
+    res->max_task_work_group_size_y_ext = meshShaderProps->maxTaskWorkGroupSize[1];
+    res->max_task_work_group_size_z_ext = meshShaderProps->maxTaskWorkGroupSize[2];
+    res->max_mesh_view_count_ext = meshShaderProps->maxMeshMultiviewViewCount;
+  }
 }
 #endif

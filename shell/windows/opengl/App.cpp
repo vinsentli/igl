@@ -15,6 +15,10 @@
 #include <igl/opengl/wgl/HWDevice.h>
 #endif // FORCE_USE_ANGLE
 
+#if IGL_PLATFORM_LINUX
+#include <igl/opengl/glx/Device.h>
+#endif
+
 // clang-format off
 #if !defined(IGL_CMAKE_BUILD)
   #if !defined(GLEW_STATIC)
@@ -27,9 +31,10 @@
 
 // clang-format on
 #include "AutoContextReleaseDevice.h"
+
 #include <memory>
-#include <shell/shared/platform/win/PlatformWin.h>
 #include <shell/windows/common/GlfwShell.h>
+#include <shell/shared/platform/win/PlatformWin.h>
 #include <igl/Core.h>
 #include <igl/IGL.h>
 #include <igl/opengl/Device.h>
@@ -55,15 +60,15 @@ SurfaceTextures OpenGlShell::createSurfaceTextures() noexcept {
     auto& oglDevice = static_cast<igl::opengl::Device&>(device);
     oglDevice.getContext().setCurrent();
     TextureDesc desc = {
-        static_cast<uint32_t>(shellParams().viewportSize.x),
-        static_cast<uint32_t>(shellParams().viewportSize.y),
-        1,
-        1,
-        1,
-        TextureDesc::TextureUsageBits::Attachment,
-        1,
-        TextureType::TwoD,
-        sessionConfig().swapchainColorTextureFormat,
+        .width = static_cast<uint32_t>(shellParams().viewportSize.x),
+        .height = static_cast<uint32_t>(shellParams().viewportSize.y),
+        .depth = 1,
+        .numLayers = 1,
+        .numSamples = 1,
+        .usage = TextureDesc::TextureUsageBits::Attachment,
+        .numMipLevels = 1,
+        .type = TextureType::TwoD,
+        .format = sessionConfig().swapchainColorTextureFormat,
     };
     auto color =
         std::make_shared<igl::opengl::ViewTextureTarget>(oglDevice.getContext(), desc.format);
@@ -72,7 +77,7 @@ SurfaceTextures OpenGlShell::createSurfaceTextures() noexcept {
     auto depth =
         std::make_shared<igl::opengl::ViewTextureTarget>(oglDevice.getContext(), desc.format);
     depth->create(desc, true);
-    return SurfaceTextures{std::move(color), std::move(depth)};
+    return SurfaceTextures{.color = std::move(color), .depth = std::move(depth)};
   }
 
   return SurfaceTextures{};

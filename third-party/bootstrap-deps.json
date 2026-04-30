@@ -4,7 +4,7 @@
     "source": {
         "type": "git",
         "url": "https://github.com/zeux/meshoptimizer.git",
-        "revision": "v0.23"
+        "revision": "v1.0"
     }
 },
 {
@@ -92,7 +92,7 @@
     "source": {
         "type": "git",
         "url": "https://github.com/taskflow/taskflow.git",
-        "revision": "v3.6.0"
+        "revision": "v3.10.0"
     }
 },
 {
@@ -108,7 +108,7 @@
     "source": {
         "type": "git",
         "url": "https://github.com/ocornut/imgui.git",
-        "revision": "v1.90.1"
+        "revision": "v1.91.7"
     }
 },
 {
@@ -117,6 +117,14 @@
         "type": "git",
         "url": "https://github.com/zeux/volk",
         "revision": "1.4.304"
+    }
+},
+{
+    "name": "DirectX-Headers",
+    "source": {
+        "type": "git",
+        "url": "https://github.com/microsoft/DirectX-Headers.git",
+        "revision": "v1.614.0"
     }
 },
 {
@@ -132,7 +140,7 @@
     "source": {
         "type": "git",
         "url": "https://github.com/wolfpld/tracy.git",
-        "revision": "v0.11.1"
+        "revision": "v0.12.2"
     }
 },
 {
@@ -140,7 +148,7 @@
     "source": {
         "type": "git",
         "url": "https://github.com/google/googletest.git",
-        "revision": "v1.13.0"
+        "revision": "v1.14.0"
     }
 },
 {
@@ -172,7 +180,8 @@
     "source": {
         "type": "git",
         "url": "https://github.com/KhronosGroup/KTX-Software.git",
-        "revision": "v4.3.1"
+        "revision": "f4acc8d44a2f2dcacf61878c80e1c4061fc6a5b3",
+        "recursive": false
     }
 },
 {
@@ -188,7 +197,7 @@
     "source": {
         "type": "git",
         "url": "https://github.com/KhronosGroup/SPIRV-Cross.git",
-        "revision": "2ccc81fd826e4dd4a2db2f94b8e6eb738a89f5f1"
+        "revision": "vulkan-sdk-1.4.321.0"
     }
 },
 {

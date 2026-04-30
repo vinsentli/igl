@@ -11,7 +11,7 @@
 #include <fstream>
 #include <iterator>
 #include <string>
-#include <igl/Common.h>
+#include <igl/Core.h>
 // @fb-only
 // @fb-only
 // @fb-only
@@ -44,8 +44,6 @@ std::string findSubdir(const char* subdir, const std::string& fileName) {
 } // namespace
 
 namespace igl::shell {
-
-FileLoaderLinux::FileLoaderLinux() = default;
 
 FileLoader::FileData FileLoaderLinux::loadBinaryData(const std::string& fileName) {
   return loadBinaryDataInternal(fullPath(fileName));
@@ -98,6 +96,7 @@ std::string FileLoaderLinux::fullPath(const std::string& fileName) const {
       // @fb-only
       // @fb-only
       // @fb-only
+      // @fb-only
   };
 
   // find folders somewhere above our current directory
@@ -112,6 +111,9 @@ std::string FileLoaderLinux::fullPath(const std::string& fileName) const {
   // @fb-only
   // @fb-only
   // @fb-only
+                                     // @fb-only
+                                     // @fb-only
+                                     // @fb-only
                                      // @fb-only
                                      // @fb-only
                                      // @fb-only

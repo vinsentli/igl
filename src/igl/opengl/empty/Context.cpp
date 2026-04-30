@@ -7,12 +7,12 @@
 
 #include <igl/opengl/empty/Context.h>
 
-#include <igl/opengl/Texture.h>
+#include <igl/Texture.h>
 
 namespace igl::opengl::empty {
 
 Context::Context() {
-  igl::Result result;
+  Result result;
   // Initialize through base class.
   initialize(&result);
   IGL_DEBUG_ASSERT(result.isOk());
@@ -76,8 +76,8 @@ GLenum Context::checkFramebufferStatus(GLenum /*target*/) {
 }
 
 const GLubyte* Context::getString(GLenum /*name*/) const {
-  static const char* val = "n/a";
-  return reinterpret_cast<const GLubyte*>(val);
+  static constexpr const char* kVal = "n/a";
+  return reinterpret_cast<const GLubyte*>(kVal);
 }
 
 void Context::setEnabled(bool shouldEnable, GLenum cap) {

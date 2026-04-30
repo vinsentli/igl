@@ -8,9 +8,16 @@
 #include <shell/shared/renderSession/RenderSession.h>
 
 #include <chrono>
+#include <cstdlib>
+#include <thread>
 #include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/AppParams.h>
 #include <shell/shared/renderSession/ShellParams.h>
+#include <igl/Common.h>
+#include <igl/Macros.h>
+#ifdef IGL_WITH_PERFETTO
+#include <shell/shared/profiling/IglPerfetto.h>
+#endif
 
 namespace igl::shell {
 
@@ -72,6 +79,205 @@ void RenderSession::setPreferredClearColor(const igl::Color& color) noexcept {
 Color RenderSession::getPreferredClearColor() noexcept {
   return preferredClearColor_.has_value() ? preferredClearColor_.value()
                                           : platform()->getDevice().backendDebugColor();
+}
+
+void RenderSession::initBenchmarkTracker() noexcept {
+  if (!shellParams_ || !shellParams_->benchmarkParams.has_value()) {
+    return;
+  }
+
+  const auto& benchmarkParams = shellParams_->benchmarkParams.value();
+  benchmarkTracker_ = std::make_unique<BenchmarkTracker>(benchmarkParams.renderTimeBufferSize);
+  benchmarkTracker_->setBenchmarkDuration(benchmarkParams.benchmarkDurationMs);
+  benchmarkTracker_->setReportInterval(benchmarkParams.reportIntervalMs);
+  benchmarkTracker_->setHiccupMultiplier(benchmarkParams.hiccupMultiplier);
+
+  IGL_LOG_INFO("[IGL Benchmark] Benchmark tracking initialized\n");
+  IGL_LOG_INFO("[IGL Benchmark]   Duration: %zu ms (%.1f minutes)\n",
+               benchmarkParams.benchmarkDurationMs,
+               benchmarkParams.benchmarkDurationMs / 60000.0);
+  IGL_LOG_INFO("[IGL Benchmark]   Report Interval: %zu ms (%.1f seconds)\n",
+               benchmarkParams.reportIntervalMs,
+               benchmarkParams.reportIntervalMs / 1000.0);
+  IGL_LOG_INFO("[IGL Benchmark]   Hiccup Multiplier: %.1f\n", benchmarkParams.hiccupMultiplier);
+  IGL_LOG_INFO("[IGL Benchmark]   Buffer Size: %zu samples\n",
+               benchmarkParams.renderTimeBufferSize);
+}
+
+void RenderSession::recordBenchmarkFrame(double renderTimeMs) noexcept {
+  if (!benchmarkTracker_) {
+    return;
+  }
+
+  benchmarkTracker_->recordRenderTime(renderTimeMs);
+
+  // Log hiccups immediately when detected
+  if (benchmarkTracker_->wasLastFrameHiccup()) {
+    IGL_LOG_INFO("[IGL Benchmark] *** HICCUP DETECTED *** Frame time: %.2f ms (avg: %.2f ms)\n",
+                 renderTimeMs,
+                 benchmarkTracker_->getRunningAverageMs());
+  }
+}
+
+void RenderSession::checkBenchmarkPeriodicReport() noexcept {
+  if (!benchmarkTracker_) {
+    return;
+  }
+
+  if (benchmarkTracker_->shouldGeneratePeriodicReport()) {
+    const auto stats = benchmarkTracker_->computeStats();
+    const double elapsedMin = benchmarkTracker_->getElapsedTimeMs() / 60000.0;
+
+    IGL_LOG_INFO("[IGL Benchmark] === Periodic Report (%.1f min elapsed) ===\n", elapsedMin);
+    IGL_LOG_INFO("[IGL Benchmark] FPS: avg=%.1f, min=%.1f, max=%.1f\n",
+                 stats.avgFps,
+                 stats.minFps,
+                 stats.maxFps);
+    IGL_LOG_INFO("[IGL Benchmark] Frame time (ms): avg=%.2f, min=%.2f, max=%.2f\n",
+                 stats.avgRenderTimeMs,
+                 stats.minRenderTimeMs,
+                 stats.maxRenderTimeMs);
+    IGL_LOG_INFO("[IGL Benchmark] Total frames: %zu\n", stats.totalSamples);
+
+    // Suppress unused variable warnings when logging is disabled
+    (void)stats;
+    (void)elapsedMin;
+
+    benchmarkTracker_->markPeriodicReportGenerated();
+  }
+}
+
+bool RenderSession::isBenchmarkExpired() const noexcept {
+  if (!benchmarkTracker_) {
+    return false;
+  }
+  return benchmarkTracker_->hasBenchmarkExpired();
+}
+
+void RenderSession::logFinalBenchmarkReport(bool wasTimeout) noexcept {
+  if (!benchmarkTracker_) {
+    return;
+  }
+
+  // Log the final report line by line to ensure it appears in logcat
+  const auto stats = benchmarkTracker_->computeStats();
+  const double elapsedSec = benchmarkTracker_->getElapsedTimeMs() / 1000.0;
+  const double elapsedMin = elapsedSec / 60.0;
+
+  IGL_LOG_INFO("[IGL Benchmark] ========== FINAL BENCHMARK REPORT ==========\n");
+  if (wasTimeout) {
+    IGL_LOG_INFO("[IGL Benchmark] Status: COMPLETED SUCCESSFULLY (benchmark timeout reached)\n");
+  } else {
+    IGL_LOG_INFO("[IGL Benchmark] Status: COMPLETED (application terminated normally)\n");
+  }
+  IGL_LOG_INFO("[IGL Benchmark] Duration: %.1f minutes (%.1f seconds)\n", elapsedMin, elapsedSec);
+  IGL_LOG_INFO("[IGL Benchmark] Total Frames: %zu\n", stats.totalSamples);
+  IGL_LOG_INFO("[IGL Benchmark] ---------- FPS Statistics ----------\n");
+  IGL_LOG_INFO("[IGL Benchmark] Average FPS: %.1f\n", stats.avgFps);
+  IGL_LOG_INFO("[IGL Benchmark] Minimum FPS: %.1f\n", stats.minFps);
+  IGL_LOG_INFO("[IGL Benchmark] Maximum FPS: %.1f\n", stats.maxFps);
+  IGL_LOG_INFO("[IGL Benchmark] ---------- Frame Time Statistics ----------\n");
+  IGL_LOG_INFO("[IGL Benchmark] Average: %.2f ms\n", stats.avgRenderTimeMs);
+  IGL_LOG_INFO("[IGL Benchmark] Minimum: %.2f ms\n", stats.minRenderTimeMs);
+  IGL_LOG_INFO("[IGL Benchmark] Maximum: %.2f ms\n", stats.maxRenderTimeMs);
+  IGL_LOG_INFO("[IGL Benchmark] Overflow Records: %zu\n",
+               benchmarkTracker_->getOverflowRecordCount());
+  IGL_LOG_INFO("[IGL Benchmark] ===============================================\n");
+
+  // Suppress unused variable warnings when logging is disabled
+  (void)stats;
+  (void)elapsedSec;
+  (void)elapsedMin;
+  (void)wasTimeout;
+}
+
+void RenderSession::runUpdate(SurfaceTextures surfaceTextures) noexcept {
+  // Check if frozen (frame gate)
+  if (frozen_) {
+    return;
+  }
+
+  // Initialize benchmark tracker on first call if not already done
+  if (shellParams_ && shellParams_->benchmarkParams.has_value() && !benchmarkTracker_) {
+    initBenchmarkTracker();
+  }
+
+  // Debug: Log once if benchmark params are missing
+  if (!loggedMissingParams_ && !benchmarkTracker_) {
+    if (!shellParams_) {
+      IGL_LOG_INFO("[IGL Benchmark] WARNING: shellParams_ is null, benchmark tracking disabled\n");
+    } else if (!shellParams_->benchmarkParams.has_value()) {
+      IGL_LOG_INFO(
+          "[IGL Benchmark] WARNING: benchmarkParams not set, benchmark tracking disabled\n");
+      IGL_LOG_INFO(
+          "[IGL Benchmark] Use --benchmark flag or set "
+          "debug.iglshell.renderSession.benchmark=true\n");
+    }
+    loggedMissingParams_ = true;
+  }
+
+  // Check freeze-at-frame gate
+  if (shellParams_ && shellParams_->freezeAtFrame != ~0u &&
+      frameCount_ >= shellParams_->freezeAtFrame) {
+    frozen_ = true;
+    IGL_LOG_INFO("[IGL Shell] Frozen at frame %u\n", shellParams_->freezeAtFrame);
+    return;
+  }
+
+  // Measure wall-clock frame-to-frame interval for accurate FPS reporting.
+  // This captures vsync waits, throttle sleeps, and OS scheduling overhead
+  // that occur between consecutive calls to runUpdate().
+  const double startTime = getSeconds();
+
+  // Record benchmark frame using wall-clock interval since previous frame
+  if (benchmarkTracker_) {
+    if (prevFrameStartTime_ > 0.0) {
+      const double frameIntervalMs = (startTime - prevFrameStartTime_) * 1000.0;
+      recordBenchmarkFrame(frameIntervalMs);
+    }
+    prevFrameStartTime_ = startTime;
+
+    // Check for periodic benchmark reporting
+    checkBenchmarkPeriodicReport();
+
+    // Check if benchmark has expired (only log once)
+    if (benchmarkTracker_->hasBenchmarkExpired() && !benchmarkExpiredLogged_) {
+      IGL_LOG_INFO("[IGL Benchmark] Benchmark duration expired, requesting exit\n");
+      logFinalBenchmarkReport(true);
+      appParamsRef().exitRequested = true;
+      benchmarkExpiredLogged_ = true;
+    }
+  }
+
+  // Emit frame boundary marker visible in Tracy and Perfetto
+  IGL_PROFILER_FRAME("IGL::Frame");
+#ifdef IGL_WITH_PERFETTO
+  // Also bump the dedicated frame counter track in Perfetto for frame-aligned analysis
+  ::igl::shell::profiling::markFrame("IGL::Frame");
+#endif
+  {
+    // Scoped zone covering the full session update
+    IGL_PROFILER_ZONE("IGL::RenderSession::update", IGL_PROFILER_COLOR_UPDATE);
+    // Call the actual update implementation
+    update(std::move(surfaceTextures));
+    IGL_PROFILER_ZONE_END();
+  }
+
+  // FPS throttling — sleep is captured in the NEXT frame's wall-clock interval
+  if (shellParams_ && shellParams_->fpsThrottleMs > 0) {
+    const double endTime = getSeconds();
+    const double frameTimeMs = (endTime - startTime) * 1000.0;
+    const double targetMs =
+        shellParams_->fpsThrottleRandom
+            ? static_cast<double>(1 + (std::rand() % shellParams_->fpsThrottleMs))
+            : static_cast<double>(shellParams_->fpsThrottleMs);
+    if (frameTimeMs < targetMs) {
+      std::this_thread::sleep_for(
+          std::chrono::milliseconds(static_cast<int>(targetMs - frameTimeMs)));
+    }
+  }
+
+  frameCount_++;
 }
 
 } // namespace igl::shell

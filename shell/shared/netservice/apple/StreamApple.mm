@@ -9,14 +9,13 @@
 
 #include <shell/shared/netservice/apple/StreamApple.h>
 
-#include <igl/Common.h>
-
 #import <Foundation/Foundation.h>
+#include <igl/Core.h>
 
 // ----------------------------------------------------------------------------
 
 @interface IGLShellStreamDelegateAdapter : NSObject <NSStreamDelegate> {
-  igl::shell::netservice::StreamAdapterApple* owner_; // weak ref
+  igl::shell::netservice::StreamAdapterApple* _owner; // weak ref
 }
 @end
 
@@ -26,7 +25,7 @@
   IGL_DEBUG_ASSERT(owner);
   self = [super init];
   if (self) {
-    owner_ = owner;
+    self->_owner = owner;
   }
   return self;
 }
@@ -34,7 +33,7 @@
 - (void)stream:(NSStream*)stream handleEvent:(NSStreamEvent)eventCode {
   using namespace igl::shell::netservice;
 
-  IGL_DEBUG_ASSERT(stream == owner_->nsStream());
+  IGL_DEBUG_ASSERT(stream == _owner->nsStream());
   Stream::Event event = Stream::Event::None;
   switch (eventCode) {
   case NSStreamEventNone:
@@ -57,10 +56,10 @@
     break;
   }
 
-  if (owner_) {
-    const auto& observer = owner_->stream()->observer();
+  if (_owner) {
+    const auto& observer = _owner->stream()->observer();
     if (observer) {
-      observer(*owner_->stream(), event);
+      observer(*_owner->stream(), event);
     }
   }
 }

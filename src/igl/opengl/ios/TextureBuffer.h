@@ -13,8 +13,10 @@
 
 namespace igl::opengl::ios {
 
+// @fb-only
 class TextureBuffer final : public opengl::TextureBuffer {
   using Super = opengl::TextureBuffer;
+  // @fb-only
 
  public:
   /// @param pixelBuffer The backing CVPixelBufferRef source
@@ -22,11 +24,15 @@ class TextureBuffer final : public opengl::TextureBuffer {
   /// @param planeIndex Plane index to generate texture
   /// @param usage Usage of the CVOpenGLESTextureRef
   TextureBuffer(IContext& context,
-                CVPixelBufferRef pixelBuffer,
-                CVOpenGLESTextureCacheRef textureCache,
+                CVPixelBufferRef IGL_NONNULL pixelBuffer,
+                CVOpenGLESTextureCacheRef IGL_NONNULL textureCache,
                 size_t planeIndex = 0,
                 TextureDesc::TextureUsage usage = TextureDesc::TextureUsageBits::Sampled);
   ~TextureBuffer() override;
+  TextureBuffer(const TextureBuffer&) = delete;
+  TextureBuffer& operator=(const TextureBuffer&) = delete;
+  TextureBuffer(TextureBuffer&&) = delete;
+  TextureBuffer& operator=(TextureBuffer&&) = delete;
 
   // Disable those creation methods
   Result create(const TextureDesc& desc, bool hasStorageAlready) override;
@@ -45,12 +51,13 @@ class TextureBuffer final : public opengl::TextureBuffer {
  private:
   Result uploadInternal(TextureType type,
                         const TextureRangeDesc& range,
-                        const void* data,
-                        size_t bytesPerRow) const final;
+                        const void* IGL_NULLABLE data,
+                        size_t bytesPerRow,
+                        const uint32_t* IGL_NULLABLE mipLevelBytes) const final;
 
-  CVOpenGLESTextureRef cvTexture_ = nullptr;
-  CVPixelBufferRef pixelBuffer_ = nullptr;
-  CVOpenGLESTextureCacheRef textureCache_ = nullptr;
+  CVOpenGLESTextureRef IGL_NULLABLE cvTexture_ = nullptr;
+  CVPixelBufferRef IGL_NULLABLE pixelBuffer_ = nullptr;
+  CVOpenGLESTextureCacheRef IGL_NULLABLE textureCache_ = nullptr;
   size_t planeIndex_ = 0;
   bool uploaded_ = false;
   bool isCreated_ = false;

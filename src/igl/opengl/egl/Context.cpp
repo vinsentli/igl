@@ -10,14 +10,11 @@
 #include <igl/opengl/egl/Context.h>
 
 #include <EGL/egl.h>
-#include <igl/opengl/HWDevice.h>
-
 #include <array>
-#include <cassert>
 #include <tuple>
 #include <igl/Macros.h>
-#include <igl/opengl/Errors.h>
-#include <igl/opengl/Texture.h>
+#include <igl/Texture.h>
+#include <igl/opengl/HWDevice.h>
 
 #define CHECK_EGL_ERRORS() error_checking::checkForEGLErrors(__FILE__, __FUNCTION__, __LINE__)
 
@@ -32,9 +29,9 @@ namespace error_checking {
     errorStr = #egl_error_code;              \
     break;
 
-EGLint checkForEGLErrors(IGL_MAYBE_UNUSED const char* fileName,
-                         IGL_MAYBE_UNUSED const char* callerName,
-                         IGL_MAYBE_UNUSED size_t lineNum) {
+static EGLint checkForEGLErrors(IGL_MAYBE_UNUSED const char* fileName,
+                                IGL_MAYBE_UNUSED const char* callerName,
+                                IGL_MAYBE_UNUSED size_t lineNum) {
   const EGLint errorCode = eglGetError();
   if (errorCode != EGL_SUCCESS) {
     IGL_MAYBE_UNUSED const char* errorStr = nullptr;
@@ -83,43 +80,51 @@ EGLDisplay getDefaultEGLDisplay() {
 }
 
 // typical high-quality attrib list
-constexpr std::array attribsOpenGLES2{EGLint{EGL_RED_SIZE},
-                                      EGLint{8},
-                                      EGLint{EGL_GREEN_SIZE},
-                                      EGLint{8},
-                                      EGLint{EGL_BLUE_SIZE},
-                                      EGLint{8},
-                                      EGLint{EGL_ALPHA_SIZE},
-                                      EGLint{8},
-                                      EGLint{EGL_DEPTH_SIZE},
-                                      EGLint{16},
-                                      EGLint{EGL_SURFACE_TYPE},
-                                      EGLint{EGL_PBUFFER_BIT},
-                                      EGLint{EGL_RENDERABLE_TYPE},
-                                      EGLint{EGL_OPENGL_ES2_BIT},
-                                      EGLint{EGL_NONE}};
-constexpr std::array contextAttribsOpenGLES2{EGLint{EGL_CONTEXT_CLIENT_VERSION},
-                                             EGLint{2},
-                                             EGLint{EGL_NONE}};
+constexpr std::array kAttribsEs2{
+    EGLint{EGL_RED_SIZE},
+    EGLint{8},
+    EGLint{EGL_GREEN_SIZE},
+    EGLint{8},
+    EGLint{EGL_BLUE_SIZE},
+    EGLint{8},
+    EGLint{EGL_ALPHA_SIZE},
+    EGLint{8},
+    EGLint{EGL_DEPTH_SIZE},
+    EGLint{16},
+    EGLint{EGL_SURFACE_TYPE},
+    EGLint{EGL_PBUFFER_BIT},
+    EGLint{EGL_RENDERABLE_TYPE},
+    EGLint{EGL_OPENGL_ES2_BIT},
+    EGLint{EGL_NONE},
+};
+constexpr std::array kContextAttribsEs2{
+    EGLint{EGL_CONTEXT_CLIENT_VERSION},
+    EGLint{2},
+    EGLint{EGL_NONE},
+};
 
-constexpr std::array attribsOpenGLES3{EGLint{EGL_RED_SIZE},
-                                      EGLint{8},
-                                      EGLint{EGL_GREEN_SIZE},
-                                      EGLint{8},
-                                      EGLint{EGL_BLUE_SIZE},
-                                      EGLint{8},
-                                      EGLint{EGL_ALPHA_SIZE},
-                                      EGLint{8},
-                                      EGLint{EGL_DEPTH_SIZE},
-                                      EGLint{16},
-                                      EGLint{EGL_SURFACE_TYPE},
-                                      EGLint{EGL_PBUFFER_BIT},
-                                      EGLint{EGL_RENDERABLE_TYPE},
-                                      EGLint{EGL_OPENGL_ES3_BIT},
-                                      EGLint{EGL_NONE}};
-constexpr std::array contextAttribsOpenGLES3{EGLint{EGL_CONTEXT_CLIENT_VERSION},
-                                             EGLint{3},
-                                             EGLint{EGL_NONE}};
+constexpr std::array kAttribsEs3{
+    EGLint{EGL_RED_SIZE},
+    EGLint{8},
+    EGLint{EGL_GREEN_SIZE},
+    EGLint{8},
+    EGLint{EGL_BLUE_SIZE},
+    EGLint{8},
+    EGLint{EGL_ALPHA_SIZE},
+    EGLint{8},
+    EGLint{EGL_DEPTH_SIZE},
+    EGLint{16},
+    EGLint{EGL_SURFACE_TYPE},
+    EGLint{EGL_PBUFFER_BIT},
+    EGLint{EGL_RENDERABLE_TYPE},
+    EGLint{EGL_OPENGL_ES3_BIT},
+    EGLint{EGL_NONE},
+};
+constexpr std::array kContextAttribsEs3{
+    EGLint{EGL_CONTEXT_CLIENT_VERSION},
+    EGLint{3},
+    EGLint{EGL_NONE},
+};
 
 std::pair<EGLDisplay, EGLContext> newEGLContext(uint8_t contextMajorVersion,
                                                 EGLDisplay display,
@@ -138,9 +143,8 @@ std::pair<EGLDisplay, EGLContext> newEGLContext(uint8_t contextMajorVersion,
   }
 
   EGLint numConfigs = 0;
-  const auto& attribs = contextMajorVersion == 2 ? attribsOpenGLES2 : attribsOpenGLES3;
-  const auto& contextAttribs = contextMajorVersion == 2 ? contextAttribsOpenGLES2
-                                                        : contextAttribsOpenGLES3;
+  const auto& attribs = contextMajorVersion == 2 ? kAttribsEs2 : kAttribsEs3;
+  const auto& contextAttribs = contextMajorVersion == 2 ? kContextAttribsEs2 : kContextAttribsEs3;
   if (!eglChooseConfig(display, attribs.data(), config, 1, &numConfigs)) {
     CHECK_EGL_ERRORS();
   }
@@ -153,7 +157,7 @@ std::pair<EGLDisplay, EGLContext> newEGLContext(uint8_t contextMajorVersion,
 
 EGLConfig chooseConfig(uint8_t contextMajorVersion, EGLDisplay display) {
   IGL_DEBUG_ASSERT(contextMajorVersion == 2 || contextMajorVersion == 3);
-  const auto& attribs = contextMajorVersion == 2 ? attribsOpenGLES2 : attribsOpenGLES3;
+  const auto& attribs = contextMajorVersion == 2 ? kAttribsEs2 : kAttribsEs3;
   EGLConfig config{nullptr};
   EGLint numConfigs{0};
   const EGLBoolean status = eglChooseConfig(display, attribs.data(), &config, 1, &numConfigs);
@@ -395,13 +399,13 @@ void Context::setPresentationTime(long long presentationTimeNs) {
   // This is a workaround that we cannot call the eglPresentationTimeANDROID directly from
   // <EGL/eglext.h> due to some EGL api bugs.
   // @fb-only
-  bool (*eglPresentationTimeANDROID_)(
+  bool (*eglPresentationTimeAndroid)(
       EGLDisplay dpy, EGLSurface sur, khronos_stime_nanoseconds_t time) = nullptr;
-  eglPresentationTimeANDROID_ =
+  eglPresentationTimeAndroid =
       reinterpret_cast<bool (*)(EGLDisplay, EGLSurface, khronos_stime_nanoseconds_t)>(
           eglGetProcAddress("eglPresentationTimeANDROID"));
   CHECK_EGL_ERRORS();
-  eglPresentationTimeANDROID_(display_, surface_, presentationTimeNs);
+  eglPresentationTimeAndroid(display_, surface_, presentationTimeNs);
   CHECK_EGL_ERRORS();
 }
 
@@ -457,6 +461,21 @@ std::pair<EGLint, EGLint> Context::getDrawSurfaceDimensions(Result* outResult) c
 
 EGLConfig Context::getConfig() const {
   return config_;
+}
+
+bool Context::markSharegroup(EGLContext sharedContextHandle) {
+  if (sharedContextHandle == EGL_NO_CONTEXT) {
+    return false;
+  }
+  if (!sharegroup_) {
+    sharegroup_ = std::make_shared<std::vector<EGLContext>>();
+    sharegroup_->emplace_back(context_);
+  }
+  if (std::find(sharegroup_->begin(), sharegroup_->end(), sharedContextHandle) ==
+      sharegroup_->end()) {
+    sharegroup_->emplace_back(sharedContextHandle);
+  }
+  return true;
 }
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)

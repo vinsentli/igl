@@ -9,12 +9,12 @@
 
 #include <shell/shared/netservice/apple/NetServiceApple.h>
 
-#include <igl/Common.h>
+#include <igl/Assert.h>
 
 // ----------------------------------------------------------------------------
 
 @interface IGLShellNetServiceDelegateAdapter : NSObject <NSNetServiceDelegate> {
-  igl::shell::netservice::NetServiceApple* owner_; // weak ref
+  igl::shell::netservice::NetServiceApple* _owner; // weak ref
 }
 @end
 
@@ -22,77 +22,77 @@
 - (id)initWithOwner:(igl::shell::netservice::NetServiceApple*)owner {
   self = [super init];
   if (self) {
-    owner_ = owner;
+    self->_owner = owner;
   }
   return self;
 }
 
 - (void)netServiceWillPublish:(NSNetService*)sender {
-  auto* target = (owner_ ? owner_->delegate() : nullptr);
+  auto* target = (_owner ? _owner->delegate() : nullptr);
   if (target) {
-    target->willPublish(*owner_);
+    target->willPublish(*_owner);
   }
 }
 
 - (void)netService:(NSNetService*)sender
      didNotPublish:(NSDictionary<NSString*, NSNumber*>*)errorDict {
-  auto* target = (owner_ ? owner_->delegate() : nullptr);
+  auto* target = (_owner ? _owner->delegate() : nullptr);
   if (target) {
     int errorCode = [[errorDict valueForKey:NSNetServicesErrorCode] intValue];
     int errorDomain = [[errorDict valueForKey:NSNetServicesErrorDomain] intValue];
-    target->didNotPublish(*owner_, errorCode, errorDomain);
+    target->didNotPublish(*_owner, errorCode, errorDomain);
   }
 }
 
 - (void)netServiceDidPublish:(NSNetService*)sender {
-  auto* target = (owner_ ? owner_->delegate() : nullptr);
+  auto* target = (_owner ? _owner->delegate() : nullptr);
   if (target) {
-    target->didPublish(*owner_);
+    target->didPublish(*_owner);
   }
 }
 
 - (void)netServiceWillResolve:(NSNetService*)sender {
-  auto* target = (owner_ ? owner_->delegate() : nullptr);
+  auto* target = (_owner ? _owner->delegate() : nullptr);
   if (target) {
-    target->willResolve(*owner_);
+    target->willResolve(*_owner);
   }
 }
 
 - (void)netService:(NSNetService*)sender
      didNotResolve:(NSDictionary<NSString*, NSNumber*>*)errorDict {
-  auto* target = (owner_ ? owner_->delegate() : nullptr);
+  auto* target = (_owner ? _owner->delegate() : nullptr);
   if (target) {
     int errorCode = [[errorDict valueForKey:NSNetServicesErrorCode] intValue];
     int errorDomain = [[errorDict valueForKey:NSNetServicesErrorDomain] intValue];
-    target->didNotResolve(*owner_, errorCode, errorDomain);
+    target->didNotResolve(*_owner, errorCode, errorDomain);
   }
 }
 
 - (void)netServiceDidResolveAddress:(NSNetService*)sender {
-  auto* target = (owner_ ? owner_->delegate() : nullptr);
+  auto* target = (_owner ? _owner->delegate() : nullptr);
   if (target) {
-    target->didResolveAddress(*owner_);
+    target->didResolveAddress(*_owner);
   }
 }
 
 - (void)netServiceDidStop:(NSNetService*)sender {
-  auto* target = (owner_ ? owner_->delegate() : nullptr);
+  auto* target = (_owner ? _owner->delegate() : nullptr);
   if (target) {
-    target->didStop(*owner_);
+    target->didStop(*_owner);
   }
 }
 
 - (void)netService:(NSNetService*)sender
     didAcceptConnectionWithInputStream:(NSInputStream*)inputStream
                           outputStream:(NSOutputStream*)outputStream {
-  auto* target = (owner_ ? owner_->delegate() : nullptr);
+  auto* target = (_owner ? _owner->delegate() : nullptr);
   if (target) {
     auto input = std::make_shared<igl::shell::netservice::InputStreamApple>();
     input->initialize(inputStream);
     auto output = std::make_shared<igl::shell::netservice::OutputStreamApple>();
     output->initialize(outputStream);
 
-    target->didAcceptConnection(*owner_, std::move(input), std::move(output));
+    target->didAcceptConnection(*_owner, std::move(input), std::move(output));
   }
 }
 
@@ -164,7 +164,7 @@ std::shared_ptr<OutputStream> NetServiceApple::getOutputStream() const noexcept 
   return outputStream_;
 }
 
-std::string NetServiceApple::getName() const noexcept {
+std::string NetServiceApple::getName() const noexcept { // NOLINT(bugprone-exception-escape)
   return {[[netService_ name] UTF8String]};
 }
 

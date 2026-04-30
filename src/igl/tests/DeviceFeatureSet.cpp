@@ -7,6 +7,7 @@
 
 #include "util/Common.h"
 #if IGL_BACKEND_OPENGL
+#include <igl/opengl/DeviceFeatureSet.h>
 #include <igl/opengl/IContext.h>
 #include <igl/opengl/PlatformDevice.h>
 #endif // IGL_BACKEND_OPENGL
@@ -234,6 +235,34 @@ TEST_F(DeviceFeatureSetTest, hasFeatureForMacOSOrWinOrAndroidTest) {
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ValidationLayersEnabled));
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ExternalMemoryObjects));
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::PushConstants));
+    } else if (iglDev_->getBackendType() == igl::BackendType::D3D12) {
+      // D3D12 backend
+      EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::Texture2DArray));
+      EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::Texture3D));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::TextureArrayExt));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::TextureExternalImage));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::Multiview));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::BindUniform));
+      EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::TexturePartialMipChain));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::BufferRing));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::BufferNoCopy));
+      EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::ShaderLibrary));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::BindBytes));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::BufferDeviceAddress));
+      EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::ShaderTextureLod));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ShaderTextureLodExt));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::StandardDerivativeExt));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::SamplerMinMaxLod));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::DrawIndexedIndirect));
+      EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::MultipleRenderTargets));
+      EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::ExplicitBinding));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ExplicitBindingExt));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::TextureFormatRG));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ValidationLayersEnabled));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ExternalMemoryObjects));
+      EXPECT_TRUE(iglDev_->hasFeature(
+          DeviceFeatures::PushConstants)); // D3D12 supports push constants via root constants
+                                           // (shader register b2)
     } else {
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::Texture2DArray));
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::Texture3D));
@@ -289,5 +318,164 @@ TEST_F(DeviceFeatureSetTest, getTextureFormatCapabilities) {
   capability = iglDev_->getTextureFormatCapabilities(TextureFormat::Z_UNorm16);
   EXPECT_TRUE(contains(capability, ICapabilities::TextureFormatCapabilityBits::Sampled));
 }
+
+#if IGL_BACKEND_OPENGL
+// classifyGpuTimerTier — pure function tests (no GL context needed)
+class GpuTimerTierTest : public ::testing::Test {};
+
+TEST_F(GpuTimerTierTest, NullRenderer) {
+  EXPECT_EQ(opengl::classifyGpuTimerTier(nullptr, nullptr), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier(nullptr, "ARM"), opengl::GpuTimerTier::Disabled);
+}
+
+TEST_F(GpuTimerTierTest, AdrenoBudget) {
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno (TM) 505", "Qualcomm"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno (TM) 506", "Qualcomm"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno (TM) 610", "Qualcomm"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno (TM) 619", "Qualcomm"),
+            opengl::GpuTimerTier::Disabled);
+}
+
+TEST_F(GpuTimerTierTest, AdrenoConservative) {
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno (TM) 620", "Qualcomm"),
+            opengl::GpuTimerTier::Conservative);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno (TM) 630", "Qualcomm"),
+            opengl::GpuTimerTier::Conservative);
+}
+
+TEST_F(GpuTimerTierTest, AdrenoFull) {
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno (TM) 640", "Qualcomm"),
+            opengl::GpuTimerTier::Full);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno (TM) 730", "Qualcomm"),
+            opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, AdrenoNoTM) {
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno 610", "Qualcomm"), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno 730", "Qualcomm"), opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, AdrenoVendorCrossCheck) {
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno (TM) 505", "ARM"), opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, MaliBudget) {
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-G31", "ARM"), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-G52", "ARM"), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-G68", "ARM"), opengl::GpuTimerTier::Disabled);
+}
+
+TEST_F(GpuTimerTierTest, MaliConservative) {
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-G72", "ARM"), opengl::GpuTimerTier::Conservative);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-G76", "ARM"), opengl::GpuTimerTier::Conservative);
+}
+
+TEST_F(GpuTimerTierTest, MaliFull) {
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-G77", "ARM"), opengl::GpuTimerTier::Full);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-G710", "ARM"), opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, MaliVendorCrossCheck) {
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-G52", "Qualcomm"), opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, MaliTBudget) {
+  // SEV S647462: Mali-T series must be Disabled (broken timer query drivers)
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T720", "ARM"), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T760", "ARM"), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T820", "ARM"), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T860", "ARM"), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T880", "ARM"), opengl::GpuTimerTier::Disabled);
+}
+
+TEST_F(GpuTimerTierTest, MaliTVendorCrossCheck) {
+  // Wrong vendor → falls through to Full (default)
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T880", "Qualcomm"), opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, MaliTWithSuffix) {
+  // Real-world Mali-T renderer strings include MP core count and revision
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T880 MP12", "ARM"), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T860MP2", "ARM"), opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T760 r1p0", "ARM"), opengl::GpuTimerTier::Disabled);
+}
+
+TEST_F(GpuTimerTierTest, MaliTMalformed) {
+  // Malformed "Mali-T" without number — sscanf fails, falls through to Full
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T", "ARM"), opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, MaliTArmVendorVariants) {
+  // SEV S647462: ARM ships at least three vendor string variants — accept all
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T880", "ARM Limited"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T760", "Arm"), opengl::GpuTimerTier::Disabled);
+}
+
+TEST_F(GpuTimerTierTest, PowerVRBudget) {
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR Rogue GE8320", "Imagination Technologies"),
+            opengl::GpuTimerTier::Disabled);
+}
+
+TEST_F(GpuTimerTierTest, PowerVRVendorCrossCheck) {
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR Rogue GE8320", "ARM"),
+            opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, PowerVRSgxAndRogueGx) {
+  // SGX (legacy MediaTek/TI OMAP) has no hardware timer support; Rogue GX (older
+  // MediaTek/Intel Atom) has worse driver quality than GE8. Both are Disabled.
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR SGX 540", "Imagination Technologies"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR Rogue GX6250", "Imagination Technologies"),
+            opengl::GpuTimerTier::Disabled);
+}
+
+TEST_F(GpuTimerTierTest, PowerVRImaginationVendor) {
+  // Newer Android drivers report vendor as "Imagination" (no "Technologies").
+  // Cover all three renderer families (GE8, GX, SGX) against the short vendor.
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR Rogue GE8320", "Imagination"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR Rogue GX6250", "Imagination"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR SGX 540", "Imagination"),
+            opengl::GpuTimerTier::Disabled);
+}
+
+TEST_F(GpuTimerTierTest, MaliTNonArmVendorFallsThrough) {
+  // Defensive: a Mali-T renderer with a non-ARM vendor string must NOT be
+  // Disabled by the Mali-T block — it should fall through to the Full default.
+  // Catches a future bug where someone OR's vendor checks across blocks.
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T880", "Imagination"), opengl::GpuTimerTier::Full);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-T880", "Samsung"), opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, PowerVRNonImaginationVendorFallsThrough) {
+  // Defensive: a PowerVR renderer with a non-Imagination vendor must NOT be
+  // Disabled by the PowerVR block — it should fall through to the Full default.
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR Rogue GE8320", "ARM"),
+            opengl::GpuTimerTier::Full);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR SGX 540", "ARM"), opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, XclipseConservative) {
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Samsung Xclipse 920", "Samsung"),
+            opengl::GpuTimerTier::Conservative);
+}
+
+TEST_F(GpuTimerTierTest, XclipseVendorCrossCheck) {
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Samsung Xclipse 920", "ARM"), opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, DesktopAndUnknown) {
+  EXPECT_EQ(opengl::classifyGpuTimerTier("NVIDIA GeForce RTX 3090", "NVIDIA Corporation"),
+            opengl::GpuTimerTier::Full);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Apple M1", "Apple"), opengl::GpuTimerTier::Full);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("", nullptr), opengl::GpuTimerTier::Full);
+}
+#endif // IGL_BACKEND_OPENGL
 
 } // namespace igl::tests

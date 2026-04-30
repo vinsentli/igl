@@ -11,8 +11,9 @@
 #define GLM_FORCE_XYZW_ONLY 1
 #endif
 
+#include <gtest/gtest.h>
+
 #include "data/ShaderData.h"
-#include "data/TextureData.h"
 #include "data/VertexIndexData.h"
 #include "util/Color.h"
 #include "util/Common.h"
@@ -23,7 +24,6 @@
 #include <array>
 #include <cstring>
 #include <glm/gtc/color_space.hpp>
-#include <gtest/gtest.h>
 #include <string>
 #include <igl/NameHandle.h>
 
@@ -103,7 +103,6 @@ class TextureArrayFloatTest : public ::testing::Test {
     if (!iglDev_->hasFeature(DeviceFeatures::TextureHalfFloat) ||
         !iglDev_->hasFeature(DeviceFeatures::Texture2DArray)) {
       GTEST_SKIP() << "2D float texture array is unsupported for this platform.";
-      return;
     }
 
     // Create an offscreen texture to render to
@@ -136,29 +135,28 @@ class TextureArrayFloatTest : public ::testing::Test {
 #if IGL_BACKEND_OPENGL
       if (iglDev_->getBackendVersion().flavor == BackendFlavor::OpenGL_ES) {
         util::createShaderStages(iglDev_,
-                                 igl::tests::data::shader::OGL_SIMPLE_VERT_SHADER_TEXARRAY_ES3,
-                                 igl::tests::data::shader::shaderFunc,
-                                 igl::tests::data::shader::OGL_SIMPLE_FRAG_SHADER_TEXARRAY_ES3,
-                                 igl::tests::data::shader::shaderFunc,
+                                 igl::tests::data::shader::kOglSimpleVertShaderTexArrayEs3,
+                                 igl::tests::data::shader::kShaderFunc,
+                                 igl::tests::data::shader::kOglSimpleFragShaderTexArrayEs3,
+                                 igl::tests::data::shader::kShaderFunc,
                                  stages);
       } else {
         if (!iglDev_->hasRequirement(DeviceRequirement::TextureArrayExtReq)) {
           util::createShaderStages(iglDev_,
-                                   igl::tests::data::shader::OGL_SIMPLE_VERT_SHADER_TEXARRAY,
-                                   igl::tests::data::shader::shaderFunc,
-                                   igl::tests::data::shader::OGL_SIMPLE_FRAG_SHADER_TEXARRAY,
-                                   igl::tests::data::shader::shaderFunc,
+                                   igl::tests::data::shader::kOglSimpleVertShaderTexArray,
+                                   igl::tests::data::shader::kShaderFunc,
+                                   igl::tests::data::shader::kOglSimpleFragShaderTexArray,
+                                   igl::tests::data::shader::kShaderFunc,
                                    stages);
         } else if (iglDev_->hasFeature(DeviceFeatures::TextureArrayExt)) {
           util::createShaderStages(iglDev_,
-                                   igl::tests::data::shader::OGL_SIMPLE_VERT_SHADER_TEXARRAY_EXT,
-                                   igl::tests::data::shader::shaderFunc,
-                                   igl::tests::data::shader::OGL_SIMPLE_FRAG_SHADER_TEXARRAY_EXT,
-                                   igl::tests::data::shader::shaderFunc,
+                                   igl::tests::data::shader::kOglSimpleVertShaderTexArrayExt,
+                                   igl::tests::data::shader::kShaderFunc,
+                                   igl::tests::data::shader::kOglSimpleFragShaderTexArrayExt,
+                                   igl::tests::data::shader::kShaderFunc,
                                    stages);
         } else {
           GTEST_SKIP() << "Texture array is unsupported for this platform.";
-          return;
         }
       }
 #if defined(IGL_PLATFORM_LINUX) && IGL_PLATFORM_LINUX
@@ -167,16 +165,23 @@ class TextureArrayFloatTest : public ::testing::Test {
 #endif // IGL_BACKEND_OPENGL
     } else if (iglDev_->getBackendType() == BackendType::Vulkan) {
       util::createShaderStages(iglDev_,
-                               igl::tests::data::shader::VULKAN_SIMPLE_VERT_SHADER_TEX_2DARRAY,
-                               igl::tests::data::shader::shaderFunc,
-                               igl::tests::data::shader::VULKAN_SIMPLE_FRAG_SHADER_TEX_2DARRAY,
-                               igl::tests::data::shader::shaderFunc,
+                               igl::tests::data::shader::kVulkanSimpleVertShaderTex2dArray,
+                               igl::tests::data::shader::kShaderFunc,
+                               igl::tests::data::shader::kVulkanSimpleFragShaderTex2dArray,
+                               igl::tests::data::shader::kShaderFunc,
                                stages);
     } else if (iglDev_->getBackendType() == BackendType::Metal) {
       util::createShaderStages(iglDev_,
-                               igl::tests::data::shader::MTL_SIMPLE_SHADER_TXT_2D_ARRAY,
-                               igl::tests::data::shader::simpleVertFunc,
-                               igl::tests::data::shader::simpleFragFunc,
+                               igl::tests::data::shader::kMtlSimpleShaderTxt2dArray,
+                               igl::tests::data::shader::kSimpleVertFunc,
+                               igl::tests::data::shader::kSimpleFragFunc,
+                               stages);
+    } else if (iglDev_->getBackendType() == BackendType::D3D12) {
+      util::createShaderStages(iglDev_,
+                               igl::tests::data::shader::kD3D12SimpleVertShaderTex2dArray,
+                               igl::tests::data::shader::kShaderFunc,
+                               igl::tests::data::shader::kD3D12SimpleFragShaderTex2dArray,
+                               igl::tests::data::shader::kShaderFunc,
                                stages);
     }
 
@@ -189,15 +194,15 @@ class TextureArrayFloatTest : public ::testing::Test {
 
     inputDesc.attributes[0].format = VertexAttributeFormat::Float4;
     inputDesc.attributes[0].offset = 0;
-    inputDesc.attributes[0].bufferIndex = data::shader::simplePosIndex;
-    inputDesc.attributes[0].name = data::shader::simplePos;
+    inputDesc.attributes[0].bufferIndex = data::shader::kSimplePosIndex;
+    inputDesc.attributes[0].name = data::shader::kSimplePos;
     inputDesc.attributes[0].location = 0;
     inputDesc.inputBindings[0].stride = sizeof(float) * 4;
 
     inputDesc.attributes[1].format = VertexAttributeFormat::Float2;
     inputDesc.attributes[1].offset = 0;
-    inputDesc.attributes[1].bufferIndex = data::shader::simpleUvIndex;
-    inputDesc.attributes[1].name = data::shader::simpleUv;
+    inputDesc.attributes[1].bufferIndex = data::shader::kSimpleUvIndex;
+    inputDesc.attributes[1].name = data::shader::kSimpleUv;
     inputDesc.attributes[1].location = 1;
     inputDesc.inputBindings[1].stride = sizeof(float) * 2;
 
@@ -212,8 +217,8 @@ class TextureArrayFloatTest : public ::testing::Test {
     BufferDesc bufDesc;
 
     bufDesc.type = BufferDesc::BufferTypeBits::Index;
-    bufDesc.data = data::vertex_index::QUAD_IND;
-    bufDesc.length = sizeof(data::vertex_index::QUAD_IND);
+    bufDesc.data = data::vertex_index::kQuadInd.data();
+    bufDesc.length = sizeof(data::vertex_index::kQuadInd);
 
     ib_ = iglDev_->createBuffer(bufDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -221,8 +226,8 @@ class TextureArrayFloatTest : public ::testing::Test {
 
     // Initialize vertex and sampler buffers
     bufDesc.type = BufferDesc::BufferTypeBits::Vertex;
-    bufDesc.data = data::vertex_index::QUAD_VERT;
-    bufDesc.length = sizeof(data::vertex_index::QUAD_VERT);
+    bufDesc.data = data::vertex_index::kQuadVert.data();
+    bufDesc.length = sizeof(data::vertex_index::kQuadVert);
 
     vb_ = iglDev_->createBuffer(bufDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -230,8 +235,8 @@ class TextureArrayFloatTest : public ::testing::Test {
 
     // Initialize UV data and sampler buffer
     bufDesc.type = BufferDesc::BufferTypeBits::Vertex;
-    bufDesc.data = data::vertex_index::QUAD_UV;
-    bufDesc.length = sizeof(data::vertex_index::QUAD_UV);
+    bufDesc.data = data::vertex_index::kQuadUv.data();
+    bufDesc.length = sizeof(data::vertex_index::kQuadUv);
 
     uv_ = iglDev_->createBuffer(bufDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -251,7 +256,7 @@ class TextureArrayFloatTest : public ::testing::Test {
     renderPipelineDesc_.targetDesc.colorAttachments[0].textureFormat =
         offscreenTexture_->getFormat();
     renderPipelineDesc_.fragmentUnitSamplerMap[textureUnit_] =
-        IGL_NAMEHANDLE(data::shader::simpleSampler);
+        IGL_NAMEHANDLE(data::shader::kSimpleSampler);
     renderPipelineDesc_.cullMode = igl::CullMode::Disabled;
   }
 
@@ -541,8 +546,8 @@ TEST_F(TextureArrayFloatTest, Passthrough_SampleFromArray) {
     ASSERT_TRUE(cmdBuf_ != nullptr);
 
     auto cmds = cmdBuf_->createRenderCommandEncoder(renderPass_, framebuffer_);
-    cmds->bindVertexBuffer(data::shader::simplePosIndex, *vb_);
-    cmds->bindVertexBuffer(data::shader::simpleUvIndex, *uv_);
+    cmds->bindVertexBuffer(data::shader::kSimplePosIndex, *vb_);
+    cmds->bindVertexBuffer(data::shader::kSimpleUvIndex, *uv_);
 
     cmds->bindRenderPipelineState(pipelineState);
 
@@ -648,8 +653,8 @@ TEST_F(TextureArrayFloatTest, Passthrough_RenderToArray) {
 
     renderPass_.colorAttachments[0].layer = layer;
     auto cmds = cmdBuf_->createRenderCommandEncoder(renderPass_, customFramebuffer);
-    cmds->bindVertexBuffer(data::shader::simplePosIndex, *vb_);
-    cmds->bindVertexBuffer(data::shader::simpleUvIndex, *uv_);
+    cmds->bindVertexBuffer(data::shader::kSimplePosIndex, *vb_);
+    cmds->bindVertexBuffer(data::shader::kSimpleUvIndex, *uv_);
 
     cmds->bindRenderPipelineState(pipelineState);
 

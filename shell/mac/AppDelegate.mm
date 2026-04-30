@@ -14,45 +14,45 @@
 
 #include <shell/shared/renderSession/DefaultRenderSessionFactory.h>
 #include <shell/shared/renderSession/RenderSessionConfig.h>
-#import <igl/Common.h>
+#import <igl/Common.h> // IWYU pragma: keep
 
 namespace {
 
 #if IGL_BACKEND_OPENGL
 NSColorSpace* colorSpaceToNSColorSpace(igl::ColorSpace colorSpace) {
   switch (colorSpace) {
-  case igl::ColorSpace::SRGB_LINEAR:
+  case igl::ColorSpace::SRGBLinear:
     return [NSColorSpace sRGBColorSpace]; // closest thing to linear srgb
-  case igl::ColorSpace::SRGB_NONLINEAR:
+  case igl::ColorSpace::SRGBNonlinear:
     return [NSColorSpace sRGBColorSpace];
-  case igl::ColorSpace::DISPLAY_P3_NONLINEAR:
+  case igl::ColorSpace::DisplayP3Nonlinear:
     return [NSColorSpace displayP3ColorSpace];
-  case igl::ColorSpace::DISPLAY_P3_LINEAR:
+  case igl::ColorSpace::DisplayP3Linear:
     return [NSColorSpace displayP3ColorSpace];
-  case igl::ColorSpace::EXTENDED_SRGB_LINEAR:
+  case igl::ColorSpace::ExtendedSRGBLinear:
     return [NSColorSpace extendedSRGBColorSpace];
-  case igl::ColorSpace::DCI_P3_NONLINEAR:
+  case igl::ColorSpace::DCIP3Nonlinear:
     return [NSColorSpace displayP3ColorSpace];
-  case igl::ColorSpace::ADOBERGB_LINEAR:
+  case igl::ColorSpace::AdobeRGBLinear:
     return [NSColorSpace adobeRGB1998ColorSpace];
-  case igl::ColorSpace::ADOBERGB_NONLINEAR:
+  case igl::ColorSpace::AdobeRGBNonlinear:
     return [NSColorSpace adobeRGB1998ColorSpace];
-  case igl::ColorSpace::PASS_THROUGH:
+  case igl::ColorSpace::PassThrough:
     return nil;
-  case igl::ColorSpace::EXTENDED_SRGB_NONLINEAR:
+  case igl::ColorSpace::ExtendedSRGBNonlinear:
     return [NSColorSpace extendedSRGBColorSpace];
-  case igl::ColorSpace::DISPLAY_NATIVE_AMD:
+  case igl::ColorSpace::DisplayNativeAMD:
     return [NSColorSpace deviceRGBColorSpace];
-  case igl::ColorSpace::BT709_LINEAR:
-  case igl::ColorSpace::BT709_NONLINEAR:
-  case igl::ColorSpace::BT2020_LINEAR:
-  case igl::ColorSpace::HDR10_ST2084:
-  case igl::ColorSpace::DOLBYVISION:
-  case igl::ColorSpace::HDR10_HLG:
-  case igl::ColorSpace::BT2020_NONLINEAR:
-  case igl::ColorSpace::BT601_NONLINEAR:
-  case igl::ColorSpace::BT2100_HLG_NONLINEAR:
-  case igl::ColorSpace::BT2100_PQ_NONLINEAR:
+  case igl::ColorSpace::BT709Linear:
+  case igl::ColorSpace::BT709Nonlinear:
+  case igl::ColorSpace::BT2020Linear:
+  case igl::ColorSpace::HDR10St2084:
+  case igl::ColorSpace::DolbyVision:
+  case igl::ColorSpace::HDR10HLG:
+  case igl::ColorSpace::BT2020Nonlinear:
+  case igl::ColorSpace::BT601Nonlinear:
+  case igl::ColorSpace::BT2100HLGNonlinear:
+  case igl::ColorSpace::BT2100PQNonlinear:
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
     return [NSColorSpace sRGBColorSpace];
   }
@@ -142,7 +142,11 @@ NSColorSpace* colorSpaceToNSColorSpace(igl::ColorSpace colorSpace) {
 // @fb-only
 #if IGL_BACKEND_VULKAN
       {
+#if IGL_USE_STATIC_LAVAPIPE
+          .displayName = "Vulkan (Lavapipe)",
+#else
           .displayName = "Vulkan",
+#endif
           .backendVersion = {.flavor = igl::BackendFlavor::Vulkan,
                              .majorVersion = 1,
                              .minorVersion = 1},
@@ -222,7 +226,7 @@ NSColorSpace* colorSpaceToNSColorSpace(igl::ColorSpace colorSpace) {
 }
 
 - (void)tearDownViewController {
-  if (self.tabViewController) {
+  if (self.tabViewController != nil) {
     for (NSInteger i = 0; i < [[self.tabViewController tabViewItems] count]; ++i) {
       NSTabViewItem* item = [self.tabViewController tabViewItems][i];
       ViewController* controller = (ViewController*)item.viewController;

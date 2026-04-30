@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <igl/metal/SamplerState.h>
-
 #include <gtest/gtest.h>
+
+#include <igl/metal/SamplerState.h>
 
 namespace igl::tests {
 
@@ -28,7 +28,7 @@ class SamplerStateMTLTest : public ::testing::Test {
 };
 
 TEST_F(SamplerStateMTLTest, ConvertMinMagFilter) {
-  MTLSamplerMinMagFilter res;
+  MTLSamplerMinMagFilter res = MTLSamplerMinMagFilterNearest;
 
   res = igl::metal::SamplerState::convertMinMagFilter(SamplerMinMagFilter::Linear);
   ASSERT_EQ(res, MTLSamplerMinMagFilterLinear);
@@ -38,7 +38,7 @@ TEST_F(SamplerStateMTLTest, ConvertMinMagFilter) {
 }
 
 TEST_F(SamplerStateMTLTest, ConvertMipFilter) {
-  MTLSamplerMipFilter res;
+  MTLSamplerMipFilter res = MTLSamplerMipFilterNotMipmapped;
 
   res = igl::metal::SamplerState::convertMipFilter(SamplerMipFilter::Disabled);
   ASSERT_EQ(res, MTLSamplerMipFilterNotMipmapped);
@@ -51,7 +51,7 @@ TEST_F(SamplerStateMTLTest, ConvertMipFilter) {
 }
 
 TEST_F(SamplerStateMTLTest, ConvertAddressMode) {
-  MTLSamplerAddressMode res;
+  MTLSamplerAddressMode res = MTLSamplerAddressModeRepeat;
 
   res = igl::metal::SamplerState::convertAddressMode(SamplerAddressMode::Repeat);
   ASSERT_EQ(res, MTLSamplerAddressModeRepeat);
@@ -61,6 +61,13 @@ TEST_F(SamplerStateMTLTest, ConvertAddressMode) {
 
   res = igl::metal::SamplerState::convertAddressMode(SamplerAddressMode::MirrorRepeat);
   ASSERT_EQ(res, MTLSamplerAddressModeMirrorRepeat);
+
+  res = igl::metal::SamplerState::convertAddressMode(SamplerAddressMode::ClampToBorder);
+  if (@available(macOS 10.12, iOS 14.0, *)) {
+    ASSERT_EQ(res, MTLSamplerAddressModeClampToBorderColor);
+  } else {
+    ASSERT_EQ(res, MTLSamplerAddressModeClampToZero);
+  }
 }
 
 } // namespace igl::tests

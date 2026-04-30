@@ -8,13 +8,14 @@
 // @MARK:COVERAGE_EXCLUDE_FILE
 
 #include "ParametricVertexData.h"
+
 #include <array>
 
 namespace iglu::vertexdata {
 
 // Assumption: <name, location> for OpenGL and Metal, respectively
-static const std::pair<const char*, int> s_attrPosition("a_position", 0);
-static const std::pair<const char*, int> s_attrUV("a_uv", 1);
+static const std::pair<const char*, int> kSAttrPosition("a_position", 0);
+static const std::pair<const char*, int> kSAttrUv("a_uv", 1);
 
 namespace Quad {
 
@@ -26,15 +27,15 @@ igl::VertexInputStateDesc inputStateDesc() {
           .bufferIndex = 0,
           .format = igl::VertexAttributeFormat::Float3,
           .offset = offsetof(VertexPosUv, position),
-          .name = s_attrPosition.first,
-          .location = s_attrPosition.second,
+          .name = kSAttrPosition.first,
+          .location = kSAttrPosition.second,
       },
   inputDesc.attributes[1] = {
       .bufferIndex = 0,
       .format = igl::VertexAttributeFormat::Float2,
       .offset = offsetof(VertexPosUv, uv),
-      .name = s_attrUV.first,
-      .location = s_attrUV.second,
+      .name = kSAttrUv.first,
+      .location = kSAttrUv.second,
   };
   inputDesc.numInputBindings = 1;
   inputDesc.inputBindings[0].stride = sizeof(VertexPosUv);
@@ -53,19 +54,19 @@ std::shared_ptr<VertexData> create(igl::IDevice& device,
   // |    |
   // 1 -- 3
   const std::array vertexData{
-      VertexPosUv{{posMin[0], posMax[1], 0.0}, {uvMin[0], uvMax[1]}},
-      VertexPosUv{{posMin[0], posMin[1], 0.0}, {uvMin[0], uvMin[1]}},
-      VertexPosUv{{posMax[0], posMax[1], 0.0}, {uvMax[0], uvMax[1]}},
-      VertexPosUv{{posMax[0], posMin[1], 0.0}, {uvMax[0], uvMin[1]}},
+      VertexPosUv{.position = {posMin[0], posMax[1], 0.0}, .uv = {uvMin[0], uvMax[1]}},
+      VertexPosUv{.position = {posMin[0], posMin[1], 0.0}, .uv = {uvMin[0], uvMin[1]}},
+      VertexPosUv{.position = {posMax[0], posMax[1], 0.0}, .uv = {uvMax[0], uvMax[1]}},
+      VertexPosUv{.position = {posMax[0], posMin[1], 0.0}, .uv = {uvMax[0], uvMin[1]}},
   };
   const std::array indexData{uint16_t{0}, uint16_t{1}, uint16_t{2}, uint16_t{3}};
 
-  const igl::BufferDesc vbDesc(igl::BufferDesc::BufferTypeBits::Vertex,
-                               vertexData.data(),
-                               sizeof(VertexPosUv) * vertexData.size());
-  const igl::BufferDesc ibDesc(igl::BufferDesc::BufferTypeBits::Index,
-                               indexData.data(),
-                               sizeof(uint16_t) * indexData.size());
+  const igl::BufferDesc vbDesc{.type = igl::BufferDesc::BufferTypeBits::Vertex,
+                               .data = vertexData.data(),
+                               .length = sizeof(VertexPosUv) * vertexData.size()};
+  const igl::BufferDesc ibDesc{.type = igl::BufferDesc::BufferTypeBits::Index,
+                               .data = indexData.data(),
+                               .length = sizeof(uint16_t) * indexData.size()};
 
   const igl::VertexInputStateDesc inputDesc = inputStateDesc();
   const std::shared_ptr<igl::IVertexInputState> vertexInput =
@@ -97,8 +98,8 @@ std::shared_ptr<VertexData> create(igl::IDevice& device,
                                    iglu::simdtypes::float2 posMax,
                                    iglu::simdtypes::float2 uvMin,
                                    iglu::simdtypes::float2 uvMax) {
-  iglu::simdtypes::float2 uvMin_adjusted = uvMin;
-  iglu::simdtypes::float2 uvMax_adjusted = uvMax;
+  iglu::simdtypes::float2 uvMinAdjusted = uvMin;
+  iglu::simdtypes::float2 uvMaxAdjusted = uvMax;
 
   // Here's how to think about the conventions that led to this workaround.
   //
@@ -136,11 +137,11 @@ std::shared_ptr<VertexData> create(igl::IDevice& device,
   // - http://hacksoflife.blogspot.com/2019/04/keeping-blue-side-up-coordinate.html
   //
   if (device.getBackendType() == igl::BackendType::Metal) {
-    uvMin_adjusted[1] = 1.0f - uvMin_adjusted[1];
-    uvMax_adjusted[1] = 1.0f - uvMax_adjusted[1];
+    uvMinAdjusted[1] = 1.0f - uvMinAdjusted[1];
+    uvMaxAdjusted[1] = 1.0f - uvMaxAdjusted[1];
   }
 
-  return Quad::create(device, posMin, posMax, uvMin_adjusted, uvMax_adjusted);
+  return Quad::create(device, posMin, posMax, uvMinAdjusted, uvMaxAdjusted);
 }
 
 } // namespace RenderToTextureQuad

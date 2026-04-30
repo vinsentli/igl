@@ -10,26 +10,25 @@
 #ifndef IGL_VULKAN_COMMON_H
 #define IGL_VULKAN_COMMON_H
 
-#include <cassert>
-#include <map>
-#include <utility>
+#include <cassert> // IWYU pragma: export
+#include <utility> // IWYU pragma: export
 
 // set to 1 to see very verbose debug console logs with Vulkan commands
 #define IGL_VULKAN_PRINT_COMMANDS 0
 
-#include <igl/Macros.h>
-#include <igl/vulkan/VulkanFunctionTable.h>
+#include <igl/Macros.h> // IWYU pragma: export
+#include <igl/vulkan/VulkanFunctionTable.h> // IWYU pragma: export
 #if IGL_PLATFORM_MACOSX
-#include <vulkan/vulkan_metal.h>
+#include <vulkan/vulkan_metal.h> // IWYU pragma: export
 #endif
 
-#include <igl/ColorSpace.h>
-#include <igl/Common.h>
-#include <igl/DepthStencilState.h>
-#include <igl/Format.h>
-#include <igl/Texture.h>
-#include <igl/VertexInputState.h>
-#include <igl/vulkan/VulkanHelpers.h>
+#include <igl/ColorSpace.h> // IWYU pragma: export
+#include <igl/Common.h> // IWYU pragma: export
+#include <igl/DepthStencilState.h> // IWYU pragma: export
+#include <igl/Format.h> // IWYU pragma: export
+#include <igl/Texture.h> // IWYU pragma: export
+#include <igl/VertexInputState.h> // IWYU pragma: export
+#include <igl/vulkan/VulkanHelpers.h> // IWYU pragma: export
 
 // Enable to use VulkanMemoryAllocator (VMA)
 #define IGL_VULKAN_USE_VMA 1
@@ -52,13 +51,13 @@
 // location of failure when the result is not VK_SUCCESS, along with a stringified version of the
 // result value. Asserts at the end of the code block. The check remains even in build modes other
 // than DEBUG
-#if IGL_VERIFY_ENABLED
-// When IGL_VERIFY_ENABLED is 1, VK_ASSERT may assert but will always log so use the existing
+#if IGL_DEBUG_ABORT_ENABLED
+// When IGL_DEBUG_ABORT_ENABLED is 1, VK_ASSERT may assert but will always log so use the existing
 // macro.
 #define VK_ASSERT_FORCE_LOG(func) VK_ASSERT(func)
 #else
-// When IGL_VERIFY_ENABLED is 0, VK_ASSERT will neither log nor assert so need a separate definition
-// that will explicitly log the result
+// When IGL_DEBUG_ABORT_ENABLED is 0, VK_ASSERT will neither log nor assert so need a separate
+// definition that will explicitly log the result
 #define VK_ASSERT_FORCE_LOG(func)                           \
   {                                                         \
     const VkResult vk_assert_result = func;                 \
@@ -71,7 +70,7 @@
              ivkGetVulkanResultString(vk_assert_result));   \
     }                                                       \
   }
-#endif // IGL_VERIFY_ENABLED
+#endif // IGL_DEBUG_ABORT_ENABLED
 
 // Macro that encapsulates a function call and check its return value against VK_SUCCESS. Prints
 // location of failure when the result is not VK_SUCCESS, along with a stringified version of the
@@ -102,18 +101,14 @@ namespace igl::vulkan {
 
 // The color definitions below are used by debugging utility functions, such as the ones provided by
 // VK_EXT_debug_utils
-#define kColorGenerateMipmaps igl::Color(1.f, 0.75f, 0.f)
-#define kColorUploadImage igl::Color(1.f, 0.2f, 0.78f)
-#define kColorDebugLines igl::Color(0.f, 1.f, 1.f)
-#define kColorCommandBufferSubmissionWithFence igl::Color(0.878f, 0.69f, 1.0f) // Mauve
+#define K_COLOR_GENERATE_MIPMAPS igl::Color(1.f, 0.75f, 0.f)
+#define K_COLOR_UPLOAD_IMAGE igl::Color(1.f, 0.2f, 0.78f)
+#define K_COLOR_COMMAND_BUFFER_SUBMISSION_WITH_FENCE igl::Color(0.878f, 0.69f, 1.0f) // Mauve
 
 // The VulkanContextConfig provides a way to override some of the the default behaviors of the
 // VulkanContext
 struct VulkanContextConfig {
   bool terminateOnValidationError = false; // invoke std::terminate() on any validation error
-
-  // enable/disable enhanced shader debugging capabilities (line drawing)
-  bool enhancedShaderDebugging = false;
 
   bool enableConcurrentVkDevicesSupport = false;
 
@@ -121,7 +116,6 @@ struct VulkanContextConfig {
   bool enableGPUAssistedValidation = true;
   bool enableExtraLogs = true;
   bool enableDescriptorIndexing = false;
-  // @fb-only
   bool enableShaderInt16 = true;
   bool enableShaderDrawParameters = true;
   bool enableStorageBuffer16BitAccess = true;
@@ -129,7 +123,7 @@ struct VulkanContextConfig {
   bool enableGfxReconstruct = false;
   bool enableMultiviewPerViewViewports = false;
 
-  ColorSpace swapChainColorSpace = igl::ColorSpace::SRGB_NONLINEAR;
+  ColorSpace swapChainColorSpace = igl::ColorSpace::SRGBNonlinear;
   TextureFormat requestedSwapChainTextureFormat = igl::TextureFormat::RGBA_UNorm8;
 
   // the number of resources to support BufferAPIHintBits::Ring
@@ -158,6 +152,11 @@ struct VulkanContextConfig {
 
   // Android application name
   std::string appName;
+  size_t numExtraInstanceExtensions = 0;
+  const char* IGL_NULLABLE* IGL_NULLABLE extraInstanceExtensions = nullptr;
+
+  const char* engineName = "IGL/Vulkan";
+  const char* applicationName = "IGL/Vulkan";
 };
 
 /**
@@ -178,7 +177,7 @@ struct VulkanSampler final {
 // values
 
 Result getResultFromVkResult(VkResult result);
-void setResultFrom(Result* outResult, VkResult result);
+void setResultFrom(Result* IGL_NULLABLE outResult, VkResult result);
 VkFormat textureFormatToVkFormat(TextureFormat format);
 TextureFormat vkFormatToTextureFormat(VkFormat format);
 VkFormat invertRedAndBlue(VkFormat format);
@@ -187,7 +186,9 @@ bool isTextureFormatBGR(VkFormat format);
 bool hasDepth(VkFormat format);
 bool hasStencil(VkFormat format);
 uint32_t getNumImagePlanes(VkFormat format);
-VkMemoryPropertyFlags resourceStorageToVkMemoryPropertyFlags(ResourceStorage resourceStorage);
+VkMemoryPropertyFlags resourceStorageToVkMemoryPropertyFlags(
+    ResourceStorage resourceStorage,
+    const VkPhysicalDeviceMemoryProperties* IGL_NULLABLE memProperties = nullptr);
 VkCompareOp compareFunctionToVkCompareOp(CompareFunction func);
 VkStencilOp stencilOperationToVkStencilOp(StencilOperation op);
 VkSampleCountFlagBits getVulkanSampleCountFlags(size_t numSamples);
@@ -196,6 +197,13 @@ uint32_t getVkLayer(TextureType type, uint32_t face, uint32_t layer);
 TextureRangeDesc atVkLayer(TextureType type, const TextureRangeDesc& range, uint32_t vkLayer);
 VkColorSpaceKHR colorSpaceToVkColorSpace(ColorSpace colorSpace);
 ColorSpace vkColorSpaceToColorSpace(VkColorSpaceKHR colorSpace);
+VkComponentMapping componentMappingToVkComponentMapping(const ComponentMapping& mapping);
+struct VulkanSpecializationInfo{
+  VkSpecializationInfo info = {};
+  std::vector<int> datas;
+  std::vector<VkSpecializationMapEntry> entries;
+};
+std::shared_ptr<VulkanSpecializationInfo> createSpecializationInfo(const std::vector<int>& constantValues);
 
 struct VulkanSpecializationInfo{
   VkSpecializationInfo info = {};
@@ -227,15 +235,15 @@ void ensureShaderModule(IShaderModule* sm);
 
 /// @brief Implements the igl::IDepthStencilState interface
 struct DepthStencilState final : public IDepthStencilState {
-  explicit DepthStencilState(DepthStencilStateDesc desc) : desc_(std::move(desc)) {}
-  const DepthStencilStateDesc desc_;
+  explicit DepthStencilState(DepthStencilStateDesc desc) : desc(std::move(desc)) {}
+  const DepthStencilStateDesc desc;
 };
 
 /// @brief Implements the igl::IVertexInputState interface
 struct VertexInputState final : public IVertexInputState {
  public:
-  explicit VertexInputState(VertexInputStateDesc desc) : desc_(std::move(desc)) {}
-  const VertexInputStateDesc desc_;
+  explicit VertexInputState(VertexInputStateDesc desc) : desc(std::move(desc)) {}
+  const VertexInputStateDesc desc;
 };
 
 } // namespace igl::vulkan

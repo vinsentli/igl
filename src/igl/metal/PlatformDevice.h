@@ -7,8 +7,8 @@
 
 #pragma once
 
+#import <CoreVideo/CVImageBuffer.h>
 #import <CoreVideo/CVMetalTextureCache.h>
-#import <CoreVideo/CVPixelBuffer.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/CALayer.h>
 #import <QuartzCore/CAMetalLayer.h>
@@ -28,7 +28,7 @@ class Framebuffer;
 
 class PlatformDevice final : public IPlatformDevice {
  public:
-  static constexpr igl::PlatformDeviceType Type = igl::PlatformDeviceType::Metal;
+  static constexpr igl::PlatformDeviceType kType = igl::PlatformDeviceType::Metal;
 
   PlatformDevice(Device& device);
   ~PlatformDevice() override;
@@ -77,6 +77,17 @@ class PlatformDevice final : public IPlatformDevice {
                                                                size_t planeIndex,
                                                                Result* outResult);
 
+  /// Creates a texture from a native PixelBuffer with auto-detected format.
+  /// The texture format is inferred from the CVPixelBuffer's pixel format type and plane index,
+  /// matching the OpenGL backend's behavior of automatic format detection.
+  /// @param sourceImage source image
+  /// @param planeIndex the plane index to generate the texture
+  /// @param outResult optional result
+  /// @return pointer to generated Texture or nullptr
+  std::unique_ptr<ITexture> createTextureFromNativePixelBuffer(CVImageBufferRef sourceImage,
+                                                               size_t planeIndex,
+                                                               Result* outResult);
+
   /// Creates a texture from a native PixelBuffer
   /// @param sourceImage source image
   /// @param format the format of the source texture
@@ -109,7 +120,7 @@ class PlatformDevice final : public IPlatformDevice {
 
  protected:
   [[nodiscard]] bool isType(PlatformDeviceType t) const noexcept override {
-    return t == Type;
+    return t == kType;
   }
 
  private:

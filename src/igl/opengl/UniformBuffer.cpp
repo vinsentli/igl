@@ -11,9 +11,6 @@
 #include <memory>
 #include <igl/Common.h>
 #include <igl/IGLSafeC.h>
-#include <igl/opengl/Device.h>
-#include <igl/opengl/Errors.h>
-#include <igl/opengl/RenderPipelineState.h>
 
 namespace igl::opengl {
 namespace {
@@ -199,7 +196,7 @@ void UniformBuffer::bindUniformArray(IContext& context,
   // NOLINTEND(bugprone-easily-swappable-parameters)
   const size_t packedSize = igl::sizeForUniformType(uniformType);
   size_t primitivesPerElement = 0;
-  UniformBaseType baseType;
+  UniformBaseType baseType = UniformBaseType::Invalid;
   if (packedSize == stride) {
     UniformBuffer::bindUniform(context, shaderLocation, uniformType, start, numElements);
   } else {
@@ -305,6 +302,7 @@ void UniformBuffer::bindUniformArray(IContext& context,
       UniformBuffer::bindUniform(
           context, shaderLocation, uniformType, (uint8_t*)packedFloatArray.get(), numElements);
     } break;
+    case UniformBaseType::Invalid:
     default:
       return;
     }

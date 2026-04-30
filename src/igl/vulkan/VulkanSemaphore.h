@@ -8,7 +8,6 @@
 #pragma once
 
 #include <memory>
-
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanHelpers.h>
 
@@ -42,14 +41,17 @@ class VulkanSemaphore final {
   [[nodiscard]] VkSemaphore getVkSemaphore() const noexcept;
 
   // Exportable semaphores are not used right now, so exclude from coverage
-  // @MARK:COVERAGE_EXCLUDE_START
+  // FIXME_DEPRECATED_COVERAGE_EXCLUDE_START
   [[nodiscard]] int getFileDescriptor() const noexcept;
-  // @MARK:COVERAGE_EXCLUDE_END
+  // FIXME_DEPRECATED_COVERAGE_EXCLUDE_END
 
  public:
+  // NOLINTBEGIN(readability-identifier-naming)
   const VulkanFunctionTable* vf_{};
   VkDevice device_ = VK_NULL_HANDLE;
   VkSemaphore vkSemaphore_ = VK_NULL_HANDLE;
+  bool exportable_ = false;
+  // NOLINTEND(readability-identifier-naming)
 };
 
 } // namespace igl::vulkan

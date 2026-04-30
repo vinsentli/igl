@@ -63,11 +63,11 @@ class INativeHWTextureBuffer {
 
   Result createHWBuffer(const TextureDesc& desc, bool hasStorageAlready, bool surfaceComposite);
 
-  [[nodiscard]] LockGuard lockHWBuffer(std::byte* IGL_NULLABLE* IGL_NONNULL dst,
+  [[nodiscard]] LockGuard lockHWBuffer(std::byte * IGL_NULLABLE * IGL_NONNULL dst,
                                        RangeDesc& outRange,
                                        Result* IGL_NULLABLE outResult) const;
 
-  Result lockHWBuffer(std::byte* IGL_NULLABLE* IGL_NONNULL dst, RangeDesc& outRange) const;
+  Result lockHWBuffer(std::byte * IGL_NULLABLE * IGL_NONNULL dst, RangeDesc& outRange) const;
   Result unlockHWBuffer() const;
 
   [[nodiscard]] AHardwareBuffer* IGL_NULLABLE getHardwareBuffer() const;

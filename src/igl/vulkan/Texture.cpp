@@ -5,11 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <igl/vulkan/Texture.h>
+
 #include <igl/IGLSafeC.h>
 #include <igl/vulkan/CommandBuffer.h>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/Device.h>
-#include <igl/vulkan/Texture.h>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanImage.h>
 #include <igl/vulkan/VulkanImageView.h>
@@ -23,6 +24,8 @@ Texture::Texture(Device& device, TextureFormat format) : ITexture(format), devic
 }
 
 Result Texture::create(const TextureDesc& desc) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+
   desc_ = desc;
 
   const VulkanContext& ctx = device_.getVulkanContext();
@@ -120,7 +123,8 @@ Result Texture::create(const TextureDesc& desc) {
 
   IGL_DEBUG_ASSERT(usageFlags != 0, "Invalid usage flags");
 
-  const VkMemoryPropertyFlags memFlags = resourceStorageToVkMemoryPropertyFlags(desc_.storage);
+  const VkMemoryPropertyFlags memFlags =
+      resourceStorageToVkMemoryPropertyFlags(desc_.storage, &ctx.memoryProperties);
 
   const std::string debugNameImage =
       !desc_.debugName.empty() ? IGL_FORMAT("Image: {}", desc_.debugName.c_str()) : "";
@@ -129,13 +133,12 @@ Result Texture::create(const TextureDesc& desc) {
 
   VkImageCreateFlags createFlags = 0;
   uint32_t arrayLayerCount = desc_.numLayers;
-  VkImageViewType imageViewType;
-  VkImageType imageType;
+  VkImageViewType imageViewType = VK_IMAGE_VIEW_TYPE_MAX_ENUM;
+  VkImageType imageType = VK_IMAGE_TYPE_2D;
   VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
   switch (desc_.type) {
   case TextureType::TwoD:
     imageViewType = VK_IMAGE_VIEW_TYPE_2D;
-    imageType = VK_IMAGE_TYPE_2D;
     samples = getVulkanSampleCountFlags(desc_.numSamples);
     break;
   case TextureType::ThreeD:
@@ -145,11 +148,9 @@ Result Texture::create(const TextureDesc& desc) {
   case TextureType::Cube:
     imageViewType = VK_IMAGE_VIEW_TYPE_CUBE;
     arrayLayerCount *= 6;
-    imageType = VK_IMAGE_TYPE_2D;
     createFlags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
     break;
   case TextureType::TwoDArray:
-    imageType = VK_IMAGE_TYPE_2D;
     imageViewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
     samples = getVulkanSampleCountFlags(desc_.numSamples);
     break;
@@ -198,7 +199,6 @@ Result Texture::create(const TextureDesc& desc) {
 
     image = igl::vulkan::VulkanImage::createWithExportMemory(
         ctx,
-        ctx.getVkDevice(),
         VkExtent3D{.width = (uint32_t)desc_.width,
                    .height = (uint32_t)desc_.height,
                    .depth = (uint32_t)desc_.depth},
@@ -260,6 +260,8 @@ Result Texture::create(const TextureDesc& desc) {
 }
 
 Result Texture::createView(const Texture& baseTexture, const TextureViewDesc& desc) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+
   if (!IGL_DEBUG_VERIFY(baseTexture.texture_)) {
     return Result(Result::Code::InvalidOperation, "Cannot create a view from an empty texture");
   }
@@ -279,10 +281,6 @@ Result Texture::createView(const Texture& baseTexture, const TextureViewDesc& de
   if (!IGL_DEBUG_VERIFY(desc.type == TextureType::TwoD || desc.type == TextureType::ThreeD)) {
     IGL_DEBUG_ABORT("Only 2D and 3D texture views are supported");
     return Result(Result::Code::Unimplemented);
-  }
-
-  if (!desc.swizzle.identity()) {
-    IGL_DEBUG_ABORT("Only identity swizzle is supported (for now)");
   }
 
   if (!desc_.numMipLevels) {
@@ -347,14 +345,18 @@ Result Texture::createView(const Texture& baseTexture, const TextureViewDesc& de
   };
 
   VulkanImageView imageView = image.createImageView(
-      textureTypeToVkImageViewType(desc.type),
-      desc.format == TextureFormat::Invalid ? image.imageFormat_
-                                            : textureFormatToVkFormat(desc.format),
-      aspectToVkAspectFlags(vulkanTexture.imageView_.aspectMask_, desc.aspect),
-      desc.mipLevel,
-      desc.numMipLevels,
-      desc.layer,
-      desc.numLayers,
+      VulkanImageViewCreateInfo{
+          .viewType = textureTypeToVkImageViewType(desc.type),
+          .format = desc.format == TextureFormat::Invalid ? image.imageFormat_
+                                                          : textureFormatToVkFormat(desc.format),
+          .components = componentMappingToVkComponentMapping(desc.swizzle),
+          .subresourceRange = {.aspectMask = aspectToVkAspectFlags(
+                                   vulkanTexture.imageView_.aspectMask, desc.aspect),
+                               .baseMipLevel = desc.mipLevel,
+                               .levelCount = desc.numMipLevels,
+                               .baseArrayLayer = desc.layer,
+                               .layerCount = desc.numLayers},
+      },
       debugNameImageView.c_str());
 
   if (!IGL_DEBUG_VERIFY(imageView.valid())) {
@@ -377,7 +379,8 @@ bool Texture::needsRepacking(const TextureRangeDesc& /*range*/, size_t bytesPerR
 Result Texture::uploadInternal(TextureType /*type*/,
                                const TextureRangeDesc& range,
                                const void* data,
-                               size_t bytesPerRow) const {
+                               size_t bytesPerRow,
+                               const uint32_t* IGL_NULLABLE /*mipLevelBytes*/) const {
   if (!data) {
     return Result{};
   }
@@ -395,6 +398,24 @@ Result Texture::uploadInternal(TextureType /*type*/,
   const VkImageAspectFlags imageAspectFlags = texture_->imageView_.getVkImageAspectFlags();
   ctx.stagingDevice_->imageData(
       vulkanImage, desc_.type, range, getProperties(), bytesPerRow, imageAspectFlags, data);
+
+  // Generate mipmaps if requested by the user
+  if (desc_.mipmapGeneration == TextureDesc::TextureMipmapGeneration::AutoGenerateOnUpload) {
+    if (range.mipLevel != 0) {
+      return Result{Result::Code::InvalidOperation,
+                    "AutoGenerateOnUpload requires mipLevel to be uploaded to be 0"};
+    }
+
+    Result result;
+    const auto cq = device_.createCommandQueue({}, &result);
+    if (!result.isOk()) {
+      return result;
+    }
+
+    generateMipmap(*cq, nullptr);
+
+    mipmapsAreAvailableAndUploaded_ = true;
+  }
 
   return Result();
 }
@@ -445,7 +466,7 @@ void Texture::generateMipmap(ICommandQueue& /* unused */,
   if (texture_ && desc_.numMipLevels > 1) {
     const auto& ctx = device_.getVulkanContext();
     const auto& wrapper = ctx.immediate_->acquire();
-    texture_->image_.generateMipmap(wrapper.cmdBuf_, range ? *range : desc_.asRange());
+    texture_->image_.generateMipmap(wrapper.cmdBuf, range ? *range : desc_.asRange());
     ctx.immediate_->submit(wrapper);
   }
 }
@@ -459,6 +480,10 @@ void Texture::generateMipmap(ICommandBuffer& cmdBuffer, const TextureRangeDesc* 
 }
 
 bool Texture::isRequiredGenerateMipmap() const {
+  if (mipmapsAreAvailableAndUploaded_) {
+    return false;
+  }
+
   if (!texture_ || desc_.numMipLevels <= 1) {
     return false;
   }
@@ -474,7 +499,7 @@ uint64_t Texture::getTextureId() const {
 }
 
 VkImageView Texture::getVkImageView() const {
-  return texture_ ? texture_->imageView_.vkImageView_ : VK_NULL_HANDLE;
+  return texture_ ? texture_->imageView_.vkImageView : VK_NULL_HANDLE;
 }
 
 VkImageView Texture::getVkImageViewForFramebuffer(uint32_t mipLevel,
@@ -509,7 +534,7 @@ VkImageView Texture::getVkImageViewForFramebuffer(uint32_t mipLevel,
       isStereo ? VK_REMAINING_ARRAY_LAYERS : 1u,
       "Image View: igl/vulkan/Texture.cpp: Texture::getVkImageViewForFramebuffer()");
 
-  return imageViews[index].vkImageView_;
+  return imageViews[index].vkImageView;
 }
 
 VkImage Texture::getVkImage() const {
@@ -525,6 +550,10 @@ bool Texture::isSwapchainTexture() const {
   return texture_ ? texture_->image_.isExternallyManaged_ : false;
 }
 
+TextureDesc::TextureMipmapGeneration Texture::getMipmapGeneration() const {
+  return desc_.mipmapGeneration;
+}
+
 uint32_t Texture::getNumVkLayers() const {
   return desc_.type == TextureType::Cube ? 6u : desc_.numLayers;
 }
@@ -537,13 +566,36 @@ void Texture::clearColorTexture(const igl::Color& rgba) {
   const igl::vulkan::VulkanImage& img = texture_->image_;
   IGL_DEBUG_ASSERT(img.valid());
 
-  const auto& wrapper = img.ctx_->stagingDevice_->immediate_->acquire();
+  const auto& wrapper = img.ctx_->stagingDevice_->immediate->acquire();
 
   // There is a memory barrier inserted in clearColorImage().
   // The memory barrier is necessary to ensure synchronized access.
-  img.clearColorImage(wrapper.cmdBuf_, rgba);
+  img.clearColorImage(wrapper.cmdBuf, rgba);
 
-  img.ctx_->stagingDevice_->immediate_->submit(wrapper);
+  img.ctx_->stagingDevice_->immediate->submit(wrapper);
+}
+
+// IAttachmentInterop interface implementation
+void* Texture::getNativeImage() const {
+  return reinterpret_cast<void*>(getVkImage());
+}
+
+void* Texture::getNativeImageView() const {
+  return reinterpret_cast<void*>(getVkImageView());
+}
+
+const base::AttachmentInteropDesc& Texture::getDesc() const {
+  // Update cached attachment descriptor from IGL TextureDesc
+  attachmentDesc_.width = desc_.width;
+  attachmentDesc_.height = desc_.height;
+  attachmentDesc_.depth = desc_.depth;
+  attachmentDesc_.numLayers = desc_.numLayers;
+  attachmentDesc_.numSamples = desc_.numSamples;
+  attachmentDesc_.numMipLevels = desc_.numMipLevels;
+  attachmentDesc_.type = desc_.type;
+  attachmentDesc_.format = desc_.format;
+  attachmentDesc_.isSampled = (desc_.usage & TextureDesc::TextureUsageBits::Sampled) != 0;
+  return attachmentDesc_;
 }
 
 } // namespace igl::vulkan

@@ -10,27 +10,33 @@
 #ifndef IGL_COMMON_H
 #define IGL_COMMON_H
 
-#include <cstdarg>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
-#include <memory>
 #include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
 #include <igl/Color.h>
 #include <igl/Core.h>
+#include <igl/base/Common.h>
+#include <igl/base/Handle.h>
+#include <igl/base/Pool.h>
 
 #define IGL_ARRAY_NUM_ELEMENTS(x) (sizeof(x) / sizeof((x)[0]))
 
 namespace igl {
+
+// Re-export types from base namespace for backward compatibility
+using base::BackendType;
+using base::TextureFormat;
+using base::TextureType;
 
 // Callback to delete and/or release a pointer
 using Deleter = void (*)(void* IGL_NULLABLE);
 
 /// Device Capabilities or Metal Features
 constexpr uint32_t IGL_TEXTURE_SAMPLERS_MAX = 16;
+
 constexpr uint32_t IGL_VERTEX_ATTRIBUTES_MAX = 24;
 
 // maximum number of buffers that can be bound to a shader stage
@@ -92,13 +98,17 @@ struct Result {
 
     /// Something bad happened internally but we don't know what
     RuntimeError,
+
+    /// GPU device was lost — connection to the hardware was severed (e.g. hardware disconnect).
+    /// After this, all GPU operations will fail until the device is recreated.
+    DeviceLost,
   };
 
   Code code = Code::Ok;
   std::string message;
   explicit Result() = default;
   explicit Result(Code code, const char* IGL_NULLABLE message = "") :
-    code(code), message(message) {}
+    code(code), message(message ? static_cast<const char*>(message) : "") {}
   explicit Result(Code code, std::string message) : code(code), message(std::move(message)) {}
 
   [[nodiscard]] bool isOk() const {
@@ -129,18 +139,9 @@ struct Result {
   static void setOk(Result* IGL_NULLABLE outResult) {
     if (outResult != nullptr) {
       outResult->code = Code::Ok;
-      outResult->message = std::string();
+      outResult->message.clear();
     }
   }
-};
-
-enum class BackendType {
-  Invalid,
-  OpenGL,
-  Metal,
-  Vulkan,
-  // @fb-only
-  Custom,
 };
 
 enum class BackendFlavor : uint8_t {
@@ -149,6 +150,7 @@ enum class BackendFlavor : uint8_t {
   OpenGL_ES,
   Metal,
   Vulkan,
+  D3D12,
   // @fb-only
 };
 
@@ -258,7 +260,7 @@ class ScopeGuard {
 template<typename T>
 // Ignore readability-named-parameter
 // @lint-ignore CLANGTIDY
-ScopeGuard<T> operator+(ScopeGuardOnExit, T&& fn) {
+ScopeGuard<T> operator+(ScopeGuardOnExit /*guard*/, T&& fn) {
   return ScopeGuard<T>(std::forward<T>(fn));
 }
 
@@ -278,67 +280,21 @@ void optimizedMemcpy(void* IGL_NULLABLE dst, const void* IGL_NULLABLE src, size_
 ///--------------------------------------
 /// MARK: - Handle
 
-// Non-ref counted handles; based on:
-// https://enginearchitecture.realtimerendering.com/downloads/reac2023_modern_mobile_rendering_at_hypehype.pdf
-// https://github.com/corporateshark/lightweightvk/blob/main/lvk/LVK.h
-template<typename ObjectType>
-class Handle final {
- public:
-  Handle() noexcept = default;
-
-  [[nodiscard]] bool empty() const noexcept {
-    return gen_ == 0;
-  }
-  [[nodiscard]] bool valid() const noexcept {
-    return gen_ != 0;
-  }
-  [[nodiscard]] uint32_t index() const noexcept {
-    return index_;
-  }
-  [[nodiscard]] uint32_t gen() const noexcept {
-    return gen_;
-  }
-  [[nodiscard]] void* IGL_NULLABLE indexAsVoid() const noexcept {
-    return reinterpret_cast<void*>(static_cast<ptrdiff_t>(index_));
-  }
-  bool operator==(const Handle<ObjectType>& other) const noexcept {
-    return index_ == other.index_ && gen_ == other.gen_;
-  }
-  bool operator!=(const Handle<ObjectType>& other) const noexcept {
-    return index_ != other.index_ || gen_ != other.gen_;
-  }
-  // allow conditions 'if (handle)'
-  explicit operator bool() const noexcept {
-    return gen_ != 0;
-  }
-
- private:
-  Handle(uint32_t index, uint32_t gen) noexcept : index_(index), gen_(gen) {}
-
-  template<typename ObjectType_, typename ImplObjectType>
-  friend class Pool;
-
-  uint32_t index_ = 0; // the index of this handle within a Pool
-  uint32_t gen_ = 0; // the generation of this handle to prevent the ABA Problem
-};
-
-static_assert(sizeof(Handle<class Foo>) == sizeof(uint64_t));
-
 // specialized with dummy structs for type safety
-using BindGroupTextureHandle = igl::Handle<struct BindGroupTextureTag>;
-using BindGroupBufferHandle = igl::Handle<struct BindGroupBufferTag>;
-using TextureHandle = igl::Handle<struct TextureTag>;
-using SamplerHandle = igl::Handle<struct SamplerTag>;
-using DepthStencilStateHandle = igl::Handle<struct DepthStencilStateTag>;
+using BindGroupTextureHandle = Handle<struct BindGroupTextureTag>;
+using BindGroupBufferHandle = Handle<struct BindGroupBufferTag>;
+using TextureHandle = Handle<struct TextureTag>;
+using SamplerHandle = Handle<struct SamplerTag>;
+using DepthStencilStateHandle = Handle<struct DepthStencilStateTag>;
 
 class IDevice;
 
 // forward declarations to access incomplete type IDevice
-void destroy(igl::IDevice* IGL_NULLABLE device, igl::BindGroupTextureHandle handle);
-void destroy(igl::IDevice* IGL_NULLABLE device, igl::BindGroupBufferHandle handle);
-void destroy(igl::IDevice* IGL_NULLABLE device, igl::TextureHandle handle);
-void destroy(igl::IDevice* IGL_NULLABLE device, igl::SamplerHandle handle);
-void destroy(igl::IDevice* IGL_NULLABLE device, igl::DepthStencilStateHandle handle);
+void destroy(IDevice* IGL_NULLABLE device, BindGroupTextureHandle handle);
+void destroy(IDevice* IGL_NULLABLE device, BindGroupBufferHandle handle);
+void destroy(IDevice* IGL_NULLABLE device, TextureHandle handle);
+void destroy(IDevice* IGL_NULLABLE device, SamplerHandle handle);
+void destroy(IDevice* IGL_NULLABLE device, DepthStencilStateHandle handle);
 
 ///--------------------------------------
 /// MARK: - Holder
@@ -349,7 +305,7 @@ template<typename HandleType>
 class Holder final {
  public:
   Holder() noexcept = default;
-  Holder(igl::IDevice* IGL_NULLABLE device, HandleType handle) noexcept :
+  Holder(IDevice* IGL_NULLABLE device, HandleType handle) noexcept :
     device_(device), handle_(handle) {}
   ~Holder() {
     igl::destroy(device_, handle_);
@@ -404,110 +360,8 @@ class Holder final {
   }
 
  private:
-  igl::IDevice* IGL_NULLABLE device_ = nullptr;
+  IDevice* IGL_NULLABLE device_ = nullptr;
   HandleType handle_ = {};
-};
-
-///--------------------------------------
-/// MARK: - Pool
-
-// A Pool of objects which is compatible with the abovementioned Handle<> types; based on:
-// https://enginearchitecture.realtimerendering.com/downloads/reac2023_modern_mobile_rendering_at_hypehype.pdf
-// https://github.com/corporateshark/lightweightvk/blob/main/lvk/Pool.h
-template<typename ObjectType, typename ImplObjectType>
-class Pool {
-  static constexpr uint32_t kListEndSentinel = 0xffffffff;
-  struct PoolEntry {
-    explicit PoolEntry(ImplObjectType& obj) noexcept : obj_(std::move(obj)) {}
-    ImplObjectType obj_ = {};
-    uint32_t gen_ = 1;
-    uint32_t nextFree_ = kListEndSentinel;
-  };
-  uint32_t freeListHead_ = kListEndSentinel;
-  uint32_t numObjects_ = 0;
-
- public:
-  std::vector<PoolEntry> objects_;
-
-  [[nodiscard]] Handle<ObjectType> create(ImplObjectType&& obj) {
-    uint32_t idx = 0;
-    if (freeListHead_ != kListEndSentinel) {
-      idx = freeListHead_;
-      freeListHead_ = objects_[idx].nextFree_;
-      objects_[idx].obj_ = std::move(obj);
-    } else {
-      idx = (uint32_t)objects_.size();
-      objects_.emplace_back(obj);
-    }
-    numObjects_++;
-    return Handle<ObjectType>(idx, objects_[idx].gen_);
-  }
-  void destroy(Handle<ObjectType> handle) noexcept {
-    if (handle.empty()) {
-      return;
-    }
-    IGL_DEBUG_ASSERT(numObjects_ > 0, "Double deletion");
-    const uint32_t index = handle.index();
-    IGL_DEBUG_ASSERT(index < objects_.size());
-    IGL_DEBUG_ASSERT(handle.gen() == objects_[index].gen_, "Double deletion");
-    objects_[index].obj_ = ImplObjectType{};
-    objects_[index].gen_++;
-    objects_[index].nextFree_ = freeListHead_;
-    freeListHead_ = index;
-    numObjects_--;
-  }
-  // this is a helper function to simplify migration to handles (should be deprecated after the
-  // migration is completed)
-  void destroy(uint32_t index) noexcept {
-    IGL_DEBUG_ASSERT(numObjects_ > 0, "Double deletion");
-    IGL_DEBUG_ASSERT(index < objects_.size());
-    objects_[index].obj_ = ImplObjectType{};
-    objects_[index].gen_++;
-    objects_[index].nextFree_ = freeListHead_;
-    freeListHead_ = index;
-    numObjects_--;
-  }
-  [[nodiscard]] const ImplObjectType* IGL_NULLABLE get(Handle<ObjectType> handle) const noexcept {
-    if (handle.empty()) {
-      return nullptr;
-    }
-
-    const uint32_t index = handle.index();
-    IGL_DEBUG_ASSERT(index < objects_.size());
-    IGL_DEBUG_ASSERT(handle.gen() == objects_[index].gen_, "Accessing a deleted object");
-    return &objects_[index].obj_;
-  }
-  [[nodiscard]] ImplObjectType* IGL_NULLABLE get(Handle<ObjectType> handle) noexcept {
-    if (handle.empty()) {
-      return nullptr;
-    }
-
-    const uint32_t index = handle.index();
-    IGL_DEBUG_ASSERT(index < objects_.size());
-    IGL_DEBUG_ASSERT(handle.gen() == objects_[index].gen_, "Accessing a deleted object");
-    return &objects_[index].obj_;
-  }
-  [[nodiscard]] Handle<ObjectType> findObject(const ImplObjectType* IGL_NULLABLE obj) noexcept {
-    if (!obj) {
-      return {};
-    }
-
-    for (size_t idx = 0; idx != objects_.size(); idx++) {
-      if (objects_[idx].obj_ == *obj) {
-        return Handle<ObjectType>((uint32_t)idx, objects_[idx].gen_);
-      }
-    }
-
-    return {};
-  }
-  void clear() noexcept {
-    objects_.clear();
-    freeListHead_ = kListEndSentinel;
-    numObjects_ = 0;
-  }
-  [[nodiscard]] uint32_t numObjects() const noexcept {
-    return numObjects_;
-  }
 };
 
 } // namespace igl

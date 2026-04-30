@@ -63,8 +63,19 @@ std::shared_ptr<ITexture> Platform::loadTexture(const ImageData& imageData,
                                                 TextureFormat format,
                                                 igl::TextureDesc::TextureUsageBits usage,
                                                 const char* debugName) {
+  // @fb-only
+  // For D3D12 backend: If
+  // mipmaps are requested, we need Attachment usage so that generateMipmap can create render
+  // targets for each mip level.
+  auto effectiveUsage = usage;
+  if (calculateMipmapLevels && getDevice().getBackendType() == igl::BackendType::D3D12) {
+    effectiveUsage = static_cast<igl::TextureDesc::TextureUsageBits>(
+        static_cast<uint32_t>(usage) |
+        static_cast<uint32_t>(igl::TextureDesc::TextureUsageBits::Attachment));
+  }
+
   TextureDesc texDesc =
-      igl::TextureDesc::new2D(format, imageData.desc.width, imageData.desc.height, usage);
+      igl::TextureDesc::new2D(format, imageData.desc.width, imageData.desc.height, effectiveUsage);
   texDesc.numMipLevels =
       calculateMipmapLevels ? igl::TextureDesc::calcNumMipLevels(texDesc.width, texDesc.height) : 1;
   texDesc.debugName = debugName;
@@ -73,7 +84,10 @@ std::shared_ptr<ITexture> Platform::loadTexture(const ImageData& imageData,
   auto tex = getDevice().createTexture(texDesc, &res);
   IGL_DEBUG_ASSERT(res.isOk(), res.message.c_str());
   IGL_DEBUG_ASSERT(tex != nullptr, "createTexture returned null for some reason");
-  tex->upload(tex->getFullRange(), imageData.data->data());
+  tex->upload(tex->getFullRange(),
+              imageData.data->data(),
+              0,
+              !imageData.mipLevelBytes.empty() ? imageData.mipLevelBytes.data() : nullptr);
   return tex;
 }
 

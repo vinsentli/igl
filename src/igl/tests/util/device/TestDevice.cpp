@@ -19,13 +19,16 @@
 // clang-format on
 // @fb-only
 #if IGL_METAL_SUPPORTED
-#include "metal/TestDevice.h"
+#include <igl/tests/util/device/MetalTestDevice.h>
 #endif
 #if IGL_OPENGL_SUPPORTED
-#include "opengl/TestDevice.h"
+#include <igl/tests/util/device/opengl/TestDevice.h>
 #endif
 #if IGL_VULKAN_SUPPORTED
-#include "vulkan/TestDevice.h"
+#include <igl/tests/util/device/vulkan/TestDevice.h>
+#endif
+#if IGL_D3D12_SUPPORTED
+#include <igl/tests/util/device/d3d12/TestDevice.h>
 #endif
 // @fb-only
 // @fb-only
@@ -45,16 +48,18 @@ bool isBackendTypeSupported(BackendType backendType) {
     return IGL_OPENGL_SUPPORTED;
   case ::igl::BackendType::Vulkan:
     return IGL_VULKAN_SUPPORTED;
+  case ::igl::BackendType::D3D12:
+    return IGL_D3D12_SUPPORTED;
   // @fb-only
     // @fb-only
   }
   IGL_UNREACHABLE_RETURN(false)
 }
 
-std::shared_ptr<IDevice> createTestDevice(BackendType backendType, const TestDeviceConfig& config) {
+std::unique_ptr<IDevice> createTestDevice(BackendType backendType, const TestDeviceConfig& config) {
   if (backendType == ::igl::BackendType::Metal) {
 #if IGL_METAL_SUPPORTED
-    return metal::createTestDevice();
+    return createMetalTestDevice();
 #else
     return nullptr;
 #endif
@@ -73,8 +78,24 @@ std::shared_ptr<IDevice> createTestDevice(BackendType backendType, const TestDev
     return nullptr;
 #endif
   }
+  if (backendType == ::igl::BackendType::D3D12) {
+#if IGL_D3D12_SUPPORTED
+    IGL_LOG_INFO("[Tests] Creating D3D12 test device (debug layer: enabled)\n");
+    auto dev = d3d12::createTestDevice(true);
+    if (!dev) {
+      IGL_LOG_ERROR("[Tests] D3D12 test device creation failed\n");
+    } else {
+      IGL_LOG_INFO("[Tests] D3D12 test device created OK\n");
+    }
+    return dev;
+#else
+    return nullptr;
+#endif
+  }
   // @fb-only
 // @fb-only
+    // @fb-only
+    // @fb-only
     // @fb-only
 // @fb-only
     // @fb-only

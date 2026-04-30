@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <igl/Common.h>
+#include <memory>
 #include <igl/ComputePipelineState.h>
-#include <igl/vulkan/Common.h>
 #include <igl/vulkan/PipelineState.h>
+#include <igl/vulkan/VulkanFunctionTable.h>
 
 namespace igl::vulkan {
 
@@ -20,6 +20,10 @@ class ComputePipelineState final : public IComputePipelineState, public Pipeline
  public:
   ComputePipelineState(const igl::vulkan::Device& device, ComputePipelineDesc desc);
   ~ComputePipelineState() override;
+  ComputePipelineState(const ComputePipelineState&) = delete;
+  ComputePipelineState& operator=(const ComputePipelineState&) = delete;
+  ComputePipelineState(ComputePipelineState&&) = delete;
+  ComputePipelineState& operator=(ComputePipelineState&&) = delete;
   std::shared_ptr<IComputePipelineReflection> computePipelineReflection() override {
     return nullptr;
   }

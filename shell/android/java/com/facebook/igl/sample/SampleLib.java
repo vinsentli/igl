@@ -9,6 +9,7 @@
 
 package com.facebook.igl.shell;
 
+import android.content.Intent;
 import android.content.res.AssetManager;
 import android.view.Surface;
 
@@ -48,13 +49,14 @@ public class SampleLib {
       BackendVersion backendVersion,
       int swapchainColorTextureFormat,
       AssetManager assetManager,
-      Surface surface);
+      Surface surface,
+      Intent intent);
 
   public static native void setActiveBackendVersion(BackendVersion backendVersion);
 
   public static native void surfaceChanged(Surface surface, int width, int height);
 
-  public static native void render(float displayScale);
+  public static native boolean render(float displayScale);
 
   public static native void touchEvent(boolean isDown, float x, float y, float dx, float dy);
 
@@ -63,6 +65,10 @@ public class SampleLib {
   public static native boolean isSRGBTextureFormat(int textureFormat);
 
   public static native void surfaceDestroyed(Surface surface);
+
+  /// @brief Returns true if the active renderer is in headless mode.
+  /// Must be called after init().
+  public static native boolean isHeadless();
 
   public static class RenderSessionConfig {
     String displayName;

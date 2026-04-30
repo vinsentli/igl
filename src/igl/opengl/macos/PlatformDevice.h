@@ -20,9 +20,10 @@ namespace macos {
 
 class Device;
 
+// @fb-only
 class PlatformDevice : public opengl::PlatformDevice {
  public:
-  static constexpr igl::PlatformDeviceType Type = igl::PlatformDeviceType::OpenGLMacOS;
+  static constexpr igl::PlatformDeviceType kType = igl::PlatformDeviceType::OpenGLMacOS;
 
   PlatformDevice(Device& owner);
   ~PlatformDevice() override = default;
@@ -70,7 +71,7 @@ class PlatformDevice : public opengl::PlatformDevice {
 
  private:
   std::shared_ptr<ViewTextureTarget> drawableTexture_;
-  igl::TextureFormat drawableTextureFormat_ = igl::TextureFormat::RGBA_SRGB;
+  TextureFormat drawableTextureFormat_ = TextureFormat::RGBA_SRGB;
 };
 } // namespace macos
 } // namespace igl::opengl

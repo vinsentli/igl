@@ -8,9 +8,7 @@
 #include "VulkanSwapchain.h"
 
 #include <igl/vulkan/Common.h>
-#include <igl/vulkan/Device.h>
 #include <igl/vulkan/VulkanContext.h>
-#include <igl/vulkan/VulkanDevice.h>
 #include <igl/vulkan/VulkanSemaphore.h>
 #include <igl/vulkan/VulkanTexture.h>
 
@@ -127,11 +125,7 @@ namespace igl::vulkan {
 #if USE_DEFAULT_SWAPCHAIN
 
 VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t height) :
-  ctx_(ctx),
-  device_(ctx.device_->getVkDevice()),
-  graphicsQueue_(ctx.deviceQueues_.graphicsQueue),
-  width_(width),
-  height_(height) {
+  ctx_(ctx), graphicsQueue_(ctx.deviceQueues_.graphicsQueue), width_(width), height_(height) {
   surfaceFormat_ = chooseSwapSurfaceFormat(ctx.deviceSurfaceFormats_,
                                            ctx.config_.requestedSwapChainTextureFormat,
                                            ctx.config_.swapChainColorSpace);
@@ -166,7 +160,7 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
 
   {
     VK_ASSERT(ivkCreateSwapchain(&ctx_.vf_,
-                                 device_,
+                                 ctx.getVkDevice(),
                                  ctx.vkSurface_,
                                  requestedSwapchainImageCount,
                                  surfaceFormat_,
@@ -178,12 +172,13 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
                                  height,
                                  &swapchain_));
   }
-  VK_ASSERT(ctx.vf_.vkGetSwapchainImagesKHR(device_, swapchain_, &numSwapchainImages_, nullptr));
+  VK_ASSERT(ctx.vf_.vkGetSwapchainImagesKHR(
+      ctx.getVkDevice(), swapchain_, &numSwapchainImages_, nullptr));
   IGL_LOG_INFO("vkGetSwapchainImagesKHR, request min:%d, actual:%d", requestedSwapchainImageCount, numSwapchainImages_);
   std::vector<VkImage> swapchainImages(numSwapchainImages_);
   swapchainImages.resize(numSwapchainImages_);
   VK_ASSERT(ctx.vf_.vkGetSwapchainImagesKHR(
-      device_, swapchain_, &numSwapchainImages_, swapchainImages.data()));
+      ctx.getVkDevice(), swapchain_, &numSwapchainImages_, swapchainImages.data()));
 
   IGL_DEBUG_ASSERT(numSwapchainImages_ > 0);
 
@@ -195,9 +190,9 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
   // create images, image views and framebuffers
   swapchainTextures_ = std::make_unique<std::shared_ptr<VulkanTexture>[]>(numSwapchainImages_);
   for (uint32_t i = 0; i < numSwapchainImages_; i++) {
-    auto image = VulkanImage(
-        ctx_, device_, swapchainImages[i], IGL_FORMAT("Image: swapchain #{}", i).c_str());
-    image.extent_ = {width, height, 1};
+    auto image =
+        VulkanImage(ctx_, swapchainImages[i], IGL_FORMAT("Image: swapchain #{}", i).c_str());
+    image.extent_ = {.width = width, .height = height, .depth = 1};
     // set usage flags for retrieved images
     image.usageFlags_ = usageFlags;
     image.imageFormat_ = surfaceFormat_.format;
@@ -215,16 +210,18 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
 
   // create semaphores and fences for swapchain images
   for (uint32_t i = 0; i < numSwapchainImages_; ++i) {
-    timelineWaitValues_.emplace_back(0);
-    acquireSemaphores_.emplace_back(
-        ctx_.vf_, device_, false, IGL_FORMAT("Semaphore: swapchain-acquire #{}", i).c_str());
+    timelineWaitValues.emplace_back(0);
+    acquireSemaphores.emplace_back(ctx_.vf_,
+                                   ctx_.getVkDevice(),
+                                   false,
+                                   IGL_FORMAT("Semaphore: swapchain-acquire #{}", i).c_str());
     if (!ctx_.timelineSemaphore_) {
       // this can be removed once we switch to timeline semaphores
-      acquireFences_.emplace_back(ctx_.vf_,
-                                  device_,
-                                  VK_FENCE_CREATE_SIGNALED_BIT,
-                                  false,
-                                  IGL_FORMAT("Fence: swapchain-acquire #{}", i).c_str());
+      acquireFences.emplace_back(ctx_.vf_,
+                                 ctx_.getVkDevice(),
+                                 VK_FENCE_CREATE_SIGNALED_BIT,
+                                 false,
+                                 IGL_FORMAT("Fence: swapchain-acquire #{}", i).c_str());
     }
   }
 }
@@ -260,7 +257,6 @@ void VulkanSwapchain::lazyAllocateDepthBuffer() const {
 #endif
 
   auto depthImage = VulkanImage(ctx_,
-                                device_,
                                 VkExtent3D{width_, height_, 1},
                                 VK_IMAGE_TYPE_2D,
                                 depthFormat,
@@ -279,15 +275,15 @@ void VulkanSwapchain::lazyAllocateDepthBuffer() const {
 }
 
 VkSemaphore VulkanSwapchain::getSemaphore() const noexcept {
-  return acquireSemaphores_[currentSemaphoreIndex_].vkSemaphore_;
+  return acquireSemaphores[currentSemaphoreIndex_].vkSemaphore_;
 }
 
 VulkanSwapchain::~VulkanSwapchain() {
-  for (auto& fence : acquireFences_) {
+  for (auto& fence : acquireFences) {
     // this can be removed once we switch to timeline semaphores
     fence.wait();
   }
-  ctx_.vf_.vkDestroySwapchainKHR(device_, swapchain_, nullptr);
+  ctx_.vf_.vkDestroySwapchainKHR(ctx_.getVkDevice(), swapchain_, nullptr);
 }
 
 Result VulkanSwapchain::acquireNextImage() {
@@ -300,14 +296,18 @@ Result VulkanSwapchain::acquireNextImage() {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
         .semaphoreCount = 1,
         .pSemaphores = &ctx_.timelineSemaphore_->vkSemaphore_,
-        .pValues = &timelineWaitValues_[currentImageIndex_],
+        .pValues = &timelineWaitValues[currentImageIndex_],
     };
-    VK_ASSERT(ctx_.vf_.vkWaitSemaphoresKHR(device_, &waitInfo, UINT64_MAX));
+    VK_ASSERT(ctx_.vf_.vkWaitSemaphoresKHR(ctx_.getVkDevice(), &waitInfo, UINT64_MAX));
 
-    VkSemaphore acquireSemaphore = acquireSemaphores_[currentImageIndex_].getVkSemaphore();
+    const VkSemaphore acquireSemaphore = acquireSemaphores[currentImageIndex_].getVkSemaphore();
     // when timeout is set to UINT64_MAX, we wait until the next image has been acquired
-    acquireResult = ctx_.vf_.vkAcquireNextImageKHR(
-        device_, swapchain_, UINT64_MAX, acquireSemaphore, VK_NULL_HANDLE, &currentImageIndex_);
+    acquireResult = ctx_.vf_.vkAcquireNextImageKHR(ctx_.getVkDevice(),
+                                                   swapchain_,
+                                                   UINT64_MAX,
+                                                   acquireSemaphore,
+                                                   VK_NULL_HANDLE,
+                                                   &currentImageIndex_);
 
     currentSemaphoreIndex_ =
         currentImageIndex_; // remove `currentSemaphoreIndex_` once we switch to timeline semaphores
@@ -323,18 +323,18 @@ Result VulkanSwapchain::acquireNextImage() {
     //   If semaphore is not VK_NULL_HANDLE it must not have any uncompleted signal or wait
     //   operations pending
     //   (https://vulkan.lunarg.com/doc/view/1.3.275.0/windows/1.3-extensions/vkspec.html#VUID-vkAcquireNextImageKHR-semaphore-01779)
-    acquireFences_[currentImageIndex_].wait();
-    acquireFences_[currentImageIndex_].reset();
+    acquireFences[currentImageIndex_].wait();
+    acquireFences[currentImageIndex_].reset();
 
     currentSemaphoreIndex_ = currentImageIndex_;
 
     // when timeout is set to UINT64_MAX, we wait until the next image has been acquired
     acquireResult =
-        ctx_.vf_.vkAcquireNextImageKHR(device_,
+        ctx_.vf_.vkAcquireNextImageKHR(ctx_.getVkDevice(),
                                        swapchain_,
                                        UINT64_MAX,
-                                       acquireSemaphores_[currentImageIndex_].vkSemaphore_,
-                                       acquireFences_[currentImageIndex_].vkFence_,
+                                       acquireSemaphores[currentImageIndex_].vkSemaphore_,
+                                       acquireFences[currentImageIndex_].vkFence_,
                                        &currentImageIndex_);
   }
 

@@ -7,6 +7,7 @@
 
 #include <igl/metal/BufferSynchronizationManager.h>
 
+#import <Metal/Metal.h>
 #include <igl/metal/CommandBuffer.h>
 
 namespace igl::metal {

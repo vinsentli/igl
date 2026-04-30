@@ -10,14 +10,12 @@
 #include <shell/openxr/mobile/vulkan/XrSwapchainProviderImplVulkan.h>
 
 #include <fmt/core.h>
+#include <shell/openxr/XrLog.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/Texture.h>
 #include <igl/vulkan/VulkanContext.h>
-#include <igl/vulkan/VulkanDevice.h>
 #include <igl/vulkan/VulkanImage.h>
 #include <igl/vulkan/VulkanImageView.h>
-
-#include <shell/openxr/XrLog.h>
 
 namespace igl::shell::openxr::mobile {
 namespace {
@@ -49,12 +47,13 @@ void enumerateSwapchainImages(
   for (uint32_t i = 0; i < numImages; ++i) {
     auto image = igl::vulkan::VulkanImage(
         ctx,
-        ctx.device_->device_,
         images[i].image,
         fmt::format("Image: swapchain {} #{}", isDepth ? "depth" : "color", i).c_str(),
         usageFlags,
         true,
-        VkExtent3D{swapchainImageInfo.imageWidth, swapchainImageInfo.imageHeight, 0},
+        VkExtent3D{.width = swapchainImageInfo.imageWidth,
+                   .height = swapchainImageInfo.imageHeight,
+                   .depth = 0},
         VK_IMAGE_TYPE_2D,
         format,
         1,
@@ -136,7 +135,7 @@ void XrSwapchainProviderImplVulkan::enumerateImages(
     XrSwapchain colorSwapchain,
     XrSwapchain depthSwapchain,
     const impl::SwapchainImageInfo& swapchainImageInfo,
-    uint8_t numViews) noexcept {
+    uint8_t numViews) noexcept { // NOLINT(bugprone-exception-escape)
   enumerateSwapchainImages(device,
                            colorSwapchain,
                            static_cast<VkFormat>(swapchainImageInfo.colorFormat),
@@ -148,10 +147,10 @@ void XrSwapchainProviderImplVulkan::enumerateImages(
 
   auto vkDepthFormat = static_cast<VkFormat>(swapchainImageInfo.depthFormat);
   VkImageAspectFlags depthAspectFlags = 0;
-  if (vulkan::VulkanImage::isDepthFormat(vkDepthFormat)) {
+  if (igl::vulkan::hasDepth(vkDepthFormat)) {
     depthAspectFlags |= VK_IMAGE_ASPECT_DEPTH_BIT;
   }
-  if (vulkan::VulkanImage::isStencilFormat(vkDepthFormat)) {
+  if (igl::vulkan::hasStencil(vkDepthFormat)) {
     depthAspectFlags |= VK_IMAGE_ASPECT_STENCIL_BIT;
   }
   enumerateSwapchainImages(device,
@@ -169,7 +168,7 @@ SurfaceTextures XrSwapchainProviderImplVulkan::getSurfaceTextures(
     XrSwapchain colorSwapchain,
     XrSwapchain depthSwapchain,
     const impl::SwapchainImageInfo& swapchainImageInfo,
-    uint8_t numViews) noexcept {
+    uint8_t numViews) noexcept { // NOLINT(bugprone-exception-escape)
   auto colorTexture = getSurfaceTexture(device,
                                         colorSwapchain,
                                         swapchainImageInfo,
@@ -185,6 +184,6 @@ SurfaceTextures XrSwapchainProviderImplVulkan::getSurfaceTextures(
                                         static_cast<VkFormat>(swapchainImageInfo.depthFormat),
                                         depthTextures_);
 
-  return {colorTexture, depthTexture};
+  return {.color = colorTexture, .depth = depthTexture};
 }
 } // namespace igl::shell::openxr::mobile

@@ -7,8 +7,9 @@
 
 #pragma once
 
-#include <Metal/Metal.h>
 #include <igl/CommandBuffer.h>
+
+@protocol MTLCommandBuffer;
 
 namespace igl::metal {
 
@@ -65,6 +66,8 @@ class CommandBuffer final : public ICommandBuffer,
  private:
   Device& device_;
   id<MTLCommandBuffer> value_;
+
+  friend class CommandQueue;
 };
 
 } // namespace igl::metal

@@ -8,7 +8,6 @@
 #pragma once
 
 #include <memory>
-
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanHelpers.h>
 #include <igl/vulkan/VulkanImageView.h>
@@ -42,7 +41,6 @@ class VulkanImage final {
    * the constructor will assign it to the `VkImage` object. No other Vulkan functions are called
    */
   VulkanImage(const VulkanContext& ctx,
-              VkDevice device,
               VkImage image,
               const char* debugName = nullptr,
               VkImageUsageFlags usageFlags = 0,
@@ -60,7 +58,6 @@ class VulkanImage final {
    * the constructor will assign it to the `VkImage` object. No other Vulkan functions are called
    */
   VulkanImage(const VulkanContext& ctx,
-              VkDevice device,
               VkImage image,
               const VulkanImageCreateInfo& createInfo,
               const char* debugName = nullptr);
@@ -77,7 +74,6 @@ class VulkanImage final {
    * it is memory mapped until the object's destruction.
    */
   VulkanImage(const VulkanContext& ctx,
-              VkDevice device,
               VkExtent3D extent,
               VkImageType type,
               VkFormat format,
@@ -116,7 +112,6 @@ class VulkanImage final {
   VulkanImage(const VulkanContext& ctx,
               AHardwareBuffer* ahb,
               uint64_t memoryAllocationSize,
-              VkDevice device,
               VkExtent3D extent,
               VkImageType type,
               VkFormat format,
@@ -154,7 +149,6 @@ class VulkanImage final {
   VulkanImage(const VulkanContext& ctx,
               int32_t undupedFileDescriptor,
               uint64_t memoryAllocationSize,
-              VkDevice device,
               VkExtent3D extent,
               VkImageType type,
               VkFormat format,
@@ -177,7 +171,6 @@ class VulkanImage final {
    */
   VulkanImage(const VulkanContext& ctx,
               void* windowsHandle,
-              VkDevice device,
               VkExtent3D extent,
               VkImageType type,
               VkFormat format,
@@ -197,7 +190,6 @@ class VulkanImage final {
    * On Linux/Android, the exported file descriptor will be stored in `exportedFd_`.
    */
   static VulkanImage createWithExportMemory(const VulkanContext& ctx,
-                                            VkDevice device,
                                             VkExtent3D extent,
                                             VkImageType type,
                                             VkFormat format,
@@ -278,9 +270,6 @@ class VulkanImage final {
 
   VkImageAspectFlags getImageAspectFlags() const;
 
-  static bool isDepthFormat(VkFormat format);
-  static bool isStencilFormat(VkFormat format);
-
   bool isMappedPtrAccessible() const {
     return (mappedPtr_ != nullptr) && ((tiling_ & VK_IMAGE_TILING_LINEAR) != 0);
   }
@@ -301,7 +290,7 @@ class VulkanImage final {
   VkImage vkImage_ = VK_NULL_HANDLE;
   VkImageUsageFlags usageFlags_ = 0;
   // Separate VkDeviceMemory objects to support disjoint multiplanar images
-  // @fb-only
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   VkDeviceMemory vkMemory_[kMaxImagePlanes] = {VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE};
   VmaAllocation vmaAllocation_ = VK_NULL_HANDLE;
   VkFormatProperties formatProperties_{};
@@ -326,7 +315,7 @@ class VulkanImage final {
   int exportedFd_ = -1; // linux fd
   uint32_t extendedFormat_ = 0; // defined by VkAndroidHardwareBufferFormatPropertiesANDROID
   VkSamplerYcbcrConversionCreateInfo samplerYcbcrConversionCreateInfo_ = {};
-#if defined(IGL_DEBUG)
+#if IGL_DEBUG
   std::string name_;
 #endif
 
@@ -353,7 +342,6 @@ class VulkanImage final {
    * it is memory mapped until the object's destruction.
    */
   VulkanImage(const VulkanContext& ctx,
-              VkDevice device,
               VkExtent3D extent,
               VkImageType type,
               VkFormat format,
@@ -369,7 +357,7 @@ class VulkanImage final {
 #endif // IGL_PLATFORM_WINDOWS || IGL_PLATFORM_LINUX || IGL_PLATFORM_ANDROID
 
   // No-op in all builds except DEBUG
-  void setName(const std::string& name) noexcept;
+  void setName(std::string name) noexcept;
 
   void destroy();
 };

@@ -30,7 +30,6 @@ namespace igl::tests::util::device::vulkan {
 
 igl::vulkan::VulkanContextConfig getContextConfig(bool enableValidation) {
   igl::vulkan::VulkanContextConfig config;
-  config.enhancedShaderDebugging = false; // This causes issues for MoltenVK
   config.enableValidation = enableValidation;
   config.enableGPUAssistedValidation = enableValidation;
 
@@ -46,18 +45,19 @@ igl::vulkan::VulkanContextConfig getContextConfig(bool enableValidation) {
   config.enableValidation = false;
   config.terminateOnValidationError = false;
 #endif
-  config.swapChainColorSpace = igl::ColorSpace::SRGB_NONLINEAR;
+  config.swapChainColorSpace = igl::ColorSpace::SRGBNonlinear;
   config.enableExtraLogs = enableValidation;
 
   return config;
 }
 
-std::shared_ptr<IDevice> createTestDevice(const igl::vulkan::VulkanContextConfig& config) {
+std::unique_ptr<igl::vulkan::Device> createTestDevice(
+    const igl::vulkan::VulkanContextConfig& config) {
 #if IGL_PLATFORM_MACOSX
   ::igl::vulkan::setupMoltenVKEnvironment();
 #endif
 
-  std::shared_ptr<IDevice> iglDev = nullptr;
+  std::unique_ptr<igl::vulkan::Device> iglDev = nullptr;
   Result ret;
 
   auto ctx = igl::vulkan::HWDevice::createContext(config, nullptr);
@@ -70,7 +70,8 @@ std::shared_ptr<IDevice> createTestDevice(const igl::vulkan::VulkanContextConfig
     extraDeviceExtensions.emplace_back(VK_KHR_MULTIVIEW_EXTENSION_NAME);
 
     igl::vulkan::VulkanFeatures features(config);
-    features.populateWithAvailablePhysicalDeviceFeatures(*ctx, (VkPhysicalDevice)devices[0].guid);
+    features.populateWithAvailablePhysicalDeviceFeatures(
+        *ctx, (VkPhysicalDevice)devices[0].guid); // NOLINT(performance-no-int-to-ptr)
 
     iglDev = igl::vulkan::HWDevice::create(std::move(ctx),
                                            devices[0],
@@ -90,7 +91,7 @@ std::shared_ptr<IDevice> createTestDevice(const igl::vulkan::VulkanContextConfig
   return iglDev;
 }
 
-std::shared_ptr<IDevice> createTestDevice(bool enableValidation) {
+std::unique_ptr<igl::vulkan::Device> createTestDevice(bool enableValidation) {
   return createTestDevice(getContextConfig(enableValidation));
 }
 

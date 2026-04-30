@@ -7,10 +7,9 @@
 
 #pragma once
 
+#import <Foundation/Foundation.h>
 #include <shell/shared/netservice/NetServiceExtension.h>
 #include <igl/Common.h>
-
-#import <Foundation/Foundation.h>
 
 namespace igl::shell::netservice {
 
@@ -18,6 +17,10 @@ class NetServiceExtensionApple final : public NetServiceExtension {
  public:
   NetServiceExtensionApple() = default;
   ~NetServiceExtensionApple() final;
+  NetServiceExtensionApple(const NetServiceExtensionApple&) = delete;
+  NetServiceExtensionApple& operator=(const NetServiceExtensionApple&) = delete;
+  NetServiceExtensionApple(NetServiceExtensionApple&&) = delete;
+  NetServiceExtensionApple& operator=(NetServiceExtensionApple&&) = delete;
 
   bool initialize(igl::shell::Platform& platform) noexcept final;
 
@@ -34,6 +37,7 @@ class NetServiceExtensionApple final : public NetServiceExtension {
   id<NSNetServiceBrowserDelegate> netServiceBrowserDelegate_ = nil;
 };
 
+// NOLINTNEXTLINE(readability-identifier-naming)
 IGL_API IGLShellExtension* IGLShellExtension_NewIglShellNetService();
 
 } // namespace igl::shell::netservice

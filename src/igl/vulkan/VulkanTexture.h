@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanImage.h>
 #include <igl/vulkan/VulkanImageView.h>
 
@@ -20,6 +19,8 @@ class VulkanTexture final {
 
   VulkanTexture(const VulkanTexture&) = delete;
   VulkanTexture& operator=(const VulkanTexture&) = delete;
+  VulkanTexture(VulkanTexture&&) noexcept = default;
+  VulkanTexture& operator=(VulkanTexture&&) noexcept = default;
 
  public:
   VulkanImage image_;

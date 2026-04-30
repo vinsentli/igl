@@ -8,11 +8,12 @@
 #include <igl/metal/macos/Framebuffer.h>
 
 #include <vector>
+#include <igl/Texture.h>
 #include <igl/metal/CommandQueue.h>
-#include <igl/metal/Texture.h>
 
 namespace igl::metal::macos {
 
+// @fb-only
 Framebuffer::Framebuffer(const FramebufferDesc& value) : metal::Framebuffer(value) {}
 
 /// This function assumes the input texture has the content. For example,

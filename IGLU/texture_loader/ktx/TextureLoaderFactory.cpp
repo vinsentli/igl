@@ -8,8 +8,11 @@
 #include <IGLU/texture_loader/ktx/TextureLoaderFactory.h>
 
 #include <ktx.h>
-#include <numeric>
 #include <igl/IGLSafeC.h>
+
+// @fb-only
+// @fb-only
+// @fb-only
 
 namespace iglu::textureloader::ktx {
 namespace {
@@ -31,6 +34,49 @@ class TextureLoader : public ITextureLoader {
 
   [[nodiscard]] bool canUploadSourceData() const noexcept final;
   [[nodiscard]] bool shouldGenerateMipmaps() const noexcept final;
+
+  [[nodiscard]] size_t getMemorySizeInBytesFromFile(uint32_t miplevel) const noexcept final {
+    // Structure to hold the data for the callback function
+    struct Data {
+      uint32_t mipLevel = 0;
+      ktx_uint64_t size = 0;
+    };
+
+    // Store the mip level in the userData struct
+    Data userData = {
+        .mipLevel = miplevel,
+    };
+
+    // Callback function to iterate over the mip levels and calculate the total size
+    // Passed to the ktxTexture_IterateLevelFaces function
+    PFNKTXITERCB iterCb = [](int miplevel,
+                             int face,
+                             int width,
+                             int height,
+                             int depth,
+                             ktx_uint64_t faceLodSize,
+                             void* pixels,
+                             void* userdata) -> ktx_error_code_e {
+      Data* data = static_cast<Data*>(userdata);
+      data->size += (data->mipLevel == miplevel) ? faceLodSize : 0;
+      return KTX_SUCCESS;
+    };
+    const auto result = ktxTexture_IterateLevelFaces(texture_.get(), iterCb, &userData);
+    if (result == KTX_SUCCESS) {
+      return userData.size;
+    }
+
+    return 0;
+  }
+
+  [[nodiscard]] std::vector<uint32_t> mipLevelBytes() const noexcept override {
+    std::vector<uint32_t> mipLevelBytes;
+    mipLevelBytes.reserve(descriptor().numMipLevels);
+    for (uint32_t i = 0; i < descriptor().numMipLevels; ++i) {
+      mipLevelBytes.push_back(static_cast<uint32_t>(getMemorySizeInBytesFromFile(i)));
+    }
+    return mipLevelBytes;
+  }
 
  private:
   void uploadInternal(igl::ITexture& texture,
@@ -83,9 +129,11 @@ void TextureLoader::uploadInternal(igl::ITexture& texture,
   size_t offset = 0;
   for (uint32_t mipLevel = 0; mipLevel < desc.numMipLevels && mipLevel < texture_->numLevels;
        ++mipLevel) {
-    auto error = ktxTexture_GetImageOffset(ktxTexture(texture_.get()), mipLevel, 0, 0, &offset);
-    if (error != KTX_SUCCESS) {
-      IGL_LOG_ERROR("Error getting KTX texture data: %d %s\n", error, ktxErrorString(error));
+    const auto ktxResult =
+        ktxTexture_GetImageOffset(ktxTexture(texture_.get()), mipLevel, 0, 0, &offset);
+    if (ktxResult != KTX_SUCCESS) {
+      IGL_LOG_ERROR(
+          "Error getting KTX texture data: %d %s\n", ktxResult, ktxErrorString(ktxResult));
       igl::Result::setResult(
           outResult, igl::Result::Code::RuntimeError, "Error getting KTX texture data.");
     }
@@ -101,32 +149,56 @@ void TextureLoader::loadToExternalMemoryInternal(uint8_t* IGL_NONNULL data,
                                                      outResult) const noexcept {
   const auto& desc = descriptor();
 
-  size_t offset = 0;
+  size_t offsetDestination = 0;
+  size_t offsetSource = 0;
   for (uint32_t mipLevel = 0; mipLevel < desc.numMipLevels && mipLevel < texture_->numLevels;
        ++mipLevel) {
-    auto error = ktxTexture_GetImageOffset(ktxTexture(texture_.get()), 0, 0, mipLevel, &offset);
-    if (error != KTX_SUCCESS) {
-      IGL_LOG_ERROR("Error getting KTX texture data: %d %s\n", error, ktxErrorString(error));
+    auto ktxResult =
+        ktxTexture_GetImageOffset(ktxTexture(texture_.get()), mipLevel, 0, 0, &offsetSource);
+    if (ktxResult != KTX_SUCCESS) {
+      IGL_LOG_ERROR(
+          "Error getting KTX texture data: %d %s\n", ktxResult, ktxErrorString(ktxResult));
       igl::Result::setResult(
           outResult, igl::Result::Code::RuntimeError, "Error getting KTX texture data.");
     }
 
-    auto mipLevelLength = ktxTexture_GetImageSize(ktxTexture(texture_.get()), mipLevel);
+    ktx_size_t mipLevelLength = 0;
+// @fb-only
+    // @fb-only
+    // @fb-only
+    // @fb-only
+    // @fb-only
+    // @fb-only
+    // @fb-only
+        // @fb-only
+            // @fb-only
+            // @fb-only
+            // @fb-only
+            // @fb-only
+    // @fb-only
+// @fb-only
+      mipLevelLength = ktxTexture_GetImageSize(ktxTexture(texture_.get()), mipLevel);
+// @fb-only
+    // @fb-only
+      // @fb-only
+    // @fb-only
+// @fb-only
 
     // Naively, we could just check mipmapLength > length - offset. However,
     // if offset is very large, e.g. size_t(-1), then destination_size - offset
     // will overflow `size_t` and hence act additive to destination_size.
     //
     // To avoid this, we properly compute the available_size and then check that.
-    const size_t availableSize = offset > length ? 0 : length - offset;
+    const size_t availableSize = offsetSource > length ? 0 : length - offsetSource;
     if (mipLevelLength > availableSize) {
       igl::Result::setResult(
           outResult, igl::Result::Code::InvalidOperation, "data length is too small.");
       return;
     }
 
-    checked_memcpy_offset(data, length, offset, texture_->pData + offset, mipLevelLength);
-    offset += mipLevelLength;
+    checked_memcpy_offset(
+        data, length, offsetDestination, texture_->pData + offsetSource, mipLevelLength);
+    offsetDestination += mipLevelLength;
   }
 }
 } // namespace
@@ -147,11 +219,11 @@ std::unique_ptr<ITextureLoader> TextureLoaderFactory::tryCreateInternal(
   }
 
   ktxTexture* rawTexture = nullptr;
-  auto error = ktxTexture_CreateFromMemory(
-      reader.data(), reader.length(), KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &rawTexture);
+  const auto ktxResult = ktxTexture_CreateFromMemory(
+      reader.data(), reader.size(), KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &rawTexture);
 
-  if (error != KTX_SUCCESS || rawTexture == nullptr) {
-    IGL_LOG_ERROR("Error loading KTX texture: %d %s\n", error, ktxErrorString(error));
+  if (ktxResult != KTX_SUCCESS || rawTexture == nullptr) {
+    IGL_LOG_ERROR("Error loading KTX texture: %d %s\n", ktxResult, ktxErrorString(ktxResult));
     igl::Result::setResult(
         outResult, igl::Result::Code::RuntimeError, "Error loading KTX texture.");
     if (rawTexture != nullptr) {
@@ -164,14 +236,16 @@ std::unique_ptr<ITextureLoader> TextureLoaderFactory::tryCreateInternal(
 
   if (ktxTexture_NeedsTranscoding(rawTexture)) {
 #if IGL_PLATFORM_ANDROID || IGL_PLATFORM_IOS
-    const ktx_transcode_fmt_e transcodeFormat = KTX_TTF_ASTC_4x4_RGBA;
+    constexpr ktx_transcode_fmt_e transcodeFormat = KTX_TTF_ASTC_4x4_RGBA;
 #else
-    const ktx_transcode_fmt_e transcodeFormat = KTX_TTF_BC7_RGBA;
+    constexpr ktx_transcode_fmt_e transcodeFormat = KTX_TTF_BC7_RGBA;
 #endif
-    error =
+    const auto transcodingResult =
         ktxTexture2_TranscodeBasis(reinterpret_cast<ktxTexture2*>(rawTexture), transcodeFormat, 0);
-    if (error != KTX_SUCCESS) {
-      IGL_LOG_ERROR("Error transcoding KTX texture: %d %s\n", error, ktxErrorString(error));
+    if (transcodingResult != KTX_SUCCESS) {
+      IGL_LOG_ERROR("Error transcoding KTX texture: %d %s\n",
+                    transcodingResult,
+                    ktxErrorString(transcodingResult));
       igl::Result::setResult(
           outResult, igl::Result::Code::RuntimeError, "Error transcoding KTX texture.");
       return nullptr;

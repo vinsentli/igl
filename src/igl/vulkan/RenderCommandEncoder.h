@@ -53,7 +53,11 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
   void bindRenderPipelineState(const std::shared_ptr<IRenderPipelineState>& pipelineState) override;
   void bindDepthStencilState(const std::shared_ptr<IDepthStencilState>& depthStencilState) override;
 
-  void bindBuffer(uint32_t index, uint8_t target, IBuffer* buffer, size_t bufferOffset, size_t bufferSize) override;
+  void bindBuffer(uint32_t index,
+                  uint8_t target,
+                  IBuffer* buffer,
+                  size_t bufferOffset,
+                  size_t bufferSize) override;
   void bindBuffer(uint32_t index, IBuffer* buffer, size_t bufferOffset, size_t bufferSize) override;
   void bindVertexBuffer(uint32_t index, IBuffer& buffer, size_t bufferOffset) override;
   void bindIndexBuffer(IBuffer& buffer, IndexFormat format, size_t bufferOffset, bool bindVAO) override;
@@ -87,6 +91,9 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
                    uint32_t firstIndex,
                    int32_t vertexOffset,
                    uint32_t baseInstance) override;
+  void drawMeshTasks(const Dimensions& threadgroupsPerGrid,
+                     const Dimensions& threadsPerTaskThreadgroup,
+                     const Dimensions& threadsPerMeshThreadgroup) override;
   void multiDrawIndirect(IBuffer& indirectBuffer,
                          size_t indirectBufferOffset,
                          uint32_t drawCount,
@@ -110,7 +117,7 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
 
   /// @brief Enables or disables the draw call count. If enabled, it will increment the draw call,
   /// otherwise it won't. This is used to disable the draw call count when we are doing auxiliary
-  /// draw calls such as shader debugging.
+  /// draw calls.
   bool setDrawCallCountEnabled(bool value);
 
   void blitColorImage(const igl::vulkan::VulkanImage& srcImage,
@@ -144,7 +151,7 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
   RenderPipelineDynamicState dynamicState_;
 
   /* Used to increment the draw call count. Should either be 0 or 1
-   *  0: When draw call count is disabled during auxiliary draw calls (shader debugging)
+   *  0: When draw call count is disabled during auxiliary draw calls
    *  1: All other times */
   uint32_t drawCallCountEnabled_ = 1u;
 

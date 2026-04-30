@@ -7,11 +7,16 @@
 
 // @fb-only
 
-#include <IGLU/simdtypes/SimdTypes.h>
 #include <shell/renderSessions/TQSession.h>
+
+#include <IGLU/simdtypes/SimdTypes.h>
 #include <shell/shared/renderSession/ShellParams.h>
 #include <igl/NameHandle.h>
 #include <igl/ShaderCreator.h>
+// @fb-only
+// @fb-only
+// @fb-only
+// @fb-only
 
 namespace igl::shell {
 namespace {
@@ -57,7 +62,55 @@ std::string getMetalShaderSource() {
                 return float4(color->color.r, color->color.g, color->color.b, 1.0) *
                       tex;
               }
-    )";
+              )";
+}
+
+std::string getD3D12VertexShaderSource() {
+  return R"(
+                struct UniformsPerObject {
+                  float3 color;
+                };
+
+                cbuffer PerObject : register(b0) {
+                  UniformsPerObject perObject;
+                };
+
+                struct VSInput {
+                  float3 position : POSITION;
+                  float2 uv_in : TEXCOORD0;
+                };
+
+                struct VSOutput {
+                  float4 position : SV_POSITION;
+                  float2 uv : TEXCOORD0;
+                  float3 color : COLOR0;
+                };
+
+                VSOutput main(VSInput input) {
+                  VSOutput output;
+                  output.position = float4(input.position, 1.0);
+                  output.uv = input.uv_in;
+                  output.color = perObject.color;
+                  return output;
+                }
+                )";
+}
+
+std::string getD3D12FragmentShaderSource() {
+  return R"(
+                Texture2D in_texture : register(t0);
+                SamplerState in_sampler : register(s0);
+
+                struct PSInput {
+                  float4 position : SV_POSITION;
+                  float2 uv : TEXCOORD0;
+                  float3 color : COLOR0;
+                };
+
+                float4 main(PSInput input) : SV_Target {
+                  return float4(input.color, 1.0) * in_texture.Sample(in_sampler, input.uv);
+                }
+                )";
 }
 
 std::string getOpenGLVertexShaderSource() {
@@ -124,7 +177,6 @@ std::string getVulkanFragmentShaderSource() {
                 }
                 )";
 }
-// @fb-only
 
 std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
   switch (device.getBackendType()) {
@@ -163,8 +215,64 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
                                                            "main",
                                                            "",
                                                            nullptr);
+  case igl::BackendType::D3D12:
+    return igl::ShaderStagesCreator::fromModuleStringInput(device,
+                                                           getD3D12VertexShaderSource().c_str(),
+                                                           "main",
+                                                           "",
+                                                           getD3D12FragmentShaderSource().c_str(),
+                                                           "main",
+                                                           "",
+                                                           nullptr);
   }
   IGL_UNREACHABLE_RETURN(nullptr)
+}
+
+// @fb-only
+// @fb-only
+  // @fb-only
+          // @fb-only
+          // @fb-only
+          // @fb-only
+          // @fb-only
+          // @fb-only
+// @fb-only
+// @fb-only
+
+BufferDesc getVertexBufferDesc(const igl::IDevice& device, const VertexPosUv* vertexData) {
+// @fb-only
+  // @fb-only
+    // @fb-only
+                                    // @fb-only
+                                    // @fb-only
+                                    // @fb-only
+    // @fb-only
+                      // @fb-only
+                      // @fb-only
+                      // @fb-only
+  // @fb-only
+// @fb-only
+  return {.type = BufferDesc::BufferTypeBits::Vertex,
+          .data = vertexData,
+          .length = sizeof(VertexPosUv) * 4};
+}
+
+uint32_t getVertexBufferIndex(const igl::IDevice& device) {
+// @fb-only
+  // @fb-only
+    return 0;
+  // @fb-only
+// @fb-only
+  return 1;
+}
+
+ResourceStorage getIndexBufferResourceStorage(const igl::IDevice& device) {
+// @fb-only
+  // @fb-only
+    // @fb-only
+  // @fb-only
+// @fb-only
+  return igl::BufferDesc{}.storage;
 }
 } // namespace
 
@@ -173,44 +281,56 @@ void TQSession::initialize() noexcept {
 
   // Vertex & Index buffer
   const VertexPosUv vertexData[] = {
-      {{-0.8f, 0.8f, 0.0}, {0.0, 0.0}},
-      {{0.8f, 0.8f, 0.0}, {uvScale_, 0.0}},
-      {{-0.8f, -0.8f, 0.0}, {0.0, uvScale_}},
-      {{0.8f, -0.8f, 0.0}, {uvScale_, uvScale_}},
+      {.position = {-0.8f, 0.8f, 0.0}, .uv = {0.0, 0.0}},
+      {.position = {0.8f, 0.8f, 0.0}, .uv = {uvScale_, 0.0}},
+      {.position = {-0.8f, -0.8f, 0.0}, .uv = {0.0, uvScale_}},
+      {.position = {0.8f, -0.8f, 0.0}, .uv = {uvScale_, uvScale_}},
   };
-  const BufferDesc vbDesc =
-      BufferDesc(BufferDesc::BufferTypeBits::Vertex, vertexData, sizeof(vertexData));
+  const BufferDesc vbDesc = getVertexBufferDesc(device, &vertexData[0]);
   vb0_ = device.createBuffer(vbDesc, nullptr);
   IGL_DEBUG_ASSERT(vb0_ != nullptr);
-  const uint16_t indexData[] = {
-      0,
-      1,
-      2,
-      1,
-      3,
-      2,
-  };
-  const BufferDesc ibDesc =
-      BufferDesc(BufferDesc::BufferTypeBits::Index, indexData, sizeof(indexData));
+  const uint16_t indexData[] = {0, 1, 2, 1, 3, 2};
+  const BufferDesc ibDesc{.type = BufferDesc::BufferTypeBits::Index,
+                          .data = indexData,
+                          .length = sizeof(indexData),
+                          .storage = getIndexBufferResourceStorage(device)};
   ib0_ = device.createBuffer(ibDesc, nullptr);
   IGL_DEBUG_ASSERT(ib0_ != nullptr);
 
-  VertexInputStateDesc inputDesc;
-  inputDesc.numAttributes = 2;
-  inputDesc.attributes[0] = VertexAttribute{
-      1, VertexAttributeFormat::Float3, offsetof(VertexPosUv, position), "position", 0};
-  inputDesc.attributes[1] =
-      VertexAttribute{1, VertexAttributeFormat::Float2, offsetof(VertexPosUv, uv), "uv_in", 1};
-  inputDesc.numInputBindings = 1;
-  inputDesc.inputBindings[1].stride = sizeof(VertexPosUv);
+  const auto vertexBufferIndex = getVertexBufferIndex(getPlatform().getDevice());
+  VertexInputStateDesc inputDesc = {
+      .numAttributes = 2,
+      .attributes =
+          {
+              {
+                  .bufferIndex = vertexBufferIndex,
+                  .format = VertexAttributeFormat::Float3,
+                  .offset = offsetof(VertexPosUv, position),
+                  .name = "position",
+                  .location = 0,
+              },
+              {
+                  .bufferIndex = vertexBufferIndex,
+                  .format = VertexAttributeFormat::Float2,
+                  .offset = offsetof(VertexPosUv, uv),
+                  .name = "uv_in",
+                  .location = 1,
+              },
+          },
+      .numInputBindings = 1,
+  };
+  inputDesc.inputBindings[vertexBufferIndex].stride = sizeof(VertexPosUv);
   vertexInput0_ = device.createVertexInputState(inputDesc, nullptr);
   IGL_DEBUG_ASSERT(vertexInput0_ != nullptr);
 
   // Sampler & Texture
-  SamplerStateDesc samplerDesc;
-  samplerDesc.minFilter = samplerDesc.magFilter = SamplerMinMagFilter::Linear;
-  samplerDesc.debugName = "Sampler: linear";
-  samp0_ = device.createSamplerState(samplerDesc, nullptr);
+  samp0_ = device.createSamplerState(
+      SamplerStateDesc{
+          .minFilter = SamplerMinMagFilter::Linear,
+          .magFilter = SamplerMinMagFilter::Linear,
+          .debugName = "Sampler: linear",
+      },
+      nullptr);
   IGL_DEBUG_ASSERT(samp0_ != nullptr);
   tex0_ = getPlatform().loadTexture("igl.png");
 
@@ -218,25 +338,32 @@ void TQSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(shaderStages_ != nullptr);
 
   // Command queue
-  const CommandQueueDesc desc{};
-  commandQueue_ = device.createCommandQueue(desc, nullptr);
+  commandQueue_ = device.createCommandQueue(CommandQueueDesc{}, nullptr);
   IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
 
-  renderPass_.colorAttachments.resize(1);
-  renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
-  renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPass_.colorAttachments[0].clearColor = getPreferredClearColor();
-  renderPass_.depthAttachment.loadAction = LoadAction::Clear;
-  renderPass_.depthAttachment.clearDepth = 1.0;
+  // Generate mipmaps for texture for D3D12
+  if (device.getBackendType() == igl::BackendType::D3D12) {
+    tex0_->generateMipmap(*commandQueue_);
+  }
+
+  renderPass_ = {
+      .colorAttachments = {{
+          .loadAction = LoadAction::Clear,
+          .storeAction = StoreAction::Store,
+          .clearColor = getPreferredClearColor(),
+      }},
+      .depthAttachment = {.loadAction = LoadAction::Clear, .clearDepth = 1.0},
+  };
 
   // init uniforms
   fragmentParameters_ = FragmentFormat{{1.0f, 1.0f, 1.0f}};
 
-  BufferDesc fpDesc;
-  fpDesc.type = BufferDesc::BufferTypeBits::Uniform;
-  fpDesc.data = &fragmentParameters_;
-  fpDesc.length = sizeof(fragmentParameters_);
-  fpDesc.storage = ResourceStorage::Shared;
+  const BufferDesc fpDesc{
+      .type = BufferDesc::BufferTypeBits::Uniform,
+      .data = &fragmentParameters_,
+      .length = sizeof(fragmentParameters_),
+      .storage = ResourceStorage::Shared,
+  };
 
   fragmentParamBuffer_ = device.createBuffer(fpDesc, nullptr);
   IGL_DEBUG_ASSERT(fragmentParamBuffer_ != nullptr);
@@ -245,9 +372,10 @@ void TQSession::initialize() noexcept {
 void TQSession::update(SurfaceTextures surfaceTextures) noexcept {
   Result ret;
   if (framebuffer_ == nullptr) {
-    FramebufferDesc framebufferDesc;
-    framebufferDesc.colorAttachments[0].texture = surfaceTextures.color;
-    framebufferDesc.depthAttachment.texture = surfaceTextures.depth;
+    FramebufferDesc framebufferDesc{
+        .colorAttachments = {{.texture = surfaceTextures.color}},
+        .depthAttachment = {.texture = surfaceTextures.depth},
+    };
     if (surfaceTextures.depth && surfaceTextures.depth->getProperties().hasStencil()) {
       framebufferDesc.stencilAttachment.texture = surfaceTextures.depth;
     }
@@ -263,19 +391,25 @@ void TQSession::update(SurfaceTextures surfaceTextures) noexcept {
 
   // Graphics pipeline
   if (pipelineState_ == nullptr) {
-    RenderPipelineDesc graphicsDesc;
-    graphicsDesc.vertexInputState = vertexInput0_;
-    graphicsDesc.shaderStages = shaderStages_;
-    graphicsDesc.targetDesc.colorAttachments.resize(1);
-    graphicsDesc.targetDesc.colorAttachments[0].textureFormat =
-        framebuffer_->getColorAttachment(0)->getFormat();
-    graphicsDesc.targetDesc.depthAttachmentFormat = framebuffer_->getDepthAttachment()->getFormat();
-    graphicsDesc.targetDesc.stencilAttachmentFormat =
-        framebuffer_->getStencilAttachment() ? framebuffer_->getStencilAttachment()->getFormat()
-                                             : igl::TextureFormat::Invalid;
-    graphicsDesc.fragmentUnitSamplerMap[textureUnit] = IGL_NAMEHANDLE("inputImage");
-    graphicsDesc.cullMode = igl::CullMode::Back;
-    graphicsDesc.frontFaceWinding = igl::WindingMode::Clockwise;
+    const RenderPipelineDesc graphicsDesc = {
+        .vertexInputState = vertexInput0_,
+        .shaderStages = shaderStages_,
+        .targetDesc =
+            {
+                .colorAttachments = {{.textureFormat =
+                                          framebuffer_->getColorAttachment(0)->getFormat()}},
+                .depthAttachmentFormat = framebuffer_->getDepthAttachment()->getFormat(),
+                .stencilAttachmentFormat = framebuffer_->getStencilAttachment()
+                                               ? framebuffer_->getStencilAttachment()->getFormat()
+                                               : igl::TextureFormat::Invalid,
+            },
+        .cullMode = igl::CullMode::Back,
+        .frontFaceWinding = igl::WindingMode::Clockwise,
+        .fragmentUnitSamplerMap =
+            {
+                std::pair<size_t, NameHandle>(textureUnit, IGL_NAMEHANDLE("inputImage")),
+            },
+    };
 
     pipelineState_ = getPlatform().getDevice().createRenderPipeline(graphicsDesc, nullptr);
     IGL_DEBUG_ASSERT(pipelineState_ != nullptr);
@@ -285,10 +419,9 @@ void TQSession::update(SurfaceTextures surfaceTextures) noexcept {
   }
 
   // Command Buffers
-  const CommandBufferDesc cbDesc;
-  auto buffer = commandQueue_->createCommandBuffer(cbDesc, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer(CommandBufferDesc{}, nullptr);
   IGL_DEBUG_ASSERT(buffer != nullptr);
-  auto drawableSurface = framebuffer_->getColorAttachment(0);
+  const auto drawableSurface = framebuffer_->getColorAttachment(0);
 
   // Uniform: "color"
   if (!fragmentUniformDescriptors_.empty()) {
@@ -310,7 +443,7 @@ void TQSession::update(SurfaceTextures surfaceTextures) noexcept {
       buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
   IGL_DEBUG_ASSERT(commands != nullptr);
   if (commands) {
-    commands->bindVertexBuffer(1, *vb0_);
+    commands->bindVertexBuffer(getVertexBufferIndex(getPlatform().getDevice()), *vb0_);
     commands->bindRenderPipelineState(pipelineState_);
     if (getPlatform().getDevice().hasFeature(DeviceFeatures::BindUniform)) {
       // Bind non block uniforms
@@ -344,7 +477,7 @@ void TQSession::update(SurfaceTextures surfaceTextures) noexcept {
   }
 
   IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
-  commandQueue_->submit(*buffer);
+  commandQueue_->submit(*buffer, true);
   RenderSession::update(surfaceTextures);
 }
 

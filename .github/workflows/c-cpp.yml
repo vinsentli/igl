@@ -15,9 +15,17 @@ jobs:
     name: "Android (Ubuntu)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
+
+      - name: Free up disk space
+        run: |
+          df -h
+          sudo rm -rf /usr/share/dotnet /opt/ghc
+          sudo docker system prune --all --force --volumes
+          sudo apt-get clean -y
+          df -h
 
       - name: Set up NDK
         uses: nttld/setup-ndk@v1
@@ -25,10 +33,24 @@ jobs:
           ndk-version: r26b
 
       - name: Set up JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
-          java-version: 17
+          java-version: 21
           distribution: 'oracle'
+
+      - name: Install CMake 4.0.0
+        shell: bash
+        run: |
+          sudo apt remove cmake -y || true
+          sudo pip install --break-system-packages cmake==4.0.0
+          cmake --version
+
+      - name: Point AGP at the pip-installed CMake
+        shell: bash
+        run: |
+          CMAKE_DATA_DIR=$(python3 -c 'import cmake, os; print(os.path.dirname(cmake.__file__) + "/data")')
+          echo "cmake.dir=$CMAKE_DATA_DIR" >> build/android/local.properties
+          cat build/android/local.properties
 
       - name: Assemble APK debug
         run: |
@@ -87,28 +109,28 @@ jobs:
 #              cxx: "em++",
 #              generators: "Ninja",
 #          }
-          - {
-              name: "macOS - Clang (Xcode)",
-              os: macos-latest,
-              build_type: "Debug",
-              cc: "clang",
-              cxx: "clang++",
-              generators: "Xcode",
-              cmake_args: "-DIGL_WITH_VULKAN=OFF"
-            }
-          - {
-              name: "macOS - Clang (Unix Makefiles)",
-              os: macos-latest,
-              build_type: "Debug",
-              cc: "clang",
-              cxx: "clang++",
-              generators: "Unix Makefiles",
-              cmake_args: "-DIGL_WITH_VULKAN=OFF"
-            }
+#          - {
+#              name: "macOS - Clang (Xcode)",
+#              os: macos-latest,
+#              build_type: "Debug",
+#              cc: "clang",
+#              cxx: "clang++",
+#              generators: "Xcode",
+#              cmake_args: "-DIGL_WITH_VULKAN=OFF"
+#            }
+#          - {
+#              name: "macOS - Clang (Unix Makefiles)",
+#              os: macos-latest,
+#              build_type: "Debug",
+#              cc: "clang",
+#              cxx: "clang++",
+#              generators: "Unix Makefiles",
+#              cmake_args: "-DIGL_WITH_VULKAN=OFF"
+#            }
       runs-on: ${{ matrix.config.os }}
 
       steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v6
           with:
             submodules: recursive
 
@@ -177,7 +199,7 @@ jobs:
       runs-on: ${{ matrix.config.os }}
 
       steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v6
           with:
             submodules: recursive
 
@@ -201,6 +223,9 @@ jobs:
         - name: Get the number of CPU cores
           uses: SimenB/github-actions-cpu-cores@v2
 
+        - name: Check disk space
+          run: df -h
+
         - name: Build
           shell: bash
           env:
@@ -210,12 +235,38 @@ jobs:
             cmake ${{ env.CMAKE_GENERATOR }} -S "${{ github.workspace }}" -B build ${{ matrix.config.cmake_args }} -DCMAKE_BUILD_TYPE=Debug
             cd build
             cmake --build . --target Tiny --parallel ${{ steps.cpu-cores.outputs.count }}
+            cmake --build . --target BasicFramebufferSession_vulkan --parallel ${{ steps.cpu-cores.outputs.count }}
+            cmake --build . --target BindGroupSession_vulkan --parallel ${{ steps.cpu-cores.outputs.count }}
             cmake --build . --target ColorSession_vulkan --parallel ${{ steps.cpu-cores.outputs.count }}
+            cmake --build . --target DrawInstancedSession_vulkan --parallel ${{ steps.cpu-cores.outputs.count }}
+            cmake --build . --target GPUStressSession_vulkan --parallel ${{ steps.cpu-cores.outputs.count }}
+            cmake --build . --target HelloWorldSession_vulkan --parallel ${{ steps.cpu-cores.outputs.count }}
+            cmake --build . --target ImguiSession_vulkan --parallel ${{ steps.cpu-cores.outputs.count }}
+            cmake --build . --target MRTSession_vulkan --parallel ${{ steps.cpu-cores.outputs.count }}
+            cmake --build . --target Textured3DCubeSession_vulkan --parallel ${{ steps.cpu-cores.outputs.count }}
+            cmake --build . --target TextureViewSession_vulkan --parallel ${{ steps.cpu-cores.outputs.count }}
+            cmake --build . --target TinyMeshBindGroupSession_vulkan --parallel ${{ steps.cpu-cores.outputs.count }}
+            cmake --build . --target TinyMeshSession_vulkan --parallel ${{ steps.cpu-cores.outputs.count }}
+            cmake --build . --target TQSession_vulkan --parallel ${{ steps.cpu-cores.outputs.count }}
+            cmake --build . --target YUVColorSession_vulkan --parallel ${{ steps.cpu-cores.outputs.count }}
 
         - name: Run tests (shell)
           run: |
             ls build/shell
-            ./build/shell/ColorSession_vulkan --headless
+            ./build/shell/BasicFramebufferSession_vulkan  --headless --viewport-size 1600x900 --screenshot-file BasicFramebufferSession.png
+            ./build/shell/BindGroupSession_vulkan         --headless --viewport-size 1600x900 --screenshot-file BindGroupSession.png
+            ./build/shell/ColorSession_vulkan             --headless --viewport-size 1600x900 --screenshot-file ColorSession.png
+            ./build/shell/DrawInstancedSession_vulkan     --headless --viewport-size 1600x900 --screenshot-file DrawInstancedSession.png
+            ./build/shell/GPUStressSession_vulkan         --headless --viewport-size 1600x900 --screenshot-file GPUStressSession.png
+            ./build/shell/HelloWorldSession_vulkan        --headless --viewport-size 1600x900 --screenshot-file HelloWorldSession.png
+            ./build/shell/ImguiSession_vulkan             --headless --viewport-size 1600x900 --screenshot-file ImguiSession.png
+            ./build/shell/MRTSession_vulkan               --headless --viewport-size 1600x900 --screenshot-file MRTSession.png
+            ./build/shell/Textured3DCubeSession_vulkan    --headless --viewport-size 1600x900 --screenshot-file Textured3DCubeSession.png
+            ./build/shell/TextureViewSession_vulkan       --headless --viewport-size 1600x900 --screenshot-file TextureViewSession.png
+            ./build/shell/TinyMeshBindGroupSession_vulkan --headless --viewport-size 1600x900 --screenshot-file TinyMeshBindGroupSession.png
+            ./build/shell/TinyMeshSession_vulkan          --headless --viewport-size 1600x900 --screenshot-file TinyMeshSession.png
+            ./build/shell/TQSession_vulkan                --headless --viewport-size 1600x900 --screenshot-file TQSession.png
+            ./build/shell/YUVColorSession_vulkan          --headless --viewport-size 1600x900 --screenshot-file YUVColorSession.png
 
         - name: Run tests (desktop)
           run: |
@@ -223,11 +274,24 @@ jobs:
             #./build/samples/desktop/Tiny --headless
 
         - name: Upload artifacts
-          uses: actions/upload-artifact@v4
+          uses: actions/upload-artifact@v6
           with:
             name: Screenshots
             path: |
-              screenshot.png
+              BasicFramebufferSession.png
+              BindGroupSession.png
+              ColorSession.png
+              DrawInstancedSession.png
+              GPUStressSession.png
+              HelloWorldSession.png
+              ImguiSession.png
+              MRTSession.png
+              Textured3DCubeSession.png
+              TextureViewSession.png
+              TinyMeshBindGroupSession.png
+              TinyMeshSession.png
+              TQSession.png
+              YUVColorSession.png
             if-no-files-found: error
             retention-days: 5
             overwrite: true

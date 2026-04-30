@@ -5,10 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "../util/Common.h"
-
 #include <gtest/gtest.h>
-#include <igl/tests/util/device/opengl/TestDevice.h>
+
+#include <memory>
+#include <igl/Common.h>
+#include <igl/Device.h>
 
 #if IGL_PLATFORM_IOS
 #include <igl/opengl/ios/HWDevice.h>

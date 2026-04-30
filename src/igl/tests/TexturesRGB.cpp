@@ -5,13 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gtest/gtest.h>
+
 #include "data/ShaderData.h"
 #include "data/TextureData.h"
 #include "data/VertexIndexData.h"
 #include "util/Color.h"
 #include "util/Common.h"
 
-#include <gtest/gtest.h>
 #include <string>
 #include <igl/CommandBuffer.h>
 #include <igl/NameHandle.h>
@@ -88,15 +89,15 @@ class TexturesRGBBaseTest : public ::testing::Test {
 
     inputDesc.attributes[0].format = VertexAttributeFormat::Float4;
     inputDesc.attributes[0].offset = 0;
-    inputDesc.attributes[0].bufferIndex = data::shader::simplePosIndex;
-    inputDesc.attributes[0].name = data::shader::simplePos;
+    inputDesc.attributes[0].bufferIndex = data::shader::kSimplePosIndex;
+    inputDesc.attributes[0].name = data::shader::kSimplePos;
     inputDesc.attributes[0].location = 0;
     inputDesc.inputBindings[0].stride = sizeof(float) * 4;
 
     inputDesc.attributes[1].format = VertexAttributeFormat::Float2;
     inputDesc.attributes[1].offset = 0;
-    inputDesc.attributes[1].bufferIndex = data::shader::simpleUvIndex;
-    inputDesc.attributes[1].name = data::shader::simpleUv;
+    inputDesc.attributes[1].bufferIndex = data::shader::kSimpleUvIndex;
+    inputDesc.attributes[1].name = data::shader::kSimpleUv;
     inputDesc.attributes[1].location = 1;
     inputDesc.inputBindings[1].stride = sizeof(float) * 2;
 
@@ -111,8 +112,8 @@ class TexturesRGBBaseTest : public ::testing::Test {
     BufferDesc bufDesc;
 
     bufDesc.type = BufferDesc::BufferTypeBits::Index;
-    bufDesc.data = data::vertex_index::QUAD_IND;
-    bufDesc.length = sizeof(data::vertex_index::QUAD_IND);
+    bufDesc.data = data::vertex_index::kQuadInd.data();
+    bufDesc.length = sizeof(data::vertex_index::kQuadInd);
 
     ib_ = iglDev_->createBuffer(bufDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -120,16 +121,16 @@ class TexturesRGBBaseTest : public ::testing::Test {
 
     // Initialize vertex and sampler buffers
     bufDesc.type = BufferDesc::BufferTypeBits::Vertex;
-    bufDesc.data = data::vertex_index::QUAD_VERT;
-    bufDesc.length = sizeof(data::vertex_index::QUAD_VERT);
+    bufDesc.data = data::vertex_index::kQuadVert.data();
+    bufDesc.length = sizeof(data::vertex_index::kQuadVert);
 
     vb_ = iglDev_->createBuffer(bufDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
     ASSERT_TRUE(vb_ != nullptr);
 
     bufDesc.type = BufferDesc::BufferTypeBits::Vertex;
-    bufDesc.data = data::vertex_index::QUAD_UV;
-    bufDesc.length = sizeof(data::vertex_index::QUAD_UV);
+    bufDesc.data = data::vertex_index::kQuadUv.data();
+    bufDesc.length = sizeof(data::vertex_index::kQuadUv);
 
     uv_ = iglDev_->createBuffer(bufDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -149,7 +150,7 @@ class TexturesRGBBaseTest : public ::testing::Test {
     renderPipelineDesc_.targetDesc.colorAttachments[0].textureFormat =
         offscreenTexture_->getFormat();
     renderPipelineDesc_.fragmentUnitSamplerMap[textureUnit_] =
-        IGL_NAMEHANDLE(data::shader::simpleSampler);
+        IGL_NAMEHANDLE(data::shader::kSimpleSampler);
     renderPipelineDesc_.cullMode = igl::CullMode::Disabled;
 
 // The sRGB hardware extension should decode and re-encode to exactly the same color values
@@ -163,7 +164,7 @@ class TexturesRGBBaseTest : public ::testing::Test {
 // Panther is external codename for Quest3s and Eureka is external codename for Quest3
 #if IGL_PLATFORM_LINUX_SWIFTSHADER || defined(PANTHER_PLATFORM) || defined(EUREKA_PLATFORM)
     if (iglDev_->getBackendType() == BackendType::OpenGL) {
-      kTolerance_ = 1; // Swiftshader and quest 3(s) opengl is not accurate enough.
+      tolerance_ = 1; // Swiftshader and quest 3(s) opengl is not accurate enough.
     }
 #endif
   }
@@ -202,7 +203,7 @@ class TexturesRGBBaseTest : public ::testing::Test {
   size_t offscreenTexWidth_ = 2;
   size_t offscreenTexHeight_ = 2;
 
-  uint8_t kTolerance_ = 0; // some platforms aren't perfect and need some tolerance
+  uint8_t tolerance_ = 0; // some platforms aren't perfect and need some tolerance
 };
 
 class TexturesRGBSmallTest : public TexturesRGBBaseTest {
@@ -263,7 +264,7 @@ TEST_F(TexturesRGBSmallTest, Passthrough) {
 
   const auto rangeDesc = TextureRangeDesc::new2D(0, 0, offscreenTexWidth_, offscreenTexHeight_);
 
-  inputTexture_->upload(rangeDesc, data::texture::TEX_RGBA_2x2);
+  inputTexture_->upload(rangeDesc, data::texture::kTexRgba2x2.data());
 
   //----------------
   // Create Pipeline
@@ -280,8 +281,8 @@ TEST_F(TexturesRGBSmallTest, Passthrough) {
   ASSERT_TRUE(cmdBuf_ != nullptr);
 
   auto cmds = cmdBuf_->createRenderCommandEncoder(renderPass_, framebuffer_);
-  cmds->bindVertexBuffer(data::shader::simplePosIndex, *vb_);
-  cmds->bindVertexBuffer(data::shader::simpleUvIndex, *uv_);
+  cmds->bindVertexBuffer(data::shader::kSimplePosIndex, *vb_);
+  cmds->bindVertexBuffer(data::shader::kSimpleUvIndex, *uv_);
 
   cmds->bindRenderPipelineState(pipelineState);
 
@@ -308,12 +309,12 @@ TEST_F(TexturesRGBSmallTest, Passthrough) {
   // Verify against original texture
   //--------------------------------
   for (size_t i = 0; i < offscreenTexWidth_ * offscreenTexHeight_; i++) {
-    const util::sRGBColor currentColor(pixels[i]);
-    const util::sRGBColor testColor(data::texture::TEX_RGBA_2x2[i]);
-    ASSERT_LE(abs(currentColor.r - testColor.r), kTolerance_);
-    ASSERT_LE(abs(currentColor.g - testColor.g), kTolerance_);
-    ASSERT_LE(abs(currentColor.b - testColor.b), kTolerance_);
-    ASSERT_LE(abs(currentColor.a - testColor.a), kTolerance_);
+    const util::SRgbColor currentColor(pixels[i]);
+    const util::SRgbColor testColor(data::texture::kTexRgba2x2[i]);
+    ASSERT_LE(abs(currentColor.r - testColor.r), tolerance_);
+    ASSERT_LE(abs(currentColor.g - testColor.g), tolerance_);
+    ASSERT_LE(abs(currentColor.b - testColor.b), tolerance_);
+    ASSERT_LE(abs(currentColor.a - testColor.a), tolerance_);
   }
 }
 
@@ -364,8 +365,8 @@ TEST_F(TexturesRGBBigTest, Passthrough) {
   ASSERT_TRUE(cmdBuf_ != nullptr);
 
   auto cmds = cmdBuf_->createRenderCommandEncoder(renderPass_, framebuffer_);
-  cmds->bindVertexBuffer(data::shader::simplePosIndex, *vb_);
-  cmds->bindVertexBuffer(data::shader::simpleUvIndex, *uv_);
+  cmds->bindVertexBuffer(data::shader::kSimplePosIndex, *vb_);
+  cmds->bindVertexBuffer(data::shader::kSimpleUvIndex, *uv_);
 
   cmds->bindRenderPipelineState(pipelineState);
 
@@ -392,12 +393,12 @@ TEST_F(TexturesRGBBigTest, Passthrough) {
   // Verify against original texture
   //--------------------------------
   for (size_t i = 0; i < offscreenTexWidth_ * offscreenTexHeight_; i++) {
-    const util::sRGBColor currentColor(pixels[i]);
-    const util::sRGBColor testColor(allColorsBuffer[i]);
-    ASSERT_LE(abs(currentColor.r - testColor.r), kTolerance_);
-    ASSERT_LE(abs(currentColor.g - testColor.g), kTolerance_);
-    ASSERT_LE(abs(currentColor.b - testColor.b), kTolerance_);
-    ASSERT_LE(abs(currentColor.a - testColor.a), kTolerance_);
+    const util::SRgbColor currentColor(pixels[i]);
+    const util::SRgbColor testColor(allColorsBuffer[i]);
+    ASSERT_LE(abs(currentColor.r - testColor.r), tolerance_);
+    ASSERT_LE(abs(currentColor.g - testColor.g), tolerance_);
+    ASSERT_LE(abs(currentColor.b - testColor.b), tolerance_);
+    ASSERT_LE(abs(currentColor.a - testColor.a), tolerance_);
   }
 }
 

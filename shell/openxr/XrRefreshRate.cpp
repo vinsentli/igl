@@ -9,9 +9,9 @@
 
 #include <shell/openxr/XrRefreshRate.h>
 
-#include <shell/openxr/XrLog.h>
-
 #include <algorithm>
+#include <shell/openxr/XrLog.h>
+#include <igl/Core.h>
 
 namespace igl::shell::openxr {
 

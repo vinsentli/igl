@@ -14,8 +14,6 @@
 #include <igl/opengl/IContext.h>
 #include <igl/opengl/SamplerState.h>
 #include <igl/opengl/Texture.h>
-#include <igl/opengl/UniformBuffer.h>
-#include <igl/opengl/VertexInputState.h>
 
 #define SET_DIRTY(dirtyMap, index) dirtyMap.set(index)
 #define CLEAR_DIRTY(dirtyMap, index) dirtyMap.reset(index)
@@ -66,7 +64,7 @@ void ComputeCommandAdapter::setBuffer(Buffer* buffer, size_t offset, uint32_t in
   IGL_DEBUG_ASSERT(index < IGL_BUFFER_BINDINGS_MAX,
                    "Buffer index is beyond max, may want to increase limit");
   if (index < uniformAdapter_.getMaxUniforms() && buffer) {
-    buffers_[index] = {buffer, offset};
+    buffers_[index] = {.resource = buffer, .offset = offset};
     SET_DIRTY(buffersDirty_, index);
   }
 }
@@ -119,6 +117,11 @@ void ComputeCommandAdapter::willDispatch() {
     return;
   }
 
+  if (isDirty(StateMask::PIPELINE)) {
+    pipelineState->bind();
+    clearDirty(StateMask::PIPELINE);
+  }
+
   for (uint32_t bufferIndex = 0; bufferIndex < IGL_BUFFER_BINDINGS_MAX; ++bufferIndex) {
     if (!IS_DIRTY(buffersDirty_, bufferIndex)) {
       continue;
@@ -130,11 +133,6 @@ void ComputeCommandAdapter::willDispatch() {
       IGL_LOG_INFO_ONCE(ret.message.c_str());
       continue;
     }
-  }
-
-  if (isDirty(StateMask::PIPELINE)) {
-    pipelineState->bind();
-    clearDirty(StateMask::PIPELINE);
   }
 
   // Bind uniforms to be used for compute

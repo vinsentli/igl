@@ -5,19 +5,21 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <igl/Common.h>
 #include <igl/opengl/RenderCommandAdapter.h>
 
 #include <algorithm>
+#include <igl/Common.h>
+#include <igl/RenderCommandEncoder.h>
 #include <igl/opengl/Buffer.h>
 #include <igl/opengl/DepthStencilState.h>
 #include <igl/opengl/Framebuffer.h>
+#include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/IContext.h>
-#include <igl/opengl/RenderCommandEncoder.h>
 #include <igl/opengl/RenderPipelineState.h>
 #include <igl/opengl/SamplerState.h>
 #include <igl/opengl/Shader.h>
 #include <igl/opengl/Texture.h>
+#include <igl/opengl/UniformAdapter.h>
 #include <igl/opengl/VertexArrayObject.h>
 
 #define SET_DIRTY(dirtyMap, index) dirtyMap.set(index)
@@ -27,8 +29,7 @@
 namespace igl::opengl {
 RenderCommandAdapter::RenderCommandAdapter(IContext& context) :
   WithContext(context),
-  uniformAdapter_(UniformAdapter(context, UniformAdapter::PipelineType::Render)),
-  cachedUnbindPolicy_(getContext().getUnbindPolicy()) {
+  uniformAdapter_(UniformAdapter(context, UniformAdapter::PipelineType::Render)) {
   useVAO_ = context.deviceFeatures().hasInternalFeature(InternalFeatures::VertexArrayObject);
   if (useVAO_) {
     activeVAO_ = std::make_shared<VertexArrayObject>(getContext());
@@ -41,6 +42,7 @@ std::unique_ptr<RenderCommandAdapter> RenderCommandAdapter::create(
     const RenderPassDesc& renderPass,
     const std::shared_ptr<IFramebuffer>& framebuffer,
     Result* outResult) {
+  // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
   std::unique_ptr<RenderCommandAdapter> newAdapter(new RenderCommandAdapter(context));
   newAdapter->initialize(renderPass, framebuffer, outResult);
   return newAdapter;
@@ -49,8 +51,6 @@ std::unique_ptr<RenderCommandAdapter> RenderCommandAdapter::create(
 void RenderCommandAdapter::initialize(const RenderPassDesc& renderPass,
                                       const std::shared_ptr<IFramebuffer>& framebuffer,
                                       Result* outResult) {
-  cachedUnbindPolicy_ = getContext().getUnbindPolicy();
-
   if (!IGL_DEBUG_VERIFY(framebuffer)) {
     Result::setResult(outResult, Result::Code::ArgumentNull, "framebuffer is null");
     return;
@@ -89,14 +89,14 @@ void RenderCommandAdapter::setScissorRect(const ScissorRect& rect) {
 void RenderCommandAdapter::setDepthStencilState(
     const std::shared_ptr<IDepthStencilState>& newValue) {
   depthStencilState_ = newValue;
-  setDirty(StateMask::DEPTH_STENCIL);
+  setDirty(StateMask::DepthStencil);
 }
 
 void RenderCommandAdapter::setStencilReferenceValue(uint32_t value) {
   frontStencilReferenceValue_ = value;
   backStencilReferenceValue_ = value;
-  
-  setDirty(StateMask::DEPTH_STENCIL);
+
+  setDirty(StateMask::DepthStencil);
 }
 
 void RenderCommandAdapter::setBlendColor(const Color& color) {
@@ -119,7 +119,7 @@ void RenderCommandAdapter::setVertexBuffer(Buffer& buffer,
   IGL_DEBUG_ASSERT(index < IGL_BUFFER_BINDINGS_MAX,
                    "Buffer index is beyond max, may want to increase limit");
   if (index < IGL_BUFFER_BINDINGS_MAX) {
-    vertexBuffers_[index] = {&buffer, offset};
+    vertexBuffers_[index] = {.resource = &buffer, .offset = offset};
     SET_DIRTY(vertexBuffersDirty_, index);
     Result::setOk(outResult);
   } else {
@@ -335,6 +335,39 @@ void RenderCommandAdapter::drawElementsIndirect(GLenum mode,
   didDraw();
 }
 
+void RenderCommandAdapter::multiDrawArraysIndirect(GLenum mode,
+                                                   Buffer& indirectBuffer,
+                                                   const GLvoid* indirectBufferOffset,
+                                                   GLsizei drawcount,
+                                                   GLsizei stride) {
+  willDraw();
+  if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::MultiDrawIndirect)) {
+    bindBufferWithShaderStorageBufferOverride(indirectBuffer, GL_DRAW_INDIRECT_BUFFER);
+    getContext().multiDrawArraysIndirect(
+        toMockWireframeMode(mode), indirectBufferOffset, drawcount, stride);
+  } else {
+    IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
+  }
+  didDraw();
+}
+
+void RenderCommandAdapter::multiDrawElementsIndirect(GLenum mode,
+                                                     GLenum indexType,
+                                                     Buffer& indirectBuffer,
+                                                     const GLvoid* indirectBufferOffset,
+                                                     GLsizei drawcount,
+                                                     GLsizei stride) {
+  willDraw();
+  if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::MultiDrawIndirect)) {
+    bindBufferWithShaderStorageBufferOverride(indirectBuffer, GL_DRAW_INDIRECT_BUFFER);
+    getContext().multiDrawElementsIndirect(
+        toMockWireframeMode(mode), indexType, indirectBufferOffset, drawcount, stride);
+  } else {
+    IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
+  }
+  didDraw();
+}
+
 void RenderCommandAdapter::endEncoding() {
   // Some minimal cleanup needs to occur in order. Otherwise, OpenGL can end in a bad state
   // with complex rendering.
@@ -387,9 +420,9 @@ void RenderCommandAdapter::willDraw() {
   }
 
   auto* depthStencilState = static_cast<DepthStencilState*>(depthStencilState_.get());
-  if (depthStencilState && isDirty(StateMask::DEPTH_STENCIL)) {
+  if (depthStencilState && isDirty(StateMask::DepthStencil)) {
     depthStencilState->bind(frontStencilReferenceValue_, backStencilReferenceValue_);
-    clearDirty(StateMask::DEPTH_STENCIL);
+    clearDirty(StateMask::DepthStencil);
   }
 
   // We store 2 parallel vectors (one for uniforms and one for uniform blocks)
@@ -418,15 +451,15 @@ void RenderCommandAdapter::willDraw() {
       }
       auto& textureState = vertexTextureStates_[index];
       if (auto* texture = static_cast<Texture*>(textureState.first)) {
-        ret = pipelineState->bindTextureUnit(index, igl::BindTarget::kVertex);
+        if (IGL_DEBUG_VERIFY_NOT(texture == nullptr)) {
+          continue;
+        }
+        ret = pipelineState->bindTextureUnit(index, igl::BindTarget::kVertex, *texture);
 
         if (!ret.isOk()) {
           IGL_LOG_INFO_ONCE(ret.message.c_str());
           continue;
         }
-          
-        IGL_PROFILER_ZONE_GPU_OGL("bindTexture");
-        texture->bind();
 
         if (auto* samplerState = static_cast<SamplerState*>(textureState.second)) {
           samplerState->bind(texture);
@@ -440,15 +473,15 @@ void RenderCommandAdapter::willDraw() {
       }
       auto& textureState = fragmentTextureStates_[index];
       if (auto* texture = static_cast<Texture*>(textureState.first)) {
-        ret = pipelineState->bindTextureUnit(index, igl::BindTarget::kFragment);
+        if (IGL_DEBUG_VERIFY_NOT(texture == nullptr)) {
+          continue;
+        }
+        ret = pipelineState->bindTextureUnit(index, igl::BindTarget::kFragment, *texture);
 
         if (!ret.isOk()) {
           IGL_LOG_INFO_ONCE(ret.message.c_str());
           continue;
         }
-        
-        IGL_PROFILER_ZONE_GPU_OGL("bindTexture");
-        texture->bind();
 
         if (auto* samplerState = static_cast<SamplerState*>(textureState.second)) {
           samplerState->bind(texture);
@@ -464,24 +497,6 @@ void RenderCommandAdapter::willDraw() {
         IGL_DEBUG_ASSERT(result.isOk(), result.message.c_str());
       }
     }
-  }
-}
-
-void RenderCommandAdapter::unbindTexture(IContext& context,
-                                         size_t textureUnit,
-                                         TextureState& textureState) {
-  if (auto* texture = static_cast<Texture*>(textureState.first)) {
-    context.activeTexture(static_cast<GLenum>(GL_TEXTURE0 + textureUnit));
-    texture->unbind();
-  }
-}
-
-void RenderCommandAdapter::unbindTextures(IContext& context,
-                                          TextureStates& states,
-                                          std::bitset<IGL_TEXTURE_SAMPLERS_MAX>& dirtyFlags) {
-  for (size_t index = 0; index < states.size(); index++) {
-    unbindTexture(context, index, states[index]);
-    SET_DIRTY(dirtyFlags, index);
   }
 }
 

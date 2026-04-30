@@ -121,6 +121,16 @@ DeviceFeatureSet::DeviceFeatureSet(id<MTLDevice> device) {
   } else{
     //15.0以下的系统不支持
   }
+
+  if (@available(macOS 10.15, iOS 14.0, *)) {
+    // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
+    for (id<MTLCounterSet> counterSet in device.counterSets) {
+      if ([counterSet.name isEqualToString:MTLCommonCounterSetTimestamp]) {
+        supportsTimestampQueries_ = true;
+        break;
+      }
+    }
+  }
 }
 
 bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
@@ -227,6 +237,10 @@ bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
     return false;
   case DeviceFeatures::TextureViews:
     return false;
+  case DeviceFeatures::Timers:
+    return true;
+  case DeviceFeatures::TimestampQueries:
+    return supportsTimestampQueries_;
   }
   return false;
 }
@@ -299,6 +313,26 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
     return true;
   case DeviceFeatureLimits::MaxAnisotropicFiltering:
     result = 4;
+  case DeviceFeatureLimits::MaxTextureDimension3D:
+#if IGL_PLATFORM_IOS
+    result = (gpuFamily_ <= 2) ? 2048 : 2048;
+#else
+    result = 2048;
+#endif
+    return true;
+  case DeviceFeatureLimits::MaxComputeWorkGroupSizeX:
+  case DeviceFeatureLimits::MaxComputeWorkGroupSizeY:
+  case DeviceFeatureLimits::MaxComputeWorkGroupSizeZ:
+    result = 1024;
+    return true;
+  case DeviceFeatureLimits::MaxComputeWorkGroupInvocations:
+    result = 1024;
+    return true;
+  case DeviceFeatureLimits::MaxVertexInputAttributes:
+    result = 31;
+    return true;
+  case DeviceFeatureLimits::MaxColorAttachments:
+    result = 8;
     return true;
   default:
     IGL_DEBUG_ABORT(
@@ -340,7 +374,8 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getTextureFormatCapab
 #else
     return sampled | attachment | sampledAttachment;
 #endif
-  case TextureFormat::R5G6B5_UNorm:
+  case TextureFormat::R5G6B5_UNorm: // Fallback: Metal has no native R5G6B5; uses B5G6R5 (swapped
+                                    // channels)
   case TextureFormat::B5G6R5_UNorm:
 #if IGL_PLATFORM_MACOSX || IGL_PLATFORM_MACCATALYST || IGL_PLATFORM_IOS_SIMULATOR
     return unsupported;
@@ -384,6 +419,8 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getTextureFormatCapab
     return sampled | storage | attachment | sampledAttachment;
 
     // 64 bpp
+  case TextureFormat::RGBA_UNorm16:
+    return all;
   case TextureFormat::RGBA_F16:
     return all;
   case TextureFormat::RG_F32:
@@ -516,8 +553,14 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getTextureFormatCapab
   case TextureFormat::R_EAC_SNorm:
   case TextureFormat::YUV_NV12:
   case TextureFormat::YUV_420p:
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
     return unsupported;
   }
+  return unsupported;
 }
 
 } // namespace igl::metal

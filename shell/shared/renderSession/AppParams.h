@@ -6,7 +6,6 @@
  */
 
 #pragma once
-#include <cstdint>
 #include <functional>
 #include <shell/shared/renderSession/DepthParams.h>
 #include <shell/shared/renderSession/QuadLayerParams.h>
@@ -22,5 +21,7 @@ struct AppParams {
   float sizeY = 1.f;
   QuadLayerParamsGetter quadLayerParamsGetter;
   PassthroughGetter passthroughGetter;
+  float passthroughOpacity = 1.0f;
+  bool useMaxRenderResolution = false;
 };
 } // namespace igl::shell

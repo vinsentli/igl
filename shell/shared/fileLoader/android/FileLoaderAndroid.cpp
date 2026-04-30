@@ -7,12 +7,60 @@
 
 // @fb-only
 
-#include <android/asset_manager.h>
-#include <filesystem>
 #include <shell/shared/fileLoader/android/FileLoaderAndroid.h>
-#include <igl/IGL.h>
+
+#include <android/asset_manager.h>
+// @fb-only
+// @fb-only
+#include <filesystem>
+#include <limits>
+#include <igl/Core.h>
 
 namespace igl::shell {
+
+namespace {
+
+// @fb-only
+  // @fb-only// Try to get ActivityThread so we can get a Context
+  // @fb-only
+  // @fb-only
+    // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only // Get an Application (a Context) object from ActivityThread
+  // @fb-only
+      // @fb-only
+      // @fb-only
+      // @fb-only
+  // @fb-only
+    // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+// @fb-only
+
+// @fb-only
+  // @fb-only
+    // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+      // @fb-only
+          // @fb-only
+          // @fb-only
+          // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+// @fb-only
+
+} // namespace
+
+FileLoaderAndroid::FileLoaderAndroid() {
+  // @fb-only
+}
 
 FileLoader::FileData FileLoaderAndroid::loadBinaryData(const std::string& fileName) {
   if (fileName.empty()) {
@@ -26,7 +74,7 @@ FileLoader::FileData FileLoaderAndroid::loadBinaryData(const std::string& fileNa
       AAsset* asset = AAssetManager_open(assetManager_, fileName.c_str(), AASSET_MODE_BUFFER);
       if (asset != nullptr) {
         const off64_t length = AAsset_getLength64(asset);
-        if (IGL_DEBUG_VERIFY_NOT(length > std::numeric_limits<uint32_t>::max())) {
+        if (IGL_DEBUG_VERIFY_NOT(length > std::numeric_limits<uint64_t>::max())) {
           AAsset_close(asset);
           return {};
         }
@@ -41,7 +89,7 @@ FileLoader::FileData FileLoaderAndroid::loadBinaryData(const std::string& fileNa
         }
         AAsset_close(asset);
 
-        return {std::move(data), static_cast<uint32_t>(length)};
+        return {.data = std::move(data), .length = static_cast<uint64_t>(length)};
       }
     }
     // Fallback to default behavior (i.e., loading w/ C++ functions) if asset manager is not set or

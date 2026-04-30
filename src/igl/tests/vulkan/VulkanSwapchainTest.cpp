@@ -7,17 +7,12 @@
 
 #include <igl/vulkan/Common.h>
 
-#ifdef __ANDROID__
-#include <vulkan/vulkan_android.h>
-#endif
-
 #if IGL_PLATFORM_WINDOWS || IGL_PLATFORM_ANDROID || IGL_PLATFORM_LINUX
-#include <cstddef>
 #include <gtest/gtest.h>
-#include <memory>
 
-#include <igl/tests/util/device/vulkan/TestDevice.h>
-#include <igl/vulkan/Device.h>
+#include <cstddef>
+#include <memory>
+#include <igl/tests/util/device/vulkan/TestDevice.h> // IWYU pragma: export
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanSwapchain.h>
 

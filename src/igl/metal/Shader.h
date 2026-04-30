@@ -8,7 +8,7 @@
 #pragma once
 
 #include <Metal/Metal.h>
-#include <string>
+#include <memory>
 #include <vector>
 #include <igl/Shader.h>
 
@@ -22,10 +22,10 @@ class ShaderModule final : public IShaderModule {
   ~ShaderModule() override = default;
 
   IGL_INLINE id<MTLFunction> get() const {
-    return value_;
+    return value;
   }
 
-  id<MTLFunction> value_;
+  id<MTLFunction> value;
 };
 
 class ShaderLibrary final : public IShaderLibrary {

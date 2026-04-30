@@ -7,24 +7,24 @@
 
 #include <igl/opengl/RenderCommandEncoder.h>
 
+#include <igl/DepthStencilState.h>
+#include <igl/RenderPipelineState.h>
+#include <igl/SamplerState.h>
 #include <igl/opengl/Buffer.h>
 #include <igl/opengl/CommandBuffer.h>
-#include <igl/opengl/DepthStencilState.h>
-#include <igl/opengl/Errors.h>
 #include <igl/opengl/Framebuffer.h>
 #include <igl/opengl/IContext.h>
+#include <igl/opengl/PlatformDevice.h>
 #include <igl/opengl/RenderCommandAdapter.h>
-#include <igl/opengl/RenderPipelineState.h>
-#include <igl/opengl/SamplerState.h>
+#include <igl/opengl/TimestampQueries.h>
 #include <igl/opengl/UniformAdapter.h>
-#include <igl/opengl/VertexInputState.h>
 
 namespace igl::opengl {
 
 namespace {
-GLenum toGlPrimitive(PrimitiveType t) {
+GLenum toGlPrimitive(PrimitiveType primitiveType) {
   GLenum result = GL_TRIANGLES;
-  switch (t) {
+  switch (primitiveType) {
   case PrimitiveType::Point:
     result = GL_POINTS;
     break;
@@ -63,6 +63,8 @@ uint8_t getIndexByteSize(GLenum indexType) {
     return 2u;
   case GL_UNSIGNED_INT:
     return 4u;
+  default:
+    break;
   }
   IGL_UNREACHABLE_RETURN(4u)
 }
@@ -84,6 +86,7 @@ std::unique_ptr<RenderCommandEncoder> RenderCommandEncoder::create(
     return {};
   }
 
+  // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
   std::unique_ptr<RenderCommandEncoder> newEncoder(new RenderCommandEncoder(commandBuffer));
   newEncoder->beginEncoding(renderPass, framebuffer, outResult);
   return newEncoder;
@@ -124,6 +127,15 @@ void RenderCommandEncoder::beginEncoding(const RenderPassDesc& renderPass,
   }
   framebuffer_ = std::static_pointer_cast<Framebuffer>(framebuffer);
   resolveFramebuffer_ = framebuffer_->getResolveFramebuffer();
+
+  // GPU timing: if the render pass descriptor contains a timestamp query,
+  // start a GL_TIME_ELAPSED query to measure this render pass's GPU time.
+  if (renderPass.timestampQuery.queries) {
+    timestampQueries_ = renderPass.timestampQuery.queries;
+    static_cast<TimestampQueries&>(*timestampQueries_)
+        .beginElapsedQuery(renderPass.timestampQuery.slotIndex);
+  }
+
   Result::setOk(outResult);
 }
 
@@ -140,6 +152,12 @@ void RenderCommandEncoder::endEncoding() {
     getContext().getAdapterPool().push_back(std::move(adapter_));
       
     framebuffer_->unbind();
+
+    // GPU timing: end the GL_TIME_ELAPSED query after all draw calls.
+    if (timestampQueries_) {
+      static_cast<TimestampQueries&>(*timestampQueries_).endElapsedQuery();
+      timestampQueries_ = nullptr;
+    }
 
     if (resolveFramebuffer_) {
       Result outResult;
@@ -271,10 +289,10 @@ void RenderCommandEncoder::bindUniform(const UniformDesc& uniformDesc, const voi
 }
 
 void RenderCommandEncoder::bindBuffer(uint32_t index,
-                                      uint8_t bindTarget, 
+                                      uint8_t bindTarget,
                                       IBuffer* buffer,
                                       size_t offset,
-                                      size_t bufferSize){
+                                      size_t bufferSize) {
   bindBuffer(index, buffer, offset, bufferSize);
 }
 
@@ -310,7 +328,7 @@ void RenderCommandEncoder::bindIndexBuffer(IBuffer& buffer,
                                            bool bindVAO) {
   if (IGL_DEBUG_VERIFY(adapter_)) {
     indexType_ = toGlType(format);
-    indexBufferOffset_ = reinterpret_cast<void*>(bufferOffset);
+    indexBufferOffset_ = reinterpret_cast<void*>(bufferOffset); // NOLINT(performance-no-int-to-ptr)
     adapter_->setIndexBuffer((Buffer&)buffer, bindVAO);
   }
 }
@@ -413,6 +431,16 @@ void RenderCommandEncoder::drawIndexed(size_t indexCount,
   }
 }
 
+void RenderCommandEncoder::drawMeshTasks(const Dimensions& threadgroupsPerGrid,
+                                         const Dimensions& threadsPerTaskThreadgroup,
+                                         const Dimensions& threadsPerMeshThreadgroup) {
+  (void)threadgroupsPerGrid;
+  (void)threadsPerTaskThreadgroup;
+  (void)threadsPerMeshThreadgroup;
+
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
+}
+
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
 void RenderCommandEncoder::multiDrawIndirect(IBuffer& indirectBuffer,
                                              size_t indirectBufferOffset,
@@ -422,10 +450,17 @@ void RenderCommandEncoder::multiDrawIndirect(IBuffer& indirectBuffer,
   if (IGL_DEBUG_VERIFY(adapter_)) {
     getCommandBuffer().incrementCurrentDrawCount();
     const auto mode = toGlPrimitive(adapter_->pipelineState().getRenderPipelineDesc().topology);
-    const auto* indirectBufferOffsetPtr = reinterpret_cast<uint8_t*>(indirectBufferOffset);
-    for (uint32_t i = 0; i != drawCount; i++) {
-      adapter_->drawArraysIndirect(mode, (Buffer&)indirectBuffer, indirectBufferOffsetPtr);
-      indirectBufferOffsetPtr += stride ? stride : 16u; // sizeof(DrawArraysIndirectCommand)
+    const auto* indirectBufferOffsetPtr =
+        reinterpret_cast<uint8_t*>(indirectBufferOffset); // NOLINT(performance-no-int-to-ptr)
+    const GLsizei effectiveStride = stride ? stride : 16u; // sizeof(DrawArraysIndirectCommand)
+    if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::MultiDrawIndirect)) {
+      adapter_->multiDrawArraysIndirect(
+          mode, (Buffer&)indirectBuffer, indirectBufferOffsetPtr, drawCount, effectiveStride);
+    } else {
+      for (uint32_t i = 0; i != drawCount; i++) {
+        adapter_->drawArraysIndirect(mode, (Buffer&)indirectBuffer, indirectBufferOffsetPtr);
+        indirectBufferOffsetPtr += effectiveStride;
+      }
     }
   }
 }
@@ -438,16 +473,25 @@ void RenderCommandEncoder::multiDrawIndexedIndirect(IBuffer& indirectBuffer,
   // NOLINTEND(bugprone-easily-swappable-parameters)
   IGL_DEBUG_ASSERT(indexType_, "No index buffer bound");
 
-  // TODO: use glMultiDrawElementsIndirect() when available
-
   if (IGL_DEBUG_VERIFY(adapter_ && indexType_)) {
     getCommandBuffer().incrementCurrentDrawCount();
     const auto mode = toGlPrimitive(adapter_->pipelineState().getRenderPipelineDesc().topology);
-    const auto* indirectBufferOffsetPtr = reinterpret_cast<uint8_t*>(indirectBufferOffset);
-    for (uint32_t i = 0; i != drawCount; i++) {
-      adapter_->drawElementsIndirect(
-          mode, indexType_, (Buffer&)indirectBuffer, indirectBufferOffsetPtr);
-      indirectBufferOffsetPtr += stride ? stride : 20u; // sizeof(DrawElementsIndirectCommand)
+    const auto* indirectBufferOffsetPtr =
+        reinterpret_cast<uint8_t*>(indirectBufferOffset); // NOLINT(performance-no-int-to-ptr)
+    const GLsizei effectiveStride = stride ? stride : 20u; // sizeof(DrawElementsIndirectCommand)
+    if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::MultiDrawIndirect)) {
+      adapter_->multiDrawElementsIndirect(mode,
+                                          indexType_,
+                                          (Buffer&)indirectBuffer,
+                                          indirectBufferOffsetPtr,
+                                          drawCount,
+                                          effectiveStride);
+    } else {
+      for (uint32_t i = 0; i != drawCount; i++) {
+        adapter_->drawElementsIndirect(
+            mode, indexType_, (Buffer&)indirectBuffer, indirectBufferOffsetPtr);
+        indirectBufferOffsetPtr += effectiveStride;
+      }
     }
   }
 }
@@ -475,7 +519,7 @@ void RenderCommandEncoder::bindBindGroup(BindGroupTextureHandle handle) {
     return;
   }
 
-  const BindGroupTextureDesc* desc = getContext().bindGroupTexturesPool_.get(handle);
+  const BindGroupTextureDesc* desc = getContext().bindGroupTexturesPool.get(handle);
 
   for (uint32_t i = 0; i != IGL_TEXTURE_SAMPLERS_MAX; i++) {
     if (desc->textures[i]) {
@@ -493,7 +537,7 @@ void RenderCommandEncoder::bindBindGroup(BindGroupBufferHandle handle,
     return;
   }
 
-  const BindGroupBufferDesc* desc = getContext().bindGroupBuffersPool_.get(handle);
+  const BindGroupBufferDesc* desc = getContext().bindGroupBuffersPool.get(handle);
 
   uint32_t dynamicOffset = 0;
 

@@ -8,13 +8,14 @@
 // @fb-only
 // @fb-only
 
-#include "NativeHWBuffer.h"
+#include <igl/opengl/egl/android/NativeHWBuffer.h>
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
-#include "../Context.h"
+#include <igl/opengl/Config.h>
+#include <igl/opengl/egl/Context.h>
 
-#if defined(IGL_API_LOG) && (IGL_DEBUG || defined(IGL_FORCE_ENABLE_LOGS))
+#if IGL_API_LOG && IGL_LOGGING_ENABLED
 #define APILOG_DEC_DRAW_COUNT() \
   if (apiLogDrawsLeft_) {       \
     apiLogDrawsLeft_--;         \
@@ -26,7 +27,7 @@
 #else
 #define APILOG_DEC_DRAW_COUNT() static_cast<void>(0)
 #define APILOG(format, ...) static_cast<void>(0)
-#endif // defined(IGL_API_LOG) && (IGL_DEBUG || defined(IGL_FORCE_ENABLE_LOGS))
+#endif // IGL_API_LOGs && IGL_LOGGING_ENABLED
 
 namespace igl::opengl::egl::android {
 
@@ -36,14 +37,14 @@ struct AHardwareBufferContext {
 };
 
 NativeHWTextureBuffer::~NativeHWTextureBuffer() {
-  GLuint textureID = getId();
-  if (textureID != 0) {
+  GLuint textureId = getId();
+  if (textureId != 0) {
     if (getContext().isLikelyValidObject()) {
-      getContext().deleteTextures({textureID});
+      getContext().deleteTextures(1, &textureId);
     }
   }
 
-  auto context = std::static_pointer_cast<AHardwareBufferContext>(hwBufferHelper_);
+  auto* context = static_cast<AHardwareBufferContext*>(hwBufferHelper_.get());
   if (context) {
     eglDestroyImageKHR(context->display, context->elgImage);
     if (hwBuffer_) {
@@ -115,7 +116,8 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* buffer) {
   getContext().bindTexture(getTarget(), getId());
 
   if (getContext().checkForErrors(__FUNCTION__, __LINE__) != GL_NO_ERROR) {
-    getContext().deleteTextures({getId()});
+    GLuint textureId = getId();
+    getContext().deleteTextures(1, &textureId);
     eglDestroyImageKHR(display, eglImage);
     return Result{Result::Code::RuntimeError, "NativeHWTextureBuffer GL error during bindTexture"};
   }
@@ -130,7 +132,7 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* buffer) {
   std::shared_ptr<AHardwareBufferContext> hwBufferCtx = std::make_shared<AHardwareBufferContext>();
   hwBufferCtx->display = display;
   hwBufferCtx->elgImage = eglImage;
-  hwBufferHelper_ = std::static_pointer_cast<AHardwareBufferHelper>(hwBufferCtx);
+  hwBufferHelper_ = hwBufferCtx; // Implicit upcast
 
   textureDesc_ = desc;
 
@@ -139,7 +141,7 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* buffer) {
 
 void NativeHWTextureBuffer::bind() {
   getContext().bindTexture(getTarget(), getId());
-  auto context = std::static_pointer_cast<AHardwareBufferContext>(hwBufferHelper_);
+  auto* context = static_cast<AHardwareBufferContext*>(hwBufferHelper_.get());
 
   getContext().checkForErrors(__FUNCTION__, __LINE__);
 
@@ -160,7 +162,8 @@ void NativeHWTextureBuffer::bindImage(size_t unit) {
 Result NativeHWTextureBuffer::uploadInternal(TextureType /*type*/,
                                              const TextureRangeDesc& range,
                                              const void* IGL_NULLABLE data,
-                                             size_t bytesPerRow) const {
+                                             size_t bytesPerRow,
+                                             const uint32_t* IGL_NULLABLE /*mipLevelBytes*/) const {
   // not optimal pass
 
   std::byte* dst = nullptr;
@@ -169,7 +172,7 @@ Result NativeHWTextureBuffer::uploadInternal(TextureType /*type*/,
   auto lockGuard
       [[maybe_unused]] = lockHWBuffer(reinterpret_cast<std::byte**>(&dst), outRange, &outResult);
   auto internalBpr = getProperties().getBytesPerRow(outRange.stride);
-  bytesPerRow = bytesPerRow > 0 ? bytesPerRow : getProperties().getBytesPerRow(range);
+  bytesPerRow = bytesPerRow ? bytesPerRow : getProperties().getBytesPerRow(range);
 
   if (outResult.isOk() && dst != nullptr && bytesPerRow <= internalBpr &&
       range.width == outRange.width && range.height == outRange.height) {

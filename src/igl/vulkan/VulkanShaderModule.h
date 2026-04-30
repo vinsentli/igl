@@ -9,9 +9,7 @@
 
 #include <memory>
 #include <vector>
-
-#include <igl/vulkan/Common.h>
-#include <igl/vulkan/VulkanHelpers.h>
+#include <igl/vulkan/VulkanFunctionTable.h>
 #include <igl/vulkan/util/SpvReflection.h>
 
 namespace igl::vulkan {
@@ -27,6 +25,10 @@ class VulkanShaderModule final {
                      VkShaderModule shaderModule,
                      util::SpvModuleInfo&& moduleInfo);
   ~VulkanShaderModule();
+  VulkanShaderModule(const VulkanShaderModule&) = delete;
+  VulkanShaderModule& operator=(const VulkanShaderModule&) = delete;
+  VulkanShaderModule(VulkanShaderModule&&) = delete;
+  VulkanShaderModule& operator=(VulkanShaderModule&&) = delete;
 
   /** @brief Returns the underlying Vulkan shader module */
   [[nodiscard]] VkShaderModule getVkShaderModule() const {

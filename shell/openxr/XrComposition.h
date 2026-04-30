@@ -7,17 +7,16 @@
 
 #pragma once
 
-#include <shell/openxr/XrPlatform.h>
-#include <shell/openxr/XrSwapchainProvider.h>
-#include <shell/openxr/impl/XrSwapchainProviderImpl.h>
-#include <shell/shared/platform/Platform.h>
-#include <shell/shared/renderSession/DepthParams.h>
-#include <shell/shared/renderSession/ViewParams.h>
-
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <shell/openxr/XrPlatform.h>
+#include <shell/openxr/XrSwapchainProvider.h>
+#include <shell/openxr/impl/XrSwapchainProviderImpl.h>
 #include <vector>
+#include <shell/shared/platform/Platform.h>
+#include <shell/shared/renderSession/DepthParams.h>
+#include <shell/shared/renderSession/ViewParams.h>
 
 namespace igl::shell::openxr {
 namespace impl {
@@ -58,7 +57,6 @@ class XrComposition {
  protected:
   impl::XrAppImpl& appImpl_;
   std::shared_ptr<Platform> platform_;
-  // NOLINTNEXTLINE(misc-misplaced-const)
   const XrSession session_;
 
   std::array<impl::SwapchainImageInfo, kNumViews> swapchainImageInfo_;

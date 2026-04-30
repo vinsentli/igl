@@ -8,15 +8,22 @@
 #include "RenderPipelineReflection.h"
 
 #include <Foundation/Foundation.h>
-
 #include <igl/Common.h>
 #include <igl/metal/Texture.h>
+
+#if !defined(IGL_CMAKE_BUILD)
+#include <lang/switch.h>
+#else
+#define NON_EXHAUSTIVE_SWITCH_BEGIN
+#define NON_EXHAUSTIVE_SWITCH_END
+#endif // !defined(IGL_CMAKE_BUILD)
 
 using namespace igl;
 
 namespace {
 
 igl::UniformType metalDataTypeToIGLUniformType(MTLDataType type) {
+  NON_EXHAUSTIVE_SWITCH_BEGIN
   switch (type) {
   case MTLDataTypeFloat:
     return igl::UniformType::Float;
@@ -46,6 +53,7 @@ igl::UniformType metalDataTypeToIGLUniformType(MTLDataType type) {
     IGL_LOG_ERROR("Unsupported MTLDataType: %ld\n", type);
     return igl::UniformType::Invalid;
   }
+  NON_EXHAUSTIVE_SWITCH_END
 }
 
 } // namespace
@@ -53,12 +61,13 @@ igl::UniformType metalDataTypeToIGLUniformType(MTLDataType type) {
 namespace igl::metal {
 RenderPipelineReflection::RenderPipelineReflection(MTLRenderPipelineReflection* refl) {
   if (refl != nullptr) {
+    // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
     for (MTLArgument* arg = nullptr in refl.vertexArguments) {
       if (arg.active) {
         createArgDesc(arg, ShaderStage::Vertex);
       }
     }
-
+    // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
     for (MTLArgument* arg = nullptr in refl.fragmentArguments) {
       if (arg.active) {
         createArgDesc(arg, ShaderStage::Fragment);
@@ -80,24 +89,25 @@ bool RenderPipelineReflection::createArgDesc(MTLArgument* arg, ShaderStage sh) {
     bufferDesc.bufferIndex = static_cast<int>(arg.index);
     bufferDesc.shaderStage = sh;
     if (arg.bufferDataType == MTLDataTypeStruct) {
+      // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
       for (MTLStructMember* uniform = nullptr in arg.bufferStructType.members) {
         MTLDataType elementType = uniform.dataType;
         if (elementType == MTLDataTypeArray) {
           elementType = uniform.arrayType.elementType;
         }
         igl::BufferArgDesc::BufferMemberDesc iglMemberDesc{
-            igl::genNameHandle(uniform.name.UTF8String),
-            metalDataTypeToIGLUniformType(elementType),
-            (size_t)uniform.offset,
-            uniform.arrayType ? (size_t)uniform.arrayType.arrayLength : 1};
+            .name = igl::genNameHandle(uniform.name.UTF8String),
+            .type = metalDataTypeToIGLUniformType(elementType),
+            .offset = (size_t)uniform.offset,
+            .arrayLength = uniform.arrayType ? (size_t)uniform.arrayType.arrayLength : 1};
         bufferDesc.members.push_back(std::move(iglMemberDesc));
       }
     } else {
       igl::BufferArgDesc::BufferMemberDesc iglMemberDesc{
-          igl::genNameHandle(arg.name.UTF8String),
-          metalDataTypeToIGLUniformType(arg.bufferDataType),
-          0,
-          (size_t)arg.arrayLength};
+          .name = igl::genNameHandle(arg.name.UTF8String),
+          .type = metalDataTypeToIGLUniformType(arg.bufferDataType),
+          .offset = 0,
+          .arrayLength = (size_t)arg.arrayLength};
       bufferDesc.members.push_back(std::move(iglMemberDesc));
     }
     bufferArguments_.push_back(std::move(bufferDesc));
@@ -139,7 +149,7 @@ bool RenderPipelineReflection::createArgDesc(MTLArgument* arg, ShaderStage sh) {
 }
 
 int RenderPipelineReflection::getIndexByName(const std::string& name, ShaderStage sh) const {
-  const std::map<std::string, ArgIndex>& dictionary =
+  const std::unordered_map<std::string, ArgIndex>& dictionary =
       (sh == ShaderStage::Vertex) ? vertexArgDictionary_ : fragmentArgDictionary_;
 
   auto it = dictionary.find(name);
@@ -151,7 +161,7 @@ int RenderPipelineReflection::getIndexByName(const std::string& name, ShaderStag
   return -1;
 }
 
-const std::map<std::string, RenderPipelineReflection::ArgIndex>&
+const std::unordered_map<std::string, RenderPipelineReflection::ArgIndex>&
 RenderPipelineReflection::getDictionary(ShaderStage sh) const {
   return (sh == ShaderStage::Vertex) ? vertexArgDictionary_ : fragmentArgDictionary_;
 }

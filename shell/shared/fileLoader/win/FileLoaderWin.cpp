@@ -11,12 +11,13 @@
 #include <fstream>
 #include <iterator>
 #include <string>
-#include <igl/Common.h>
+#include <igl/Config.h>
 // @fb-only
 // @fb-only
 // @fb-only
 #if IGL_PLATFORM_WINDOWS
 #include <windows.h>
+#include <igl/Common.h>
 #endif
 
 namespace {
@@ -104,6 +105,7 @@ std::string FileLoaderWin::fullPath(const std::string& fileName) const {
       // @fb-only
       // @fb-only
       // @fb-only
+      // @fb-only
   };
 
   // find folders somewhere above our current directory
@@ -116,6 +118,9 @@ std::string FileLoaderWin::fullPath(const std::string& fileName) const {
 #if !defined(IGL_CMAKE_BUILD)
   // @lint-ignore CLANGTIDY
   const std::string resfolders[] = {
+      // @fb-only
+      // @fb-only
+      // @fb-only
       // @fb-only
       // @fb-only
       // @fb-only

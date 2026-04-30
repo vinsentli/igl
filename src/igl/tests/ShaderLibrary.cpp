@@ -5,10 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gtest/gtest.h>
+
 #include "data/ShaderData.h"
 #include "util/Common.h"
 
-#include <gtest/gtest.h>
 #include <igl/ShaderCreator.h>
 
 namespace igl::tests {
@@ -42,14 +43,15 @@ TEST_F(ShaderLibraryTest, CreateFromSource) {
   Result ret;
   if (!iglDev_->hasFeature(DeviceFeatures::ShaderLibrary)) {
     GTEST_SKIP() << "Shader Libraries are unsupported for this platform.";
-    return;
   }
 
   const char* source = nullptr;
   if (iglDev_->getBackendType() == igl::BackendType::Metal) {
-    source = data::shader::MTL_SIMPLE_SHADER;
+    source = data::shader::kMtlSimpleShader.data();
   } else if (iglDev_->getBackendType() == igl::BackendType::Vulkan) {
-    source = data::shader::VULKAN_SIMPLE_VERT_SHADER;
+    source = data::shader::kVulkanSimpleVertShader.data();
+  } else if (iglDev_->getBackendType() == igl::BackendType::D3D12) {
+    source = data::shader::kD3D12SimpleShader.data();
   } else {
     IGL_DEBUG_ASSERT_NOT_REACHED();
   }
@@ -57,11 +59,10 @@ TEST_F(ShaderLibraryTest, CreateFromSource) {
   // Check if source is null before passing it to fromStringInput
   if (source == nullptr) {
     GTEST_SKIP() << "No shader source available for this backend.";
-    return;
   }
 
   auto shaderLibrary = ShaderLibraryCreator::fromStringInput(
-      *iglDev_, source, {{ShaderStage::Vertex, "vertexShader"}}, "", &ret);
+      *iglDev_, source, {{.stage = ShaderStage::Vertex, .entryPoint = "vertexShader"}}, "", &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_TRUE(shaderLibrary != nullptr);
 
@@ -73,11 +74,10 @@ TEST_F(ShaderLibraryTest, CreateFromSingleModuleReturnNullWithEmptyInput) {
   Result ret;
   if (!iglDev_->hasFeature(DeviceFeatures::ShaderLibrary)) {
     GTEST_SKIP() << "Shader Libraries are unsupported for this platform.";
-    return;
   }
 
-  auto shaderLibrary =
-      ShaderLibraryCreator::fromStringInput(*iglDev_, "", {{ShaderStage::Vertex, ""}}, "", &ret);
+  auto shaderLibrary = ShaderLibraryCreator::fromStringInput(
+      *iglDev_, "", {{.stage = ShaderStage::Vertex, .entryPoint = ""}}, "", &ret);
   ASSERT_TRUE(!ret.isOk());
   ASSERT_TRUE(shaderLibrary == nullptr);
 }
@@ -86,32 +86,31 @@ TEST_F(ShaderLibraryTest, CreateFromSourceMultipleModules) {
   Result ret;
   if (!iglDev_->hasFeature(DeviceFeatures::ShaderLibrary)) {
     GTEST_SKIP() << "Shader Libraries are unsupported for this platform.";
-    return;
   }
 
   const char* source = nullptr;
   if (iglDev_->getBackendType() == igl::BackendType::Metal) {
-    source = data::shader::MTL_SIMPLE_SHADER;
+    source = data::shader::kMtlSimpleShader.data();
   } else if (iglDev_->getBackendType() == igl::BackendType::Vulkan) {
     GTEST_SKIP() << "Vulkan does not support multiple modules from the same source code.";
-    return;
+  } else if (iglDev_->getBackendType() == igl::BackendType::D3D12) {
+    source = data::shader::kD3D12SimpleShader.data();
   }
 
   // Check if source is null before passing it to fromStringInput
   if (source == nullptr) {
     GTEST_SKIP() << "No shader source available for this backend.";
-    return;
   }
 
-  auto shaderLibrary =
-      ShaderLibraryCreator::fromStringInput(*iglDev_,
-                                            source,
-                                            {
-                                                {ShaderStage::Vertex, "vertexShader"},
-                                                {ShaderStage::Fragment, "fragmentShader"},
-                                            },
-                                            "",
-                                            &ret);
+  auto shaderLibrary = ShaderLibraryCreator::fromStringInput(
+      *iglDev_,
+      source,
+      {
+          {.stage = ShaderStage::Vertex, .entryPoint = "vertexShader"},
+          {.stage = ShaderStage::Fragment, .entryPoint = "fragmentShader"},
+      },
+      "",
+      &ret);
 
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_TRUE(shaderLibrary != nullptr);
@@ -126,14 +125,15 @@ TEST_F(ShaderLibraryTest, CreateFromSourceMultipleModules) {
 TEST_F(ShaderLibraryTest, CreateFromSourceNoResult) {
   if (!iglDev_->hasFeature(DeviceFeatures::ShaderLibrary)) {
     GTEST_SKIP() << "Shader Libraries are unsupported for this platform.";
-    return;
   }
 
   const char* source = nullptr;
   if (iglDev_->getBackendType() == igl::BackendType::Metal) {
-    source = data::shader::MTL_SIMPLE_SHADER;
+    source = data::shader::kMtlSimpleShader.data();
   } else if (iglDev_->getBackendType() == igl::BackendType::Vulkan) {
-    source = data::shader::VULKAN_SIMPLE_VERT_SHADER;
+    source = data::shader::kVulkanSimpleVertShader.data();
+  } else if (iglDev_->getBackendType() == igl::BackendType::D3D12) {
+    source = data::shader::kD3D12SimpleShader.data();
   } else {
     IGL_DEBUG_ASSERT_NOT_REACHED();
   }
@@ -141,11 +141,14 @@ TEST_F(ShaderLibraryTest, CreateFromSourceNoResult) {
   // Check if source is null before passing it to fromStringInput
   if (source == nullptr) {
     GTEST_SKIP() << "No shader source available for this backend.";
-    return;
   }
 
   auto shaderLibrary = ShaderLibraryCreator::fromStringInput(
-      *iglDev_, source, {{ShaderStage::Vertex, "vertexShader"}}, "", nullptr);
+      *iglDev_,
+      source,
+      {{.stage = ShaderStage::Vertex, .entryPoint = "vertexShader"}},
+      "",
+      nullptr);
   ASSERT_TRUE(shaderLibrary != nullptr);
 
   auto vertShaderModule = shaderLibrary->getShaderModule("vertexShader");

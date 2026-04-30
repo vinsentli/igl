@@ -8,8 +8,6 @@
 #include <igl/Shader.h>
 
 #include <cstring>
-#include <type_traits>
-#include <igl/Common.h>
 
 namespace {
 
@@ -98,27 +96,24 @@ bool ShaderInput::operator!=(const ShaderInput& other) const {
 }
 
 ShaderModuleDesc ShaderModuleDesc::fromStringInput(const char* IGL_NONNULL source,
-                                                   igl::ShaderModuleInfo info,
+                                                   ShaderModuleInfo info,
                                                    std::string debugName) {
-  ShaderModuleDesc desc;
-  desc.input.type = ShaderInputType::String;
-  desc.input.source = source;
-  desc.info = std::move(info);
-  desc.debugName = std::move(debugName);
-  return desc;
+  return ShaderModuleDesc{
+      .info = std::move(info),
+      .input = {.source = source, .type = ShaderInputType::String},
+      .debugName = std::move(debugName),
+  };
 }
 
 ShaderModuleDesc ShaderModuleDesc::fromBinaryInput(const void* IGL_NONNULL data,
                                                    size_t dataLength,
-                                                   igl::ShaderModuleInfo info,
+                                                   ShaderModuleInfo info,
                                                    std::string debugName) {
-  ShaderModuleDesc desc;
-  desc.input.type = ShaderInputType::Binary;
-  desc.input.data = data;
-  desc.input.length = dataLength;
-  desc.info = std::move(info);
-  desc.debugName = std::move(debugName);
-  return desc;
+  return ShaderModuleDesc{
+      .info = std::move(info),
+      .input = {.data = data, .length = dataLength, .type = ShaderInputType::Binary},
+      .debugName = std::move(debugName),
+  };
 }
 
 bool ShaderModuleDesc::operator==(const ShaderModuleDesc& other) const {
@@ -130,7 +125,7 @@ bool ShaderModuleDesc::operator!=(const ShaderModuleDesc& other) const {
 }
 
 ShaderLibraryDesc ShaderLibraryDesc::fromStringInput(const char* IGL_NONNULL librarySource,
-                                                     std::vector<igl::ShaderModuleInfo> moduleInfo,
+                                                     std::vector<ShaderModuleInfo> moduleInfo,
                                                      std::string libraryDebugName) {
   ShaderLibraryDesc libraryDesc;
   libraryDesc.input.type = ShaderInputType::String;
@@ -146,7 +141,7 @@ ShaderLibraryDesc ShaderLibraryDesc::fromStringInput(const char* IGL_NONNULL lib
 
 ShaderLibraryDesc ShaderLibraryDesc::fromBinaryInput(const void* IGL_NONNULL libraryData,
                                                      size_t libraryDataLength,
-                                                     std::vector<igl::ShaderModuleInfo> moduleInfo,
+                                                     std::vector<ShaderModuleInfo> moduleInfo,
                                                      std::string libraryDebugName) {
   ShaderLibraryDesc libraryDesc;
   libraryDesc.input.type = ShaderInputType::Binary;
@@ -180,7 +175,7 @@ IShaderLibrary::IShaderLibrary(std::vector<std::shared_ptr<IShaderModule>> modul
 
 std::shared_ptr<IShaderModule> IShaderLibrary::getShaderModule(const std::string& entryPoint) {
   for (const auto& sm : modules_) {
-    if (sm->info().entryPoint == entryPoint) {
+    if (sm && sm->info().entryPoint == entryPoint) {
       return sm;
     }
   }
@@ -190,9 +185,11 @@ std::shared_ptr<IShaderModule> IShaderLibrary::getShaderModule(const std::string
 std::shared_ptr<IShaderModule> IShaderLibrary::getShaderModule(ShaderStage stage,
                                                                const std::string& entryPoint) {
   for (const auto& sm : modules_) {
-    const auto& info = sm->info();
-    if (info.stage == stage && info.entryPoint == entryPoint) {
-      return sm;
+    if (sm) {
+      const auto& info = sm->info();
+      if (info.stage == stage && info.entryPoint == entryPoint) {
+        return sm;
+      }
     }
   }
   return nullptr;
@@ -201,36 +198,39 @@ std::shared_ptr<IShaderModule> IShaderLibrary::getShaderModule(ShaderStage stage
 ShaderStagesDesc ShaderStagesDesc::fromRenderModules(
     std::shared_ptr<IShaderModule> vertexModule,
     std::shared_ptr<IShaderModule> fragmentModule) {
-  ShaderStagesDesc desc;
-  desc.debugName = (vertexModule ? vertexModule->info().debugName : std::string()) + ", " +
-                   (fragmentModule ? fragmentModule->info().debugName : std::string());
-  desc.type = ShaderStagesType::Render;
-  desc.vertexModule = std::move(vertexModule);
-  desc.fragmentModule = std::move(fragmentModule);
-  return desc;
+  std::string debugName = (vertexModule ? vertexModule->info().debugName : std::string()) + ", " +
+                          (fragmentModule ? fragmentModule->info().debugName : std::string());
+  return ShaderStagesDesc{
+      .vertexModule = std::move(vertexModule),
+      .fragmentModule = std::move(fragmentModule),
+      .type = ShaderStagesType::Render,
+      .debugName = std::move(debugName),
+  };
 }
 
 ShaderStagesDesc ShaderStagesDesc::fromMeshRenderModules(
     std::shared_ptr<IShaderModule> taskModule,
     std::shared_ptr<IShaderModule> meshModule,
     std::shared_ptr<IShaderModule> fragmentModule) {
-  ShaderStagesDesc desc;
-  desc.debugName = (taskModule ? taskModule->info().debugName : std::string()) + ", " +
-                   (meshModule ? meshModule->info().debugName : std::string()) + ", " +
-                   (fragmentModule ? fragmentModule->info().debugName : std::string());
-  desc.type = ShaderStagesType::MeshRender;
-  desc.taskModule = std::move(taskModule);
-  desc.meshModule = std::move(meshModule);
-  desc.fragmentModule = std::move(fragmentModule);
-  return desc;
+  std::string debugName = (taskModule ? taskModule->info().debugName : std::string()) + ", " +
+                          (meshModule ? meshModule->info().debugName : std::string()) + ", " +
+                          (fragmentModule ? fragmentModule->info().debugName : std::string());
+  return ShaderStagesDesc{
+      .fragmentModule = std::move(fragmentModule),
+      .taskModule = std::move(taskModule),
+      .meshModule = std::move(meshModule),
+      .type = ShaderStagesType::RenderMeshShader,
+      .debugName = std::move(debugName),
+  };
 }
 
 ShaderStagesDesc ShaderStagesDesc::fromComputeModule(std::shared_ptr<IShaderModule> computeModule) {
-  ShaderStagesDesc desc;
-  desc.debugName = computeModule ? computeModule->info().debugName : "igl/Shader.cpp";
-  desc.type = ShaderStagesType::Compute;
-  desc.computeModule = std::move(computeModule);
-  return desc;
+  std::string debugName = computeModule ? computeModule->info().debugName : "igl/Shader.cpp";
+  return ShaderStagesDesc{
+      .computeModule = std::move(computeModule),
+      .type = ShaderStagesType::Compute,
+      .debugName = std::move(debugName),
+  };
 }
 
 IShaderStages::IShaderStages(ShaderStagesDesc desc) : desc_(std::move(desc)) {}
@@ -264,7 +264,7 @@ bool IShaderStages::isValid() const noexcept {
     return desc_.vertexModule && desc_.fragmentModule && !desc_.computeModule;
   } else if (desc_.type == ShaderStagesType::Compute) {
     return desc_.computeModule && !desc_.vertexModule && !desc_.fragmentModule;
-  } else if (desc_.type == ShaderStagesType::MeshRender) {
+  } else if (desc_.type == ShaderStagesType::RenderMeshShader) {
     return desc_.meshModule && desc_.fragmentModule && !desc_.computeModule && !desc_.vertexModule;
   }
 
@@ -274,45 +274,46 @@ bool IShaderStages::isValid() const noexcept {
 } // namespace igl
 
 namespace std {
+// @fb-only
 
-size_t std::hash<igl::ShaderCompilerOptions>::operator()(
-    const igl::ShaderCompilerOptions& key) const {
-  const size_t hash = std::hash<bool>()(key.fastMathEnabled);
-  return hash;
+size_t hash<igl::ShaderCompilerOptions>::operator()(const igl::ShaderCompilerOptions& key) const {
+  const size_t result = std::hash<bool>()(key.fastMathEnabled);
+  return result;
 }
 
-size_t std::hash<igl::ShaderModuleInfo>::operator()(const igl::ShaderModuleInfo& key) const {
+size_t hash<igl::ShaderModuleInfo>::operator()(const igl::ShaderModuleInfo& key) const {
   static_assert(std::is_same_v<uint8_t, std::underlying_type<igl::ShaderStage>::type>);
-  size_t hash = std::hash<uint8_t>()(static_cast<uint8_t>(key.stage));
-  hash ^= std::hash<std::string>()(key.entryPoint);
-  return hash;
+  size_t result = std::hash<uint8_t>()(static_cast<uint8_t>(key.stage));
+  result ^= std::hash<string>()(key.entryPoint);
+  return result;
 }
 
-size_t std::hash<igl::ShaderInput>::operator()(const igl::ShaderInput& key) const {
+size_t hash<igl::ShaderInput>::operator()(const igl::ShaderInput& key) const {
   static_assert(std::is_same_v<uint8_t, std::underlying_type<igl::ShaderInputType>::type>);
-  size_t hash = safeCStrHash(key.source);
-  hash ^= safeDataHash(key.data, key.length);
-  hash ^= std::hash<uint8_t>()(EnumToValue(key.type));
-  return hash;
+  size_t result = safeCStrHash(key.source);
+  result ^= safeDataHash(key.data, key.length);
+  result ^= std::hash<uint8_t>()(EnumToValue(key.type));
+  return result;
 }
 
-size_t std::hash<igl::ShaderModuleDesc>::operator()(const igl::ShaderModuleDesc& key) const {
+size_t hash<igl::ShaderModuleDesc>::operator()(const igl::ShaderModuleDesc& key) const {
   static_assert(std::is_same_v<uint8_t, std::underlying_type<igl::ShaderInputType>::type>);
-  size_t hash = std::hash<igl::ShaderModuleInfo>()(key.info);
-  hash ^= std::hash<igl::ShaderInput>()(key.input);
-  hash ^= std::hash<std::string>()(key.debugName);
-  return hash;
+  size_t result = std::hash<igl::ShaderModuleInfo>()(key.info);
+  result ^= std::hash<igl::ShaderInput>()(key.input);
+  result ^= std::hash<string>()(key.debugName);
+  return result;
 }
 
-size_t std::hash<igl::ShaderLibraryDesc>::operator()(const igl::ShaderLibraryDesc& key) const {
+size_t hash<igl::ShaderLibraryDesc>::operator()(const igl::ShaderLibraryDesc& key) const {
   static_assert(std::is_same_v<uint8_t, std::underlying_type<igl::ShaderInputType>::type>);
-  size_t hash = std::hash<size_t>()(key.moduleInfo.size());
+  size_t result = std::hash<size_t>()(key.moduleInfo.size());
   for (const auto& info : key.moduleInfo) {
-    hash ^= std::hash<igl::ShaderModuleInfo>()(info);
+    result ^= std::hash<igl::ShaderModuleInfo>()(info);
   }
-  hash ^= std::hash<igl::ShaderInput>()(key.input);
-  hash ^= std::hash<std::string>()(key.debugName);
-  return hash;
+  result ^= std::hash<igl::ShaderInput>()(key.input);
+  result ^= std::hash<string>()(key.debugName);
+  return result;
 }
 
+// @fb-only
 } // namespace std

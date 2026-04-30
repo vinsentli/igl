@@ -7,11 +7,12 @@
 
 // @fb-only
 
+#include <igl/opengl/webgl/PlatformDevice.h>
+
 #include <igl/opengl/TextureBuffer.h>
 #include <igl/opengl/ViewTextureTarget.h>
 #include <igl/opengl/webgl/Context.h>
 #include <igl/opengl/webgl/Device.h>
-#include <igl/opengl/webgl/PlatformDevice.h>
 
 namespace igl::opengl::webgl {
 
@@ -50,7 +51,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(int wi
 }
 
 bool PlatformDevice::isType(PlatformDeviceType t) const noexcept {
-  return t == Type || opengl::PlatformDevice::isType(t);
+  return t == kType || opengl::PlatformDevice::isType(t);
 }
 
 } // namespace igl::opengl::webgl

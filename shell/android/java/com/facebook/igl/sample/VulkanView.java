@@ -10,6 +10,7 @@
 package com.facebook.igl.shell;
 
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.PixelFormat;
 import android.os.Handler;
 import android.os.Looper;
@@ -31,9 +32,13 @@ public class VulkanView extends SurfaceView
   RenderThread mRenderThread;
   private final SampleLib.BackendVersion mBackendVersion;
   private final int mSwapchainColorTextureFormat;
+  private Intent mIntent;
 
   public VulkanView(
-      Context context, SampleLib.BackendVersion backendVersion, int swapchainColorTextureFormat) {
+      Context context,
+      SampleLib.BackendVersion backendVersion,
+      int swapchainColorTextureFormat,
+      Intent intent) {
 
     super(context);
 
@@ -44,6 +49,7 @@ public class VulkanView extends SurfaceView
     mContext = context;
     mBackendVersion = backendVersion;
     mSwapchainColorTextureFormat = swapchainColorTextureFormat;
+    mIntent = intent;
   }
 
   @Override
@@ -88,8 +94,14 @@ public class VulkanView extends SurfaceView
     RenderHandler rh = mRenderThread.getHandler();
     if (rh != null) {
       rh.sendSurfaceCreated();
-      // start the draw events
-      Choreographer.getInstance().postFrameCallback(this);
+      if (SampleLib.isHeadless()) {
+        // Headless mode: run an unrestricted render loop on the render thread
+        // instead of vsync-driven Choreographer callbacks
+        rh.sendStartUnrestrictedLoop();
+      } else {
+        // Normal mode: use Choreographer for vsync-driven rendering
+        Choreographer.getInstance().postFrameCallback(this);
+      }
     }
   }
 
@@ -195,7 +207,8 @@ public class VulkanView extends SurfaceView
     public void surfaceCreated() {
       Log.d(TAG, "SurfaceCreated");
       Surface surface = mSurfaceHolder.getSurface();
-      SampleLib.init(mBackendVersion, mSwapchainColorTextureFormat, mContext.getAssets(), surface);
+      SampleLib.init(
+          mBackendVersion, mSwapchainColorTextureFormat, mContext.getAssets(), surface, mIntent);
     }
 
     public void surfaceChanged(int width, int height) {
@@ -219,7 +232,39 @@ public class VulkanView extends SurfaceView
         return;
       }
 
-      SampleLib.render(mContext.getResources().getDisplayMetrics().density);
+      boolean shouldExit = SampleLib.render(mContext.getResources().getDisplayMetrics().density);
+      if (shouldExit) {
+        android.util.Log.i(
+            "igl", "[IGL Benchmark] Java: Benchmark complete, waiting for logs to flush...");
+        // Give logcat time to flush the final report before killing the process
+        try {
+          Thread.sleep(2000);
+        } catch (InterruptedException e) {
+          // Ignore
+        }
+        android.util.Log.i("igl", "[IGL Benchmark] Java: Exiting process");
+        System.exit(0);
+      }
+    }
+
+    /** Run an unrestricted render loop (no vsync gating) for headless benchmarks. */
+    private void startUnrestrictedLoop() {
+      Log.i(TAG, "Starting unrestricted render loop (headless mode)");
+      float density = mContext.getResources().getDisplayMetrics().density;
+      while (true) {
+        boolean shouldExit = SampleLib.render(density);
+        if (shouldExit) {
+          android.util.Log.i(
+              "igl", "[IGL Benchmark] Java: Benchmark complete, waiting for logs to flush...");
+          try {
+            Thread.sleep(2000);
+          } catch (InterruptedException e) {
+            // Ignore
+          }
+          android.util.Log.i("igl", "[IGL Benchmark] Java: Exiting process");
+          System.exit(0);
+        }
+      }
     }
 
     private void shutdown() {
@@ -239,6 +284,7 @@ public class VulkanView extends SurfaceView
     private static final int MSG_SURFACE_CHANGED = 1;
     private static final int MSG_DO_FRAME = 2;
     private static final int MSG_SHUTDOWN = 3;
+    private static final int MSG_START_UNRESTRICTED_LOOP = 4;
 
     private RenderThread mRenderThread;
 
@@ -265,6 +311,10 @@ public class VulkanView extends SurfaceView
       sendMessage(obtainMessage(RenderHandler.MSG_SHUTDOWN));
     }
 
+    public void sendStartUnrestrictedLoop() {
+      sendMessage(obtainMessage(RenderHandler.MSG_START_UNRESTRICTED_LOOP));
+    }
+
     @Override // runs on RenderThread
     public void handleMessage(Message msg) {
       int what = msg.what;
@@ -288,6 +338,9 @@ public class VulkanView extends SurfaceView
           break;
         case MSG_SHUTDOWN:
           mRenderThread.shutdown();
+          break;
+        case MSG_START_UNRESTRICTED_LOOP:
+          mRenderThread.startUnrestrictedLoop();
           break;
         default:
           throw new RuntimeException("unknown message " + what);

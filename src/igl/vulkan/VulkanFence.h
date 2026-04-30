@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <memory>
-
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanHelpers.h>
 
@@ -32,7 +30,7 @@ class VulkanFence final {
   VulkanFence& operator=(VulkanFence&& other) noexcept;
 
   VulkanFence(const VulkanFence&) = delete;
-  VulkanFence operator=(const VulkanFence&) = delete;
+  VulkanFence& operator=(const VulkanFence&) = delete;
 
   bool reset() noexcept;
   bool wait(uint64_t timeoutNs = UINT64_MAX) noexcept;
@@ -49,10 +47,12 @@ class VulkanFence final {
   [[nodiscard]] bool exportable() const noexcept;
 
  public:
+  // NOLINTBEGIN(readability-identifier-naming)
   const VulkanFunctionTable* vf_{};
   VkDevice device_ = VK_NULL_HANDLE;
   VkFence vkFence_ = VK_NULL_HANDLE;
   bool exportable_ = false;
+  // NOLINTEND(readability-identifier-naming)
 };
 
 } // namespace igl::vulkan

@@ -5,22 +5,23 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <cstddef>
-#include <functional>
 #include <gtest/gtest.h>
-#include <memory>
-#include <utility>
-#include <vector>
+
+#include <igl/RenderCommandEncoder.h>
 
 #include "data/ShaderData.h"
 #include "data/TextureData.h"
 #include "util/Common.h"
 
+#include <cstddef>
+#include <functional>
+#include <memory>
+#include <utility>
+#include <vector>
 #include <igl/Buffer.h>
 #include <igl/CommandBuffer.h>
 #include <igl/DepthStencilState.h>
 #include <igl/NameHandle.h>
-#include <igl/RenderCommandEncoder.h>
 #include <igl/RenderPass.h>
 #include <igl/RenderPipelineState.h>
 #include <igl/SamplerState.h>
@@ -68,7 +69,7 @@ class RenderCommandEncoderTest : public ::testing::Test {
                                                  TextureDesc::TextureUsageBits::Attachment);
 
     auto depthFormat = TextureFormat::S8_UInt_Z32_UNorm;
-    if (backend_ == util::BACKEND_VUL) {
+    if (backend_ == util::kBackendVul) {
       depthFormat = TextureFormat::S8_UInt_Z24_UNorm;
     }
 
@@ -124,15 +125,15 @@ class RenderCommandEncoderTest : public ::testing::Test {
 
     inputDesc.attributes[0].format = VertexAttributeFormat::Float4;
     inputDesc.attributes[0].offset = 0;
-    inputDesc.attributes[0].bufferIndex = data::shader::simplePosIndex;
-    inputDesc.attributes[0].name = data::shader::simplePos;
+    inputDesc.attributes[0].bufferIndex = data::shader::kSimplePosIndex;
+    inputDesc.attributes[0].name = data::shader::kSimplePos;
     inputDesc.attributes[0].location = 0;
     inputDesc.inputBindings[0].stride = sizeof(float) * 4;
 
     inputDesc.attributes[1].format = VertexAttributeFormat::Float2;
     inputDesc.attributes[1].offset = 0;
-    inputDesc.attributes[1].bufferIndex = data::shader::simpleUvIndex;
-    inputDesc.attributes[1].name = data::shader::simpleUv;
+    inputDesc.attributes[1].bufferIndex = data::shader::kSimpleUvIndex;
+    inputDesc.attributes[1].name = data::shader::kSimpleUv;
     inputDesc.attributes[1].location = 1;
     inputDesc.inputBindings[1].stride = sizeof(float) * 2;
 
@@ -162,7 +163,7 @@ class RenderCommandEncoderTest : public ::testing::Test {
                 .stencilAttachmentFormat = depthStencilTexture_->getFormat(),
             },
         .cullMode = igl::CullMode::Disabled,
-        .fragmentUnitSamplerMap = {{textureUnit_, IGL_NAMEHANDLE(data::shader::simpleSampler)}},
+        .fragmentUnitSamplerMap = {{textureUnit_, IGL_NAMEHANDLE(data::shader::kSimpleSampler)}},
     };
 
     texDesc = TextureDesc::new2D(TextureFormat::RGBA_UNorm8,
@@ -173,7 +174,7 @@ class RenderCommandEncoderTest : public ::testing::Test {
     ASSERT_EQ(ret.code, Result::Code::Ok);
     ASSERT_TRUE(texture_ != nullptr);
     const auto rangeDesc = TextureRangeDesc::new2D(0, 0, OFFSCREEN_TEX_WIDTH, OFFSCREEN_TEX_HEIGHT);
-    texture_->upload(rangeDesc, data::texture::TEX_RGBA_GRAY_4x4);
+    texture_->upload(rangeDesc, data::texture::kTexRgbaGray4x4.data());
 
     auto createPipeline = [&renderPipelineDesc, &ret, this](
                               PrimitiveType topology) -> std::shared_ptr<IRenderPipelineState> {
@@ -201,7 +202,10 @@ class RenderCommandEncoderTest : public ::testing::Test {
     ASSERT_TRUE(depthStencilState_ != nullptr);
 
     bindGroupTexture_ = iglDev_->createBindGroup(
-        BindGroupTextureDesc{{texture_}, {samp_}, "Offscreen texture test"}, nullptr, &ret);
+        BindGroupTextureDesc{
+            .textures = {texture_}, .samplers = {samp_}, .debugName = "Offscreen texture test"},
+        nullptr,
+        &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   }
 
@@ -225,8 +229,8 @@ class RenderCommandEncoderTest : public ::testing::Test {
       encoder->bindSamplerState(textureUnit_, BindTarget::kFragment, samp_.get());
     }
 
-    encoder->bindVertexBuffer(data::shader::simplePosIndex, *vb_);
-    encoder->bindVertexBuffer(data::shader::simpleUvIndex, *uv_);
+    encoder->bindVertexBuffer(data::shader::kSimplePosIndex, *vb_);
+    encoder->bindVertexBuffer(data::shader::kSimpleUvIndex, *uv_);
 
     encoder->bindDepthStencilState(depthStencilState_);
 
@@ -234,10 +238,16 @@ class RenderCommandEncoderTest : public ::testing::Test {
       encoder->bindIndexBuffer(*ib_, IndexFormat::UInt32);
     }
 
-    const igl::Viewport viewport = {
-        0.0f, 0.0f, (float)OFFSCREEN_RT_WIDTH, (float)OFFSCREEN_RT_HEIGHT, 0.0f, +1.0f};
-    const igl::ScissorRect scissor = {
-        0, 0, (uint32_t)OFFSCREEN_RT_WIDTH, (uint32_t)OFFSCREEN_RT_HEIGHT};
+    const igl::Viewport viewport = {.x = 0.0f,
+                                    .y = 0.0f,
+                                    .width = (float)OFFSCREEN_RT_WIDTH,
+                                    .height = (float)OFFSCREEN_RT_HEIGHT,
+                                    .minDepth = 0.0f,
+                                    .maxDepth = +1.0f};
+    const igl::ScissorRect scissor = {.x = 0,
+                                      .y = 0,
+                                      .width = (uint32_t)OFFSCREEN_RT_WIDTH,
+                                      .height = (uint32_t)OFFSCREEN_RT_HEIGHT};
     encoder->bindViewport(viewport);
     encoder->bindScissorRect(scissor);
 
@@ -258,9 +268,9 @@ class RenderCommandEncoderTest : public ::testing::Test {
         pixels.data(),
         TextureRangeDesc::new2D(0, 0, OFFSCREEN_RT_WIDTH, OFFSCREEN_RT_HEIGHT));
 
-#if IGL_DEBUG
+#if IGL_LOGGING_ENABLED
     debugLog(pixels);
-#endif // IGL_DEBUG
+#endif // IGL_LOGGING_ENABLED
 
     for (int i = 0; i < OFFSCREEN_RT_HEIGHT; i++) {
       for (int j = 0; j < OFFSCREEN_RT_WIDTH; j++) {
@@ -279,9 +289,9 @@ class RenderCommandEncoderTest : public ::testing::Test {
         pixels.data(),
         TextureRangeDesc::new2D(0, 0, OFFSCREEN_RT_WIDTH, OFFSCREEN_RT_HEIGHT));
 
-#if IGL_DEBUG
+#if IGL_LOGGING_ENABLED
     debugLog(pixels);
-#endif // IGL_DEBUG
+#endif // IGL_LOGGING_ENABLED
 
     func(pixels);
   }
@@ -301,41 +311,36 @@ class RenderCommandEncoderTest : public ::testing::Test {
   void initializeBuffers(const std::vector<float>& verts,
                          const std::vector<float>& uvs,
                          const std::vector<uint32_t>& indices = {}) {
-    BufferDesc bufDesc;
-
-    bufDesc.type = BufferDesc::BufferTypeBits::Vertex;
-    bufDesc.data = verts.data();
-    bufDesc.length = sizeof(float) * verts.size();
-
     Result ret;
-    vb_ = iglDev_->createBuffer(bufDesc, &ret);
+    vb_ = iglDev_->createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Vertex,
+                                           .data = verts.data(),
+                                           .length = sizeof(float) * verts.size()},
+                                &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
     ASSERT_TRUE(vb_ != nullptr);
 
-    bufDesc.type = BufferDesc::BufferTypeBits::Vertex;
-    bufDesc.data = uvs.data();
-    bufDesc.length = sizeof(float) * uvs.size();
-
-    uv_ = iglDev_->createBuffer(bufDesc, &ret);
+    uv_ = iglDev_->createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Vertex,
+                                           .data = uvs.data(),
+                                           .length = sizeof(float) * uvs.size()},
+                                &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
     ASSERT_TRUE(uv_ != nullptr);
 
     if (!indices.empty()) {
-      bufDesc.type = BufferDesc::BufferTypeBits::Index;
-      bufDesc.data = indices.data();
-      bufDesc.length = sizeof(uint32_t) * indices.size();
-      ib_ = iglDev_->createBuffer(bufDesc, &ret);
+      ib_ = iglDev_->createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Index,
+                                             .data = indices.data(),
+                                             .length = sizeof(uint32_t) * indices.size()},
+                                  &ret);
       ASSERT_TRUE(ret.isOk());
       ASSERT_TRUE(ib_ != nullptr);
     }
   }
   void initialize8BitIndices(const std::vector<uint8_t>& indices) {
-    BufferDesc desc;
-    desc.type = BufferDesc::BufferTypeBits::Index;
-    desc.data = indices.data();
-    desc.length = sizeof(uint8_t) * indices.size();
     Result ret;
-    ib_ = iglDev_->createBuffer(desc, &ret);
+    ib_ = iglDev_->createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Index,
+                                           .data = indices.data(),
+                                           .length = sizeof(uint8_t) * indices.size()},
+                                &ret);
     ASSERT_TRUE(ret.isOk());
     ASSERT_TRUE(ib_ != nullptr);
   }
@@ -386,7 +391,7 @@ TEST_F(RenderCommandEncoderTest, shouldDrawAPoint) {
     encoder->draw(1);
   });
 
-  auto grayColor = data::texture::TEX_RGBA_GRAY_4x4[0];
+  auto grayColor = data::texture::kTexRgbaGray4x4[0];
   // clang-format off
   std::vector<uint32_t> const expectedPixels {
     kBackgroundColorHex, kBackgroundColorHex, kBackgroundColorHex, kBackgroundColorHex,
@@ -414,7 +419,7 @@ TEST_F(RenderCommandEncoderTest, shouldDrawAPointNewBindTexture) {
       false,
       true);
 
-  auto grayColor = data::texture::TEX_RGBA_GRAY_4x4[0];
+  auto grayColor = data::texture::kTexRgbaGray4x4[0];
   // clang-format off
   std::vector<uint32_t> const expectedPixels {
     kBackgroundColorHex, kBackgroundColorHex, kBackgroundColorHex, kBackgroundColorHex,
@@ -445,7 +450,7 @@ TEST_F(RenderCommandEncoderTest, shouldDrawALine) {
     encoder->draw(2);
   });
 
-  auto grayColor = data::texture::TEX_RGBA_GRAY_4x4[0];
+  auto grayColor = data::texture::kTexRgbaGray4x4[0];
   // clang-format off
   std::vector<uint32_t> const expectedPixels {
     kBackgroundColorHex, kBackgroundColorHex, kBackgroundColorHex, kBackgroundColorHex,
@@ -480,7 +485,7 @@ TEST_F(RenderCommandEncoderTest, shouldDrawLineStrip) {
     encoder->draw(4);
   });
 
-  auto grayColor = data::texture::TEX_RGBA_GRAY_4x4[0];
+  auto grayColor = data::texture::kTexRgbaGray4x4[0];
   // clang-format off
   std::vector<uint32_t> const expectedPixels {
     kBackgroundColorHex, kBackgroundColorHex, kBackgroundColorHex, grayColor,
@@ -496,7 +501,6 @@ TEST_F(RenderCommandEncoderTest, shouldDrawLineStrip) {
 TEST_F(RenderCommandEncoderTest, drawIndexedFirstIndex) {
   if (!iglDev_->hasFeature(igl::DeviceFeatures::DrawFirstIndexFirstVertex)) {
     GTEST_SKIP();
-    return;
   }
   initializeBuffers(
       // clang-format off
@@ -522,7 +526,7 @@ TEST_F(RenderCommandEncoderTest, drawIndexedFirstIndex) {
     encoder->drawIndexed(3, 1, 3); // skip the first 3 dummy indices
   });
 
-  const auto grayColor = data::texture::TEX_RGBA_GRAY_4x4[0];
+  const auto grayColor = data::texture::kTexRgbaGray4x4[0];
   // clang-format off
   const std::vector<uint32_t> expectedPixels {
     kBackgroundColorHex, kBackgroundColorHex, kBackgroundColorHex, grayColor,
@@ -538,7 +542,6 @@ TEST_F(RenderCommandEncoderTest, drawIndexedFirstIndex) {
 TEST_F(RenderCommandEncoderTest, drawIndexed8Bit) {
   if (!iglDev_->hasFeature(igl::DeviceFeatures::Indices8Bit)) {
     GTEST_SKIP();
-    return;
   }
   initializeBuffers(
       // clang-format off
@@ -563,7 +566,7 @@ TEST_F(RenderCommandEncoderTest, drawIndexed8Bit) {
     encoder->drawIndexed(3);
   });
 
-  const auto grayColor = data::texture::TEX_RGBA_GRAY_4x4[0];
+  const auto grayColor = data::texture::kTexRgbaGray4x4[0];
   // clang-format off
   const std::vector<uint32_t> expectedPixels {
     kBackgroundColorHex, kBackgroundColorHex, kBackgroundColorHex, grayColor,
@@ -579,7 +582,6 @@ TEST_F(RenderCommandEncoderTest, drawIndexed8Bit) {
 TEST_F(RenderCommandEncoderTest, drawInstanced) {
   if (!iglDev_->hasFeature(igl::DeviceFeatures::DrawFirstIndexFirstVertex)) {
     GTEST_SKIP();
-    return;
   }
   initializeBuffers(
       // clang-format off
@@ -607,7 +609,7 @@ TEST_F(RenderCommandEncoderTest, drawInstanced) {
     encoder->drawIndexed(3, 2);
   });
 
-  const auto grayColor = data::texture::TEX_RGBA_GRAY_4x4[0];
+  const auto grayColor = data::texture::kTexRgbaGray4x4[0];
   // clang-format off
   const std::vector<uint32_t> expectedPixels {
     kBackgroundColorHex, kBackgroundColorHex, kBackgroundColorHex, grayColor,
@@ -640,7 +642,7 @@ TEST_F(RenderCommandEncoderTest, shouldDrawATriangle) {
     encoder->draw(3);
   });
 
-  auto grayColor = data::texture::TEX_RGBA_GRAY_4x4[0];
+  auto grayColor = data::texture::kTexRgbaGray4x4[0];
   // clang-format off
   std::vector<uint32_t> const expectedPixels {
     kBackgroundColorHex, kBackgroundColorHex, kBackgroundColorHex, grayColor,
@@ -677,15 +679,15 @@ TEST_F(RenderCommandEncoderTest, shouldDrawTriangleStrip) {
 
   verifyFrameBuffer([](const std::vector<uint32_t>& pixels) {
     for (const auto& pixel : pixels) {
-      ASSERT_EQ(pixel, data::texture::TEX_RGBA_GRAY_4x4[0]);
+      ASSERT_EQ(pixel, data::texture::kTexRgbaGray4x4[0]);
     }
   });
 }
 
 TEST_F(RenderCommandEncoderTest, shouldDrawTriangleStripCopyTextureToBuffer) {
-  if (iglDev_->getBackendType() != igl::BackendType::Vulkan) {
-    GTEST_SKIP() << "Not implemented for non-Vulkan backends";
-    return;
+  if (iglDev_->getBackendType() != igl::BackendType::Vulkan &&
+      iglDev_->getBackendType() != igl::BackendType::D3D12) {
+    GTEST_SKIP() << "Not implemented for this backend";
   }
 
   initializeBuffers(
@@ -706,14 +708,14 @@ TEST_F(RenderCommandEncoderTest, shouldDrawTriangleStripCopyTextureToBuffer) {
 
   Result ret;
 
-  std ::shared_ptr<IBuffer> screenCopy =
-      iglDev_->createBuffer(BufferDesc(BufferDesc::BufferTypeBits::Storage,
-                                       nullptr,
-                                       OFFSCREEN_RT_WIDTH * OFFSCREEN_RT_HEIGHT * sizeof(uint32_t),
-                                       ResourceStorage::Shared,
-                                       0,
-                                       "Buffer: screen copy"),
-                            &ret);
+  std ::shared_ptr<IBuffer> screenCopy = iglDev_->createBuffer(
+      BufferDesc{
+          .type = BufferDesc::BufferTypeBits::Storage,
+          .length = OFFSCREEN_RT_WIDTH * OFFSCREEN_RT_HEIGHT * sizeof(uint32_t),
+          .storage = ResourceStorage::Shared,
+          .debugName = "Buffer: screen copy",
+      },
+      &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
 
   auto cmdBuffer = cmdQueue_->createCommandBuffer({}, &ret);
@@ -725,14 +727,21 @@ TEST_F(RenderCommandEncoderTest, shouldDrawTriangleStripCopyTextureToBuffer) {
   encoder->bindTexture(textureUnit_, texture_.get());
   encoder->bindSamplerState(textureUnit_, BindTarget::kFragment, samp_.get());
 
-  encoder->bindVertexBuffer(data::shader::simplePosIndex, *vb_);
-  encoder->bindVertexBuffer(data::shader::simpleUvIndex, *uv_);
+  encoder->bindVertexBuffer(data::shader::kSimplePosIndex, *vb_);
+  encoder->bindVertexBuffer(data::shader::kSimpleUvIndex, *uv_);
 
   encoder->bindDepthStencilState(depthStencilState_);
 
-  encoder->bindViewport(
-      {0.0f, 0.0f, (float)OFFSCREEN_RT_WIDTH, (float)OFFSCREEN_RT_HEIGHT, 0.0f, +1.0f});
-  encoder->bindScissorRect({0, 0, (uint32_t)OFFSCREEN_RT_WIDTH, (uint32_t)OFFSCREEN_RT_HEIGHT});
+  encoder->bindViewport({.x = 0.0f,
+                         .y = 0.0f,
+                         .width = (float)OFFSCREEN_RT_WIDTH,
+                         .height = (float)OFFSCREEN_RT_HEIGHT,
+                         .minDepth = 0.0f,
+                         .maxDepth = +1.0f});
+  encoder->bindScissorRect({.x = 0,
+                            .y = 0,
+                            .width = (uint32_t)OFFSCREEN_RT_WIDTH,
+                            .height = (uint32_t)OFFSCREEN_RT_HEIGHT});
 
   encoder->insertDebugEventLabel("Rendering a triangle strip...");
   encoder->bindRenderPipelineState(renderPipelineStateTriangleStrip_);
@@ -748,7 +757,7 @@ TEST_F(RenderCommandEncoderTest, shouldDrawTriangleStripCopyTextureToBuffer) {
   const uint32_t* data = static_cast<const uint32_t*>(
       screenCopy->map(BufferRange(screenCopy->getSizeInBytes()), nullptr));
   for (size_t i = 0; i != OFFSCREEN_RT_HEIGHT * OFFSCREEN_RT_HEIGHT; i++) {
-    ASSERT_EQ(data[i], data::texture::TEX_RGBA_GRAY_4x4[0]);
+    ASSERT_EQ(data[i], data::texture::kTexRgbaGray4x4[0]);
   }
   screenCopy->unmap();
 }
@@ -799,7 +808,6 @@ TEST_F(RenderCommandEncoderTest, shouldDrawATriangleBindGroup) {
   if (iglDev_->getBackendType() == igl::BackendType::Vulkan) {
     // @fb-only
     GTEST_SKIP() << "Broken on macOS arm64";
-    return;
   }
 #endif
 
@@ -825,7 +833,7 @@ TEST_F(RenderCommandEncoderTest, shouldDrawATriangleBindGroup) {
       },
       true);
 
-  auto grayColor = data::texture::TEX_RGBA_GRAY_4x4[0];
+  auto grayColor = data::texture::kTexRgbaGray4x4[0];
   // clang-format off
   std::vector<uint32_t> const expectedPixels {
     kBackgroundColorHex, kBackgroundColorHex, kBackgroundColorHex, grayColor,
@@ -850,7 +858,7 @@ TEST_F(RenderCommandEncoderTest, DepthBiasShouldDrawAPoint) {
     encoder->draw(1);
   });
 
-  auto grayColor = data::texture::TEX_RGBA_GRAY_4x4[0];
+  auto grayColor = data::texture::kTexRgbaGray4x4[0];
   // clang-format off
   std::vector<uint32_t> const expectedPixels {
     kBackgroundColorHex, kBackgroundColorHex, kBackgroundColorHex, kBackgroundColorHex,
@@ -864,9 +872,9 @@ TEST_F(RenderCommandEncoderTest, DepthBiasShouldDrawAPoint) {
 }
 
 TEST_F(RenderCommandEncoderTest, drawUsingBindPushConstants) {
-  if (iglDev_->getBackendType() != igl::BackendType::Vulkan) {
-    GTEST_SKIP() << "Push constants are only supported in Vulkan";
-    return;
+  if (iglDev_->getBackendType() != igl::BackendType::Vulkan &&
+      iglDev_->getBackendType() != igl::BackendType::D3D12) {
+    GTEST_SKIP() << "Push constants are only supported in Vulkan and D3D12";
   }
 
   initializeBuffers(
@@ -877,12 +885,21 @@ TEST_F(RenderCommandEncoderTest, drawUsingBindPushConstants) {
 
   // Create new shader stages with push constant shaders
   std::unique_ptr<IShaderStages> pushConstantStages;
-  igl::tests::util::createShaderStages(iglDev_,
-                                       data::shader::VULKAN_PUSH_CONSTANT_VERT_SHADER,
-                                       igl::tests::data::shader::shaderFunc,
-                                       data::shader::VULKAN_PUSH_CONSTANT_FRAG_SHADER,
-                                       igl::tests::data::shader::shaderFunc,
-                                       pushConstantStages);
+  if (iglDev_->getBackendType() == igl::BackendType::D3D12) {
+    igl::tests::util::createShaderStages(iglDev_,
+                                         data::shader::kD3D12PushConstantVertShader,
+                                         std::string("main"),
+                                         data::shader::kD3D12PushConstantFragShader,
+                                         std::string("main"),
+                                         pushConstantStages);
+  } else {
+    igl::tests::util::createShaderStages(iglDev_,
+                                         data::shader::kVulkanPushConstantVertShader,
+                                         igl::tests::data::shader::kShaderFunc,
+                                         data::shader::kVulkanPushConstantFragShader,
+                                         igl::tests::data::shader::kShaderFunc,
+                                         pushConstantStages);
+  }
   ASSERT_TRUE(pushConstantStages);
   shaderStages_ = std::move(pushConstantStages);
 
@@ -895,7 +912,7 @@ TEST_F(RenderCommandEncoderTest, drawUsingBindPushConstants) {
                      .depthAttachmentFormat = depthStencilTexture_->getFormat(),
                      .stencilAttachmentFormat = depthStencilTexture_->getFormat()},
       .cullMode = igl::CullMode::Disabled,
-      .fragmentUnitSamplerMap = {{textureUnit_, IGL_NAMEHANDLE(data::shader::simpleSampler)}},
+      .fragmentUnitSamplerMap = {{textureUnit_, IGL_NAMEHANDLE(data::shader::kSimpleSampler)}},
   };
 
   Result ret;

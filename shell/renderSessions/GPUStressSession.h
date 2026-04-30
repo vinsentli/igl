@@ -9,13 +9,13 @@
 
 #pragma once
 
-#include <shell/shared/renderSession/RenderSession.h>
-
 #include <IGLU/imgui/Session.h>
 #include <atomic>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
+#include <glm/ext/matrix_float4x4.hpp>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_float4.hpp>
 #include <shell/shared/platform/Platform.h>
+#include <shell/shared/renderSession/RenderSession.h>
 #include <igl/FPSCounter.h>
 #include <igl/IGL.h>
 
@@ -73,15 +73,15 @@ class GPUStressSession : public RenderSession {
   struct VertexPosUvw {
     glm::vec3 position;
     glm::vec4 uvw;
-    glm::vec4 base_color;
+    glm::vec4 baseColor;
   };
 
   [[nodiscard]] std::string getLightingCalc() const;
   [[nodiscard]] std::string getVulkanFragmentShaderSource() const;
   std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) const noexcept;
   void addNormalsToCube();
+  void processCustomParameter(const std::string& key, const std::string& value);
 
-  std::shared_ptr<ICommandQueue> commandQueue_;
   RenderPassDesc renderPass_;
   std::shared_ptr<IRenderPipelineState> pipelineState_;
   std::shared_ptr<IVertexInputState> vertexInput0_;
@@ -159,6 +159,7 @@ class GPUStressSession : public RenderSession {
   std::atomic<int> dropFrameX_ = 0;
   std::atomic<int> dropFrameCount_ = 2;
   std::atomic<bool> rotateCubes_ = true;
+  std::atomic<float> memoryVal_ = 0.0f;
 
   double pi_ = 0.f;
   std::vector<std::vector<std::vector<float>>> memBlock_;

@@ -7,7 +7,6 @@
 
 #include <igl/opengl/SamplerState.h>
 
-#include <igl/CommandBuffer.h>
 #include <igl/Common.h>
 #include <igl/Texture.h>
 #include <igl/opengl/DepthStencilState.h>
@@ -112,46 +111,57 @@ void SamplerState::bind(ITexture* t) {
     getContext().texParameteri(target, GL_TEXTURE_COMPARE_FUNC, depthCompareFunction_);
   }
 
+  // Fall back to GL_CLAMP_TO_EDGE when GL_CLAMP_TO_BORDER is not supported
+  GLint wrapS = addressU_;
+  GLint wrapT = addressV_;
+  GLint wrapR = addressW_;
+  if (!deviceFeatures.hasInternalFeature(InternalFeatures::TextureClampToBorder)) {
+    if (wrapS == GL_CLAMP_TO_BORDER) {
+      wrapS = GL_CLAMP_TO_EDGE;
+    }
+    if (wrapT == GL_CLAMP_TO_BORDER) {
+      wrapT = GL_CLAMP_TO_EDGE;
+    }
+    if (wrapR == GL_CLAMP_TO_BORDER) {
+      wrapR = GL_CLAMP_TO_EDGE;
+    }
+  }
+
   if (!deviceFeatures.hasFeature(DeviceFeatures::TextureNotPot)) {
     const auto dimensions = texture->getDimensions();
     if (!isPowerOfTwo(dimensions.width) || !isPowerOfTwo(dimensions.height)) {
       getContext().texParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
       getContext().texParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     } else {
-      getContext().texParameteri(target, GL_TEXTURE_WRAP_S, addressU_);
-      getContext().texParameteri(target, GL_TEXTURE_WRAP_T, addressV_);
+      getContext().texParameteri(target, GL_TEXTURE_WRAP_S, wrapS);
+      getContext().texParameteri(target, GL_TEXTURE_WRAP_T, wrapT);
     }
   } else {
-    getContext().texParameteri(target, GL_TEXTURE_WRAP_S, addressU_);
-    getContext().texParameteri(target, GL_TEXTURE_WRAP_T, addressV_);
+    getContext().texParameteri(target, GL_TEXTURE_WRAP_S, wrapS);
+    getContext().texParameteri(target, GL_TEXTURE_WRAP_T, wrapT);
   }
 
   if (type == TextureType::TwoDArray || type == TextureType::ThreeD) {
-    getContext().texParameteri(target, GL_TEXTURE_WRAP_R, addressW_);
+    getContext().texParameteri(target, GL_TEXTURE_WRAP_R, wrapR);
   }
 }
 
 // utility functions for converting from IGL sampler state enums to GL enums
 GLint SamplerState::convertMinMipFilter(SamplerMinMagFilter minFilter, SamplerMipFilter mipFilter) {
-  GLint glMinFilter = 0;
-
   switch (mipFilter) {
   case SamplerMipFilter::Disabled:
-    glMinFilter = (minFilter == SamplerMinMagFilter::Nearest) ? GL_NEAREST : GL_LINEAR;
-    break;
+    return (minFilter == SamplerMinMagFilter::Nearest) ? GL_NEAREST : GL_LINEAR;
 
   case SamplerMipFilter::Nearest:
-    glMinFilter = (minFilter == SamplerMinMagFilter::Nearest) ? GL_NEAREST_MIPMAP_NEAREST
-                                                              : GL_LINEAR_MIPMAP_NEAREST;
-    break;
+    return (minFilter == SamplerMinMagFilter::Nearest) ? GL_NEAREST_MIPMAP_NEAREST
+                                                       : GL_LINEAR_MIPMAP_NEAREST;
 
   case SamplerMipFilter::Linear:
-    glMinFilter = (minFilter == SamplerMinMagFilter::Nearest) ? GL_NEAREST_MIPMAP_LINEAR
-                                                              : GL_LINEAR_MIPMAP_LINEAR;
-    break;
+    return (minFilter == SamplerMinMagFilter::Nearest) ? GL_NEAREST_MIPMAP_LINEAR
+                                                       : GL_LINEAR_MIPMAP_LINEAR;
   }
 
-  return glMinFilter;
+  return 0;
 }
 
 GLint SamplerState::convertMagFilter(SamplerMinMagFilter magFilter) {
@@ -163,100 +173,83 @@ SamplerMinMagFilter SamplerState::convertGLMagFilter(GLint glMagFilter) {
 }
 
 SamplerMinMagFilter SamplerState::convertGLMinFilter(GLint glMinFilter) {
-  SamplerMinMagFilter minFilter;
-
   switch (glMinFilter) {
   case GL_NEAREST:
   case GL_NEAREST_MIPMAP_NEAREST:
   case GL_NEAREST_MIPMAP_LINEAR:
-    minFilter = SamplerMinMagFilter::Nearest;
-    break;
+    return SamplerMinMagFilter::Nearest;
 
   case GL_LINEAR:
   case GL_LINEAR_MIPMAP_NEAREST:
   case GL_LINEAR_MIPMAP_LINEAR:
-    minFilter = SamplerMinMagFilter::Linear;
-    break;
+    return SamplerMinMagFilter::Linear;
 
   default:
 #ifndef GTEST
     IGL_DEBUG_ASSERT_NOT_REACHED();
 #endif
-    minFilter = SamplerMinMagFilter::Nearest;
   }
 
-  return minFilter;
+  return SamplerMinMagFilter::Nearest;
 }
 
 SamplerMipFilter SamplerState::convertGLMipFilter(GLint glMinFilter) {
-  SamplerMipFilter mipFilter;
-
   switch (glMinFilter) {
   case GL_NEAREST:
   case GL_LINEAR:
-    mipFilter = SamplerMipFilter::Disabled;
-    break;
+    return SamplerMipFilter::Disabled;
 
   case GL_NEAREST_MIPMAP_NEAREST:
   case GL_LINEAR_MIPMAP_NEAREST:
-    mipFilter = SamplerMipFilter::Nearest;
-    break;
+    return SamplerMipFilter::Nearest;
 
   case GL_NEAREST_MIPMAP_LINEAR:
   case GL_LINEAR_MIPMAP_LINEAR:
-    mipFilter = SamplerMipFilter::Linear;
-    break;
+    return SamplerMipFilter::Linear;
 
   default:
     IGL_DEBUG_ASSERT_NOT_REACHED();
-    mipFilter = SamplerMipFilter::Disabled;
+    return SamplerMipFilter::Disabled;
   }
-
-  return mipFilter;
+  IGL_UNREACHABLE_RETURN(SamplerMipFilter::Disabled)
 }
 
 GLint SamplerState::convertAddressMode(SamplerAddressMode addressMode) {
-  GLint glAddressMode = 0;
-
   switch (addressMode) {
   case SamplerAddressMode::Repeat:
-    glAddressMode = GL_REPEAT;
-    break;
+    return GL_REPEAT;
 
   case SamplerAddressMode::Clamp:
-    glAddressMode = GL_CLAMP_TO_EDGE;
-    break;
+    return GL_CLAMP_TO_EDGE;
 
   case SamplerAddressMode::MirrorRepeat:
-    glAddressMode = GL_MIRRORED_REPEAT;
-    break;
+    return GL_MIRRORED_REPEAT;
+
+  case SamplerAddressMode::ClampToBorder:
+    return GL_CLAMP_TO_BORDER;
   }
 
-  return glAddressMode;
+  return 0;
 }
 
 SamplerAddressMode SamplerState::convertGLAddressMode(GLint glAddressMode) {
-  SamplerAddressMode addressMode;
-
   switch (glAddressMode) {
   case GL_REPEAT:
-    addressMode = SamplerAddressMode::Repeat;
-    break;
+    return SamplerAddressMode::Repeat;
 
   case GL_CLAMP_TO_EDGE:
-    addressMode = SamplerAddressMode::Clamp;
-    break;
+    return SamplerAddressMode::Clamp;
 
   case GL_MIRRORED_REPEAT:
-    addressMode = SamplerAddressMode::MirrorRepeat;
-    break;
+    return SamplerAddressMode::MirrorRepeat;
+
+  case GL_CLAMP_TO_BORDER:
+    return SamplerAddressMode::ClampToBorder;
 
   default:
-    addressMode = SamplerAddressMode::Repeat;
-    break;
+    return SamplerAddressMode::Repeat;
   }
-
-  return addressMode;
+  IGL_UNREACHABLE_RETURN(SamplerAddressMode::Repeat)
 }
 
 bool SamplerState::isYUV() const noexcept {

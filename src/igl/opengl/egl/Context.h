@@ -15,7 +15,6 @@
 #include <memory>
 #include <optional>
 #include <vector>
-
 #include <igl/opengl/IContext.h>
 
 namespace igl::opengl::egl {
@@ -36,6 +35,7 @@ class Context final : public IContext {
   /// surfaces to be associated with this context are already present and set to current.
   explicit Context(EGLNativeWindowType window);
   explicit Context(BackendVersion backendVersion, EGLNativeWindowType window);
+  Context& operator=(Context& other) = delete;
   /// Create a new offscreen context.
   Context(size_t width, size_t height);
   /// Create a new context applicable for a specific display/context/read surface/draw surface.
@@ -78,6 +78,10 @@ class Context final : public IContext {
 
   /// Mark this context as belonging to a sharegroup with another context.
   void markSharegroup(Context& context);
+
+  /// Add an external EGL context handle to this context's sharegroup
+  /// so that isCurrentSharegroup() recognizes it.
+  bool markSharegroup(EGLContext sharedContextHandle);
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
   void imageTargetTexture(EGLImageKHR eglImage, GLenum target) const;

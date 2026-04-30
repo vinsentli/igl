@@ -10,6 +10,7 @@
 #include <shell/openxr/XrPassthrough.h>
 
 #include <shell/openxr/XrLog.h>
+#include <igl/Core.h>
 
 namespace igl::shell::openxr {
 
@@ -57,7 +58,7 @@ bool XrPassthrough::initialize() noexcept {
       .flags = XR_PASSTHROUGH_IS_RUNNING_AT_CREATION_BIT_FB,
   };
 
-  XrResult result;
+  XrResult result(XR_SUCCESS);
   XR_CHECK(result = xrCreatePassthroughFB_(session_, &passthroughInfo, &passthrough_));
   if (result != XR_SUCCESS) {
     IGL_LOG_ERROR("xrCreatePassthroughFB failed.\n");
@@ -81,7 +82,7 @@ bool XrPassthrough::initialize() noexcept {
   const XrPassthroughStyleFB style{.type = XR_TYPE_PASSTHROUGH_STYLE_FB,
                                    .next = nullptr,
                                    .textureOpacityFactor = 1.0f,
-                                   .edgeColor = {0.0f, 0.0f, 0.0f, 0.0f}};
+                                   .edgeColor = {.r = 0.0f, .g = 0.0f, .b = 0.0f, .a = 0.0f}};
 
   XR_CHECK(result = xrPassthroughLayerSetStyleFB_(passthroughLayer_, &style));
   if (result != XR_SUCCESS) {
@@ -95,13 +96,29 @@ bool XrPassthrough::initialize() noexcept {
   return true;
 }
 
+void XrPassthrough::setOpacity(float opacity) noexcept {
+  IGL_DEBUG_ASSERT(opacity >= 0.0f && opacity <= 1.0f);
+
+  if (passthroughLayer_ == XR_NULL_HANDLE || opacity_ == opacity) {
+    return;
+  }
+  opacity_ = opacity;
+  const XrPassthroughStyleFB style{
+      .type = XR_TYPE_PASSTHROUGH_STYLE_FB,
+      .next = nullptr,
+      .textureOpacityFactor = opacity,
+      .edgeColor = {.r = 0.0f, .g = 0.0f, .b = 0.0f, .a = 0.0f},
+  };
+  XR_CHECK(xrPassthroughLayerSetStyleFB_(passthroughLayer_, &style));
+}
+
 void XrPassthrough::setEnabled(bool enabled) noexcept {
   if (enabled_ == enabled) {
     return;
   }
   enabled_ = enabled;
 
-  XrResult result;
+  XrResult result(XR_SUCCESS);
   if (enabled_) {
     XR_CHECK(result = xrPassthroughStartFB_(passthrough_));
     if (result != XR_SUCCESS) {
@@ -115,7 +132,8 @@ void XrPassthrough::setEnabled(bool enabled) noexcept {
   }
 }
 
-void XrPassthrough::injectLayer(std::vector<const XrCompositionLayerBaseHeader*>& layers) noexcept {
+void XrPassthrough::injectLayer( // NOLINT(bugprone-exception-escape)
+    std::vector<const XrCompositionLayerBaseHeader*>& layers) noexcept {
   layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&compositionLayer_));
 }
 

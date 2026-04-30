@@ -8,21 +8,27 @@
 // @fb-only
 // @fb-only
 
+#include <igl/opengl/macos/PlatformDevice.h>
+
+#import <AppKit/NSOpenGL.h>
+#import <AppKit/NSView.h> // IWYU pragma: keep
+#include <CoreVideo/CVImageBuffer.h>
+#include <CoreVideo/CVOpenGLTextureCache.h>
+#import <Foundation/NSGeometry.h>
 #include <cstdio>
 #include <cstring>
 #include <igl/Common.h>
-#include <igl/opengl/Errors.h>
-#include <igl/opengl/Texture.h>
+#include <igl/Texture.h>
+#include <igl/opengl/IContext.h>
 #include <igl/opengl/ViewTextureTarget.h>
-#include <igl/opengl/macos/Context.h>
 #include <igl/opengl/macos/Device.h>
-#include <igl/opengl/macos/PlatformDevice.h>
 #include <igl/opengl/macos/TextureBuffer.h>
 
 namespace igl::opengl::macos {
 
 ///--------------------------------------
 /// MARK: - PlatformDevice
+// @fb-only
 PlatformDevice::PlatformDevice(Device& owner) : opengl::PlatformDevice(owner) {}
 
 std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(Result* outResult) {
@@ -40,15 +46,15 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(Result
 
   if (!drawableTexture_ || drawableTexture_->getSize() != requiredSize) {
     const TextureDesc desc = {
-        static_cast<uint32_t>(requiredSize.width),
-        static_cast<uint32_t>(requiredSize.height),
-        1,
-        1,
-        1,
-        TextureDesc::TextureUsageBits::Attachment,
-        1,
-        TextureType::TwoD,
-        drawableTextureFormat_,
+        .width = static_cast<uint32_t>(requiredSize.width),
+        .height = static_cast<uint32_t>(requiredSize.height),
+        .depth = 1,
+        .numLayers = 1,
+        .numSamples = 1,
+        .usage = TextureDesc::TextureUsageBits::Attachment,
+        .numMipLevels = 1,
+        .type = TextureType::TwoD,
+        .format = drawableTextureFormat_,
     };
     auto texture = std::make_shared<ViewTextureTarget>(getContext(), desc.format);
     texture->create(desc, true);
@@ -73,7 +79,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(Result* o
     return nullptr;
   }
 
-  GLint depthBits;
+  GLint depthBits(~0);
   NSOpenGLPixelFormat* pixelFormat = [[NSOpenGLContext currentContext] pixelFormat];
   if (IGL_DEBUG_VERIFY(pixelFormat)) {
     [pixelFormat getValues:&depthBits forAttribute:NSOpenGLPFADepthSize forVirtualScreen:0];
@@ -87,7 +93,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(Result* o
     return nullptr;
   }
 
-  TextureFormat textureFormat;
+  TextureFormat textureFormat(TextureFormat::Invalid);
   switch (depthBits) {
   case 16:
     textureFormat = TextureFormat::Z_UNorm16;
@@ -104,15 +110,15 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(Result* o
   }
 
   const TextureDesc desc = {
-      static_cast<uint32_t>(sizeInPixels.width),
-      static_cast<uint32_t>(sizeInPixels.height),
-      1,
-      1,
-      1,
-      TextureDesc::TextureUsageBits::Attachment,
-      1,
-      TextureType::TwoD,
-      textureFormat,
+      .width = static_cast<uint32_t>(sizeInPixels.width),
+      .height = static_cast<uint32_t>(sizeInPixels.height),
+      .depth = 1,
+      .numLayers = 1,
+      .numSamples = 1,
+      .usage = TextureDesc::TextureUsageBits::Attachment,
+      .numMipLevels = 1,
+      .type = TextureType::TwoD,
+      .format = textureFormat,
   };
   auto depthTexture = std::make_shared<ViewTextureTarget>(getContext(), desc.format);
   depthTexture->create(desc, true);
@@ -162,7 +168,7 @@ void PlatformDevice::setNativeDrawableTextureFormat(TextureFormat format, Result
 }
 
 bool PlatformDevice::isType(PlatformDeviceType t) const noexcept {
-  return t == Type || opengl::PlatformDevice::isType(t);
+  return t == kType || opengl::PlatformDevice::isType(t);
 }
 
 } // namespace igl::opengl::macos

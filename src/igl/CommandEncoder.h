@@ -7,8 +7,8 @@
 
 #pragma once
 
+#include <memory>
 #include <string>
-
 #include <igl/Common.h>
 
 namespace igl {
@@ -26,12 +26,12 @@ class ITexture;
  * modified by non-IGL code (Skia, Qt, etc), and synchronize between graphics and compute pipelines.
  */
 struct Dependencies {
-  static constexpr uint32_t IGL_MAX_TEXTURE_DEPENDENCIES = 8;
-  static constexpr uint32_t IGL_MAX_BUFFER_DEPENDENCIES = 8;
+  static constexpr uint32_t kIglMaxTextureDependencies = 8;
+  static constexpr uint32_t kIglMaxBufferDependencies = 8;
   // Note: please ensure that both arrays are dense, meaning that processing will halt immediately
   // if any NULL texture or buffer is encountered.
-  ITexture* IGL_NULLABLE textures[IGL_MAX_TEXTURE_DEPENDENCIES] = {};
-  IBuffer* IGL_NULLABLE buffers[IGL_MAX_BUFFER_DEPENDENCIES] = {};
+  ITexture* IGL_NULLABLE textures[kIglMaxTextureDependencies] = {};
+  IBuffer* IGL_NULLABLE buffers[kIglMaxBufferDependencies] = {};
   const Dependencies* IGL_NULLABLE next = nullptr; // optional extra dependencies
 };
 
@@ -79,7 +79,7 @@ class ICommandEncoder {
    * to pop the label off the stack.
    */
   virtual void pushDebugGroupLabel(const char* IGL_NONNULL label,
-                                   const igl::Color& color = igl::Color(1, 1, 1, 1)) const = 0;
+                                   const igl::Color& color = Color(1, 1, 1, 1)) const = 0;
 
   /**
    * Inserts a debug label into the captured frame data.
@@ -88,7 +88,7 @@ class ICommandEncoder {
    * call stack of the captured frame data.
    */
   virtual void insertDebugEventLabel(const char* IGL_NONNULL label,
-                                     const igl::Color& color = igl::Color(1, 1, 1, 1)) const = 0;
+                                     const igl::Color& color = Color(1, 1, 1, 1)) const = 0;
 
   /**
    * Pops a most recent debug label off a stack of debug string labels.

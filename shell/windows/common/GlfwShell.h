@@ -7,7 +7,8 @@
 
 #pragma once
 
-#include <igl/Common.h>
+#include <igl/Config.h>
+#include <igl/Texture.h>
 
 // clang-format off
 
@@ -69,6 +70,7 @@ class GlfwShell {
   virtual void didCreateWindow() noexcept {}
 
   virtual void willTick() noexcept {}
+  virtual void postUpdate() noexcept {}
 
  private:
   bool createWindow() noexcept;

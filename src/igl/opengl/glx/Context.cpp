@@ -9,13 +9,11 @@
 
 #include <igl/opengl/glx/Context.h>
 
-#include <igl/opengl/Texture.h>
-
 #include <X11/X.h>
 #include <dlfcn.h>
-
 #include <string>
 #include <vector>
+#include <igl/Texture.h>
 
 namespace {
 
@@ -33,10 +31,13 @@ namespace igl::opengl::glx {
 #define GLX_PBUFFER_WIDTH 0x8041
 
 using GLXPbuffer = XID;
+// NOLINTBEGIN(bugprone-reserved-identifier)
+// NOLINTNEXTLINE(facebook-unused-forward-decls)
 using GLXFBConfig = struct __GLXFBConfig*;
-using __GLXextproc = void (*)(void);
+using __GLXextproc = void (*)();
 
 using PFNGLXGETPROCADDRESSPROC = __GLXextproc (*)(const GLubyte* procName);
+// NOLINTEND(bugprone-reserved-identifier)
 
 using PFNXOPENDISPLAY = Display* (*)(const char*);
 using PFNXCLOSEDISPLAY = int (*)(Display*);
@@ -95,6 +96,10 @@ struct GLXSharedModule {
       dlclose(module_);
     }
   }
+  GLXSharedModule(const GLXSharedModule&) = delete;
+  GLXSharedModule& operator=(const GLXSharedModule&) = delete;
+  GLXSharedModule(GLXSharedModule&&) = delete;
+  GLXSharedModule& operator=(GLXSharedModule&&) = delete;
 
   template<typename T>
   T loadFunction(const char* func) {
@@ -175,7 +180,7 @@ Context::Context(std::shared_ptr<GLXSharedModule> module,
       setCurrent();
 
       // Initialize through base class.
-      igl::Result result;
+      Result result;
       initialize(&result);
       IGL_DEBUG_ASSERT(result.isOk(), result.message.c_str());
     } else {
@@ -190,7 +195,7 @@ Context::Context(std::shared_ptr<GLXSharedModule> module,
                  Display* display,
                  GLXDrawable windowHandle,
                  GLXContext contextHandle) :
-  contextOwned_(false),
+
   module_(std::move(module)),
   display_(display),
   windowHandle_(windowHandle),
@@ -205,7 +210,7 @@ Context::Context(std::shared_ptr<GLXSharedModule> module,
   setCurrent();
 
   // Initialize through base class.
-  igl::Result result;
+  Result result;
   initialize(&result);
   IGL_DEBUG_ASSERT(result.isOk(), result.message.c_str());
 }

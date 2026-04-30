@@ -13,6 +13,10 @@
 #include <IGLU/simple_renderer/Material.h>
 #include <igl/ShaderCreator.h>
 
+// D3D12 FXC precompiled shaders
+#include "imgui_ps_d3d12_fxc.h"
+#include "imgui_vs_d3d12_fxc.h"
+
 namespace iglu::imgui {
 
 /* internal renderer -- based on imgui_impl_metal.mm */
@@ -128,6 +132,55 @@ void main() {
 })";
 }
 
+// Note: D3D12 shader source functions are kept for reference but not used.
+// The D3D12 backend uses pre-compiled binary shaders.
+#if IGL_PLATFORM_WINDOWS
+static const char* getD3D12VertexShaderSource() {
+  return R"(
+cbuffer Uniforms : register(b0) {
+  float4x4 projectionMatrix;
+};
+
+struct VSInput {
+  float2 position : POSITION;
+  float2 uv : TEXCOORD0;
+  float4 color : COLOR;
+};
+
+struct PSInput {
+  float4 position : SV_Position;
+  float4 color : COLOR;
+  float2 uv : TEXCOORD0;
+};
+
+PSInput main(VSInput input) {
+  PSInput output;
+  // Column-major multiplication to match the CPU-side matrix format
+  // In HLSL: mul(vector, matrix) treats matrix as column-major
+  output.position = mul(float4(input.position.xy, 0, 1), projectionMatrix);
+  output.color = input.color;
+  output.uv = input.uv;
+  return output;
+})";
+}
+
+static const char* getD3D12FragmentShaderSource() {
+  return R"(
+struct PSInput {
+  float4 position : SV_Position;
+  float4 color : COLOR;
+  float2 uv : TEXCOORD0;
+};
+
+Texture2D tex : register(t0);
+SamplerState uSampler : register(s0);
+
+float4 main(PSInput input) : SV_Target {
+  return input.color * tex.Sample(uSampler, input.uv);
+})";
+}
+#endif
+
 static std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
   igl::Result result;
   switch (device.getBackendType()) {
@@ -143,7 +196,6 @@ static std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevic
                                                            "main",
                                                            "Shader Module: imgui::fragment",
                                                            &result);
-    break;
   }
   // @fb-only
     // @fb-only
@@ -154,7 +206,6 @@ static std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevic
   case igl::BackendType::Metal: {
     return igl::ShaderStagesCreator::fromLibraryStringInput(
         device, metalShaderStr(), "vertex_main", "fragment_main", "", &result);
-    break;
   }
   case igl::BackendType::OpenGL: {
     auto shaderVersion = device.getShaderVersion();
@@ -162,7 +213,18 @@ static std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevic
     const std::string fragmentStr = getOpenGLFragmentShaderSource(shaderVersion);
     return igl::ShaderStagesCreator::fromModuleStringInput(
         device, vertexStr.c_str(), "main", "", fragmentStr.c_str(), "main", "", &result);
-    break;
+  }
+  case igl::BackendType::D3D12: {
+    return igl::ShaderStagesCreator::fromModuleBinaryInput(device,
+                                                           _tmp_imgui_vs_fxc_cso,
+                                                           _tmp_imgui_vs_fxc_cso_len,
+                                                           "main",
+                                                           "Shader Module: imgui::vertex (D3D12)",
+                                                           _tmp_imgui_ps_fxc_cso,
+                                                           _tmp_imgui_ps_fxc_cso_len,
+                                                           "main",
+                                                           "Shader Module: imgui::fragment (D3D12)",
+                                                           &result);
   }
   }
   IGL_UNREACHABLE_RETURN(nullptr)
@@ -182,14 +244,18 @@ struct DrawableData {
     const size_t kMaxVertexBufferSize = kMaxVertices * sizeof(ImDrawVert);
     const size_t kMaxIndexBufferSize = kMaxVertices * sizeof(ImDrawIdx);
 
-    const igl::BufferDesc vbDesc(igl::BufferDesc::BufferTypeBits::Vertex,
-                                 nullptr,
-                                 kMaxVertexBufferSize,
-                                 igl::ResourceStorage::Shared);
-    const igl::BufferDesc ibDesc(igl::BufferDesc::BufferTypeBits::Index,
-                                 nullptr,
-                                 kMaxIndexBufferSize,
-                                 igl::ResourceStorage::Shared);
+    const igl::BufferDesc vbDesc{.type = igl::BufferDesc::BufferTypeBits::Vertex,
+                                 .data = nullptr,
+                                 .length = kMaxVertexBufferSize,
+                                 .storage = igl::ResourceStorage::Shared,
+                                 .hint = 0,
+                                 .debugName = "vertex (" + material->name + ")"};
+    const igl::BufferDesc ibDesc{.type = igl::BufferDesc::BufferTypeBits::Index,
+                                 .data = nullptr,
+                                 .length = kMaxIndexBufferSize,
+                                 .storage = igl::ResourceStorage::Shared,
+                                 .hint = 0,
+                                 .debugName = "index (" + material->name + ")"};
 
     iglu::vertexdata::PrimitiveDesc primitiveDesc;
     primitiveDesc.numEntries = 0;
@@ -210,28 +276,34 @@ class Session::Renderer {
  public:
   explicit Renderer(igl::IDevice& device);
   ~Renderer();
+  Renderer(const Renderer&) = delete;
+  Renderer& operator=(const Renderer&) = delete;
+  Renderer(Renderer&&) = delete;
+  Renderer& operator=(Renderer&&) = delete;
 
   void newFrame(const igl::FramebufferDesc& desc);
   void renderDrawData(igl::IDevice& device,
                       igl::IRenderCommandEncoder& cmdEncoder,
                       ImDrawData* drawData);
 
- private:
-  std::shared_ptr<igl::IVertexInputState> _vertexInputState;
-  std::shared_ptr<iglu::material::Material> _material;
-  std::vector<DrawableData> _drawables[3]; // list of drawables to be reused every 3 frames
-  size_t _nextBufferingIndex = 0;
+  bool dumpRenderDrawDataInfo{false};
 
-  igl::RenderPipelineDesc _renderPipelineDesc;
-  std::shared_ptr<igl::ITexture> _fontTexture;
-  std::shared_ptr<igl::ISamplerState> _linearSampler;
+ private:
+  std::shared_ptr<igl::IVertexInputState> vertexInputState_;
+  std::shared_ptr<iglu::material::Material> material_;
+  std::vector<DrawableData> drawables_[3]; // list of drawables to be reused every 3 frames
+  size_t nextBufferingIndex_ = 0;
+
+  igl::RenderPipelineDesc renderPipelineDesc_;
+  std::shared_ptr<igl::ITexture> fontTexture_;
+  std::shared_ptr<igl::ISamplerState> linearSampler_;
 };
 
 Session::Renderer::Renderer(igl::IDevice& device) {
   ImGuiIO& io = ImGui::GetIO();
   io.BackendRendererName = "imgui_impl_igl";
 
-  _linearSampler = device.createSamplerState(igl::SamplerStateDesc::newLinear(), nullptr);
+  linearSampler_ = device.createSamplerState(igl::SamplerStateDesc::newLinear(), nullptr);
 
   { // init fonts
     unsigned char* pixels = nullptr;
@@ -242,10 +314,10 @@ Session::Renderer::Renderer(igl::IDevice& device) {
                                                     height,
                                                     igl::TextureDesc::TextureUsageBits::Sampled);
     desc.debugName = "IGLU/imgui/Session.cpp:Session::Renderer::_fontTexture";
-    _fontTexture = device.createTexture(desc, nullptr);
-    _fontTexture->upload(igl::TextureRangeDesc::new2D(0, 0, width, height), pixels);
+    fontTexture_ = device.createTexture(desc, nullptr);
+    fontTexture_->upload(igl::TextureRangeDesc::new2D(0, 0, width, height), pixels);
 
-    io.Fonts->TexID = reinterpret_cast<void*>(_fontTexture.get());
+    io.Fonts->TexID = reinterpret_cast<ImTextureID>(fontTexture_.get());
   }
 
   {
@@ -274,44 +346,46 @@ Session::Renderer::Renderer(igl::IDevice& device) {
     };
     inputDesc.numInputBindings = 1;
     inputDesc.inputBindings[0].stride = sizeof(ImDrawVert);
-    _vertexInputState = device.createVertexInputState(inputDesc, nullptr);
+    vertexInputState_ = device.createVertexInputState(inputDesc, nullptr);
   }
 
   {
     auto stages = getShaderStagesForBackend(device);
     auto program = std::make_shared<iglu::material::ShaderProgram>(
-        device, std::move(stages), _vertexInputState);
+        device, std::move(stages), vertexInputState_);
 
-    _material = std::make_shared<iglu::material::Material>(device, "imgui");
-    _material->setShaderProgram(device, program);
-    _material->cullMode = igl::CullMode::Disabled;
-    _material->blendMode = iglu::material::BlendMode::Translucent();
+    material_ = std::make_shared<iglu::material::Material>(device, "imgui");
+    material_->setShaderProgram(device, program);
+    material_->cullMode = igl::CullMode::Disabled;
+    material_->blendMode = iglu::material::BlendMode::Translucent();
 
-    // @fb-only
-    if (device.getBackendType() != igl::BackendType::Vulkan) {
-      _material->shaderUniforms().setTexture("texture", _fontTexture.get(), _linearSampler);
+    // D3D12 and Vulkan use direct slot binding, OpenGL/Metal use named binding
+    const bool usesDirectBinding = (device.getBackendType() == igl::BackendType::Vulkan ||
+                                    device.getBackendType() == igl::BackendType::D3D12);
+    if (!usesDirectBinding) {
+      material_->shaderUniforms().setTexture("texture", fontTexture_.get(), linearSampler_);
     }
   }
 }
 
 Session::Renderer::~Renderer() {
   const ImGuiIO& io = ImGui::GetIO();
-  _fontTexture = nullptr;
-  io.Fonts->TexID = nullptr;
+  fontTexture_ = nullptr;
+  io.Fonts->TexID = 0;
 }
 
 void Session::Renderer::newFrame(const igl::FramebufferDesc& desc) {
   IGL_DEBUG_ASSERT(desc.colorAttachments[0].texture);
-  _renderPipelineDesc.targetDesc.colorAttachments.resize(1);
-  _renderPipelineDesc.targetDesc.colorAttachments[0].textureFormat =
+  renderPipelineDesc_.targetDesc.colorAttachments.resize(1);
+  renderPipelineDesc_.targetDesc.colorAttachments[0].textureFormat =
       desc.colorAttachments[0].texture->getFormat();
-  _renderPipelineDesc.targetDesc.depthAttachmentFormat =
+  renderPipelineDesc_.targetDesc.depthAttachmentFormat =
       desc.depthAttachment.texture ? desc.depthAttachment.texture->getFormat()
                                    : igl::TextureFormat::Invalid;
-  _renderPipelineDesc.targetDesc.stencilAttachmentFormat =
+  renderPipelineDesc_.targetDesc.stencilAttachmentFormat =
       desc.stencilAttachment.texture ? desc.stencilAttachment.texture->getFormat()
                                      : igl::TextureFormat::Invalid;
-  _renderPipelineDesc.sampleCount = desc.colorAttachments[0].texture->getSamples();
+  renderPipelineDesc_.sampleCount = desc.colorAttachments[0].texture->getSamples();
 }
 
 void Session::Renderer::renderDrawData(igl::IDevice& device,
@@ -319,19 +393,37 @@ void Session::Renderer::renderDrawData(igl::IDevice& device,
                                        ImDrawData* drawData) {
   // Avoid rendering when minimized, scale coordinates for retina displays (screen coordinates !=
   // framebuffer coordinates)
-  const int fb_width = (int)(drawData->DisplaySize.x * drawData->FramebufferScale.x);
-  const int fb_height = (int)(drawData->DisplaySize.y * drawData->FramebufferScale.y);
-  if (fb_width <= 0 || fb_height <= 0 || drawData->CmdListsCount == 0) {
+  const int fbWidth = (int)(drawData->DisplaySize.x * drawData->FramebufferScale.x);
+  const int fbHeight = (int)(drawData->DisplaySize.y * drawData->FramebufferScale.y);
+
+  if (dumpRenderDrawDataInfo) {
+    // throttle or turn off due to swamping other messages
+    IGL_LOG_INFO(
+        "ImGui renderDrawData: DisplaySize=(%.1f,%.1f), FramebufferScale=(%.1f,%.1f), fb=(%d,%d), "
+        "CmdLists=%d, TotalVtx=%d, TotalIdx=%d\n",
+        drawData->DisplaySize.x,
+        drawData->DisplaySize.y,
+        drawData->FramebufferScale.x,
+        drawData->FramebufferScale.y,
+        fbWidth,
+        fbHeight,
+        drawData->CmdListsCount,
+        drawData->TotalVtxCount,
+        drawData->TotalIdxCount);
+  }
+
+  if (fbWidth <= 0 || fbHeight <= 0 || drawData->CmdListsCount == 0) {
+    IGL_LOG_INFO("ImGui renderDrawData: Early return (invalid dimensions or no command lists)\n");
     return;
   }
 
   cmdEncoder.pushDebugGroupLabel("ImGui Rendering", igl::Color(0, 1, 0));
 
   const igl::Viewport viewport = {
-      /*.x = */ 0.0,
-      /*.y = */ 0.0,
-      /*.width = */ (drawData->DisplaySize.x * drawData->FramebufferScale.x),
-      /*.height = */ (drawData->DisplaySize.y * drawData->FramebufferScale.y),
+      /*.x = */ .x = 0.0,
+      /*.y = */ .y = 0.0,
+      /*.width = */ .width = (drawData->DisplaySize.x * drawData->FramebufferScale.x),
+      /*.height = */ .height = (drawData->DisplaySize.y * drawData->FramebufferScale.y),
   };
   cmdEncoder.bindViewport(viewport);
 
@@ -339,55 +431,60 @@ void Session::Renderer::renderDrawData(igl::IDevice& device,
   float4x4 orthoProjection{};
 
   { // setup projection matrix
-    const float L = drawData->DisplayPos.x;
-    const float R = drawData->DisplayPos.x + drawData->DisplaySize.x;
-    const float T = drawData->DisplayPos.y;
-    const float B = drawData->DisplayPos.y + drawData->DisplaySize.y;
-    orthoProjection.columns[0] = float4{2.0f / (R - L), 0.0f, 0.0f, 0.0f};
-    orthoProjection.columns[1] = float4{0.0f, 2.0f / (T - B), 0.0f, 0.0f};
+    const float l = drawData->DisplayPos.x;
+    const float r = drawData->DisplayPos.x + drawData->DisplaySize.x;
+    const float t = drawData->DisplayPos.y;
+    const float b = drawData->DisplayPos.y + drawData->DisplaySize.y;
+    orthoProjection.columns[0] = float4{2.0f / (r - l), 0.0f, 0.0f, 0.0f};
+    orthoProjection.columns[1] = float4{0.0f, 2.0f / (t - b), 0.0f, 0.0f};
     orthoProjection.columns[2] = float4{0.0f, 0.0f, -1.0f, 0.0f};
-    orthoProjection.columns[3] = float4{(R + L) / (L - R), (T + B) / (B - T), 0.0f, 1.0f};
-    if (device.getBackendType() != igl::BackendType::Vulkan) {
-      _material->shaderUniforms().setFloat4x4(igl::genNameHandle("projectionMatrix"),
+    orthoProjection.columns[3] = float4{(r + l) / (l - r), (t + b) / (b - t), 0.0f, 1.0f};
+    // D3D12 and Vulkan use direct slot binding, OpenGL/Metal use named binding
+    const bool usesDirectBinding = (device.getBackendType() == igl::BackendType::Vulkan ||
+                                    device.getBackendType() == igl::BackendType::D3D12);
+    if (!usesDirectBinding) {
+      material_->shaderUniforms().setFloat4x4(igl::genNameHandle("projectionMatrix"),
                                               orthoProjection);
     }
   }
 
-  const ImVec2 clip_off = drawData->DisplayPos; // (0,0) unless using multi-viewports
-  const ImVec2 clip_scale =
+  const ImVec2 clipOff = drawData->DisplayPos; // (0,0) unless using multi-viewports
+  const ImVec2 clipScale =
       drawData->FramebufferScale; // (1,1) unless using retina display which are often (2,2)
 
   // Since vertex buffers are updated every frame, we must use triple buffering for Metal to work
-  std::vector<DrawableData>& curFrameDrawables = _drawables[_nextBufferingIndex];
-  _nextBufferingIndex = (_nextBufferingIndex + 1) % 3;
+  std::vector<DrawableData>& curFrameDrawables = drawables_[nextBufferingIndex_];
+  nextBufferingIndex_ = (nextBufferingIndex_ + 1) % 3;
 
   const bool isOpenGL = device.getBackendType() == igl::BackendType::OpenGL;
   const bool isVulkan = device.getBackendType() == igl::BackendType::Vulkan;
+  const bool isD3D12 = device.getBackendType() == igl::BackendType::D3D12;
+  const bool usesDirectBinding = isVulkan || isD3D12;
 
-  ImTextureID lastBoundTextureId = nullptr;
+  ImTextureID lastBoundTextureId = 0;
 
   for (int n = 0; n < drawData->CmdListsCount; n++) {
-    const ImDrawList* cmd_list = drawData->CmdLists[n];
+    const ImDrawList* cmdList = drawData->CmdLists[n];
 
     if (n >= curFrameDrawables.size()) {
-      curFrameDrawables.emplace_back(device, _vertexInputState, _material);
+      curFrameDrawables.emplace_back(device, vertexInputState_, material_);
     }
     const DrawableData& drawableData = curFrameDrawables[n];
 
     // Upload vertex/index buffers
     drawableData.vertexData->vertexBuffer().upload(
-        cmd_list->VtxBuffer.Data, {cmd_list->VtxBuffer.Size * sizeof(ImDrawVert), 0});
-    drawableData.vertexData->indexBuffer().upload(
-        cmd_list->IdxBuffer.Data, {cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), 0});
+        cmdList->VtxBuffer.Data, {cmdList->VtxBuffer.Size * sizeof(ImDrawVert), 0});
+    drawableData.vertexData->indexBuffer().upload(cmdList->IdxBuffer.Data,
+                                                  {cmdList->IdxBuffer.Size * sizeof(ImDrawIdx), 0});
 
-    for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++) {
-      const ImDrawCmd cmd = cmd_list->CmdBuffer[cmd_i];
+    for (int cmdI = 0; cmdI < cmdList->CmdBuffer.Size; cmdI++) {
+      const ImDrawCmd cmd = cmdList->CmdBuffer[cmdI];
       IGL_DEBUG_ASSERT(cmd.UserCallback == nullptr);
 
-      const ImVec2 clipMin((cmd.ClipRect.x - clip_off.x) * clip_scale.x,
-                           (cmd.ClipRect.y - clip_off.y) * clip_scale.y);
-      const ImVec2 clipMax((cmd.ClipRect.z - clip_off.x) * clip_scale.x,
-                           (cmd.ClipRect.w - clip_off.y) * clip_scale.y);
+      const ImVec2 clipMin((cmd.ClipRect.x - clipOff.x) * clipScale.x,
+                           (cmd.ClipRect.y - clipOff.y) * clipScale.y);
+      const ImVec2 clipMax((cmd.ClipRect.z - clipOff.x) * clipScale.x,
+                           (cmd.ClipRect.w - clipOff.y) * clipScale.y);
 
       if (clipMax.x <= clipMin.x || clipMax.y <= clipMin.y) {
         continue;
@@ -395,25 +492,25 @@ void Session::Renderer::renderDrawData(igl::IDevice& device,
 
       // OpenGL Y-axis goes up (Vulkan and Metal are good)
       // https://www.saschawillems.de/blog/2019/03/29/flipping-the-vulkan-viewport/
-      const igl::ScissorRect rect{uint32_t(clipMin.x),
-                                  isOpenGL ? uint32_t(viewport.height - clipMax.y)
-                                           : uint32_t(clipMin.y),
-                                  uint32_t(clipMax.x - clipMin.x),
-                                  uint32_t(clipMax.y - clipMin.y)};
+      const igl::ScissorRect rect{.x = uint32_t(clipMin.x),
+                                  .y = isOpenGL ? uint32_t(viewport.height - clipMax.y)
+                                                : uint32_t(clipMin.y),
+                                  .width = uint32_t(clipMax.x - clipMin.x),
+                                  .height = uint32_t(clipMax.y - clipMin.y)};
       cmdEncoder.bindScissorRect(rect);
 
       if (cmd.TextureId != lastBoundTextureId) {
         lastBoundTextureId = cmd.TextureId;
-        auto* tex = reinterpret_cast<igl::ITexture*>(cmd.TextureId);
-        if (isVulkan) {
-          // @fb-only
+        auto* tex = reinterpret_cast<igl::ITexture*>((ImTextureID)(intptr_t)cmd.TextureId);
+        if (usesDirectBinding) {
+          // D3D12 and Vulkan use direct slot binding
           // Add Vulkan support for texture reflection info in ShaderUniforms so we don't need to
           // bind the texture directly
           cmdEncoder.bindTexture(0, igl::BindTarget::kFragment, tex);
-          cmdEncoder.bindSamplerState(0, igl::BindTarget::kFragment, _linearSampler.get());
+          cmdEncoder.bindSamplerState(0, igl::BindTarget::kFragment, linearSampler_.get());
         } else {
-          _material->shaderUniforms().setTexture(
-              "texture", tex ? tex : _fontTexture.get(), _linearSampler);
+          material_->shaderUniforms().setTexture(
+              "texture", tex ? tex : fontTexture_.get(), linearSampler_);
         }
       }
 
@@ -422,8 +519,8 @@ void Session::Renderer::renderDrawData(igl::IDevice& device,
 
       drawableData.drawable->draw(device,
                                   cmdEncoder,
-                                  _renderPipelineDesc,
-                                  isVulkan ? sizeof(orthoProjection) : 0,
+                                  renderPipelineDesc_,
+                                  usesDirectBinding ? sizeof(orthoProjection) : 0,
                                   &orthoProjection);
     }
   }
@@ -441,8 +538,8 @@ void Session::Renderer::renderDrawData(igl::IDevice& device,
 Session::Session(igl::IDevice& device,
                  igl::shell::InputDispatcher& inputDispatcher,
                  bool needInitializeSession /* = true */) :
-  _inputDispatcher(inputDispatcher) {
-  _context = ImGui::CreateContext();
+  inputDispatcher_(inputDispatcher) {
+  context_ = ImGui::CreateContext();
   makeCurrentContext();
 
   ImGuiStyle& style = ImGui::GetStyle();
@@ -454,24 +551,24 @@ Session::Session(igl::IDevice& device,
 }
 
 void Session::initialize(igl::IDevice& device) {
-  if (!_isInitialized) {
-    _inputListener = std::make_shared<InputListener>(_context);
-    _renderer = std::make_unique<Renderer>(device);
-    _inputDispatcher.addMouseListener(_inputListener);
-    _inputDispatcher.addTouchListener(_inputListener);
-    _inputDispatcher.addKeyListener(_inputListener);
-    _isInitialized = true;
+  if (!isInitialized_) {
+    inputListener_ = std::make_shared<InputListener>(context_);
+    renderer_ = std::make_unique<Renderer>(device);
+    inputDispatcher_.addMouseListener(inputListener_);
+    inputDispatcher_.addTouchListener(inputListener_);
+    inputDispatcher_.addKeyListener(inputListener_);
+    isInitialized_ = true;
   }
 }
 
 Session::~Session() {
   makeCurrentContext();
 
-  _inputDispatcher.removeTouchListener(_inputListener);
-  _inputDispatcher.removeMouseListener(_inputListener);
-  _inputDispatcher.removeKeyListener(_inputListener);
-  _renderer = nullptr;
-  _inputListener = nullptr;
+  inputDispatcher_.removeTouchListener(inputListener_);
+  inputDispatcher_.removeMouseListener(inputListener_);
+  inputDispatcher_.removeKeyListener(inputListener_);
+  renderer_ = nullptr;
+  inputListener_ = nullptr;
   ImGui::DestroyContext();
 }
 
@@ -487,7 +584,7 @@ void Session::beginFrame(const igl::FramebufferDesc& desc, float displayScale) {
   io.DisplayFramebufferScale = ImVec2(displayScale, displayScale);
   io.IniFilename = nullptr;
 
-  _renderer->newFrame(desc);
+  renderer_->newFrame(desc);
   ImGui::NewFrame();
 }
 
@@ -496,11 +593,11 @@ void Session::endFrame(igl::IDevice& device, igl::IRenderCommandEncoder& cmdEnco
 
   ImGui::EndFrame();
   ImGui::Render();
-  _renderer->renderDrawData(device, cmdEncoder, ImGui::GetDrawData());
+  renderer_->renderDrawData(device, cmdEncoder, ImGui::GetDrawData());
 }
 
 void Session::makeCurrentContext() const {
-  ImGui::SetCurrentContext(_context);
+  ImGui::SetCurrentContext(context_);
 }
 
 void Session::drawFPS(float fps) const {

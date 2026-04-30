@@ -12,11 +12,11 @@
 #include <igl/glslang/GlslCompiler.h>
 #include <igl/glslang/GlslangHelpers.h>
 #endif
+#include <igl/FramebufferWrapper.h>
 #include <igl/vulkan/Buffer.h>
 #include <igl/vulkan/CommandQueue.h>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/ComputePipelineState.h>
-#include <igl/vulkan/EnhancedShaderDebuggingStore.h>
 #include <igl/vulkan/Framebuffer.h>
 #include <igl/vulkan/PlatformDevice.h>
 #include <igl/vulkan/RenderPipelineState.h>
@@ -24,8 +24,6 @@
 #include <igl/vulkan/ShaderModule.h>
 #include <igl/vulkan/Texture.h>
 #include <igl/vulkan/VulkanBuffer.h>
-#include <igl/vulkan/VulkanDevice.h>
-#include <igl/vulkan/VulkanHelpers.h>
 #include <igl/vulkan/VulkanShaderModule.h>
 
 // Writes the shader code to disk for debugging. Used in `Device::createShaderModule()`
@@ -67,6 +65,10 @@ VkShaderStageFlagBits shaderStageToVkShaderStage(igl::ShaderStage stage) {
     return VK_SHADER_STAGE_FRAGMENT_BIT;
   case igl::ShaderStage::Compute:
     return VK_SHADER_STAGE_COMPUTE_BIT;
+  case igl::ShaderStage::Task:
+    return VK_SHADER_STAGE_TASK_BIT_EXT;
+  case igl::ShaderStage::Mesh:
+    return VK_SHADER_STAGE_MESH_BIT_EXT;
   };
   return VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
 }
@@ -75,11 +77,7 @@ VkShaderStageFlagBits shaderStageToVkShaderStage(igl::ShaderStage stage) {
 
 namespace igl::vulkan {
 
-Device::Device(std::unique_ptr<VulkanContext> ctx) : ctx_(std::move(ctx)), platformDevice_(*this) {
-  if (ctx_->enhancedShaderDebuggingStore_) {
-    ctx_->enhancedShaderDebuggingStore_->initialize(this);
-  }
-}
+Device::Device(std::unique_ptr<VulkanContext> ctx) : ctx_(std::move(ctx)), platformDevice_(*this) {}
 
 std::shared_ptr<ICommandQueue> Device::createCommandQueueInternal(const CommandQueueDesc& desc,
                                                                   Result* IGL_NULLABLE outResult) {
@@ -92,9 +90,9 @@ std::shared_ptr<ICommandQueue> Device::createCommandQueueInternal(const CommandQ
   return resource;
 }
 
-std::unique_ptr<IBuffer> Device::createBufferInternal(const BufferDesc& desc,
-                                                      Result* IGL_NULLABLE
-                                                          outResult) const noexcept {
+std::unique_ptr<IBuffer> Device::createBufferInternal( // NOLINT(bugprone-exception-escape)
+    const BufferDesc& desc,
+    Result* IGL_NULLABLE outResult) const noexcept {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
@@ -176,9 +174,9 @@ std::shared_ptr<ISamplerState> Device::createSamplerStateInternal(const SamplerS
   return samplerState;
 }
 
-std::shared_ptr<ITexture> Device::createTextureInternal(const TextureDesc& desc,
-                                                        Result* IGL_NULLABLE
-                                                            outResult) const noexcept {
+std::shared_ptr<ITexture> Device::createTextureInternal( // NOLINT(bugprone-exception-escape)
+    const TextureDesc& desc,
+    Result* IGL_NULLABLE outResult) const noexcept {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
@@ -198,9 +196,10 @@ std::shared_ptr<ITexture> Device::createTextureInternal(const TextureDesc& desc,
   return res.isOk() ? texture : nullptr;
 }
 
-std::shared_ptr<ITexture> Device::createTextureView(std::shared_ptr<ITexture> texture,
-                                                    const TextureViewDesc& desc,
-                                                    Result* IGL_NULLABLE outResult) const noexcept {
+std::shared_ptr<ITexture> Device::createTextureView( // NOLINT(bugprone-exception-escape)
+    std::shared_ptr<ITexture> texture,
+    const TextureViewDesc& desc,
+    Result* IGL_NULLABLE outResult) const noexcept {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
@@ -277,7 +276,8 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipelineInternal(
     Result::setResult(outResult, Result::Code::ArgumentInvalid, "Missing shader stages");
     return nullptr;
   }
-  if (!IGL_DEBUG_VERIFY(desc.shaderStages->getType() == ShaderStagesType::Render)) {
+  if (!IGL_DEBUG_VERIFY(desc.shaderStages->getType() == ShaderStagesType::Render ||
+                        desc.shaderStages->getType() == ShaderStagesType::RenderMeshShader)) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid, "Shader stages not for render");
     return nullptr;
   }
@@ -290,8 +290,15 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipelineInternal(
     return nullptr;
   }
 
-  if (!IGL_DEBUG_VERIFY(desc.shaderStages->getVertexModule())) {
+  if (desc.shaderStages->getType() == ShaderStagesType::Render &&
+      !IGL_DEBUG_VERIFY(desc.shaderStages->getVertexModule())) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid, "Missing vertex shader");
+    return nullptr;
+  }
+
+  if (desc.shaderStages->getType() == ShaderStagesType::RenderMeshShader &&
+      !IGL_DEBUG_VERIFY(desc.shaderStages->getMeshModule())) {
+    Result::setResult(outResult, Result::Code::ArgumentInvalid, "Missing mesh shader");
     return nullptr;
   }
 
@@ -343,8 +350,6 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(const void* IGL_N
 
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
 
-  VkDevice device = ctx_->device_->getVkDevice();
-
 #if IGL_SHADER_DUMP && IGL_DEBUG
   uint64_t hash = 0;
   IGL_DEBUG_ASSERT(length % sizeof(uint32_t) == 0);
@@ -371,7 +376,8 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(const void* IGL_N
       .codeSize = length,
       .pCode = static_cast<const uint32_t*>(data),
   };
-  const VkResult result = ctx_->vf_.vkCreateShaderModule(device, &ci, nullptr, &vkShaderModule);
+  const VkResult result =
+      ctx_->vf_.vkCreateShaderModule(ctx_->getVkDevice(), &ci, nullptr, &vkShaderModule);
 
   setResultFrom(outResult, result);
 
@@ -382,17 +388,16 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(const void* IGL_N
   if (!debugName.empty()) {
     // set debug name
     VK_ASSERT(ivkSetDebugObjectName(&ctx_->vf_,
-                                    device,
+                                    ctx_->getVkDevice(),
                                     VK_OBJECT_TYPE_SHADER_MODULE,
                                     (uint64_t)vkShaderModule,
                                     debugName.c_str()));
   }
 
-  // @fb-only
-  // @lint-ignore CLANGTIDY
+  IGL_DEBUG_ASSERT(vkShaderModule != VK_NULL_HANDLE);
   return std::make_shared<VulkanShaderModule>(
       ctx_->vf_,
-      device,
+      ctx_->getVkDevice(),
       vkShaderModule,
       util::getReflectionData(reinterpret_cast<const uint32_t*>(data), length));
 }
@@ -407,7 +412,6 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage
 #if IGL_USE_GLSLANG
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
 
-  VkDevice device = ctx_->device_->getVkDevice();
   const VkShaderStageFlagBits vkStage = shaderStageToVkShaderStage(stage);
   IGL_DEBUG_ASSERT(vkStage != VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM);
   IGL_DEBUG_ASSERT(source);
@@ -428,10 +432,6 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage
     if (ctx_->features_.has_VK_KHR_shader_non_semantic_info) {
       extraExtensions += "#extension GL_EXT_debug_printf : enable\n";
     }
-
-    const std::string enhancedShaderDebuggingCode =
-        EnhancedShaderDebuggingStore::recordLineShaderCode(
-            ctx_->enhancedShaderDebuggingStore_ != nullptr, ctx_->features_);
 
     if (ctx_->features_.featuresShaderFloat16Int8.shaderFloat16 == VK_TRUE) {
       extraExtensions += "#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require\n";
@@ -459,22 +459,23 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage
     if (vkStage == VK_SHADER_STAGE_VERTEX_BIT || vkStage == VK_SHADER_STAGE_COMPUTE_BIT) {
       sourcePatched += R"(
       #version 460
-      )" + extraExtensions +
-                       enhancedShaderDebuggingCode;
+      )" + extraExtensions;
     }
     if (vkStage == VK_SHADER_STAGE_FRAGMENT_BIT) {
       sourcePatched += R"(
       #version 460
       )" + extraExtensions +
-                       bindlessTexturesSource + enhancedShaderDebuggingCode;
+                       bindlessTexturesSource;
     }
-    sourcePatched += source;
+    sourcePatched.append(source, strlen(source));
     source = sourcePatched.c_str();
   }
 
   glslang_resource_t glslangResource = {};
   glslangGetDefaultResource(&glslangResource);
-  ivkUpdateGlslangResource(&glslangResource, &ctx_->getVkPhysicalDeviceProperties());
+  ivkUpdateGlslangResource(&glslangResource,
+                           &ctx_->getVkPhysicalDeviceProperties(),
+                           &ctx_->getvkPhysicalDeviceMeshShaderPropertiesEXT());
 
   std::vector<uint32_t> spirv;
   const Result result = glslang::compileShader(stage, source, spirv, &glslangResource);
@@ -485,28 +486,27 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage
       .codeSize = spirv.size() * sizeof(uint32_t),
       .pCode = spirv.data(),
   };
-  VK_ASSERT(ctx_->vf_.vkCreateShaderModule(device, &ci, nullptr, &vkShaderModule));
+  VK_ASSERT(ctx_->vf_.vkCreateShaderModule(ctx_->getVkDevice(), &ci, nullptr, &vkShaderModule));
 
   Result::setResult(outResult, result);
 
   if (!result.isOk()) {
     return nullptr;
   }
+  IGL_DEBUG_ASSERT(vkShaderModule != VK_NULL_HANDLE);
 
   if (!debugName.empty()) {
     // set debug name
     VK_ASSERT(ivkSetDebugObjectName(&ctx_->vf_,
-                                    device,
+                                    ctx_->getVkDevice(),
                                     VK_OBJECT_TYPE_SHADER_MODULE,
                                     (uint64_t)vkShaderModule,
                                     debugName.c_str()));
   }
 
-  // @fb-only
-  // @lint-ignore CLANGTIDY
   return std::make_shared<VulkanShaderModule>(
       ctx_->vf_,
-      device,
+      ctx_->getVkDevice(),
       vkShaderModule,
       util::getReflectionData(spirv.data(), spirv.size() * sizeof(uint32_t)));
 #else
@@ -530,6 +530,15 @@ std::shared_ptr<IFramebuffer> Device::createFramebufferInternal(const Framebuffe
   return resource;
 }
 
+base::IFramebufferInterop* IGL_NULLABLE
+Device::createFramebufferInterop(const base::FramebufferInteropDesc& desc) {
+  auto framebuffer = createFramebufferFromBaseDesc(desc);
+  if (!framebuffer) {
+    return nullptr;
+  }
+  return new (std::nothrow) FramebufferWrapper(std::move(framebuffer));
+}
+
 const PlatformDevice& Device::getPlatformDeviceInternal() const noexcept {
   return platformDevice_;
 }
@@ -538,12 +547,18 @@ size_t Device::getCurrentDrawCountInternal() const {
   return ctx_->drawCallCount_;
 }
 
+size_t Device::getShaderCompilationCountInternal() const {
+  return ctx_->shaderCompilationCount_;
+}
+
 std::unique_ptr<IShaderLibrary> Device::createShaderLibraryInternal(const ShaderLibraryDesc& desc,
                                                                     Result* IGL_NULLABLE
                                                                         outResult) const {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
+
+  ctx_->shaderCompilationCount_++;
 
   if (IGL_DEBUG_VERIFY_NOT(desc.moduleInfo.empty())) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid);
@@ -588,7 +603,8 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibraryInternal(const Shader
 bool Device::hasFeatureInternal(DeviceFeatures feature) const {
   IGL_PROFILER_FUNCTION();
 
-  VkPhysicalDevice physicalDevice = ctx_->vkPhysicalDevice_;
+  const VkPhysicalDevice physicalDevice = ctx_->vkPhysicalDevice_;
+  IGL_DEBUG_ASSERT(physicalDevice != VK_NULL_HANDLE);
   const VkPhysicalDeviceProperties& deviceProperties = ctx_->getVkPhysicalDeviceProperties();
 
   switch (feature) {
@@ -600,7 +616,7 @@ bool Device::hasFeatureInternal(DeviceFeatures feature) const {
   case DeviceFeatures::MapBufferRange:
     return true;
   case DeviceFeatures::MeshShaders:
-    return false;  
+    return ctx_->features_.has_VK_EXT_mesh_shader;
   case DeviceFeatures::MultipleRenderTargets:
     return deviceProperties.limits.maxColorAttachments > 1;
   case DeviceFeatures::StandardDerivative:
@@ -701,6 +717,10 @@ bool Device::hasFeatureInternal(DeviceFeatures feature) const {
     return ctx_->areValidationLayersEnabled();
   case DeviceFeatures::TextureViews:
     return true;
+  case DeviceFeatures::Timers:
+    return false;
+  case DeviceFeatures::TimestampQueries:
+    return false;
   }
 
   IGL_DEBUG_ABORT("DeviceFeatures value not handled: %d", (int)feature);
@@ -785,6 +805,34 @@ bool Device::getFeatureLimitsInternal(DeviceFeatureLimits featureLimits, size_t&
   case DeviceFeatureLimits::MaxAnisotropicFiltering:
     result = limits.maxSamplerAnisotropy;
     return true;
+  case DeviceFeatureLimits::MaxTextureDimension3D:
+    result = limits.maxImageDimension3D;
+    return true;
+  case DeviceFeatureLimits::MaxComputeWorkGroupSizeX:
+    result = limits.maxComputeWorkGroupSize[0];
+    return true;
+  case DeviceFeatureLimits::MaxComputeWorkGroupSizeY:
+    result = limits.maxComputeWorkGroupSize[1];
+    return true;
+  case DeviceFeatureLimits::MaxComputeWorkGroupSizeZ:
+    result = limits.maxComputeWorkGroupSize[2];
+    return true;
+  case DeviceFeatureLimits::MaxComputeWorkGroupInvocations:
+    result = limits.maxComputeWorkGroupInvocations;
+    return true;
+  case DeviceFeatureLimits::MaxVertexInputAttributes:
+    result = limits.maxVertexInputAttributes;
+    return true;
+  case DeviceFeatureLimits::MaxColorAttachments:
+    result = limits.maxColorAttachments;
+    return true;
+  // D3D12-specific descriptor heap limits - not applicable to Vulkan
+  case DeviceFeatureLimits::MaxDescriptorHeapCbvSrvUav:
+  case DeviceFeatureLimits::MaxDescriptorHeapSamplers:
+  case DeviceFeatureLimits::MaxDescriptorHeapRtvs:
+  case DeviceFeatureLimits::MaxDescriptorHeapDsvs:
+    result = 0;
+    return false;
   }
 
   IGL_DEBUG_ABORT("DeviceFeatureLimits value not handled: %d", (int)featureLimits);
@@ -848,14 +896,16 @@ ICapabilities::TextureFormatCapabilities Device::getTextureFormatCapabilitiesInt
 }
 
 ShaderVersion Device::getShaderVersionInternal() const {
-  return {ShaderFamily::SpirV, 1, 5, 0};
+  return {.family = ShaderFamily::SpirV, .majorVersion = 1, .minorVersion = 5, .extra = 0};
 }
 
 BackendVersion Device::getBackendVersionInternal() const {
   const uint32_t apiVersion = ctx_->vkPhysicalDeviceProperties2_.properties.apiVersion;
-  return {BackendFlavor::Vulkan,
-          static_cast<uint8_t>(VK_API_VERSION_MAJOR(apiVersion)),
-          static_cast<uint8_t>(VK_API_VERSION_MINOR(apiVersion))};
+  return {
+      .flavor = BackendFlavor::Vulkan,
+      .majorVersion = static_cast<uint8_t>(VK_API_VERSION_MAJOR(apiVersion)),
+      .minorVersion = static_cast<uint8_t>(VK_API_VERSION_MINOR(apiVersion)),
+  };
 }
 
 std::string Device::getDeviceName() const{
@@ -882,6 +932,13 @@ Holder<BindGroupBufferHandle> Device::createBindGroupInternal(const igl::BindGro
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
 
   return {this, ctx_->createBindGroup(desc, outResult)};
+}
+
+std::shared_ptr<ITimer> Device::createTimer(Result* IGL_NULLABLE outResult) const noexcept {
+  if (outResult) {
+    *outResult = Result(Result::Code::Unsupported, "Timer is not supported on Vulkan");
+  }
+  return nullptr;
 }
 
 void Device::destroyInternal(BindGroupTextureHandle handle) {

@@ -7,16 +7,12 @@
 
 #include <igl/opengl/empty/Device.h>
 
-#include <cstring>
-#include <igl/opengl/Errors.h>
-#include <igl/opengl/empty/Context.h>
-#include <igl/opengl/TextureBuffer.h>
-#include <igl/opengl/TextureTarget.h>
-#include <igl/opengl/UniformBuffer.h>
+#include <igl/opengl/IContext.h>
 
 namespace igl::opengl::empty {
 
 Device::Device(std::unique_ptr<IContext> context) :
+  // @fb-only
   opengl::Device(std::move(context)), platformDevice_(*this) {}
 
 const PlatformDevice& Device::getPlatformDevice() const noexcept {
@@ -27,7 +23,8 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
                                                 Result* outResult) const noexcept {
     const auto sanitized = sanitize(desc);
 
-    std::unique_ptr<Texture> texture;
+    std::unique_ptr<ITexture> texture;
+#if 0 //todo:vinsentli
 #if IGL_DEBUG
     if (sanitized.type == TextureType::TwoD || sanitized.type == TextureType::TwoDArray) {
 size_t textureSizeLimit;
@@ -71,7 +68,7 @@ getFeatureLimits(DeviceFeatureLimits::MaxTextureDimension1D2D, textureSizeLimit)
     // sanity check to ensure that the Result value and the returned object are in sync
     // i.e. we never have a valid Result with a nullptr return value, or vice versa
     IGL_DEBUG_ASSERT(outResult == nullptr || (outResult->isOk() == (texture != nullptr)));
-
+#endif
     return texture;
 }
 

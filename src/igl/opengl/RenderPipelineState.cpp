@@ -187,28 +187,29 @@ Result RenderPipelineState::create() {
       return Result{Result::Code::RuntimeError, "Too many samplers"};
     }
 
-    vertexTextureUnitRemap[textureUnit] = realTextureUnit;
+    vertexTextureUnitRemap_[textureUnit] = realTextureUnit;
     unitSamplerLocationMap_[realTextureUnit] = loc;
   }
 
   if (!mFramebufferDesc.colorAttachments.empty()) {
     const ColorWriteMask colorWriteMask = mFramebufferDesc.colorAttachments[0].colorWriteMask;
-    colorMask_[0] = static_cast<GLboolean>((colorWriteMask & ColorWriteBitsRed) != 0);
-    colorMask_[1] = static_cast<GLboolean>((colorWriteMask & ColorWriteBitsGreen) != 0);
-    colorMask_[2] = static_cast<GLboolean>((colorWriteMask & ColorWriteBitsBlue) != 0);
-    colorMask_[3] = static_cast<GLboolean>((colorWriteMask & ColorWriteBitsAlpha) != 0);
+    colorMask_[0] = static_cast<GLboolean>((colorWriteMask & kColorWriteBitsRed) != 0);
+    colorMask_[1] = static_cast<GLboolean>((colorWriteMask & kColorWriteBitsGreen) != 0);
+    colorMask_[2] = static_cast<GLboolean>((colorWriteMask & kColorWriteBitsBlue) != 0);
+    colorMask_[3] = static_cast<GLboolean>((colorWriteMask & kColorWriteBitsAlpha) != 0);
   }
 
   if (!mFramebufferDesc.colorAttachments.empty() &&
       mFramebufferDesc.colorAttachments[0].blendEnabled) {
     blendEnabled_ = true;
     // GL equation sets blending equation for both RGB and alpha
-    blendMode_ = {convertBlendOp(mFramebufferDesc.colorAttachments[0].rgbBlendOp),
-                  convertBlendOp(mFramebufferDesc.colorAttachments[0].alphaBlendOp),
-                  convertBlendFactor(mFramebufferDesc.colorAttachments[0].srcRGBBlendFactor),
-                  convertBlendFactor(mFramebufferDesc.colorAttachments[0].dstRGBBlendFactor),
-                  convertBlendFactor(mFramebufferDesc.colorAttachments[0].srcAlphaBlendFactor),
-                  convertBlendFactor(mFramebufferDesc.colorAttachments[0].dstAlphaBlendFactor)};
+    blendMode_ = {
+        .blendOpColor = convertBlendOp(mFramebufferDesc.colorAttachments[0].rgbBlendOp),
+        .blendOpAlpha = convertBlendOp(mFramebufferDesc.colorAttachments[0].alphaBlendOp),
+        .srcColor = convertBlendFactor(mFramebufferDesc.colorAttachments[0].srcRGBBlendFactor),
+        .dstColor = convertBlendFactor(mFramebufferDesc.colorAttachments[0].dstRGBBlendFactor),
+        .srcAlpha = convertBlendFactor(mFramebufferDesc.colorAttachments[0].srcAlphaBlendFactor),
+        .dstAlpha = convertBlendFactor(mFramebufferDesc.colorAttachments[0].dstAlphaBlendFactor)};
   } else {
     blendEnabled_ = false;
   }
@@ -270,7 +271,7 @@ void RenderPipelineState::unbind() {
 // bufferOffset is an offset in bytes to the start of the vertex attributes in the buffer.
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 void RenderPipelineState::bindVertexAttributes(size_t bufferIndex, size_t bufferOffset) {
-#if IGL_VERIFY_ENABLED
+#if IGL_DEBUG_ABORT_ENABLED
   static GLint sMaxNumVertexAttribs = 0;
   if (0 == sMaxNumVertexAttribs) {
     getContext().getIntegerv(GL_MAX_VERTEX_ATTRIBS, &sMaxNumVertexAttribs);
@@ -307,7 +308,8 @@ void RenderPipelineState::bindVertexAttributes(size_t bufferIndex, size_t buffer
         attribute.componentType,
         attribute.normalized,
         attribute.stride,
-        reinterpret_cast<const char*>(attribute.bufferOffset) + bufferOffset);
+        reinterpret_cast<const char*>(attribute.bufferOffset) + // NOLINT(performance-no-int-to-ptr)
+            bufferOffset);
 
     if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::VertexAttribDivisor)) {
       if (attribute.sampleFunction == igl::VertexSampleFunction::PerVertex) {
@@ -339,7 +341,9 @@ void RenderPipelineState::unbindPrevPipelineVertexAttributes() {
 // bind the unit to the location, then activate the unit.
 //
 // Prerequisite: The shader program has to be loaded
-Result RenderPipelineState::bindTextureUnit(const size_t unit, uint8_t bindTarget) {
+Result RenderPipelineState::bindTextureUnit(const size_t unit,
+                                            uint8_t bindTarget,
+                                            Texture& texture) {
   if (!desc_.shaderStages) {
     return Result{Result::Code::InvalidOperation, "No shader set\n"};
   }
@@ -350,8 +354,8 @@ Result RenderPipelineState::bindTextureUnit(const size_t unit, uint8_t bindTarge
 
   GLint samplerLocation = -1;
   if (bindTarget == igl::BindTarget::kVertex) {
-    auto it = vertexTextureUnitRemap.find(unit);
-    if (it == vertexTextureUnitRemap.end()) {
+    auto it = vertexTextureUnitRemap_.find(unit);
+    if (it == vertexTextureUnitRemap_.end()) {
       return Result{Result::Code::RuntimeError, "Unable to find sampler location\n"};
     }
     auto realUnit = it->second;
@@ -364,8 +368,9 @@ Result RenderPipelineState::bindTextureUnit(const size_t unit, uint8_t bindTarge
     return Result{Result::Code::RuntimeError, "Unable to find sampler location\n"};
   }
 
-  getContext().uniform1i(samplerLocation, static_cast<GLint>(unit));
   getContext().activeTexture(static_cast<GLenum>(GL_TEXTURE0 + unit));
+  texture.bind();
+  getContext().uniform1i(samplerLocation, static_cast<GLint>(unit));
 
   return Result();
 }

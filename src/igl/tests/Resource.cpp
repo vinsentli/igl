@@ -7,6 +7,7 @@
 
 #include "util/Common.h"
 
+#include <igl/Buffer.h>
 #include <igl/DepthStencilState.h>
 #include <igl/RenderPipelineState.h>
 
@@ -90,8 +91,11 @@ TEST_F(ResourceTest, DepthStencilCreate) {
 TEST_F(ResourceTest, VertexBuffer) {
   Result ret;
   float vertexData[] = {1.0};
-  const BufferDesc bufferDesc =
-      BufferDesc(BufferDesc::BufferTypeBits::Vertex, vertexData, sizeof(vertexData));
+  const BufferDesc bufferDesc{
+      .type = BufferDesc::BufferTypeBits::Vertex,
+      .data = vertexData,
+      .length = sizeof(vertexData),
+  };
   const std::shared_ptr<IBuffer> buffer = iglDev_->createBuffer(bufferDesc, &ret);
 
   ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -107,8 +111,11 @@ TEST_F(ResourceTest, UninitializedVertexBuffer) {
   Result ret;
 
   const int bufferLength = 64;
-  const BufferDesc bufferDesc = BufferDesc(
-      BufferDesc::BufferTypeBits::Vertex, nullptr, bufferLength, ResourceStorage::Shared);
+  const BufferDesc bufferDesc{
+      .type = BufferDesc::BufferTypeBits::Vertex,
+      .length = bufferLength,
+      .storage = ResourceStorage::Shared,
+  };
   const std::shared_ptr<IBuffer> buffer = iglDev_->createBuffer(bufferDesc, &ret);
 
   ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -131,8 +138,11 @@ TEST_F(ResourceTest, IndexBuffer) {
       3,
       2,
   };
-  const BufferDesc bufferDesc =
-      BufferDesc(BufferDesc::BufferTypeBits::Index, indexData, sizeof(indexData));
+  const BufferDesc bufferDesc{
+      .type = BufferDesc::BufferTypeBits::Index,
+      .data = indexData,
+      .length = sizeof(indexData),
+  };
   const std::shared_ptr<IBuffer> buffer = iglDev_->createBuffer(bufferDesc, &ret);
 
   ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -148,11 +158,11 @@ TEST_F(ResourceTest, UniformBuffer) {
   Result ret;
 
   fragmentParameters_.color = {1.0f, 1.0f, 1.0f};
-  BufferDesc bufferDesc;
-  bufferDesc.type = BufferDesc::BufferTypeBits::Uniform;
-  bufferDesc.data = &fragmentParameters_;
-  bufferDesc.length = sizeof(fragmentParameters_);
-
+  const BufferDesc bufferDesc{
+      .type = BufferDesc::BufferTypeBits::Uniform,
+      .data = &fragmentParameters_,
+      .length = sizeof(fragmentParameters_),
+  };
   const std::shared_ptr<IBuffer> buffer = iglDev_->createBuffer(bufferDesc, &ret);
 
   ASSERT_EQ(ret.code, Result::Code::Ok);

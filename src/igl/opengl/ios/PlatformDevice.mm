@@ -7,20 +7,16 @@
 
 #include <igl/opengl/ios/PlatformDevice.h>
 
-#include <CoreVideo/CoreVideo.h>
-
+#include <CoreVideo/CVBuffer.h>
+#include <CoreVideo/CVOpenGLESTextureCache.h>
 #import <Foundation/Foundation.h>
-
 #include <OpenGLES/EAGL.h>
 #import <OpenGLES/ES2/glext.h>
-
 #import <QuartzCore/QuartzCore.h>
-
 #include <cstdio>
 #include <cstring>
 #import <objc/runtime.h>
 #include <igl/Common.h>
-#include <igl/opengl/Errors.h>
 #include <igl/opengl/TextureTarget.h>
 #include <igl/opengl/ios/Context.h>
 #include <igl/opengl/ios/Device.h>
@@ -28,26 +24,27 @@
 
 static void* kAssociatedRenderBufferHolderKey = &kAssociatedRenderBufferHolderKey;
 
-/// Object used to hold onto a _renderBuffer so we can attach it as an associated object
-@interface _IGLRenderBufferHolder : NSObject {
+/// Object used to hold onto a renderBuffer so we can attach it as an associated object
+@interface IGLRenderBufferHolder : NSObject {
  @public
   std::weak_ptr<igl::opengl::TextureTarget> _renderBuffer;
 }
 @end
 
 namespace {
-/// Backed by an associated object. This is used to track the last _renderBuffer used to create this
+/// Backed by an associated object. This is used to track the last renderBuffer used to create this
 /// texture so we can reuse it and invalidate it when necessary
 /// This always returns a renderBufferHolder, but it is up to the responsibility of the caller to
-/// set _renderBuffer.
+/// set renderBuffer.
 // @fb-only
 // @fb-only
-_IGLRenderBufferHolder* GetAssociatedRenderBufferHolder(CAEAGLLayer* nativeDrawable);
+IGLRenderBufferHolder* getAssociatedRenderBufferHolder(CAEAGLLayer* nativeDrawable);
 
 } // namespace
 
 namespace igl::opengl::ios {
 
+// @fb-only
 PlatformDevice::PlatformDevice(Device& owner) : opengl::PlatformDevice(owner) {}
 
 PlatformDevice::~PlatformDevice() {
@@ -70,7 +67,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
   const CGRect resolution = CGRectMake(
       bounds.origin.x, bounds.origin.y, bounds.size.width * scale, bounds.size.height * scale);
 
-  _IGLRenderBufferHolder* renderBufferHolder = GetAssociatedRenderBufferHolder(nativeDrawable);
+  IGLRenderBufferHolder* renderBufferHolder = getAssociatedRenderBufferHolder(nativeDrawable);
 
   const auto renderBuffer = renderBufferHolder->_renderBuffer.lock();
 
@@ -117,7 +114,8 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
     desc.numSamples = 1;
     desc.usage = TextureDesc::TextureUsageBits::Attachment;
 
-    auto texture = std::make_shared<TextureTarget>(getContext(), desc.format);
+    auto texture =
+        std::make_shared<TextureTarget>(getContext(), desc.format, /* canPresent */ true);
     if (texture != nullptr) {
       const Result result = texture->create(desc, true);
 
@@ -162,15 +160,15 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(
       bounds.origin.x, bounds.origin.y, bounds.size.width * scale, bounds.size.height * scale);
 
   TextureDesc desc = {
-      static_cast<uint32_t>(resolution.size.width),
-      static_cast<uint32_t>(resolution.size.height),
-      1,
-      1,
-      1,
-      TextureDesc::TextureUsageBits::Attachment,
-      1,
-      TextureType::TwoD,
-      depthTextureFormat,
+      .width = static_cast<uint32_t>(resolution.size.width),
+      .height = static_cast<uint32_t>(resolution.size.height),
+      .depth = 1,
+      .numLayers = 1,
+      .numSamples = 1,
+      .usage = TextureDesc::TextureUsageBits::Attachment,
+      .numMipLevels = 1,
+      .type = TextureType::TwoD,
+      .format = depthTextureFormat,
   };
   desc.storage = ResourceStorage::Private;
   desc.debugName = "TextureFromNativeDepth";
@@ -286,7 +284,8 @@ std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativePixelBuffer(
 }
 
 bool PlatformDevice::isType(PlatformDeviceType t) const noexcept {
-  return t == Type || opengl::PlatformDevice::isType(t);
+  // @fb-only
+  return t == kType || opengl::PlatformDevice::isType(t);
 }
 
 CVOpenGLESTextureCacheRef PlatformDevice::getTextureCache() {
@@ -297,13 +296,13 @@ CVOpenGLESTextureCacheRef PlatformDevice::getTextureCache() {
 } // namespace igl::opengl::ios
 
 namespace {
-_IGLRenderBufferHolder* GetAssociatedRenderBufferHolder(CAEAGLLayer* nativeDrawable) {
-  _IGLRenderBufferHolder* renderBufferHolder =
+IGLRenderBufferHolder* getAssociatedRenderBufferHolder(CAEAGLLayer* nativeDrawable) {
+  IGLRenderBufferHolder* renderBufferHolder =
       objc_getAssociatedObject(nativeDrawable, kAssociatedRenderBufferHolderKey);
   if (renderBufferHolder) {
     return renderBufferHolder;
   }
-  renderBufferHolder = [_IGLRenderBufferHolder new];
+  renderBufferHolder = [IGLRenderBufferHolder new];
   objc_setAssociatedObject(nativeDrawable,
                            kAssociatedRenderBufferHolderKey,
                            renderBufferHolder,
@@ -312,5 +311,5 @@ _IGLRenderBufferHolder* GetAssociatedRenderBufferHolder(CAEAGLLayer* nativeDrawa
 }
 } // namespace
 
-@implementation _IGLRenderBufferHolder
+@implementation IGLRenderBufferHolder
 @end

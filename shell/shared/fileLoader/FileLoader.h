@@ -10,7 +10,6 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <vector>
 
 namespace igl::shell {
 
@@ -18,7 +17,7 @@ class FileLoader {
  public:
   struct FileData {
     std::unique_ptr<uint8_t[]> data = nullptr;
-    uint32_t length;
+    uint64_t length;
   };
 
   FileLoader() = default;
@@ -39,5 +38,8 @@ class FileLoader {
  protected:
   FileData loadBinaryDataInternal(const std::string& filePath);
 };
+
+/// Create a cross-platform compatible file loader.
+std::unique_ptr<FileLoader> createFileLoader();
 
 } // namespace igl::shell

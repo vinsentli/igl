@@ -5,13 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gtest/gtest.h>
+
 #include "data/ShaderData.h"
 #include "data/VertexIndexData.h"
 #include "util/Common.h"
 
 #include <IGLU/managedUniformBuffer/ManagedUniformBuffer.h>
 #include <glm/glm.hpp>
-#include <gtest/gtest.h>
 #include <string>
 
 namespace igl::tests {
@@ -39,11 +40,17 @@ class MultiviewTest : public ::testing::Test {
     std::shared_ptr<iglu::ManagedUniformBuffer> vertUniformBuffer = nullptr;
 
     const iglu::ManagedUniformBufferInfo ubInfo = {
-        1,
-        sizeof(Colors),
-        {
-            {"colors", -1, igl::UniformType::Float4, 2, 0, sizeof(glm::vec4)},
-        },
+        .index = 1,
+        .length = sizeof(Colors),
+        .uniforms =
+            {
+                {.name = "colors",
+                 .location = -1,
+                 .type = igl::UniformType::Float4,
+                 .numElements = 2,
+                 .offset = 0,
+                 .elementStride = sizeof(glm::vec4)},
+            },
     };
 
     vertUniformBuffer = std::make_shared<iglu::ManagedUniformBuffer>(device, ubInfo);
@@ -74,7 +81,6 @@ class MultiviewTest : public ::testing::Test {
 
     if (!iglDev_->hasFeature(DeviceFeatures::Multiview)) {
       GTEST_SKIP() << "Multiview is unsupported for this platform.";
-      return;
     }
 #if IGL_PLATFORM_WINDOWS || (IGL_PLATFORM_LINUX && !IGL_PLATFORM_LINUX_USE_EGL)
     if (iglDev_->getBackendType() == igl::BackendType::OpenGL) {
@@ -94,7 +100,7 @@ class MultiviewTest : public ::testing::Test {
     auto depthFormat = TextureFormat::S8_UInt_Z32_UNorm;
 
 #ifndef IGL_PLATFORM_MACOSX
-    if (backend_ == util::BACKEND_VUL) {
+    if (backend_ == util::kBackendVul) {
       depthFormat = TextureFormat::S8_UInt_Z24_UNorm;
     }
 #endif // IGL_PLATFORM_MACOSX
@@ -134,8 +140,8 @@ class MultiviewTest : public ::testing::Test {
 
     inputDesc.attributes[0].format = VertexAttributeFormat::Float4;
     inputDesc.attributes[0].offset = 0;
-    inputDesc.attributes[0].bufferIndex = data::shader::simplePosIndex;
-    inputDesc.attributes[0].name = data::shader::simplePos;
+    inputDesc.attributes[0].bufferIndex = data::shader::kSimplePosIndex;
+    inputDesc.attributes[0].name = data::shader::kSimplePos;
     inputDesc.attributes[0].location = 0;
     inputDesc.inputBindings[0].stride = sizeof(float) * 4;
 
@@ -150,8 +156,8 @@ class MultiviewTest : public ::testing::Test {
     BufferDesc bufDesc;
 
     bufDesc.type = BufferDesc::BufferTypeBits::Index;
-    bufDesc.data = data::vertex_index::QUAD_IND;
-    bufDesc.length = sizeof(data::vertex_index::QUAD_IND);
+    bufDesc.data = data::vertex_index::kQuadInd.data();
+    bufDesc.length = sizeof(data::vertex_index::kQuadInd);
 
     ib_ = iglDev_->createBuffer(bufDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -159,8 +165,8 @@ class MultiviewTest : public ::testing::Test {
 
     // Initialize vertex and sampler buffers
     bufDesc.type = BufferDesc::BufferTypeBits::Vertex;
-    bufDesc.data = data::vertex_index::QUAD_VERT;
-    bufDesc.length = sizeof(data::vertex_index::QUAD_VERT);
+    bufDesc.data = data::vertex_index::kQuadVert.data();
+    bufDesc.length = sizeof(data::vertex_index::kQuadVert);
 
     vb_ = iglDev_->createBuffer(bufDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -217,23 +223,22 @@ TEST_F(MultiviewTest, FramebufferMode) {
 TEST_F(MultiviewTest, SinglePassStereo) {
   if (!iglDev_->hasFeature(DeviceFeatures::Multiview)) {
     GTEST_SKIP() << "Multiview is unsupported for this platform.";
-    return;
   }
 
   std::unique_ptr<IShaderStages> stages;
-  if (backend_ == util::BACKEND_OGL) {
+  if (backend_ == util::kBackendOgl) {
     igl::tests::util::createShaderStages(iglDev_,
-                                         data::shader::OGL_SIMPLE_VERT_SHADER_MULTIVIEW_ES3,
-                                         igl::tests::data::shader::shaderFunc,
-                                         data::shader::OGL_SIMPLE_FRAG_SHADER_MULTIVIEW_ES3,
-                                         igl::tests::data::shader::shaderFunc,
+                                         data::shader::kOglSimpleVertShaderMultiviewEs3,
+                                         igl::tests::data::shader::kShaderFunc,
+                                         data::shader::kOglSimpleFragShaderMultiviewEs3,
+                                         igl::tests::data::shader::kShaderFunc,
                                          stages);
-  } else if (backend_ == util::BACKEND_VUL) {
+  } else if (backend_ == util::kBackendVul) {
     igl::tests::util::createShaderStages(iglDev_,
-                                         data::shader::VULKAN_SIMPLE_VERT_SHADER_MULTIVIEW,
-                                         igl::tests::data::shader::shaderFunc,
-                                         data::shader::VULKAN_SIMPLE_FRAG_SHADER_MULTIVIEW,
-                                         igl::tests::data::shader::shaderFunc,
+                                         data::shader::kVulkanSimpleVertShaderMultiview,
+                                         igl::tests::data::shader::kShaderFunc,
+                                         data::shader::kVulkanSimpleFragShaderMultiview,
+                                         igl::tests::data::shader::kShaderFunc,
                                          stages);
   }
 
@@ -288,7 +293,7 @@ TEST_F(MultiviewTest, SinglePassStereo) {
   cmds->bindRenderPipelineState(pipelineState);
   cmds->bindDepthStencilState(depthStencilState);
 
-  cmds->bindVertexBuffer(data::shader::simplePosIndex, *vb_);
+  cmds->bindVertexBuffer(data::shader::kSimplePosIndex, *vb_);
   vertUniformBuffer->bind(*iglDev_, *pipelineState, *cmds);
 
   cmds->bindIndexBuffer(*ib_, IndexFormat::UInt16);

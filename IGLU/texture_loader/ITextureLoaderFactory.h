@@ -9,7 +9,8 @@
 
 #include <IGLU/texture_loader/DataReader.h>
 #include <IGLU/texture_loader/ITextureLoader.h>
-#include <igl/DeviceFeatures.h>
+#include <igl/Common.h>
+#include <igl/TextureFormat.h>
 
 namespace iglu::textureloader {
 
@@ -21,7 +22,10 @@ class ITextureLoaderFactory {
  public:
   virtual ~ITextureLoaderFactory() = default;
 
-  [[nodiscard]] virtual uint32_t headerLength() const noexcept = 0;
+  [[nodiscard]] virtual uint32_t minHeaderLength() const noexcept = 0;
+  [[nodiscard]] virtual uint32_t maxHeaderLength() const noexcept {
+    return minHeaderLength();
+  }
   [[nodiscard]] bool canCreate(const uint8_t* IGL_NONNULL headerData,
                                uint32_t headerLength,
                                igl::Result* IGL_NULLABLE outResult) const noexcept;

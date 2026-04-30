@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "util/Common.h"
-#include <string>
+#include <gtest/gtest.h>
+
 #include <igl/VertexInputState.h>
 
 namespace igl::tests {

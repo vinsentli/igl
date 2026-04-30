@@ -68,29 +68,35 @@ class Framebuffer : public WithContext, public IFramebuffer {
   }
 
   inline std::shared_ptr<Framebuffer> getResolveFramebuffer() const {
-    return resolveFramebuffer;
+    return resolveFramebuffer_;
   }
 
   [[nodiscard]] bool isSwapchainBound() const override;
 
  protected:
   virtual bool isCustomFrameBuffer() const { return false; }
-  void attachAsColor(igl::ITexture& texture,
+  void attachAsColor(ITexture& texture,
                      uint32_t index,
                      const Texture::AttachmentParams& params) const;
-  void attachAsDepth(igl::ITexture& texture, const Texture::AttachmentParams& params) const;
-  void attachAsStencil(igl::ITexture& texture, const Texture::AttachmentParams& params) const;
+  void attachAsDepth(ITexture& texture, const Texture::AttachmentParams& params) const;
+  void attachAsStencil(ITexture& texture, const Texture::AttachmentParams& params) const;
   // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes)
   GLuint frameBufferID_ = 0;
 
   struct CachedState {
-    FramebufferMode mode_ = igl::FramebufferMode::Mono;
-    uint8_t layer_ = 0;
-    uint8_t face_ = 0;
-    uint8_t mipLevel_ = 0;
+    FramebufferMode mode = igl::FramebufferMode::Mono;
+    uint8_t layer = 0;
+    uint8_t face = 0;
+    uint8_t mipLevel = 0;
 
-    bool needsUpdate(FramebufferMode mode, uint8_t layer, uint8_t face, uint8_t mipLevel);
-    void updateCache(FramebufferMode mode, uint8_t layer, uint8_t face, uint8_t mipLevel);
+    bool needsUpdate(FramebufferMode newMode,
+                     uint8_t newLayer,
+                     uint8_t newFace,
+                     uint8_t newMipLevel);
+    void updateCache(FramebufferMode newMode,
+                     uint8_t newLayer,
+                     uint8_t newFace,
+                     uint8_t newMipLevel);
   };
 
   constexpr static auto kNumCachedStates = 8; // We allow up to 8 color attachments
@@ -98,7 +104,7 @@ class Framebuffer : public WithContext, public IFramebuffer {
   mutable CachedState depthCachedState_;
   mutable CachedState stencilCachedState_;
 
-  std::shared_ptr<Framebuffer> resolveFramebuffer = nullptr;
+  std::shared_ptr<Framebuffer> resolveFramebuffer_ = nullptr;
 };
 
 // CustomFramebuffer enables caller-defined attachments

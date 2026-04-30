@@ -8,12 +8,12 @@
 #pragma once
 
 #include <utility>
-#include <vector>
 #include <igl/Common.h>
 #include <igl/DeviceFeatures.h>
 #include <igl/IResourceTracker.h>
 #include <igl/PlatformDevice.h>
 #include <igl/Texture.h>
+#include <igl/base/IDeviceBase.h>
 
 namespace igl {
 
@@ -42,6 +42,8 @@ class IShaderLibrary;
 class IShaderModule;
 class IShaderStages;
 class ISpatialScaler;
+class ITimer;
+class ITimestampQueries;
 class IVertexInputState;
 
 /**
@@ -69,7 +71,7 @@ enum class InDevelopementFeatures : uint8_t {
 /**
  * @brief Interface to a GPU that is used to draw graphics or do parallel computation.
  */
-class IDevice : public ICapabilities {
+class IDevice : public ICapabilities, public base::IDeviceBase {
  public:
   ~IDevice() override = default;
 
@@ -103,7 +105,8 @@ class IDevice : public ICapabilities {
    * @return Shared pointer to the created queue.
    */
   virtual std::shared_ptr<ICommandQueue> createCommandQueue(const CommandQueueDesc& desc,
-                                                            Result* IGL_NULLABLE outResult) = 0;
+                                                            Result* IGL_NULLABLE
+                                                                outResult) noexcept = 0;
 
   /**
    * @brief Creates a buffer resource.
@@ -164,6 +167,27 @@ class IDevice : public ICapabilities {
                                                       const TextureViewDesc& desc,
                                                       Result* IGL_NULLABLE
                                                           outResult) const noexcept = 0;
+
+  /**
+   * @brief Creates a timer for measuring the time taken by command buffers.
+   * @param outResult Pointer to where the result (success, failure, etc) is written. Can be null if
+   * no reporting is desired.
+   * @return Shared pointer to the created timer.
+   */
+  virtual std::shared_ptr<ITimer> createTimer(Result* IGL_NULLABLE outResult) const noexcept = 0;
+
+  /**
+   * @brief Create a timestamp queries object that can hold up to maxTimestamps entries.
+   * Returns nullptr if not supported on this backend/device.
+   */
+  virtual std::shared_ptr<ITimestampQueries> createTimestampQueries(uint32_t maxTimestamps,
+                                                                    Result* IGL_NULLABLE
+                                                                        outResult) const noexcept {
+    Result::setResult(
+        outResult, Result::Code::Unsupported, "TimestampQueries not supported on this backend");
+    (void)maxTimestamps;
+    return nullptr;
+  }
 
   /**
    * @brief Creates a vertex input state.
@@ -269,8 +293,10 @@ class IDevice : public ICapabilities {
    * the actual underlying device, then null is returned.
    * @return Pointer to the underlying platform-specific device.
    */
-  template<typename T, typename = std::enable_if_t<std::is_base_of<IPlatformDevice, T>::value>>
+  template<typename T>
   T* IGL_NULLABLE getPlatformDevice() noexcept {
+    static_assert(std::is_base_of<IPlatformDevice, T>::value,
+                  "getPlatformDevice() requires T to be derived from IPlatformDevice");
     return const_cast<T*>(static_cast<const IDevice*>(this)->getPlatformDevice<T>());
   }
 
@@ -279,10 +305,12 @@ class IDevice : public ICapabilities {
    * the actual underlying device, then null is returned.
    * @return Pointer to the underlying platform-specific device.
    */
-  template<typename T, typename = std::enable_if_t<std::is_base_of<IPlatformDevice, T>::value>>
+  template<typename T>
   const T* IGL_NULLABLE getPlatformDevice() const noexcept {
+    static_assert(std::is_base_of<IPlatformDevice, T>::value,
+                  "getPlatformDevice() requires T to be derived from IPlatformDevice");
     const IPlatformDevice& platformDevice = getPlatformDevice();
-    if (platformDevice.isType(T::Type)) {
+    if (platformDevice.isType(T::kType)) {
       return static_cast<const T*>(&platformDevice);
     }
     return nullptr;
@@ -314,10 +342,57 @@ class IDevice : public ICapabilities {
   }
 
   /**
-   * @brief Returns the actual graphics API backing this IGL device (Metal, OpenGL, etc).
-   * @return The type of the underlying backend.
+   * @brief Get access to the staging buffer.
+   * @return Pointer to the staging buffer interface, or nullptr if not available.
    */
-  [[nodiscard]] virtual BackendType getBackendType() const = 0;
+  [[nodiscard]] base::IStagingBufferInterop* IGL_NULLABLE getStagingBufferInterop() override {
+    return nullptr;
+  }
+
+  /**
+   * @brief Returns the backend type.
+   * @return The backend type enum value.
+   */
+  [[nodiscard]] BackendType getBackendType() const override = 0;
+
+  /**
+   * @brief Returns whether the GPU device has been lost (e.g. due to a hardware disconnect or
+   * driver error). After device lost, all GPU operations should be skipped until the device is
+   * recreated. Default implementation returns false (most backends are always valid).
+   * @return true if the device is lost and cannot accept GPU commands.
+   */
+  [[nodiscard]] virtual bool isDeviceLost() const noexcept {
+    return false;
+  }
+
+  /**
+   * @brief Transitions device state from Lost to RecoveryArmed.
+   * Called when the transport layer (e.g. Intralink) signals reconnect.
+   * Default no-op for backends that do not support device loss recovery.
+   */
+  virtual void markRecoveryArmed() noexcept {}
+
+  /// Mark the device healthy after successful recovery from device-lost state.
+  /// Default is no-op; backends that track device-lost state override this to
+  /// transition their internal state machine back to the healthy state.
+  virtual void markHealthy() noexcept {}
+
+  /**
+   * @brief Returns raw pointer to native device handle.
+   * @return Platform-specific device handle.
+   */
+  [[nodiscard]] void* IGL_NULLABLE getNativeDevice() const override = 0;
+
+  /**
+   * @brief Create a framebuffer from base descriptor.
+   * @param desc The framebuffer descriptor.
+   * @return Pointer to created framebuffer, or nullptr if not supported.
+   */
+  [[nodiscard]] base::IFramebufferInterop* IGL_NULLABLE
+  createFramebufferInterop(const base::FramebufferInteropDesc& desc) override {
+    (void)desc;
+    return nullptr;
+  }
 
   /**
    * @brief Returns the range of Z values in normalized device coordinates considered to be within
@@ -334,6 +409,21 @@ class IDevice : public ICapabilities {
    * @return The number of draw calls made so far.
    */
   [[nodiscard]] virtual size_t getCurrentDrawCount() const = 0;
+
+  /**
+   * @brief Returns the number of shaders compiled using this device.
+   * @return The number of shaders compiled so far.
+   */
+  [[nodiscard]] virtual size_t getShaderCompilationCount() const = 0;
+
+  /**
+   * @brief Returns the number of bytes of GPU memory currently in use, or 0 if the device does not
+   * support memory tracking.
+   * @return Used GPU memory
+   */
+  [[nodiscard]] virtual size_t getGPUMemoryUsage() const {
+    return 0;
+  }
 
   /**
    * @brief Creates a shader library with one or more shader modules.
@@ -461,6 +551,12 @@ class IDevice : public ICapabilities {
   }
   [[nodiscard]] TextureDesc sanitize(const TextureDesc& desc) const;
   IDevice() = default;
+
+  /// @brief Helper to create framebuffer from base descriptor
+  /// @param desc The base framebuffer descriptor
+  /// @return Shared pointer to the created framebuffer, or nullptr on failure
+  [[nodiscard]] std::shared_ptr<IFramebuffer> createFramebufferFromBaseDesc(
+      const base::FramebufferInteropDesc& desc);
 
   uint64_t inDevelopmentFlags_ = 0;
 

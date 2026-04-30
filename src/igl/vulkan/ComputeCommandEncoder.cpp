@@ -11,8 +11,8 @@
 #include <igl/vulkan/ComputePipelineState.h>
 #include <igl/vulkan/SamplerState.h>
 #include <igl/vulkan/Texture.h>
-#include <igl/vulkan/VulkanBuffer.h>
 #include <igl/vulkan/VulkanContext.h>
+#include <igl/vulkan/VulkanHelpers.h>
 #include <igl/vulkan/VulkanImage.h>
 #include <igl/vulkan/VulkanTexture.h>
 
@@ -44,8 +44,8 @@ void ComputeCommandEncoder::endEncoding() {
 
   isEncoding_ = false;
 
-  for (size_t i = 0; i < restoreLayout_.size(); ++i) {
-    const VulkanImage* img = restoreLayout_[i];
+  for (size_t i = 0; i < numRestoreLayouts_; ++i) {
+    const VulkanImage* const img = restoreLayout_[i];
     if (img->isSampledImage()) {
       // only sampled images can be transitioned to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
       img->transitionLayout(cmdBuffer_,
@@ -53,14 +53,16 @@ void ComputeCommandEncoder::endEncoding() {
                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
                                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                            VkImageSubresourceRange{restoreLayoutAspectFlags_[i],
-                                                    0,
-                                                    VK_REMAINING_MIP_LEVELS,
-                                                    0,
-                                                    VK_REMAINING_ARRAY_LAYERS});
+                            VkImageSubresourceRange{
+                                .aspectMask = restoreLayoutAspectFlags_[i],
+                                .baseMipLevel = 0,
+                                .levelCount = VK_REMAINING_MIP_LEVELS,
+                                .baseArrayLayer = 0,
+                                .layerCount = VK_REMAINING_ARRAY_LAYERS,
+                            });
     }
   }
-  restoreLayout_.clear();
+  numRestoreLayouts_ = 0;
 }
 
 void ComputeCommandEncoder::bindComputePipelineState(
@@ -76,7 +78,7 @@ void ComputeCommandEncoder::bindComputePipelineState(
   binder_.bindPipeline(cps_->getVkPipeline(), &cps_->getSpvModuleInfo());
 
   if (ctx_.config_.enableDescriptorIndexing) {
-    VkDescriptorSet dset = ctx_.getBindlessVkDescriptorSet();
+    const VkDescriptorSet dset = ctx_.getBindlessVkDescriptorSet();
 
 #if IGL_VULKAN_PRINT_COMMANDS
     IGL_LOG_INFO("%p vkCmdBindDescriptorSets(COMPUTE) - bindless\n", cmdBuffer_);
@@ -184,16 +186,18 @@ void ComputeCommandEncoder::bindTexture(uint32_t index, ITexture* texture) {
 
   IGL_DEBUG_ASSERT(vkImage);
 
-  if (vkImage->isStorageImage()) {
-    igl::vulkan::transitionToGeneral(cmdBuffer_, texture);
-  } else if (vkImage->isSampledImage()) {
+  if (vkImage->isSampledImage()) {
     igl::vulkan::transitionToShaderReadOnly(cmdBuffer_, texture);
+  } else if (vkImage->isStorageImage()) {
+    igl::vulkan::transitionToGeneral(cmdBuffer_, texture);
   } else {
     IGL_DEBUG_ASSERT(false, "A texture should be Sampled or Storage");
   }
 
-  restoreLayout_.push_back(vkImage);
-  restoreLayoutAspectFlags_.push_back(vkTex.imageView_.getVkImageAspectFlags());
+  IGL_DEBUG_ASSERT(numRestoreLayouts_ < IGL_TEXTURE_SAMPLERS_MAX);
+  restoreLayout_[numRestoreLayouts_] = vkImage;
+  restoreLayoutAspectFlags_[numRestoreLayouts_] = vkTex.imageView_.getVkImageAspectFlags();
+  numRestoreLayouts_++;
 
   binder_.bindTexture(index, static_cast<Texture*>(texture));
 }
@@ -219,9 +223,11 @@ void ComputeCommandEncoder::bindImageTexture(uint32_t index,
 
   igl::vulkan::transitionToGeneral(cmdBuffer_, texture);
 
-  restoreLayout_.push_back(vkImage);
-  restoreLayoutAspectFlags_.push_back(
-      tex ? tex->getVulkanTexture().imageView_.getVkImageAspectFlags() : VK_IMAGE_ASPECT_NONE_KHR);
+  IGL_DEBUG_ASSERT(numRestoreLayouts_ < IGL_TEXTURE_SAMPLERS_MAX);
+  restoreLayout_[numRestoreLayouts_] = vkImage;
+  restoreLayoutAspectFlags_[numRestoreLayouts_] =
+      tex ? tex->getVulkanTexture().imageView_.getVkImageAspectFlags() : VK_IMAGE_ASPECT_NONE;
+  numRestoreLayouts_++;
 
   binder_.bindStorageImage(index, tex);
 }
@@ -272,10 +278,9 @@ void ComputeCommandEncoder::bindPushConstants(const void* data, size_t length, s
                                      // of 4
 
   IGL_DEBUG_ASSERT(cps_, "Did you forget to call bindComputePipelineState()?");
-  IGL_DEBUG_ASSERT(cps_->pushConstantRange_.size,
+  IGL_DEBUG_ASSERT(cps_->pushConstantRange.size,
                    "Currently bound compute pipeline state has no push constants");
-  IGL_DEBUG_ASSERT(offset + length <=
-                       cps_->pushConstantRange_.offset + cps_->pushConstantRange_.size,
+  IGL_DEBUG_ASSERT(offset + length <= cps_->pushConstantRange.offset + cps_->pushConstantRange.size,
                    "Push constants size exceeded");
 
 #if IGL_VULKAN_PRINT_COMMANDS
@@ -284,8 +289,8 @@ void ComputeCommandEncoder::bindPushConstants(const void* data, size_t length, s
   ctx_.vf_.vkCmdPushConstants(cmdBuffer_,
                               cps_->getVkPipelineLayout(),
                               VK_SHADER_STAGE_COMPUTE_BIT,
-                              (uint32_t)offset,
-                              (uint32_t)length,
+                              static_cast<uint32_t>(offset),
+                              static_cast<uint32_t>(length),
                               data);
 }
 

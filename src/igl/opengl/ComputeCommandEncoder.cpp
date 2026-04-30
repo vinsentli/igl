@@ -11,9 +11,9 @@
 #include <array>
 #include <igl/opengl/Buffer.h>
 #include <igl/opengl/ComputeCommandAdapter.h>
-#include <igl/opengl/Device.h>
+#include <igl/opengl/DeviceFeatureSet.h>
+#include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/IContext.h>
-#include <igl/opengl/Shader.h>
 
 namespace igl::opengl {
 
@@ -124,13 +124,12 @@ void ComputeCommandEncoder::bindBuffer(uint32_t index,
                                        size_t offset,
                                        size_t bufferSize) {
   // NOLINTEND(bugprone-easily-swappable-parameters)
-  (void)bufferSize;
 
   if (IGL_DEBUG_VERIFY(adapter_) && buffer) {
     auto* glBuffer = static_cast<Buffer*>(buffer);
     auto bufferType = glBuffer->getType();
 
-    if (bufferType == Buffer::Type::UniformBlock){
+    if (bufferType == Buffer::Type::UniformBlock) {
       adapter_->setBlockUniform(glBuffer, offset, bufferSize, index, nullptr);
     } else {
       adapter_->setBuffer(glBuffer, offset, static_cast<int>(index));

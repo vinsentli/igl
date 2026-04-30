@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanFeatures.h>
+
+#include <igl/vulkan/VulkanContext.h>
 
 namespace igl::vulkan {
 
@@ -116,6 +117,7 @@ void DeviceMemoryReportCallbackEXT(const VkDeviceMemoryReportCallbackDataEXT*  p
     }
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
   // Vulkan 1.1
   vkPhysicalDeviceFeatures2({
@@ -234,18 +236,30 @@ VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PER_VIEW_VIEWPORTS_FEATURES_QCOM,
       .multiviewPerViewViewports = VK_TRUE,
   }),
+  featuresMeshShader({
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
+      .taskShader = VK_TRUE,
+      .meshShader = VK_TRUE,
+  }),
+  featuresFragmentShadingRate({
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,
+      .pipelineFragmentShadingRate = VK_FALSE,
+      .primitiveFragmentShadingRate = VK_FALSE,
+      .attachmentFragmentShadingRate = VK_FALSE,
+  }),
   featuresDescriptorBuffer({
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
       .descriptorBuffer = VK_TRUE,
   }),
-  config_(config) {
+  config(config) {
   extensions_.resize(kNumberOfExtensionTypes);
   enabledExtensions_.resize(kNumberOfExtensionTypes);
 
   // All the above get assembled into a feature chain
-  assembleFeatureChain(config_);
+  assembleFeatureChain(config);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void VulkanFeatures::populateWithAvailablePhysicalDeviceFeatures(
     const VulkanContext& context,
     VkPhysicalDevice physicalDevice) noexcept {
@@ -270,6 +284,7 @@ bool VulkanFeatures::hasExtension(const char* ext) const {
   return false;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 Result VulkanFeatures::checkSelectedFeatures(
     const VulkanFeatures& availableFeatures) const noexcept {
   // Stores missing features
@@ -299,7 +314,7 @@ Result VulkanFeatures::checkSelectedFeatures(
 
 #define ENABLE_FEATURE_1_1_EXT(requestedFeatureStruct, availableFeatureStruct, feature) \
   ENABLE_VULKAN_FEATURE(requestedFeatureStruct, availableFeatureStruct, feature, "1.1 EXT")
-  if (config_.enableDescriptorIndexing) {
+  if (config.enableDescriptorIndexing) {
     ENABLE_FEATURE_1_1_EXT(featuresDescriptorIndexing,
                            availableFeatures.featuresDescriptorIndexing,
                            shaderSampledImageArrayNonUniformIndexing)
@@ -364,7 +379,7 @@ Result VulkanFeatures::checkSelectedFeatures(
   return Result{};
 }
 
-void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& config) noexcept {
+void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& contextConfig) noexcept {
   // Versions 1.0 and 1.1 are always present
 
   // Reset all pNext pointers. We might be copying the chain from another VulkanFeatures object,
@@ -390,6 +405,8 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& config) noe
   featuresFragmentDensityMap.pNext = nullptr;
   features8BitStorage.pNext = nullptr;
   featuresUniformBufferStandardLayout.pNext = nullptr;
+  featuresMeshShader.pNext = nullptr;
+  featuresFragmentShadingRate.pNext = nullptr;
   featuresDescriptorBuffer.pNext = nullptr;
 
   // Add the required and optional features to the VkPhysicalDeviceFetaures2_
@@ -428,32 +445,40 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& config) noe
   if (hasExtension(VK_KHR_UNIFORM_BUFFER_STANDARD_LAYOUT_EXTENSION_NAME)) {
     ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresUniformBufferStandardLayout);
   }
-  if (hasExtension(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)) {
-    ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresDescriptorBuffer);
-  }
 #ifndef NDEBUG
   if (hasExtension(VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME)) {
     ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresMemoryReport);
     ivkAddNext(&vkPhysicalDeviceFeatures2, &deviceMemoryReportCreateInfo);
   }
 #endif
-
-  if (config_.enableMultiviewPerViewViewports) {
+  if (contextConfig.enableMultiviewPerViewViewports) {
     if (hasExtension(VK_QCOM_MULTIVIEW_PER_VIEW_VIEWPORTS_EXTENSION_NAME)) {
       ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresMultiviewPerViewViewports);
     } else {
-      IGL_LOG_ERROR("VK_QCOM_multiview_per_view_viewports extension not supported");
+      IGL_LOG_ERROR("VK_QCOM_multiview_per_view_viewports extension not supported\n");
     }
+  }
+  if (enabled(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)) {
+    ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresDescriptorBuffer);
+  }
+  // Fragment shading rate must be added before mesh shader to ensure the dependency is properly
+  // handled when primitiveFragmentShadingRateMeshShader requires primitiveFragmentShadingRate
+  if (hasExtension(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME)) {
+    ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresFragmentShadingRate);
+  }
+  if (hasExtension(VK_EXT_MESH_SHADER_EXTENSION_NAME)) {
+    ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresMeshShader);
   }
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 VulkanFeatures& VulkanFeatures::operator=(const VulkanFeatures& other) noexcept {
   if (this == &other) {
     return *this;
   }
 
   const bool sameConfiguration =
-      config_.enableDescriptorIndexing == other.config_.enableDescriptorIndexing;
+      config.enableDescriptorIndexing == other.config.enableDescriptorIndexing;
   if (!sameConfiguration) {
     return *this;
   }
@@ -477,12 +502,15 @@ VulkanFeatures& VulkanFeatures::operator=(const VulkanFeatures& other) noexcept 
   features8BitStorage = other.features8BitStorage;
   featuresUniformBufferStandardLayout = other.featuresUniformBufferStandardLayout;
   featuresMultiviewPerViewViewports = other.featuresMultiviewPerViewViewports;
+  featuresMeshShader = other.featuresMeshShader;
+  featuresFragmentShadingRate = other.featuresFragmentShadingRate;
+  featuresDescriptorBuffer = other.featuresDescriptorBuffer;
 
   extensions_ = other.extensions_;
   enabledExtensions_ = other.enabledExtensions_;
   extensionProps_ = other.extensionProps_;
 
-  assembleFeatureChain(config_);
+  assembleFeatureChain(config);
 
   return *this;
 }
@@ -495,7 +523,7 @@ void VulkanFeatures::enumerate(const VulkanFunctionTable& vf) {
 
   VK_ASSERT(vf.vkEnumerateInstanceExtensionProperties(nullptr, &count, allExtensions.data()));
 
-  constexpr size_t vectorIndex = (size_t)ExtensionType::Instance;
+  constexpr size_t vectorIndex = static_cast<size_t>(ExtensionType::Instance);
   std::transform(allExtensions.cbegin(),
                  allExtensions.cend(),
                  std::back_inserter(extensions_[vectorIndex]),
@@ -512,7 +540,7 @@ void VulkanFeatures::enumerate(const VulkanFunctionTable& vf, VkPhysicalDevice d
 
   VK_ASSERT(vf.vkEnumerateDeviceExtensionProperties(device, nullptr, &count, allExtensions.data()));
 
-  constexpr size_t vectorIndex = (size_t)ExtensionType::Device;
+  constexpr size_t vectorIndex = static_cast<size_t>(ExtensionType::Device);
   std::transform(allExtensions.cbegin(),
                  allExtensions.cend(),
                  std::back_inserter(extensions_[vectorIndex]),
@@ -523,12 +551,12 @@ void VulkanFeatures::enumerate(const VulkanFunctionTable& vf, VkPhysicalDevice d
 
 const std::vector<std::string>& VulkanFeatures::allAvailableExtensions(
     ExtensionType extensionType) const {
-  const size_t vectorIndex = (size_t)extensionType;
+  const size_t vectorIndex = static_cast<size_t>(extensionType);
   return extensions_[vectorIndex];
 }
 
 bool VulkanFeatures::available(const char* extensionName, ExtensionType extensionType) const {
-  const size_t vectorIndex = (size_t)extensionType;
+  const size_t vectorIndex = static_cast<size_t>(extensionType);
   const std::string extensionNameStr(extensionName);
   auto result = std::find_if(
       extensions_[vectorIndex].begin(),
@@ -539,7 +567,7 @@ bool VulkanFeatures::available(const char* extensionName, ExtensionType extensio
 }
 
 bool VulkanFeatures::enable(const char* extensionName, ExtensionType extensionType) {
-  const size_t vectorIndex = (size_t)extensionType;
+  const size_t vectorIndex = static_cast<size_t>(extensionType);
   if (available(extensionName, extensionType)) {
     enabledExtensions_[vectorIndex].insert(extensionName);
     return true;
@@ -547,42 +575,41 @@ bool VulkanFeatures::enable(const char* extensionName, ExtensionType extensionTy
   return false;
 }
 
-void VulkanFeatures::enableCommonInstanceExtensions(const VulkanContextConfig& config) {
+void VulkanFeatures::enableCommonInstanceExtensions(const VulkanContextConfig& contextConfig) {
   enable(VK_KHR_SURFACE_EXTENSION_NAME, ExtensionType::Instance);
-  enable(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, ExtensionType::Instance);
   enable(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, ExtensionType::Instance);
 #if IGL_PLATFORM_WINDOWS
   enable(VK_KHR_WIN32_SURFACE_EXTENSION_NAME, ExtensionType::Instance);
 #elif IGL_PLATFORM_ANDROID
-  enable("VK_KHR_android_surface", ExtensionType::Instance);
+  enable(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME, ExtensionType::Instance);
 #elif IGL_PLATFORM_LINUX
   enable("VK_KHR_xlib_surface", ExtensionType::Instance);
 #elif IGL_PLATFORM_MACOSX
   enable(VK_EXT_METAL_SURFACE_EXTENSION_NAME, ExtensionType::Instance);
 #endif
 
-#if IGL_PLATFORM_MACOSX
   // https://vulkan.lunarg.com/doc/sdk/1.3.216.0/mac/getting_started.html
-  if (!enable(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME, ExtensionType::Instance)) {
-    IGL_LOG_ERROR("VK_KHR_portability_enumeration extension not supported\n");
-  }
-#endif // IGL_PLATFORM_MACOSX
+  has_VK_KHR_portability_enumeration =
+      enable(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME, ExtensionType::Instance);
 
 #if !IGL_PLATFORM_ANDROID
-  if (config.enableValidation) {
+  if (contextConfig.enableValidation) {
     enable(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME, ExtensionType::Instance);
   }
 #endif // !IGL_PLATFORM_ANDROID
 
+  has_VK_KHR_get_surface_capabilities2 =
+      enable(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME, ExtensionType::Instance);
+
   has_VK_EXT_headless_surface =
       enable(VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME, ExtensionType::Instance);
 
-  if (config.headless) {
+  if (contextConfig.headless) {
     if (!has_VK_EXT_headless_surface) {
-      IGL_LOG_ERROR("VK_EXT_headless_surface extension not supported");
+      IGL_LOG_ERROR("VK_EXT_headless_surface extension not supported\n");
     }
   }
-  if (config.swapChainColorSpace != igl::ColorSpace::SRGB_NONLINEAR) {
+  if (contextConfig.swapChainColorSpace != igl::ColorSpace::SRGBNonlinear) {
     const bool enabledExtension =
         enable(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, ExtensionType::Instance);
     if (!enabledExtension) {
@@ -591,7 +618,7 @@ void VulkanFeatures::enableCommonInstanceExtensions(const VulkanContextConfig& c
   }
 }
 
-void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& config) {
+void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& contextConfig) {
   enable(VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME, ExtensionType::Device);
   enable(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME, ExtensionType::Device);
   enable(VK_KHR_SWAPCHAIN_EXTENSION_NAME, ExtensionType::Device);
@@ -611,9 +638,11 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
       enable(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME, ExtensionType::Device);
 #endif // !IGL_DEBUG
 
-#if IGL_PLATFORM_MACOSX
-  std::ignore = IGL_DEBUG_VERIFY(enable("VK_KHR_portability_subset", ExtensionType::Device));
-#endif // IGL_PLATFORM_MACOSX
+  // Enable the Portability Subset extension when available (e.g. MoltenVK).
+  // Reset the flag if the extension is not available.
+  if (has_VK_KHR_portability_enumeration) {
+    has_VK_KHR_portability_enumeration = enable("VK_KHR_portability_subset", ExtensionType::Device);
+  }
 
 #if IGL_PLATFORM_WINDOWS
   enable(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME, ExtensionType::Device);
@@ -669,21 +698,28 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
   has_VK_EXT_device_memory_report = enable(VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME, ExtensionType::Device);
 #endif
 
-  if (config_.enableMultiviewPerViewViewports) {
+  if (contextConfig.enableMultiviewPerViewViewports) {
     has_VK_QCOM_multiview_per_view_viewports =
         enable(VK_QCOM_MULTIVIEW_PER_VIEW_VIEWPORTS_EXTENSION_NAME, ExtensionType::Device);
     IGL_SOFT_ASSERT(has_VK_QCOM_multiview_per_view_viewports,
                     "VK_QCOM_multiview_per_view_viewports is not supported");
   }
+
+  has_VK_EXT_mesh_shader = enable(VK_EXT_MESH_SHADER_EXTENSION_NAME, ExtensionType::Device);
+
+  // Enable fragment shading rate extension (required when primitiveFragmentShadingRateMeshShader is
+  // used)
+  enable(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, ExtensionType::Device);
 }
 
 bool VulkanFeatures::enabled(const char* extensionName) const {
-  return (enabledExtensions_[(size_t)ExtensionType::Instance].count(extensionName) > 0) ||
-         (enabledExtensions_[(size_t)ExtensionType::Device].count(extensionName) > 0);
+  return (enabledExtensions_[static_cast<size_t>(ExtensionType::Instance)].count(extensionName) >
+          0) ||
+         (enabledExtensions_[static_cast<size_t>(ExtensionType::Device)].count(extensionName) > 0);
 }
 
 std::vector<const char*> VulkanFeatures::allEnabled(ExtensionType extensionType) const {
-  const size_t vectorIndex = (size_t)extensionType;
+  const size_t vectorIndex = static_cast<size_t>(extensionType);
   std::vector<const char*> returnList;
   for (const auto& extension : enabledExtensions_[vectorIndex]) {
     returnList.emplace_back(extension.c_str());

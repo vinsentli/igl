@@ -5,13 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gtest/gtest.h>
+
 #include <igl/metal/BufferSynchronizationManager.h>
-#include <igl/metal/CommandBuffer.h>
 
 #include "../util/Common.h"
 
-#include <gtest/gtest.h>
 #include <igl/IGL.h>
+#include <igl/metal/CommandBuffer.h>
 
 namespace igl::tests {
 

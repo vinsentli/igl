@@ -8,27 +8,8 @@
 #pragma once
 
 #include <unordered_set>
-
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanHelpers.h>
-
-#if !defined(VK_QCOM_multiview_per_view_viewports)
-// this is copied from `vulkan_core.h`, just in case we compile using some old Vulkan headers
-// NOLINTBEGIN(modernize-use-using)
-// NOLINTBEGIN(readability-identifier-naming)
-#define VK_QCOM_multiview_per_view_viewports 1
-#define VK_QCOM_MULTIVIEW_PER_VIEW_VIEWPORTS_SPEC_VERSION 1
-#define VK_QCOM_MULTIVIEW_PER_VIEW_VIEWPORTS_EXTENSION_NAME "VK_QCOM_multiview_per_view_viewports"
-typedef struct VkPhysicalDeviceMultiviewPerViewViewportsFeaturesQCOM {
-  VkStructureType sType;
-  void* pNext;
-  VkBool32 multiviewPerViewViewports;
-} VkPhysicalDeviceMultiviewPerViewViewportsFeaturesQCOM;
-#define VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PER_VIEW_VIEWPORTS_FEATURES_QCOM \
-  (VkStructureType)1000488000
-// NOLINTEND(readability-identifier-naming)
-// NOLINTEND(modernize-use-using)
-#endif // VK_QCOM_multiview_per_view_viewports
 
 namespace igl::vulkan {
 
@@ -89,6 +70,10 @@ class VulkanFeatures final {
   VkPhysicalDevice8BitStorageFeaturesKHR features8BitStorage{};
   VkPhysicalDeviceUniformBufferStandardLayoutFeaturesKHR featuresUniformBufferStandardLayout{};
   VkPhysicalDeviceMultiviewPerViewViewportsFeaturesQCOM featuresMultiviewPerViewViewports{};
+  VkPhysicalDeviceMeshShaderFeaturesEXT featuresMeshShader{};
+  VkPhysicalDeviceFragmentShadingRateFeaturesKHR featuresFragmentShadingRate{};
+
+  VkPhysicalDeviceDescriptorBufferFeaturesEXT featuresDescriptorBuffer{};
 
   VkPhysicalDeviceDescriptorBufferFeaturesEXT featuresDescriptorBuffer{};
 
@@ -115,39 +100,38 @@ class VulkanFeatures final {
   /// @param extensionType The type of the extensions to return
   bool available(const char* extensionName, ExtensionType extensionType) const;
 
-  /// @brief Enables the common extensions used in IGL for a particular type. The
-  /// `validationEnabled` parameter helps the method enable certain extensions that depend on the
-  /// validation layer being enabled or not
-  /// @param extensionType The type of the extensions
-  /// @param validationEnabled Flag that informs the class whether the Validation Layer is
-  /// enabled or not.
-  void enableCommonInstanceExtensions(const VulkanContextConfig& config);
-  void enableCommonDeviceExtensions(const VulkanContextConfig& config);
+  /// @brief Enables the common instance extensions used in IGL.
+  /// @param contextConfig The VulkanContextConfig used to create the VulkanContext
+  void enableCommonInstanceExtensions(const VulkanContextConfig& contextConfig);
+
+  /// @brief Enables the common device extensions used in IGL.
+  /// @param contextConfig The VulkanContextConfig used to create the VulkanContext
+  void enableCommonDeviceExtensions(const VulkanContextConfig& contextConfig);
 
  public:
   friend class Device;
   friend class VulkanContext;
 
   // A copy of the config used by the VulkanContext
-  VulkanContextConfig config_{};
+  VulkanContextConfig config{};
 
   // NOLINTBEGIN(readability-identifier-naming)
   bool has_VK_EXT_descriptor_buffer = false;
-  bool has_VK_EXT_descriptor_indexing = false;
+  bool has_VK_EXT_descriptor_indexing = false; // promoted to Vulkan 1.2
   bool has_VK_EXT_fragment_density_map = false;
   bool has_VK_EXT_headless_surface = false;
-  bool has_VK_EXT_index_type_uint8 = false;
-  bool has_VK_EXT_device_memory_report = false;
+  bool has_VK_EXT_index_type_uint8 = false; // promoted to Vulkan 1.4
+  bool has_VK_EXT_mesh_shader = false;
   bool has_VK_EXT_queue_family_foreign = false;
-  bool has_VK_KHR_8bit_storage = false;
-  bool has_VK_KHR_buffer_device_address = false;
-  bool has_VK_KHR_create_renderpass2 = false;
-  bool has_VK_KHR_shader_non_semantic_info = false;
-  bool has_VK_KHR_synchronization2 = false;
-  bool has_VK_KHR_external_semaphore_fd = false;
-  bool has_VK_KHR_timeline_semaphore = false;
-  bool has_VK_KHR_uniform_buffer_standard_layout = false;
-  bool has_VK_KHR_vulkan_memory_model = false;
+  bool has_VK_KHR_8bit_storage = false; // promoted to Vulkan 1.2
+  bool has_VK_KHR_buffer_device_address = false; // promoted to Vulkan 1.2
+  bool has_VK_KHR_get_surface_capabilities2 = false;
+  bool has_VK_KHR_portability_enumeration = false;
+  bool has_VK_KHR_shader_non_semantic_info = false; // promoted to Vulkan 1.3
+  bool has_VK_KHR_synchronization2 = false; // promoted to Vulkan 1.3
+  bool has_VK_KHR_timeline_semaphore = false; // promoted to Vulkan 1.2
+  bool has_VK_KHR_uniform_buffer_standard_layout = false; // promoted to Vulkan 1.2
+  bool has_VK_KHR_vulkan_memory_model = false; // promoted to Vulkan 1.2
   bool has_VK_QCOM_multiview_per_view_viewports = false;
   // NOLINTEND(readability-identifier-naming)
 
@@ -165,7 +149,7 @@ class VulkanFeatures final {
 
   /// @brief Assembles the feature chain for the VkPhysicalDeviceFeatures2 structure by connecting
   /// the existing/required feature structures and their pNext chain.
-  void assembleFeatureChain(const VulkanContextConfig& config) noexcept;
+  void assembleFeatureChain(const VulkanContextConfig& contextConfig) noexcept;
   bool hasExtension(const char* ext) const;
 
   /// @brief Enables the extension with name `extensionName` of the type `extensionType` if the

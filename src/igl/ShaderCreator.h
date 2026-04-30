@@ -264,7 +264,6 @@ class ShaderStagesCreator {
       const IDevice& device,
       std::shared_ptr<IShaderModule> computeModule,
       Result* IGL_NULLABLE outResult);
-    
   static std::unique_ptr<IShaderStages> fromMeshRenderModules(
       const IDevice& device,
       std::shared_ptr<IShaderModule> taskModule,

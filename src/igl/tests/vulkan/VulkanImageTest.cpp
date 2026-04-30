@@ -5,15 +5,16 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <cstddef>
 #include <gtest/gtest.h>
-#include <memory>
-#include <igl/vulkan/Common.h>
-#include <igl/vulkan/Device.h>
-#include <igl/vulkan/VulkanContext.h>
+
 #include <igl/vulkan/VulkanImage.h>
 
+#include <cstddef>
+#include <memory>
+#include <igl/Common.h>
 #include <igl/tests/util/device/TestDevice.h>
+#include <igl/vulkan/Device.h>
+#include <igl/vulkan/VulkanContext.h>
 
 #if IGL_PLATFORM_WINDOWS || IGL_PLATFORM_ANDROID || IGL_PLATFORM_LINUX
 
@@ -52,7 +53,6 @@ class VulkanImageTest : public ::testing::Test {
 TEST_F(VulkanImageTest, CreateImageWithExportedMemory) {
   auto vulkanImage = igl::vulkan::VulkanImage::createWithExportMemory(
       *context_,
-      context_->getVkDevice(),
       VkExtent3D{.width = kWidth, .height = kHeight, .depth = 1},
       VK_IMAGE_TYPE_2D,
       kFormat,
@@ -78,7 +78,6 @@ TEST_F(VulkanImageTest, CreateImageWithExportedMemory) {
 TEST_F(VulkanImageTest, CreateImageWithImportedMemoryWin32) {
   auto exportedImage = igl::vulkan::VulkanImage::createWithExportMemory(
       *context_,
-      context_->getVkDevice(),
       VkExtent3D{.width = kWidth, .height = kHeight, .depth = 1},
       VK_IMAGE_TYPE_2D,
       kFormat,
@@ -95,7 +94,6 @@ TEST_F(VulkanImageTest, CreateImageWithImportedMemoryWin32) {
   auto importedImage =
       igl::vulkan::VulkanImage(*context_,
                                exportedImage.exportedMemoryHandle_,
-                               context_->getVkDevice(),
                                VkExtent3D{.width = kWidth, .height = kHeight, .depth = 1},
                                VK_IMAGE_TYPE_2D,
                                kFormat,

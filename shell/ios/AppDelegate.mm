@@ -9,18 +9,27 @@
 
 #import "AppDelegate.h"
 
-#import "RenderSessionFactoryProvider.h"
-#import "ViewController.h"
-
 #include "RenderSessionFactoryAdapterInternal.hpp"
+#import "RenderSessionFactoryProvider.h" // @donotremove
+#import "ViewController.h" // @donotremove
+
+#import <Foundation/NSArray.h>
+#import <Foundation/NSDictionary.h>
+#import <Foundation/NSString.h>
+#import <UIKit/UIColor.h>
+#import <UIKit/UIScreen.h>
+#import <UIKit/UITabBarItem.h>
+#import <UIKit/UIViewController.h>
+#include <vector>
+#include <shell/shared/renderSession/RenderSessionConfig.h>
+#include <shell/shared/renderSession/ShellType.h>
 #include <igl/Macros.h>
 #if IGL_BACKEND_OPENGL
 #include <igl/opengl/GLIncludes.h>
 #endif
-#include <shell/shared/renderSession/RenderSessionConfig.h>
 
 @interface AppDelegate () {
-  RenderSessionFactoryProvider* factoryProvider_;
+  RenderSessionFactoryProvider* _factoryProvider;
 }
 - (void)addTab:(igl::shell::RenderSessionConfig)config
     viewControllers:(NSMutableArray<UIViewController*>*)viewControllers;
@@ -28,10 +37,12 @@
 
 @implementation AppDelegate
 
+@synthesize window = _window;
+
 - (BOOL)application:(UIApplication*)application
     didFinishLaunchingWithOptions:(NSDictionary*)launchOptions {
   self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
-  factoryProvider_ = [[RenderSessionFactoryProvider alloc] init];
+  _factoryProvider = [[RenderSessionFactoryProvider alloc] init];
   NSMutableArray<UIViewController*>* viewControllers = [NSMutableArray array];
 
   std::vector<igl::shell::RenderSessionConfig> suggestedSessionConfigs = {
@@ -78,7 +89,7 @@
 // @fb-only
   };
 
-  const auto requestedSessionConfigs = factoryProvider_.adapter->factory->requestedSessionConfigs(
+  const auto requestedSessionConfigs = _factoryProvider.adapter->factory->requestedSessionConfigs(
       igl::shell::ShellType::iOS, std::move(suggestedSessionConfigs));
   for (const auto& sessionConfig : requestedSessionConfigs) {
     [self addTab:sessionConfig viewControllers:viewControllers];
@@ -122,7 +133,7 @@
   }
 
   UIViewController* viewController = [[ViewController alloc] init:config
-                                                  factoryProvider:factoryProvider_
+                                                  factoryProvider:_factoryProvider
                                                             frame:self.window.frame];
   viewController.tabBarItem =
       [[UITabBarItem alloc] initWithTitle:[NSString stringWithUTF8String:config.displayName.c_str()]

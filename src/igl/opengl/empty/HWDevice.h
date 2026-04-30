@@ -11,6 +11,7 @@
 
 namespace igl::opengl::empty {
 
+// @fb-only
 class HWDevice final : public ::igl::opengl::HWDevice {
  public:
   ///--------------------------------------

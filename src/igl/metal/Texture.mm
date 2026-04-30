@@ -9,6 +9,7 @@
 
 #include <vector>
 #include <igl/metal/CommandBuffer.h>
+#include <igl/metal/CommandQueue.h>
 
 namespace {
 
@@ -24,17 +25,23 @@ void bgrToRgb(unsigned char* dstImg, size_t width, size_t height, size_t bytesPe
 
 namespace igl::metal {
 
-Texture::Texture(id<MTLTexture> texture, const ICapabilities& capabilities) :
+Texture::Texture(id<MTLTexture> texture,
+                 const ICapabilities& capabilities,
+                 TextureDesc::TextureMipmapGeneration mipmapGeneration) :
   ITexture(mtlPixelFormatToTextureFormat([texture pixelFormat])),
   value_(texture),
   drawable_(nullptr),
-  capabilities_(capabilities) {}
+  capabilities_(capabilities),
+  mipmapGeneration_(mipmapGeneration) {}
 
-Texture::Texture(id<CAMetalDrawable> drawable, const ICapabilities& capabilities) :
+Texture::Texture(id<CAMetalDrawable> drawable,
+                 const ICapabilities& capabilities,
+                 TextureDesc::TextureMipmapGeneration mipmapGeneration) :
   ITexture(mtlPixelFormatToTextureFormat([drawable.texture pixelFormat])),
   value_(nullptr),
   drawable_(drawable),
-  capabilities_(capabilities) {}
+  capabilities_(capabilities),
+  mipmapGeneration_(mipmapGeneration) {}
 
 Texture::~Texture() {
   value_ = nil;
@@ -62,7 +69,8 @@ bool Texture::needsRepacking(const TextureRangeDesc& range, size_t bytesPerRow) 
 Result Texture::uploadInternal(TextureType type,
                                const TextureRangeDesc& range,
                                const void* IGL_NULLABLE data,
-                               size_t bytesPerRow) const {
+                               size_t bytesPerRow,
+                               const uint32_t* IGL_NULLABLE /*mipLevelBytes*/) const {
   if (data == nullptr) {
     return Result(Result::Code::Ok);
   }
@@ -103,12 +111,38 @@ Result Texture::uploadInternal(TextureType type,
                bytesPerImage:toMetalBytesPerRow(rangeBytesPerRow * sliceRange.height)];
         break;
       }
+      case TextureType::ExternalImage:
+      case TextureType::Invalid:
       default:
         IGL_DEBUG_ABORT("Unknown texture type");
         break;
       }
     }
   }
+
+  if (mipmapGeneration_ == TextureDesc::TextureMipmapGeneration::AutoGenerateOnUpload) {
+    if (range.mipLevel != 0) {
+      return Result{Result::Code::InvalidOperation,
+                    "AutoGenerateOnUpload requires mipLevel to be uploaded to be 0"};
+    }
+    const auto* device = static_cast<const igl::metal::Device*>(&capabilities_);
+    if (device) {
+      auto cmdQueue = const_cast<Device*>(device)->getMostRecentCommandQueue();
+      if (!cmdQueue) {
+        Result result;
+        cmdQueue = const_cast<Device*>(device)->createCommandQueue({}, &result);
+        if (!result.isOk()) {
+          return result;
+        }
+      }
+      generateMipmap(*cmdQueue, nullptr);
+      mipmapsAreAvailableAndUploaded_ = true;
+    } else {
+      return Result(igl::Result::Code::RuntimeError,
+                    "Device is not available; cannot generate mipmaps.");
+    }
+  }
+
   return Result{};
 }
 
@@ -156,6 +190,8 @@ Result Texture::getBytes(const TextureRangeDesc& range, void* outData, size_t by
 }
 
 size_t Texture::toMetalBytesPerRow(size_t bytesPerRow) const {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wswitch-enum"
   switch (getFormat()) {
   case TextureFormat::RGBA_PVRTC_2BPPV1:
   case TextureFormat::RGB_PVRTC_2BPPV1:
@@ -165,6 +201,7 @@ size_t Texture::toMetalBytesPerRow(size_t bytesPerRow) const {
   default:
     return bytesPerRow;
   }
+#pragma clang diagnostic pop
 }
 
 Dimensions Texture::getDimensions() const {
@@ -237,6 +274,10 @@ void Texture::generateMipmap(id<MTLCommandBuffer> cmdBuffer) const {
 }
 
 bool Texture::isRequiredGenerateMipmap() const {
+  if (mipmapsAreAvailableAndUploaded_) {
+    return false;
+  }
+
   return value_.mipmapLevelCount > 1;
 }
 
@@ -244,6 +285,10 @@ uint64_t Texture::getTextureId() const {
   // TODO: implement via gpuResourceID
   IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   return 0;
+}
+
+TextureDesc::TextureMipmapGeneration Texture::getMipmapGeneration() const {
+  return mipmapGeneration_;
 }
 
 TextureDesc::TextureUsage Texture::toTextureUsage(MTLTextureUsage usage) {
@@ -299,12 +344,13 @@ TextureType Texture::convertType(MTLTextureType value) {
     return TextureType::ThreeD;
   case MTLTextureTypeCube:
     return TextureType::Cube;
+  case MTLTextureType2DMultisampleArray:
+    return TextureType::TwoDArray;
+  case MTLTextureType1D:
+  case MTLTextureType1DArray:
+  case MTLTextureTypeTextureBuffer:
+  case MTLTextureTypeCubeArray:
   default:
-    if (@available(macOS 10.14, iOS 14.0, *)) {
-      if (value == MTLTextureType2DMultisampleArray) {
-        return TextureType::TwoDArray;
-      }
-    }
     return TextureType::Invalid;
   }
 }
@@ -326,7 +372,8 @@ MTLPixelFormat Texture::textureFormatToMTLPixelFormat(TextureFormat value) {
 #else
     return MTLPixelFormatBGR5A1Unorm;
 #endif
-  case TextureFormat::R5G6B5_UNorm:
+  case TextureFormat::R5G6B5_UNorm: // Fallback: Metal has no native R5G6B5; uses B5G6R5 (swapped
+                                    // channels)
   case TextureFormat::B5G6R5_UNorm:
 #if IGL_PLATFORM_MACOSX || IGL_PLATFORM_IOS_SIMULATOR
     return MTLPixelFormatInvalid;
@@ -371,6 +418,8 @@ MTLPixelFormat Texture::textureFormatToMTLPixelFormat(TextureFormat value) {
     return MTLPixelFormatRG16Uint;
   case TextureFormat::RG_UNorm16:
     return MTLPixelFormatRG16Unorm;
+  case TextureFormat::RGBA_UNorm16:
+    return MTLPixelFormatRGBA16Unorm;
 
   case TextureFormat::RGB10_A2_UNorm_Rev:
     return MTLPixelFormatRGB10A2Unorm;
@@ -723,6 +772,12 @@ MTLPixelFormat Texture::textureFormatToMTLPixelFormat(TextureFormat value) {
 
   case TextureFormat::YUV_NV12:
   case TextureFormat::YUV_420p:
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  default:
     return MTLPixelFormatInvalid;
   }
 }
@@ -786,6 +841,8 @@ TextureFormat Texture::mtlPixelFormatToTextureFormat(MTLPixelFormat value) {
     return TextureFormat::RG_UInt16;
   case MTLPixelFormatRG16Unorm:
     return TextureFormat::RG_UNorm16;
+  case MTLPixelFormatRGBA16Unorm:
+    return TextureFormat::RGBA_UNorm16;
 
   case MTLPixelFormatR32Float:
     return TextureFormat::R_F32;
@@ -900,6 +957,32 @@ TextureRangeDesc Texture::atMetalSlice(TextureType type,
                                        NSUInteger metalSlice) {
   return type == TextureType::Cube ? range.atFace(static_cast<uint32_t>(metalSlice))
                                    : range.atLayer(static_cast<uint32_t>(metalSlice));
+}
+
+// IAttachmentInterop interface implementation
+void* Texture::getNativeImage() const {
+  return (__bridge void*)get();
+}
+
+void* Texture::getNativeImageView() const {
+  // Metal doesn't have a separate image view concept
+  return nullptr;
+}
+
+const base::AttachmentInteropDesc& Texture::getDesc() const {
+  id<MTLTexture> tex = get();
+  // Update cached attachment descriptor
+  attachmentDesc_.width = static_cast<uint32_t>(tex.width);
+  attachmentDesc_.height = static_cast<uint32_t>(tex.height);
+  attachmentDesc_.depth = static_cast<uint32_t>(tex.depth);
+  attachmentDesc_.numLayers = static_cast<uint32_t>(tex.arrayLength);
+  attachmentDesc_.numSamples = static_cast<uint32_t>(tex.sampleCount);
+  attachmentDesc_.numMipLevels = static_cast<uint32_t>(tex.mipmapLevelCount);
+  attachmentDesc_.type = static_cast<base::TextureType>(convertType(tex.textureType));
+  attachmentDesc_.format =
+      static_cast<base::TextureFormat>(mtlPixelFormatToTextureFormat(tex.pixelFormat));
+  attachmentDesc_.isSampled = (tex.usage & MTLTextureUsageShaderRead) != 0;
+  return attachmentDesc_;
 }
 
 } // namespace igl::metal

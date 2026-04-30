@@ -8,13 +8,15 @@
 // @fb-only
 // @fb-only
 
+#include <igl/opengl/glx/PlatformDevice.h>
+
 #include <igl/opengl/ViewTextureTarget.h>
 #include <igl/opengl/glx/Context.h>
 #include <igl/opengl/glx/Device.h>
-#include <igl/opengl/glx/PlatformDevice.h>
 
 namespace igl::opengl::glx {
 
+// @fb-only
 PlatformDevice::PlatformDevice(Device& owner) : opengl::PlatformDevice(owner) {}
 
 std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(uint32_t width,
@@ -96,7 +98,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(uint32_t 
 }
 
 bool PlatformDevice::isType(PlatformDeviceType t) const noexcept {
-  return t == Type || opengl::PlatformDevice::isType(t);
+  return t == kType || opengl::PlatformDevice::isType(t);
 }
 
 } // namespace igl::opengl::glx

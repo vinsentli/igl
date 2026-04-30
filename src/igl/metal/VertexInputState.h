@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <Metal/Metal.h>
+#import <Metal/MTLVertexDescriptor.h>
 #include <igl/VertexInputState.h>
 
 namespace igl::metal {
@@ -26,6 +26,7 @@ class VertexInputState final : public IVertexInputState {
   static MTLVertexFormat convertAttributeFormat(VertexAttributeFormat value);
   static MTLVertexStepFunction convertSampleFunction(VertexSampleFunction value);
 
+ private:
   MTLVertexDescriptor* value_;
 };
 

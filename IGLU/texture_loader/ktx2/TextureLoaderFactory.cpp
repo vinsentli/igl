@@ -12,6 +12,19 @@
 #include <numeric>
 #include <igl/vulkan/util/TextureFormat.h>
 
+#if IGL_BACKEND_D3D12 && !IGL_BACKEND_VULKAN
+// Provide a fallback for D3D12-only builds where Vulkan support is not compiled in.
+namespace igl::vulkan::util {
+inline igl::TextureFormat vkTextureFormatToTextureFormat(int32_t /*vkFormat*/) {
+  return igl::TextureFormat::Invalid;
+}
+} // namespace igl::vulkan::util
+#endif
+
+// @fb-only
+// @fb-only
+// @fb-only
+
 namespace iglu::textureloader::ktx2 {
 namespace {
 template<typename T>
@@ -20,7 +33,7 @@ T align(T offset, T alignment) {
 }
 } // namespace
 
-uint32_t TextureLoaderFactory::headerLength() const noexcept {
+uint32_t TextureLoaderFactory::minHeaderLength() const noexcept {
   return kHeaderLength;
 }
 
@@ -31,7 +44,7 @@ bool TextureLoaderFactory::canCreateInternal(DataReader headerReader,
         outResult, igl::Result::Code::ArgumentInvalid, "Reader's data is nullptr.");
     return false;
   }
-  if (headerReader.length() < kHeaderLength) {
+  if (headerReader.size() < kHeaderLength) {
     igl::Result::setResult(
         outResult, igl::Result::Code::ArgumentOutOfRange, "Not enough data for header.");
     return false;
@@ -59,13 +72,16 @@ bool TextureLoaderFactory::canCreateInternal(DataReader headerReader,
 
 igl::TextureRangeDesc TextureLoaderFactory::textureRange(DataReader reader) const noexcept {
   const Header* header = reader.as<Header>();
-  igl::TextureRangeDesc range;
-  range.numMipLevels = std::max(header->levelCount, 1u);
-  range.numLayers = std::max(header->layerCount, 1u);
-  range.numFaces = header->faceCount;
-  range.width = std::max(header->pixelWidth, 1u);
-  range.height = std::max(header->pixelHeight, 1u);
-  range.depth = std::max(header->pixelDepth, 1u);
+
+  const igl::TextureRangeDesc range{
+      .width = std::max(header->pixelWidth, 1u),
+      .height = std::max(header->pixelHeight, 1u),
+      .depth = std::max(header->pixelDepth, 1u),
+      .numLayers = std::max(header->layerCount, 1u),
+      .numMipLevels = std::max(header->levelCount, 1u),
+      .numFaces = header->faceCount,
+  };
+
   return range;
 }
 
@@ -73,7 +89,7 @@ bool TextureLoaderFactory::validate(DataReader reader,
                                     const igl::TextureRangeDesc& range,
                                     igl::Result* IGL_NULLABLE outResult) const noexcept {
   const Header* header = reader.as<Header>();
-  const uint32_t length = reader.length();
+  const uint32_t length = reader.size();
 
   if (header->sgdByteLength > std::numeric_limits<uint32_t>::max()) {
     igl::Result::setResult(outResult,
@@ -173,13 +189,70 @@ bool TextureLoaderFactory::validate(DataReader reader,
   return true;
 }
 
+namespace {
+// @fb-only
+// @fb-only
+// @fb-only
+  // @fb-only
+  // @fb-only
+    // @fb-only
+  // @fb-only
+    // @fb-only
+  // @fb-only
+    // @fb-only
+  // @fb-only
+    // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+  // @fb-only
+    // @fb-only
+  // @fb-only
+  // @fb-only
+// @fb-only
+// @fb-only
+} // namespace
+
 igl::TextureFormat TextureLoaderFactory::textureFormat(const ktxTexture* texture) const noexcept {
   if (texture->classId == ktxTexture2_c) {
-    const auto* texture2 = reinterpret_cast<const ktxTexture2*>(texture);
-    return igl::vulkan::util::vkTextureFormatToTextureFormat(
-        static_cast<int32_t>(texture2->vkFormat));
+// @fb-only
+    // @fb-only
+    // @fb-only
+    // @fb-only
+    // @fb-only
+        // @fb-only
+        // @fb-only
+        // @fb-only
+        // @fb-only
+    // @fb-only
+// @fb-only
+      const auto* texture2 = reinterpret_cast<const ktxTexture2*>(texture);
+      return igl::vulkan::util::vkTextureFormatToTextureFormat(
+          static_cast<int32_t>(texture2->vkFormat));
+// @fb-only
+    // @fb-only
+
+    // @fb-only
+    // @fb-only
+
+    // @fb-only
+      // @fb-only
+    // @fb-only
+// @fb-only
   }
 
   return igl::TextureFormat::Invalid;
 }
+
 } // namespace iglu::textureloader::ktx2

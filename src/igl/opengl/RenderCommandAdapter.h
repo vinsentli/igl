@@ -10,7 +10,6 @@
 #include <array>
 #include <bitset>
 #include <functional>
-#include <igl/Buffer.h>
 #include <igl/Common.h>
 #include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/UnbindPolicy.h>
@@ -32,7 +31,7 @@ class VertexArrayObject;
 class RenderCommandAdapter final : public WithContext {
  public:
   using StateBits = uint32_t;
-  enum class StateMask : StateBits { NONE = 0, PIPELINE = 1 << 1, DEPTH_STENCIL = 1 << 2 };
+  enum class StateMask : StateBits { NONE = 0, PIPELINE = 1 << 1, DepthStencil = 1 << 2 };
 
  private:
   struct BufferState {
@@ -99,6 +98,17 @@ class RenderCommandAdapter final : public WithContext {
                             GLenum indexType,
                             Buffer& indirectBuffer,
                             const GLvoid* indirectBufferOffset);
+  void multiDrawArraysIndirect(GLenum mode,
+                               Buffer& indirectBuffer,
+                               const GLvoid* indirectBufferOffset,
+                               GLsizei drawcount,
+                               GLsizei stride);
+  void multiDrawElementsIndirect(GLenum mode,
+                                 GLenum indexType,
+                                 Buffer& indirectBuffer,
+                                 const GLvoid* indirectBufferOffset,
+                                 GLsizei drawcount,
+                                 GLsizei stride);
 
   void endEncoding();
 
@@ -122,11 +132,6 @@ class RenderCommandAdapter final : public WithContext {
 
   void bindBufferWithShaderStorageBufferOverride(Buffer& buffer,
                                                  GLenum overrideTargetForShaderStorageBuffer);
-
-  static void unbindTexture(IContext& context, size_t textureUnit, TextureState& textureState);
-  static void unbindTextures(IContext& context,
-                             TextureStates& states,
-                             std::bitset<IGL_TEXTURE_SAMPLERS_MAX>& dirtyFlags);
 
   [[nodiscard]] bool isDirty(StateMask mask) const {
     return (dirtyStateBits_ & EnumToValue(mask)) != 0;
@@ -157,7 +162,6 @@ class RenderCommandAdapter final : public WithContext {
   uint32_t frontStencilReferenceValue_ = 0xFF;
   uint32_t backStencilReferenceValue_ = 0xFF;
 
-  UnbindPolicy cachedUnbindPolicy_;
   bool useVAO_ = false;
   bool vaoBound_ = false;
 };

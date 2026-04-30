@@ -22,6 +22,10 @@ namespace {
     return GLSLANG_STAGE_FRAGMENT;
   case igl::ShaderStage::Compute:
     return GLSLANG_STAGE_COMPUTE;
+  case igl::ShaderStage::Task:
+    return GLSLANG_STAGE_TASK;
+  case igl::ShaderStage::Mesh:
+    return GLSLANG_STAGE_MESH;
   default:
     IGL_DEBUG_ABORT("Not supported shader stage (%d)", static_cast<int>(stage));
   };
@@ -30,7 +34,7 @@ namespace {
 
 // Logs GLSL shaders with line numbers annotation
 void logShaderSource(const char* text) {
-#if IGL_DEBUG
+#if IGL_LOGGING_ENABLED
   uint32_t line = 1;
 
   // IGLLog on Android also writes a new line,

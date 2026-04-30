@@ -9,14 +9,12 @@
 
 #include <shell/openxr/mobile/vulkan/XrAppImplVulkan.h>
 
+#include <shell/openxr/XrLog.h>
+#include <shell/openxr/impl/XrSwapchainProviderImpl.h>
+#include <shell/openxr/mobile/vulkan/XrSwapchainProviderImplVulkan.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/HWDevice.h>
 #include <igl/vulkan/VulkanContext.h>
-#include <igl/vulkan/VulkanDevice.h>
-
-#include <shell/openxr/XrLog.h>
-#include <shell/openxr/XrSwapchainProvider.h>
-#include <shell/openxr/mobile/vulkan/XrSwapchainProviderImplVulkan.h>
 
 namespace igl::shell::openxr::mobile {
 RenderSessionConfig XrAppImplVulkan::suggestedSessionConfig() const {
@@ -84,10 +82,12 @@ std::unique_ptr<IDevice> XrAppImplVulkan::initIGL(XrInstance instance, XrSystemI
 
   requiredVkDeviceExtensions_ = processExtensionsBuffer(requiredVkDeviceExtensionsBuffer_);
 
-  igl::vulkan::VulkanContextConfig cfg = igl::vulkan::VulkanContextConfig();
+  const igl::vulkan::VulkanContextConfig cfg = {
+      .numExtraInstanceExtensions = requiredVkInstanceExtensions_.size(),
+      .extraInstanceExtensions = requiredVkInstanceExtensions_.data(),
+  };
 
-  auto context = igl::vulkan::HWDevice::createContext(
-      cfg, nullptr, requiredVkInstanceExtensions_.size(), requiredVkInstanceExtensions_.data());
+  auto context = igl::vulkan::HWDevice::createContext(cfg, nullptr);
 
   PFN_xrGetVulkanGraphicsDeviceKHR pfnGetVulkanGraphicsDeviceKHR = nullptr;
   XR_CHECK(xrGetInstanceProcAddr(instance,
@@ -140,14 +140,14 @@ XrSession XrAppImplVulkan::initXrSession(XrInstance instance,
   const auto& vkDevice = static_cast<igl::vulkan::Device&>(device); // Downcast is safe here
 
   // Bind Vulkan to XR session
-  XrGraphicsBindingVulkanKHR graphicsBinding = {
-      XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR,
-      nullptr,
-      vkDevice.getVulkanContext().getVkInstance(),
-      vkDevice.getVulkanContext().getVkPhysicalDevice(),
-      vkDevice.getVulkanContext().device_->getVkDevice(),
-      vkDevice.getVulkanContext().deviceQueues_.graphicsQueueFamilyIndex,
-      0,
+  const XrGraphicsBindingVulkanKHR graphicsBinding = {
+      .type = XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR,
+      .next = nullptr,
+      .instance = vkDevice.getVulkanContext().getVkInstance(),
+      .physicalDevice = vkDevice.getVulkanContext().getVkPhysicalDevice(),
+      .device = vkDevice.getVulkanContext().getVkDevice(),
+      .queueFamilyIndex = vkDevice.getVulkanContext().deviceQueues_.graphicsQueueFamilyIndex,
+      .queueIndex = 0,
   };
 
   const XrSessionCreateInfo sessionCreateInfo = {
@@ -157,9 +157,10 @@ XrSession XrAppImplVulkan::initXrSession(XrInstance instance,
       .systemId = systemId,
   };
 
-  XrResult xrResult;
   XrSession session = nullptr;
-  XR_CHECK(xrResult = xrCreateSession(instance, &sessionCreateInfo, &session));
+  const XrResult xrResult = xrCreateSession(instance, &sessionCreateInfo, &session);
+
+  XR_CHECK(xrResult);
   if (xrResult != XR_SUCCESS) {
     IGL_LOG_ERROR("Failed to create XR session: %d\n", xrResult);
     return XR_NULL_HANDLE;

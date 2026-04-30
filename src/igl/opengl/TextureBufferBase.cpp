@@ -7,8 +7,6 @@
 
 #include <igl/opengl/TextureBufferBase.h>
 
-#include <igl/opengl/Errors.h>
-
 namespace igl::opengl {
 
 TextureType TextureBufferBase::getType() const {
@@ -34,6 +32,8 @@ TextureType TextureBufferBase::getType() const {
     if (getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureExternalImage)) {
       return TextureType::ExternalImage;
     }
+    break;
+  default:
     break;
   }
   IGL_DEBUG_ABORT("Unsupported OGL Texture Target: 0x%x", target_);
@@ -167,6 +167,10 @@ void TextureBufferBase::generateMipmap() const {
 }
 
 bool TextureBufferBase::isRequiredGenerateMipmap() const {
+  if (mipmapsAreAvailableAndUploaded_) {
+    return false;
+  }
+
   return numMipLevels_ > 1;
 }
 

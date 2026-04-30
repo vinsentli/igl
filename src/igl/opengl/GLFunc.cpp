@@ -11,7 +11,8 @@
 #include <igl/opengl/GLFunc.h>
 
 #define __IGL_INNER_USER__
-#include <igl/IGL.h>
+#include <igl/Core.h>
+#include <igl/opengl/Config.h>
 
 #if IGL_EGL
 #include <EGL/egl.h>
@@ -32,13 +33,18 @@
 extern "C" void glQueryCounterEXT(GLuint, GLenum) {}
 #endif
 #endif
+#if defined(__clang__)
+#define ROAI __attribute__((annotate("ro_after_init")))
+#else
+#define ROAI
+#endif
 
 #define GLEXTENSION_DIRECT_CALL(funcName, funcType, ...) funcName(__VA_ARGS__);
 #define GLEXTENSION_DIRECT_CALL_WITH_RETURN(funcName, funcType, returnOnError, ...) \
   return funcName(__VA_ARGS__);
 
 #define GLEXTENSION_LOAD_AND_CALL(funcName, funcType, ...)         \
-  static funcType funcAddr = nullptr;                              \
+  static ROAI funcType funcAddr = nullptr;                         \
   if (funcAddr == nullptr) {                                       \
     funcAddr = (funcType)IGL_GET_PROC_ADDRESS(#funcName);          \
   }                                                                \
@@ -48,7 +54,7 @@ extern "C" void glQueryCounterEXT(GLuint, GLenum) {}
     IGL_DEBUG_ABORT("Extension function " #funcName " not found"); \
   }
 #define GLEXTENSION_LOAD_AND_CALL_WITH_RETURN(funcName, funcType, returnOnError, ...) \
-  static funcType funcAddr = nullptr;                                                 \
+  static ROAI funcType funcAddr = nullptr;                                            \
   if (funcAddr == nullptr) {                                                          \
     funcAddr = (funcType)IGL_GET_PROC_ADDRESS(#funcName);                             \
   }                                                                                   \
@@ -169,8 +175,10 @@ IGL_EXTERN_BEGIN
 #define CAN_CALL_glUnmapBuffer 0
 #endif
 #if defined(GL_VERSION_3_0) || defined(GL_ES_VERSION_3_0)
+#define CAN_CALL_glClearBufferfv CAN_CALL
 #define CAN_CALL_glGetStringi CAN_CALL
 #else
+#define CAN_CALL_glClearBufferfv 0
 #define CAN_CALL_glGetStringi 0
 #endif
 #if defined(GL_VERSION_3_1) || defined(GL_ES_VERSION_3_0)
@@ -227,6 +235,11 @@ void iglDebugMessageInsert(GLenum source,
                           severity,
                           length,
                           buf);
+}
+
+void iglClearBufferfv(GLenum buffer, GLint drawBuffer, const GLfloat* value) {
+  GLEXTENSION_METHOD_BODY(
+      CAN_CALL_glClearBufferfv, glClearBufferfv, PFNIGLCLEARBUFFERFVPROC, buffer, drawBuffer, value)
 }
 
 void iglClearDepth(GLfloat depth) {
@@ -534,13 +547,13 @@ void iglMakeTextureHandleNonResidentARB(GLuint64 handle) {
 #define CAN_CALL_glDispatchCompute 0
 #endif
 
-void iglDispatchCompute(GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z) {
+void iglDispatchCompute(GLuint numGroupsX, GLuint numGroupsY, GLuint numGroupsZ) {
   GLEXTENSION_METHOD_BODY(CAN_CALL_glDispatchCompute,
                           glDispatchCompute,
                           PFNIGLDISPATCHCOMPUTEPROC,
-                          num_groups_x,
-                          num_groups_y,
-                          num_groups_z);
+                          numGroupsX,
+                          numGroupsY,
+                          numGroupsZ);
 }
 
 ///--------------------------------------
@@ -572,6 +585,45 @@ void iglDrawArraysIndirect(GLenum mode, const GLvoid* indirect) {
 }
 
 ///--------------------------------------
+/// MARK: - GL_ARB_multi_draw_indirect
+
+#if defined(GL_VERSION_4_3) || defined(GL_ARB_multi_draw_indirect)
+#define CAN_CALL_glMultiDrawArraysIndirect CAN_CALL
+#define CAN_CALL_glMultiDrawElementsIndirect CAN_CALL
+#else
+#define CAN_CALL_glMultiDrawArraysIndirect 0
+#define CAN_CALL_glMultiDrawElementsIndirect 0
+#endif
+
+void iglMultiDrawArraysIndirect(GLenum mode,
+                                const void* indirect,
+                                GLsizei drawcount,
+                                GLsizei stride) {
+  GLEXTENSION_METHOD_BODY(CAN_CALL_glMultiDrawArraysIndirect,
+                          glMultiDrawArraysIndirect,
+                          PFNIGLMULTIDRAWARRAYSINDIRECTPROC,
+                          mode,
+                          indirect,
+                          drawcount,
+                          stride);
+}
+
+void iglMultiDrawElementsIndirect(GLenum mode,
+                                  GLenum type,
+                                  const void* indirect,
+                                  GLsizei drawcount,
+                                  GLsizei stride) {
+  GLEXTENSION_METHOD_BODY(CAN_CALL_glMultiDrawElementsIndirect,
+                          glMultiDrawElementsIndirect,
+                          PFNIGLMULTIDRAWELEMENTSINDIRECTPROC,
+                          mode,
+                          type,
+                          indirect,
+                          drawcount,
+                          stride);
+}
+
+///--------------------------------------
 /// MARK: - GL_ARB_ES2_compatibility
 
 #if IGL_OPENGL_ES || defined(GL_VERSION_4_1) || defined(GL_ARB_ES2_compatibility)
@@ -580,10 +632,8 @@ void iglDrawArraysIndirect(GLenum mode, const GLvoid* indirect) {
 #define CAN_CALL_glClearDepthf 0
 #endif
 
-void iglClearDepthf(GLfloat depth) {
-  GLEXTENSION_METHOD_BODY(CAN_CALL_glClearDepthf, glClearDepthf, PFNIGLCLEARDEPTHFPROC, depth)
-}
-
+void iglClearDepthf(GLfloat depth){
+    GLEXTENSION_METHOD_BODY(CAN_CALL_glClearDepthf, glClearDepthf, PFNIGLCLEARDEPTHFPROC, depth)}
 ///--------------------------------------
 /// MARK: - GL_ARB_framebuffer_object
 
@@ -807,17 +857,15 @@ void iglRenderbufferStorageMultisample(GLenum target,
                                        GLsizei samples,
                                        GLenum internalformat,
                                        GLsizei width,
-                                       GLsizei height) {
-  GLEXTENSION_METHOD_BODY(CAN_CALL_glRenderbufferStorageMultisample,
-                          glRenderbufferStorageMultisample,
-                          PFNIGLRENDERBUFFERSTORAGEMULTISAMPLEPROC,
-                          target,
-                          samples,
-                          internalformat,
-                          width,
-                          height)
-}
-
+                                       GLsizei height){
+    GLEXTENSION_METHOD_BODY(CAN_CALL_glRenderbufferStorageMultisample,
+                            glRenderbufferStorageMultisample,
+                            PFNIGLRENDERBUFFERSTORAGEMULTISAMPLEPROC,
+                            target,
+                            samples,
+                            internalformat,
+                            width,
+                            height)}
 ///--------------------------------------
 /// MARK: - GL_ARB_invalidate_subdata
 
@@ -920,18 +968,16 @@ void iglGetProgramResourceName(GLuint program,
                                GLuint index,
                                GLsizei bufSize,
                                GLsizei* length,
-                               char* name) {
-  GLEXTENSION_METHOD_BODY(CAN_CALL_glGetProgramResourceName,
-                          glGetProgramResourceName,
-                          PFNIGLGETPROGRAMRESOURCENAMEPROC,
-                          program,
-                          programInterface,
-                          index,
-                          bufSize,
-                          length,
-                          name)
-}
-
+                               char* name){
+    GLEXTENSION_METHOD_BODY(CAN_CALL_glGetProgramResourceName,
+                            glGetProgramResourceName,
+                            PFNIGLGETPROGRAMRESOURCENAMEPROC,
+                            program,
+                            programInterface,
+                            index,
+                            bufSize,
+                            length,
+                            name)}
 ///--------------------------------------
 /// MARK: - GL_ARB_shader_image_load_store
 
@@ -1470,17 +1516,15 @@ void iglRenderbufferStorageMultisampleEXT(GLenum target,
                                           GLsizei samples,
                                           GLenum internalformat,
                                           GLsizei width,
-                                          GLsizei height) {
-  GLEXTENSION_METHOD_BODY(CAN_CALL_glRenderbufferStorageMultisampleEXT,
-                          glRenderbufferStorageMultisampleEXT,
-                          PFNIGLRENDERBUFFERSTORAGEMULTISAMPLEPROC,
-                          target,
-                          samples,
-                          internalformat,
-                          width,
-                          height)
-}
-
+                                          GLsizei height){
+    GLEXTENSION_METHOD_BODY(CAN_CALL_glRenderbufferStorageMultisampleEXT,
+                            glRenderbufferStorageMultisampleEXT,
+                            PFNIGLRENDERBUFFERSTORAGEMULTISAMPLEPROC,
+                            target,
+                            samples,
+                            internalformat,
+                            width,
+                            height)}
 ///--------------------------------------
 /// MARK: - GL_EXT_shader_image_load_store
 
@@ -1563,18 +1607,15 @@ void iglTexStorage3DEXT(GLenum target,
                         GLenum internalformat,
                         GLsizei width,
                         GLsizei height,
-                        GLsizei depth) {
-  GLEXTENSION_METHOD_BODY(CAN_CALL_glTexStorage3DEXT,
-                          glTexStorage3DEXT,
-                          PFNIGLTEXSTORAGE3DPROC,
-                          target,
-                          levels,
-                          internalformat,
-                          width,
-                          height,
-                          depth)
-}
-
+                        GLsizei depth){GLEXTENSION_METHOD_BODY(CAN_CALL_glTexStorage3DEXT,
+                                                               glTexStorage3DEXT,
+                                                               PFNIGLTEXSTORAGE3DPROC,
+                                                               target,
+                                                               levels,
+                                                               internalformat,
+                                                               width,
+                                                               height,
+                                                               depth)}
 ///--------------------------------------
 /// MARK: - GL_IMG_multisampled_render_to_texture
 
@@ -1607,17 +1648,15 @@ void iglRenderbufferStorageMultisampleIMG(GLenum target,
                                           GLsizei samples,
                                           GLenum internalformat,
                                           GLsizei width,
-                                          GLsizei height) {
-  GLEXTENSION_METHOD_BODY(CAN_CALL_glRenderbufferStorageMultisampleIMG,
-                          glRenderbufferStorageMultisampleIMG,
-                          PFNIGLRENDERBUFFERSTORAGEMULTISAMPLEPROC,
-                          target,
-                          samples,
-                          internalformat,
-                          width,
-                          height)
-}
-
+                                          GLsizei height){
+    GLEXTENSION_METHOD_BODY(CAN_CALL_glRenderbufferStorageMultisampleIMG,
+                            glRenderbufferStorageMultisampleIMG,
+                            PFNIGLRENDERBUFFERSTORAGEMULTISAMPLEPROC,
+                            target,
+                            samples,
+                            internalformat,
+                            width,
+                            height)}
 ///--------------------------------------
 /// MARK: - GL_KHR_debug
 
@@ -1789,18 +1828,16 @@ void iglFramebufferTextureMultiviewOVR(GLenum target,
                                        GLuint texture,
                                        GLint level,
                                        GLint baseViewIndex,
-                                       GLsizei numViews) {
-  GLEXTENSION_METHOD_BODY(CAN_CALL_glFramebufferTextureMultiviewOVR,
-                          glFramebufferTextureMultiviewOVR,
-                          PFNIGLFRAMEBUFFERTEXTUREMULTIVIEWPROC,
-                          target,
-                          attachment,
-                          texture,
-                          level,
-                          baseViewIndex,
-                          numViews)
-}
-
+                                       GLsizei numViews){
+    GLEXTENSION_METHOD_BODY(CAN_CALL_glFramebufferTextureMultiviewOVR,
+                            glFramebufferTextureMultiviewOVR,
+                            PFNIGLFRAMEBUFFERTEXTUREMULTIVIEWPROC,
+                            target,
+                            attachment,
+                            texture,
+                            level,
+                            baseViewIndex,
+                            numViews)}
 ///--------------------------------------
 /// MARK: - GL_OVR_multiview_multisampled_render_to_texture
 
@@ -1816,18 +1853,17 @@ void iglFramebufferTextureMultisampleMultiviewOVR(GLenum target,
                                                   GLint level,
                                                   GLsizei samples,
                                                   GLint baseViewIndex,
-                                                  GLsizei numViews) {
-  GLEXTENSION_METHOD_BODY(CAN_CALL_glFramebufferTextureMultisampleMultiviewOVR,
-                          glFramebufferTextureMultisampleMultiviewOVR,
-                          PFNIGLFRAMEBUFFERTEXTUREMULTISAMPLEMULTIVIEWPROC,
-                          target,
-                          attachment,
-                          texture,
-                          level,
-                          samples,
-                          baseViewIndex,
-                          numViews)
-}
+                                                  GLsizei numViews){
+    GLEXTENSION_METHOD_BODY(CAN_CALL_glFramebufferTextureMultisampleMultiviewOVR,
+                            glFramebufferTextureMultisampleMultiviewOVR,
+                            PFNIGLFRAMEBUFFERTEXTUREMULTISAMPLEMULTIVIEWPROC,
+                            target,
+                            attachment,
+                            texture,
+                            level,
+                            samples,
+                            baseViewIndex,
+                            numViews)}
 
 ///--------------------------------------
 /// MARK: - GL_OES_mapbuffer
@@ -2001,6 +2037,106 @@ void iglGenVertexArraysOES(GLsizei n, GLuint* vertexArrays) {
                           vertexArrays);
 }
 
+///--------------------------------------
+/// MARK: - GL_EXT_timer_query
+
+#if defined(GL_EXT_timer_query) || defined(GL_EXT_disjoint_timer_query)
+#define CAN_CALL_glBeginQuery OPENGL_OR_CAN_CALL
+#define CAN_CALL_glDeleteQueries OPENGL_OR_CAN_CALL
+#define CAN_CALL_glEndQuery OPENGL_OR_CAN_CALL
+#define CAN_CALL_glGenQueries OPENGL_OR_CAN_CALL
+#define CAN_CALL_glGetQueryObjectui64v OPENGL_OR_CAN_CALL
+#define CAN_CALL_glGetQueryObjectiv OPENGL_OR_CAN_CALL
+#define CAN_CALL_glQueryCounter OPENGL_OR_CAN_CALL
+#else
+#define CAN_CALL_glBeginQuery 0
+#define CAN_CALL_glDeleteQueries 0
+#define CAN_CALL_glEndQuery 0
+#define CAN_CALL_glGenQueries 0
+#define CAN_CALL_glGetQueryObjectiv 0
+#define CAN_CALL_glGetQueryObjectui64v 0
+#define CAN_CALL_glQueryCounter 0
+#endif
+
+void iglBeginQuery(GLenum target, GLuint id) {
+#if IGL_OPENGL_ES
+  GLEXTENSION_METHOD_BODY(CAN_CALL_glBeginQuery, glBeginQueryEXT, PFNIGLBEGINQUERYPROC, target, id);
+#else
+  GLEXTENSION_METHOD_BODY(CAN_CALL_glBeginQuery, glBeginQuery, PFNIGLBEGINQUERYPROC, target, id);
+#endif
+}
+
+void iglDeleteQueries(GLsizei n, GLuint* queries) {
+#if IGL_OPENGL_ES
+  GLEXTENSION_METHOD_BODY(
+      CAN_CALL_glDeleteQueries, glDeleteQueriesEXT, PFNIGLDELETEQUERIESPROC, n, queries);
+#else
+  GLEXTENSION_METHOD_BODY(
+      CAN_CALL_glDeleteQueries, glDeleteQueries, PFNIGLDELETEQUERIESPROC, n, queries);
+#endif
+}
+
+void iglEndQuery(GLenum target) {
+#if IGL_OPENGL_ES
+  GLEXTENSION_METHOD_BODY(CAN_CALL_glEndQuery, glEndQueryEXT, PFNIGLENDQUERYPROC, target);
+#else
+  GLEXTENSION_METHOD_BODY(CAN_CALL_glEndQuery, glEndQuery, PFNIGLENDQUERYPROC, target);
+#endif
+}
+
+void iglGenQueries(GLsizei n, GLuint* queries) {
+#if IGL_OPENGL_ES
+  GLEXTENSION_METHOD_BODY(CAN_CALL_glGenQueries, glGenQueriesEXT, PFNIGLGENQUERIESPROC, n, queries);
+#else
+  GLEXTENSION_METHOD_BODY(CAN_CALL_glGenQueries, glGenQueries, PFNIGLGENQUERIESPROC, n, queries);
+#endif
+}
+
+void iglGetQueryObjectiv(GLuint id, GLenum pname, GLint* params) {
+#if IGL_OPENGL_ES
+  GLEXTENSION_METHOD_BODY(CAN_CALL_glGetQueryObjectiv,
+                          glGetQueryObjectivEXT,
+                          PFNIGLGETQUERYOBJECTIVPROC,
+                          id,
+                          pname,
+                          params);
+#else
+  GLEXTENSION_METHOD_BODY(CAN_CALL_glGetQueryObjectiv,
+                          glGetQueryObjectiv,
+                          PFNIGLGETQUERYOBJECTIVPROC,
+                          id,
+                          pname,
+                          params);
+#endif
+}
+
+void iglGetQueryObjectui64v(GLuint id, GLenum pname, GLuint64* params) {
+#if IGL_OPENGL_ES
+  GLEXTENSION_METHOD_BODY(CAN_CALL_glGetQueryObjectui64v,
+                          glGetQueryObjectui64vEXT,
+                          PFNIGLGETQUERYOBJECTUI64VPROC,
+                          id,
+                          pname,
+                          params);
+#else
+  GLEXTENSION_METHOD_BODY(CAN_CALL_glGetQueryObjectui64v,
+                          glGetQueryObjectui64v,
+                          PFNIGLGETQUERYOBJECTUI64VPROC,
+                          id,
+                          pname,
+                          params);
+#endif
+}
+
+void iglQueryCounter(GLuint id, GLenum target) {
+#if IGL_OPENGL_ES
+  GLEXTENSION_METHOD_BODY(
+      CAN_CALL_glQueryCounter, glQueryCounterEXT, PFNIGLQUERYCOUNTERPROC, id, target);
+#else
+  GLEXTENSION_METHOD_BODY(
+      CAN_CALL_glQueryCounter, glQueryCounter, PFNIGLQUERYCOUNTERPROC, id, target);
+#endif
+}
 IGL_EXTERN_END
 
 // NOLINTEND(readability-identifier-naming)

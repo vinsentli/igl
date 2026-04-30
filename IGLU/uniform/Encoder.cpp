@@ -5,11 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <IGLU/uniform/Descriptor.h>
 #include <IGLU/uniform/Encoder.h>
-#include <igl/IGL.h>
 
-#include <glm/gtx/string_cast.hpp>
+#include <IGLU/uniform/Descriptor.h>
+#include <igl/IGL.h> // IWYU pragma: keep
 
 namespace iglu::uniform {
 

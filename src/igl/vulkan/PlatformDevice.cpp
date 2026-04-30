@@ -5,9 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <igl/vulkan/PlatformDevice.h>
+
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/Device.h>
-#include <igl/vulkan/PlatformDevice.h>
 #include <igl/vulkan/Texture.h>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanSwapchain.h>
@@ -28,10 +29,13 @@ PlatformDevice::PlatformDevice(Device& device) : device_(device) {
 
 std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(uint32_t width,
                                                                        uint32_t height,
-                                                                       Result* outResult) {
-  IGL_PROFILER_FUNCTION();
+                                                                       Result* IGL_NULLABLE
+                                                                           outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
   const auto& ctx = device_.getVulkanContext();
+  IGL_ENSURE_VULKAN_CONTEXT_THREAD(&ctx);
+
   const auto& swapChain = ctx.swapchain_;
 
   if (!ctx.hasSwapchain()) {
@@ -73,10 +77,12 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(uint32_t 
   return nativeDepthTexture_;
 }
 
-std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(Result* outResult) {
-  IGL_PROFILER_FUNCTION();
+std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
+    Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
   const auto& ctx = device_.getVulkanContext();
+  IGL_ENSURE_VULKAN_CONTEXT_THREAD(&ctx);
 
   if (!ctx.hasSwapchain()) {
     nativeDrawableTextures_.clear();
@@ -102,14 +108,14 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(Result
     return nullptr;
   }
 
-  const auto width = (size_t)swapChain->getWidth();
-  const auto height = (size_t)swapChain->getHeight();
-  const auto currentImageIndex = swapChain->getCurrentImageIndex();
+  const size_t width = static_cast<size_t>(swapChain->getWidth());
+  const size_t height = static_cast<size_t>(swapChain->getHeight());
+  const uint32_t currentImageIndex = swapChain->getCurrentImageIndex();
 
   // resize nativeDrawableTextures_ pushing null pointers
   // null pointers will be allocated later as needed
   if (currentImageIndex >= nativeDrawableTextures_.size()) {
-    nativeDrawableTextures_.resize((size_t)currentImageIndex + 1, nullptr);
+    nativeDrawableTextures_.resize(static_cast<size_t>(currentImageIndex) + 1, nullptr);
   }
 
   const auto result = nativeDrawableTextures_[currentImageIndex];
@@ -135,9 +141,10 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(Result
 /// returns a android::NativeHWTextureBuffer on platforms supporting it
 /// this texture allows CPU and GPU to both read/write memory
 std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const TextureDesc& desc,
-                                                                        Result* outResult) const {
+                                                                        Result* IGL_NULLABLE
+                                                                            outResult) const {
   if (!funcTable_) {
-      return nullptr;
+    return nullptr;
   }
 
   Result subResult;
@@ -155,11 +162,11 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const Te
 
 std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(
     struct AHardwareBuffer* buffer,
-    Result* outResult) const {
+    Result* IGL_NULLABLE outResult) const {
   if (!funcTable_){
-      return nullptr;
-  }
-
+    return nullptr;
+  }      
+  
   Result subResult;
 
   AHardwareBuffer_Desc hwbDesc;

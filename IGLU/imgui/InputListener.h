@@ -5,16 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-// @fb-only
+// @MARK:COVERAGE_EXCLUDE_FILE
 
 #pragma once
 
-#include <memory>
-#include <shell/shared/input/InputDispatcher.h>
+#include "imgui.h"
+
+#include <shell/shared/input/InputDispatcher.h> // IWYU pragma: export
 #include <shell/shared/input/KeyListener.h>
 #include <shell/shared/input/MouseListener.h>
-
-#include "imgui.h"
 
 namespace iglu::imgui {
 
@@ -34,7 +33,7 @@ class InputListener : public igl::shell::IMouseListener,
   bool process(const igl::shell::CharEvent& event) override;
 
  private:
-  ImGuiContext* _context;
+  ImGuiContext* context_;
 
   void makeCurrentContext() const;
 };

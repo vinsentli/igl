@@ -5,28 +5,29 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <igl/opengl/egl/PlatformDevice.h>
+
 #include <igl/opengl/ViewTextureTarget.h>
 #include <igl/opengl/egl/Context.h>
 #include <igl/opengl/egl/Device.h>
-#include <igl/opengl/egl/PlatformDevice.h>
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 #include <android/hardware_buffer.h>
 #include <igl/opengl/egl/android/NativeHWBuffer.h>
 #endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
-#include <sstream>
 #include <utility>
 
 namespace igl::opengl::egl {
 
+// @fb-only
 PlatformDevice::PlatformDevice(Device& owner) : opengl::PlatformDevice(owner) {
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
-    funcTable_ = AHardwareBufferFunctionTable::create();
+  funcTable_ = AHardwareBufferFunctionTable::create();
 #endif
 }
 
 std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
     TextureFormat colorTextureFormat,
-    Result* outResult) {
+    Result* IGL_NULLABLE outResult) {
   if (drawableTexture_) {
     return drawableTexture_;
   }
@@ -45,16 +46,16 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
   }
 
   const TextureDesc desc = {
-      dimensions.first < 0 ? 0 : static_cast<uint32_t>(dimensions.first),
-      dimensions.second < 0 ? 0 : static_cast<uint32_t>(dimensions.second),
-      1, // depth
-      1, // numLayers
-      1, // numSamples
-      TextureDesc::TextureUsageBits::Attachment,
-      1, // numMipLevels
-      TextureType::TwoD,
-      colorTextureFormat,
-      ResourceStorage::Private,
+      .width = dimensions.first < 0 ? 0 : static_cast<uint32_t>(dimensions.first),
+      .height = dimensions.second < 0 ? 0 : static_cast<uint32_t>(dimensions.second),
+      .depth = 1,
+      .numLayers = 1,
+      .numSamples = 1,
+      .usage = TextureDesc::TextureUsageBits::Attachment,
+      .numMipLevels = 1,
+      .type = TextureType::TwoD,
+      .format = colorTextureFormat,
+      .storage = ResourceStorage::Private,
   };
   auto texture = std::make_shared<ViewTextureTarget>(getContext(), desc.format);
   subResult = texture->create(desc, true);
@@ -74,7 +75,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
     int width,
     int height,
     TextureFormat colorTextureFormat,
-    Result* outResult) {
+    Result* IGL_NULLABLE outResult) {
   if (drawableTexture_ && drawableTexture_->getWidth() == width &&
       drawableTexture_->getHeight() == height) {
     return drawableTexture_;
@@ -87,16 +88,16 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
   }
 
   const TextureDesc desc = {
-      static_cast<uint32_t>(width),
-      static_cast<uint32_t>(height),
-      1, // depth
-      1, // numLayers
-      1, // numSamples
-      TextureDesc::TextureUsageBits::Attachment,
-      1, // numMipLevels
-      TextureType::TwoD,
-      colorTextureFormat,
-      ResourceStorage::Private,
+      .width = static_cast<uint32_t>(width),
+      .height = static_cast<uint32_t>(height),
+      .depth = 1,
+      .numLayers = 1,
+      .numSamples = 1,
+      .usage = TextureDesc::TextureUsageBits::Attachment,
+      .numMipLevels = 1,
+      .type = TextureType::TwoD,
+      .format = colorTextureFormat,
+      .storage = ResourceStorage::Private,
   };
   auto texture = std::make_shared<ViewTextureTarget>(getContext(), desc.format);
   const Result subResult = texture->create(desc, true);
@@ -114,7 +115,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
 
 std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(
     TextureFormat depthTextureFormat,
-    Result* outResult) {
+    Result* IGL_NULLABLE outResult) {
   if (depthTexture_ && depthTexture_->getFormat() == depthTextureFormat) {
     return depthTexture_;
   }
@@ -133,16 +134,16 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(
   }
 
   const TextureDesc desc = {
-      dimensions.first < 0 ? 0 : static_cast<uint32_t>(dimensions.first),
-      dimensions.second < 0 ? 0 : static_cast<uint32_t>(dimensions.second),
-      1, // depth
-      1, // numLayers
-      1, // numSamples
-      TextureDesc::TextureUsageBits::Attachment,
-      1, // numMipLevels
-      TextureType::TwoD,
-      depthTextureFormat,
-      ResourceStorage::Private,
+      .width = dimensions.first < 0 ? 0 : static_cast<uint32_t>(dimensions.first),
+      .height = dimensions.second < 0 ? 0 : static_cast<uint32_t>(dimensions.second),
+      .depth = 1,
+      .numLayers = 1,
+      .numSamples = 1,
+      .usage = TextureDesc::TextureUsageBits::Attachment,
+      .numMipLevels = 1,
+      .type = TextureType::TwoD,
+      .format = depthTextureFormat,
+      .storage = ResourceStorage::Private,
   };
   auto texture = std::make_shared<ViewTextureTarget>(getContext(), desc.format);
   subResult = texture->create(desc, true);
@@ -163,9 +164,10 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(
 /// returns a android::NativeHWTextureBuffer on platforms supporting it
 /// this texture allows CPU and GPU to both read/write memory
 std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const TextureDesc& desc,
-                                                                        Result* outResult) const {
+                                                                        Result* IGL_NULLABLE
+                                                                            outResult) const {
   if (!funcTable_) {
-      return nullptr;
+    return nullptr;
   }
 
   auto context = static_cast<Context*>(getSharedContext().get());
@@ -193,12 +195,13 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const Te
   return texture;
 }
 
-std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(AHardwareBuffer* buffer,
-                                                                        Result* outResult) const {
-  if (!funcTable_) {
-      return nullptr;
-  }
+std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(
+    AHardwareBuffer* IGL_NONNULL buffer,
+    Result* IGL_NULLABLE outResult) const {
 
+  if (!funcTable_) {
+    return nullptr;
+  }
   auto context = static_cast<Context*>(getSharedContext().get());
   if (context == nullptr) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "No EGL context found!");
@@ -228,7 +231,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(AHardwar
 
 void PlatformDevice::updateSurfaces(EGLSurface readSurface,
                                     EGLSurface drawSurface,
-                                    Result* outResult) {
+                                    Result* IGL_NULLABLE outResult) {
   auto* context = static_cast<Context*>(getSharedContext().get());
   if (context == nullptr) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "No EGL context found!");
@@ -243,7 +246,8 @@ void PlatformDevice::updateSurfaces(EGLSurface readSurface,
   }
 }
 
-EGLSurface PlatformDevice::createSurface(NativeWindowType nativeWindow, Result* outResult) {
+EGLSurface PlatformDevice::createSurface(NativeWindowType nativeWindow,
+                                         Result* IGL_NULLABLE outResult) {
   auto* context = static_cast<Context*>(getSharedContext().get());
   if (context == nullptr) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "No EGL context found!");
@@ -252,7 +256,7 @@ EGLSurface PlatformDevice::createSurface(NativeWindowType nativeWindow, Result* 
   return context->createSurface(nativeWindow);
 }
 
-EGLSurface PlatformDevice::getReadSurface(Result* outResult) {
+EGLSurface PlatformDevice::getReadSurface(Result* IGL_NULLABLE outResult) {
   auto* context = static_cast<Context*>(getSharedContext().get());
   if (context == nullptr) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "No EGL context found!");
@@ -261,7 +265,8 @@ EGLSurface PlatformDevice::getReadSurface(Result* outResult) {
   return context->getReadSurface();
 }
 
-void PlatformDevice::setPresentationTime(long long presentationTimeNs, Result* outResult) {
+void PlatformDevice::setPresentationTime(long long presentationTimeNs,
+                                         Result* IGL_NULLABLE outResult) {
   auto* context = static_cast<Context*>(getSharedContext().get());
   if (context == nullptr) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "No EGL context found!");
@@ -271,7 +276,7 @@ void PlatformDevice::setPresentationTime(long long presentationTimeNs, Result* o
 }
 
 bool PlatformDevice::isType(PlatformDeviceType t) const noexcept {
-  return t == Type || opengl::PlatformDevice::isType(t);
+  return t == kType || opengl::PlatformDevice::isType(t);
 }
 
 } // namespace igl::opengl::egl

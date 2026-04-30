@@ -11,7 +11,9 @@
 
 namespace igl::opengl::egl {
 
+// @fb-only
 class HWDevice final : public ::igl::opengl::HWDevice {
+  // @fb-only
   using Super = ::igl::opengl::HWDevice;
 
  public:
@@ -31,12 +33,14 @@ class HWDevice final : public ::igl::opengl::HWDevice {
   std::unique_ptr<IContext> createOffscreenContext(size_t width,
                                                    size_t height,
                                                    Result* outResult) const;
+  // @fb-only
   std::unique_ptr<opengl::Device> createWithContext(std::unique_ptr<IContext> context,
                                                     Result* outResult) const override;
 
   using Super::create;
-  std::unique_ptr<IDevice> create(EGLNativeWindowType nativeWindow,
-                                  Result* outResult = nullptr) const;
+  // @fb-only
+  std::unique_ptr<opengl::Device> create(EGLNativeWindowType nativeWindow,
+                                         Result* outResult = nullptr) const;
 };
 
 } // namespace igl::opengl::egl

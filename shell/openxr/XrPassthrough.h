@@ -8,7 +8,6 @@
 #pragma once
 
 #include <shell/openxr/XrPlatform.h>
-
 #include <vector>
 
 namespace igl::shell::openxr {
@@ -17,12 +16,18 @@ class XrPassthrough final {
  public:
   XrPassthrough(XrInstance instance, XrSession session) noexcept;
   ~XrPassthrough() noexcept;
+  XrPassthrough(const XrPassthrough&) = delete;
+  XrPassthrough& operator=(const XrPassthrough&) = delete;
+  XrPassthrough(XrPassthrough&&) = delete;
+  XrPassthrough& operator=(XrPassthrough&&) = delete;
 
   [[nodiscard]] static const std::vector<const char*>& getExtensions() noexcept;
 
   [[nodiscard]] bool initialize() noexcept;
 
   void setEnabled(bool enabled) noexcept;
+
+  void setOpacity(float opacity) noexcept;
 
   void injectLayer(std::vector<const XrCompositionLayerBaseHeader*>& layers) noexcept;
 
@@ -44,6 +49,7 @@ class XrPassthrough final {
   XrCompositionLayerPassthroughFB compositionLayer_{XR_TYPE_COMPOSITION_LAYER_PASSTHROUGH_FB};
 
   bool enabled_ = false;
+  float opacity_ = 1.0f;
 };
 
 } // namespace igl::shell::openxr

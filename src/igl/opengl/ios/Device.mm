@@ -10,14 +10,11 @@
 #include <cstdio>
 #include <cstring>
 #include <igl/Common.h>
-#include <igl/opengl/Errors.h>
-#include <igl/opengl/Texture.h>
-#include <igl/opengl/VertexInputState.h>
-#include <igl/opengl/ios/Context.h>
 
 namespace igl::opengl::ios {
 
 Device::Device(std::unique_ptr<IContext> context) :
+  // @fb-only
   opengl::Device(std::move(context)), platformDevice_(*this) {}
 
 const PlatformDevice& Device::getPlatformDevice() const noexcept {

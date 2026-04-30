@@ -7,21 +7,41 @@
 
 #include <shell/shared/imageLoader/ImageLoader.h>
 
+// @fb-only
+// @fb-only
+// @fb-only
+#include <IGLU/texture_loader/ktx1/TextureLoaderFactory.h>
+#include <IGLU/texture_loader/ktx2/TextureLoaderFactory.h>
 #include <IGLU/texture_loader/stb_hdr/TextureLoaderFactory.h>
 #include <IGLU/texture_loader/stb_jpeg/TextureLoaderFactory.h>
 #include <IGLU/texture_loader/stb_png/TextureLoaderFactory.h>
+// @fb-only
+// @fb-only
+// @fb-only
+#include <IGLU/texture_loader/xtc1/TextureLoaderFactory.h>
 #include <array>
-#include <cstdio>
 #include <shell/shared/fileLoader/FileLoader.h>
 
 namespace igl::shell {
 namespace {
 std::vector<std::unique_ptr<iglu::textureloader::ITextureLoaderFactory>> createLoaderFactories() {
   std::vector<std::unique_ptr<iglu::textureloader::ITextureLoaderFactory>> factories;
-  factories.reserve(3);
+  factories.reserve(8);
   factories.emplace_back(std::make_unique<iglu::textureloader::stb::hdr::TextureLoaderFactory>());
   factories.emplace_back(std::make_unique<iglu::textureloader::stb::jpeg::TextureLoaderFactory>());
   factories.emplace_back(std::make_unique<iglu::textureloader::stb::png::TextureLoaderFactory>());
+  // @fb-only
+// @fb-only
+  // @fb-only
+      // @fb-only
+// @fb-only
+// @fb-only
+  // @fb-only
+      // @fb-only
+// @fb-only
+  factories.emplace_back(std::make_unique<iglu::textureloader::ktx2::TextureLoaderFactory>());
+  factories.emplace_back(std::make_unique<iglu::textureloader::ktx1::TextureLoaderFactory>());
+  factories.emplace_back(std::make_unique<iglu::textureloader::xtc1::TextureLoaderFactory>());
 
   return factories;
 }
@@ -49,28 +69,28 @@ constexpr uint32_t kNumBytes = kWidth * kHeight * 4u;
 class CheckerboardData : public iglu::textureloader::IData {
  public:
   [[nodiscard]] const uint8_t* IGL_NONNULL data() const noexcept final;
-  [[nodiscard]] uint32_t length() const noexcept final;
+  [[nodiscard]] uint64_t size() const noexcept final;
 };
 
 const uint8_t* IGL_NONNULL CheckerboardData::data() const noexcept {
   return reinterpret_cast<const uint8_t*>(kCheckerboard.data());
 }
 
-uint32_t CheckerboardData::length() const noexcept {
+uint64_t CheckerboardData::size() const noexcept {
   return kNumBytes;
 }
 
 class WhiteData : public iglu::textureloader::IData {
  public:
   [[nodiscard]] const uint8_t* IGL_NONNULL data() const noexcept final;
-  [[nodiscard]] uint32_t length() const noexcept final;
+  [[nodiscard]] uint64_t size() const noexcept final;
 };
 
 const uint8_t* IGL_NONNULL WhiteData::data() const noexcept {
   return reinterpret_cast<const uint8_t*>(kWhiteTexture.data());
 }
 
-uint32_t WhiteData::length() const noexcept {
+uint64_t WhiteData::size() const noexcept {
   return kNumBytes;
 }
 } // namespace
@@ -101,7 +121,7 @@ ImageData ImageLoader::loadImageDataFromMemory(
     const uint8_t* data,
     uint32_t length,
     std::optional<TextureFormat> preferredFormat) noexcept {
-  if (IGL_DEBUG_VERIFY_NOT(data == nullptr)) {
+  if (data == nullptr) {
     return {};
   }
 
@@ -120,6 +140,7 @@ ImageData ImageLoader::loadImageDataFromMemory(
   ImageData imageData;
   imageData.data = std::move(texData);
   imageData.desc = loader->descriptor();
+  imageData.mipLevelBytes = loader->mipLevelBytes();
 
   return imageData;
 }

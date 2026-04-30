@@ -7,8 +7,9 @@
 
 #include <gtest/gtest.h>
 
-#include "../../util/TestDevice.h"
 #include <IGLU/bitmap/BitmapWriter.h>
+
+#include "../../util/TestDevice.h"
 
 #include <sstream>
 

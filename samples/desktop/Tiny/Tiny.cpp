@@ -8,24 +8,28 @@
 // @fb-only
 
 #define GLFW_INCLUDE_NONE
+
 #include <GLFW/glfw3.h>
-#ifdef _WIN32
+#include <igl/Config.h>
+
+#if defined(_XLESS_GLFW_)
+// do nothing
+#elif IGL_PLATFORM_WINDOWS
 #define GLFW_EXPOSE_NATIVE_WIN32
 #define GLFW_EXPOSE_NATIVE_WGL
-#elif __APPLE__
+#elif IGL_PLATFORM_APPLE
 #define GLFW_EXPOSE_NATIVE_COCOA
-#elif defined(__linux__)
+#elif IGL_PLATFORM_LINUX
 #define GLFW_EXPOSE_NATIVE_X11
 #define GLFW_EXPOSE_NATIVE_GLX
 #else
 #error Unsupported OS
 #endif
 
+// NOLINTNEXTLINE(facebook-unused-include-check)
 #include <GLFW/glfw3native.h>
-
 #include <cstdio>
-#include <regex>
-
+#include <stb/stb_image_write.h>
 #include <igl/IGL.h>
 
 #define USE_OPENGL_BACKEND 0
@@ -36,6 +40,7 @@
 #define USE_OPENGL_BACKEND 1
 #endif
 
+// NOLINTBEGIN(facebook-unused-include-check)
 // clang-format off
 #if USE_OPENGL_BACKEND
   #if IGL_PLATFORM_WINDOWS
@@ -57,6 +62,7 @@
   #include <igl/vulkan/VulkanContext.h>
 #endif // USE_OPENGL_BACKEND
 // clang-format on
+// NOLINTEND(facebook-unused-include-check)
 
 #define ENABLE_MULTIPLE_COLOR_ATTACHMENTS 0
 
@@ -66,6 +72,7 @@ static const uint32_t kNumColorAttachments = 4;
 static const uint32_t kNumColorAttachments = 1;
 #endif
 
+// NOLINTBEGIN(facebook-unused-include-check)
 #if defined(__cpp_lib_format) && !IGL_PLATFORM_APPLE
 #include <format>
 #define IGL_FORMAT std::format
@@ -73,6 +80,7 @@ static const uint32_t kNumColorAttachments = 1;
 #include <fmt/core.h>
 #define IGL_FORMAT fmt::format
 #endif // __cpp_lib_format
+// NOLINTEND(facebook-unused-include-check)
 
 static std::string codeVS = R"(
 #version 460
@@ -118,16 +126,16 @@ void main() {
 
 using namespace igl;
 
-static int width_ = 1024;
-static int height_ = 768;
+static int width = 1024;
+static int height = 768;
 
-static std::unique_ptr<IDevice> device_;
-static std::shared_ptr<ICommandQueue> commandQueue_;
-static RenderPassDesc renderPass_;
-static std::shared_ptr<IFramebuffer> framebuffer_;
-static std::shared_ptr<IRenderPipelineState> renderPipelineState_Triangle_;
+static std::unique_ptr<IDevice> device;
+static std::shared_ptr<ICommandQueue> commandQueue;
+static RenderPassDesc renderPass;
+static std::shared_ptr<IFramebuffer> framebuffer;
+static std::shared_ptr<IRenderPipelineState> renderPipelineStateTriangle;
 
-static GLFWwindow* initIGL(bool isHeadless) {
+static GLFWwindow* initIGL(bool isHeadless, bool enableVulkanValidationLayers) {
   if (!glfwInit()) {
     printf("glfwInit() failed");
     return nullptr;
@@ -153,7 +161,7 @@ static GLFWwindow* initIGL(bool isHeadless) {
 #endif
 
   GLFWwindow* window = isHeadless ? nullptr
-                                  : glfwCreateWindow(width_, height_, title, nullptr, nullptr);
+                                  : glfwCreateWindow(width, height, title, nullptr, nullptr);
 
   if (window) {
     glfwSetErrorCallback([](int error, const char* description) {
@@ -167,18 +175,18 @@ static GLFWwindow* initIGL(bool isHeadless) {
     });
 
     // @lint-ignore CLANGTIDY
-    glfwSetWindowSizeCallback(window, [](GLFWwindow* /*window*/, int width, int height) {
+    glfwSetWindowSizeCallback(window, [](GLFWwindow* /*window*/, int w, int h) {
+      width = w;
+      height = h;
       printf("Window resized! width=%d, height=%d\n", width, height);
-      width_ = width;
-      height_ = height;
 #if !USE_OPENGL_BACKEND
-      auto* vulkanDevice = static_cast<vulkan::Device*>(device_.get());
+      auto* vulkanDevice = static_cast<vulkan::Device*>(device.get());
       auto& ctx = vulkanDevice->getVulkanContext();
-      ctx.initSwapchain(width_, height_);
+      ctx.initSwapchain(width, height);
 #endif
     });
 
-    glfwGetWindowSize(window, &width_, &height_);
+    glfwGetWindowSize(window, &width, &height);
   }
 
   // create a device
@@ -187,7 +195,7 @@ static GLFWwindow* initIGL(bool isHeadless) {
 #if IGL_PLATFORM_WINDOWS
     auto ctx = std::make_unique<igl::opengl::wgl::Context>(GetDC(glfwGetWin32Window(window)),
                                                            glfwGetWGLContext(window));
-    device_ = std::make_unique<igl::opengl::wgl::Device>(std::move(ctx));
+    device = std::make_unique<igl::opengl::wgl::Device>(std::move(ctx));
 #elif IGL_PLATFORM_LINUX
     auto ctx = std::make_unique<igl::opengl::glx::Context>(
         nullptr,
@@ -195,25 +203,25 @@ static GLFWwindow* initIGL(bool isHeadless) {
         (igl::opengl::glx::GLXDrawable)glfwGetX11Window(window),
         (igl::opengl::glx::GLXContext)glfwGetGLXContext(window));
 
-    device_ = std::make_unique<igl::opengl::glx::Device>(std::move(ctx));
+    device = std::make_unique<igl::opengl::glx::Device>(std::move(ctx));
 #endif
 #else
     const igl::vulkan::VulkanContextConfig cfg{
-        .terminateOnValidationError = true,
+        .terminateOnValidationError = false,
+        .enableValidation = enableVulkanValidationLayers,
         .headless = isHeadless,
     };
 #ifdef _WIN32
     auto ctx =
         vulkan::HWDevice::createContext(cfg, window ? (void*)glfwGetWin32Window(window) : nullptr);
-#elif __APPLE__
+#elif IGL_PLATFORM_APPLE
     auto ctx =
         vulkan::HWDevice::createContext(cfg, window ? (void*)glfwGetCocoaWindow(window) : nullptr);
-#elif defined(__linux__)
-    auto ctx = vulkan::HWDevice::createContext(cfg,
-                                               window ? (void*)glfwGetX11Window(window) : nullptr,
-                                               0,
-                                               nullptr,
-                                               (void*)glfwGetX11Display());
+#elif defined(_XLESS_GLFW_)
+    auto ctx = vulkan::HWDevice::createContext(cfg, nullptr, nullptr);
+#elif IGL_PLATFORM_LINUX
+    auto ctx = vulkan::HWDevice::createContext(
+        cfg, window ? (void*)glfwGetX11Window(window) : nullptr, (void*)glfwGetX11Display());
 #else
 #error Unsupported OS
 #endif
@@ -224,21 +232,21 @@ static GLFWwindow* initIGL(bool isHeadless) {
       devices = vulkan::HWDevice::queryDevices(
           *ctx, HWDeviceQueryDesc(HWDeviceType::IntegratedGpu), nullptr);
     }
-    if (devices.empty()) {
+    if (devices.empty() || cfg.headless) {
       // LavaPipe etc
       devices = vulkan::HWDevice::queryDevices(
           *ctx, HWDeviceQueryDesc(HWDeviceType::SoftwareGpu), nullptr);
     }
 
-    device_ =
-        vulkan::HWDevice::create(std::move(ctx), devices[0], (uint32_t)width_, (uint32_t)height_);
+    device =
+        vulkan::HWDevice::create(std::move(ctx), devices[0], (uint32_t)width, (uint32_t)height);
 #endif
-    IGL_DEBUG_ASSERT(device_);
+    IGL_DEBUG_ASSERT(device);
   }
 
-  commandQueue_ = device_->createCommandQueue({}, nullptr);
+  commandQueue = device->createCommandQueue({}, nullptr);
 
-  renderPass_.colorAttachments.resize(kNumColorAttachments);
+  renderPass.colorAttachments.resize(kNumColorAttachments);
 
   // first color attachment
   for (auto i = 0; i < kNumColorAttachments; ++i) {
@@ -246,23 +254,23 @@ static GLFWwindow* initIGL(bool isHeadless) {
     if (i & 0x1) {
       continue;
     }
-    renderPass_.colorAttachments[i] = {
+    renderPass.colorAttachments[i] = {
         .loadAction = LoadAction::Clear,
         .storeAction = StoreAction::Store,
         .clearColor = {1.0f, 1.0f, 1.0f, 1.0f},
     };
   }
-  renderPass_.depthAttachment.loadAction = LoadAction::DontCare;
+  renderPass.depthAttachment.loadAction = LoadAction::DontCare;
 
   return window;
 }
 
 static void createRenderPipeline() {
-  if (renderPipelineState_Triangle_) {
+  if (renderPipelineStateTriangle) {
     return;
   }
 
-  IGL_DEBUG_ASSERT(framebuffer_);
+  IGL_DEBUG_ASSERT(framebuffer);
 
   RenderPipelineDesc desc;
 
@@ -270,14 +278,14 @@ static void createRenderPipeline() {
 
   for (auto i = 0; i < kNumColorAttachments; ++i) {
     // @fb-only
-    if (framebuffer_->getColorAttachment(i)) {
+    if (framebuffer->getColorAttachment(i)) {
       desc.targetDesc.colorAttachments[i].textureFormat =
-          framebuffer_->getColorAttachment(i)->getFormat();
+          framebuffer->getColorAttachment(i)->getFormat();
     }
   }
 
-  if (framebuffer_->getDepthAttachment()) {
-    desc.targetDesc.depthAttachmentFormat = framebuffer_->getDepthAttachment()->getFormat();
+  if (framebuffer->getDepthAttachment()) {
+    desc.targetDesc.depthAttachmentFormat = framebuffer->getDepthAttachment()->getFormat();
   }
 
 #if USE_OPENGL_BACKEND
@@ -285,9 +293,9 @@ static void createRenderPipeline() {
 #endif
 
   desc.shaderStages = ShaderStagesCreator::fromModuleStringInput(
-      *device_, codeVS.c_str(), "main", "", codeFS, "main", "", nullptr);
-  renderPipelineState_Triangle_ = device_->createRenderPipeline(desc, nullptr);
-  IGL_DEBUG_ASSERT(renderPipelineState_Triangle_);
+      *device, codeVS.c_str(), "main", "", codeFS, "main", "", nullptr);
+  renderPipelineStateTriangle = device->createRenderPipeline(desc, nullptr);
+  IGL_DEBUG_ASSERT(renderPipelineStateTriangle);
 }
 
 static std::shared_ptr<ITexture> getNativeDrawable() {
@@ -295,16 +303,16 @@ static std::shared_ptr<ITexture> getNativeDrawable() {
   std::shared_ptr<ITexture> drawable;
 #if USE_OPENGL_BACKEND
 #if IGL_PLATFORM_WINDOWS
-  const auto& platformDevice = device_->getPlatformDevice<opengl::wgl::PlatformDevice>();
+  const auto& platformDevice = device->getPlatformDevice<opengl::wgl::PlatformDevice>();
   IGL_DEBUG_ASSERT(platformDevice != nullptr);
   drawable = platformDevice->createTextureFromNativeDrawable(&ret);
 #elif IGL_PLATFORM_LINUX
-  const auto& platformDevice = device_->getPlatformDevice<opengl::glx::PlatformDevice>();
+  const auto& platformDevice = device->getPlatformDevice<opengl::glx::PlatformDevice>();
   IGL_DEBUG_ASSERT(platformDevice != nullptr);
-  drawable = platformDevice->createTextureFromNativeDrawable(width_, height_, &ret);
+  drawable = platformDevice->createTextureFromNativeDrawable(width, height, &ret);
 #endif
 #else
-  const auto& platformDevice = device_->getPlatformDevice<igl::vulkan::PlatformDevice>();
+  const auto& platformDevice = device->getPlatformDevice<igl::vulkan::PlatformDevice>();
   IGL_DEBUG_ASSERT(platformDevice != nullptr);
   drawable = platformDevice->createTextureFromNativeDrawable(&ret);
 #endif
@@ -328,10 +336,10 @@ static void createFramebuffer(const std::shared_ptr<ITexture>& nativeDrawable) {
         TextureDesc::TextureUsageBits::Attachment | TextureDesc::TextureUsageBits::Sampled,
         IGL_FORMAT("{}C{}", framebufferDesc.debugName.c_str(), i - 1).c_str());
 
-    framebufferDesc.colorAttachments[i].texture = device_->createTexture(desc, nullptr);
+    framebufferDesc.colorAttachments[i].texture = device->createTexture(desc, nullptr);
   }
-  framebuffer_ = device_->createFramebuffer(framebufferDesc, nullptr);
-  IGL_DEBUG_ASSERT(framebuffer_);
+  framebuffer = device->createFramebuffer(framebufferDesc, nullptr);
+  IGL_DEBUG_ASSERT(framebuffer);
 }
 
 static void render(const std::shared_ptr<ITexture>& nativeDrawable) {
@@ -339,25 +347,30 @@ static void render(const std::shared_ptr<ITexture>& nativeDrawable) {
     return;
   }
 
-  const auto size = framebuffer_->getColorAttachment(0)->getSize();
-  if (size.width != width_ || size.height != height_) {
+  const auto size = framebuffer->getColorAttachment(0)->getSize();
+  if (size.width != width || size.height != height) {
     createFramebuffer(nativeDrawable);
   } else {
-    framebuffer_->updateDrawable(nativeDrawable);
+    framebuffer->updateDrawable(nativeDrawable);
   }
 
   // Command buffers (1-N per thread): create, submit and forget
   const CommandBufferDesc cbDesc;
-  const std::shared_ptr<ICommandBuffer> buffer =
-      commandQueue_->createCommandBuffer(cbDesc, nullptr);
+  const std::shared_ptr<ICommandBuffer> buffer = commandQueue->createCommandBuffer(cbDesc, nullptr);
 
-  const igl::Viewport viewport = {0.0f, 0.0f, (float)width_, (float)height_, 0.0f, +1.0f};
-  const igl::ScissorRect scissor = {0, 0, (uint32_t)width_, (uint32_t)height_};
+  const igl::Viewport viewport = {.x = 0.0f,
+                                  .y = 0.0f,
+                                  .width = (float)width,
+                                  .height = (float)height,
+                                  .minDepth = 0.0f,
+                                  .maxDepth = +1.0f};
+  const igl::ScissorRect scissor = {
+      .x = 0, .y = 0, .width = (uint32_t)width, .height = (uint32_t)height};
 
   // This will clear the framebuffer
-  auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
+  auto commands = buffer->createRenderCommandEncoder(renderPass, framebuffer);
 
-  commands->bindRenderPipelineState(renderPipelineState_Triangle_);
+  commands->bindRenderPipelineState(renderPipelineStateTriangle);
   commands->bindViewport(viewport);
   commands->bindScissorRect(scissor);
   commands->pushDebugGroupLabel("Render Triangle", igl::Color(1, 0, 0));
@@ -367,13 +380,22 @@ static void render(const std::shared_ptr<ITexture>& nativeDrawable) {
 
   buffer->present(nativeDrawable);
 
-  commandQueue_->submit(*buffer);
+  commandQueue->submit(*buffer);
 }
 
 int main(int argc, char* argv[]) {
-  const bool isHeadless = argc > 1 && !strcmp(argv[1], "--headless");
+  bool isHeadless = false;
+  bool enableVulkanValidationLayers = true;
 
-  GLFWwindow* window = initIGL(isHeadless);
+  for (int i = 1; i < argc; i++) {
+    if (!strcmp(argv[i], "--headless")) {
+      isHeadless = true;
+    } else if (!strcmp(argv[i], "--disable-vulkan-validation-layers")) {
+      enableVulkanValidationLayers = false;
+    }
+  }
+
+  GLFWwindow* window = initIGL(isHeadless, enableVulkanValidationLayers);
 
   createFramebuffer(getNativeDrawable());
   createRenderPipeline();
@@ -385,14 +407,39 @@ int main(int argc, char* argv[]) {
       glfwPollEvents();
     } else {
       printf("We are running headless - breaking after 1 frame\n");
+      std::shared_ptr<ITexture> texture = framebuffer->getColorAttachment(0);
+      const Dimensions dim = texture->getDimensions();
+      std::vector<uint8_t> pixelsRGBA(dim.width * dim.height * 4);
+      std::vector<uint8_t> pixelsRGB(dim.width * dim.height * 3);
+      framebuffer->copyBytesColorAttachment(*commandQueue,
+                                            0,
+                                            pixelsRGBA.data(),
+                                            TextureRangeDesc::new2D(0, 0, dim.width, dim.height));
+      if (texture->getFormat() == igl::TextureFormat::BGRA_UNorm8 ||
+          texture->getFormat() == igl::TextureFormat::BGRA_SRGB) {
+        // swap R-B
+        for (uint32_t i = 0; i < pixelsRGBA.size(); i += 4) {
+          std::swap(pixelsRGBA[i + 0], pixelsRGBA[i + 2]);
+        }
+      }
+      // convert to RGB
+      for (uint32_t i = 0; i < pixelsRGB.size() / 3; i++) {
+        pixelsRGB[3 * i + 0] = pixelsRGBA[4 * i + 0];
+        pixelsRGB[3 * i + 1] = pixelsRGBA[4 * i + 1];
+        pixelsRGB[3 * i + 2] = pixelsRGBA[4 * i + 2];
+      }
+      const char* fileName = "Tiny.png";
+      IGLLog(IGLLogInfo, "Writing screenshot to: '%s'\n", fileName);
+      stbi_flip_vertically_on_write(1);
+      stbi_write_png(fileName, (int)dim.width, (int)dim.height, 3, pixelsRGB.data(), 0);
       break;
     }
   }
 
   // destroy all the Vulkan stuff before closing the window
-  renderPipelineState_Triangle_ = nullptr;
-  framebuffer_ = nullptr;
-  device_.reset(nullptr);
+  renderPipelineStateTriangle = nullptr;
+  framebuffer = nullptr;
+  device.reset(nullptr);
 
   glfwDestroyWindow(window);
   glfwTerminate();

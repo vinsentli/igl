@@ -5,9 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <igl/opengl/ComputePipelineState.h>
+
 #include <igl/NameHandle.h>
 #include <igl/opengl/Buffer.h>
-#include <igl/opengl/ComputePipelineState.h>
 #include <igl/opengl/Texture.h>
 
 namespace igl::opengl {
@@ -59,14 +60,8 @@ Result ComputePipelineState::create(const ComputePipelineDesc& desc) {
     if (IGL_DEBUG_VERIFY(loc >= 0)) {
       if (const auto& ssboDictionary = reflection_->getShaderStorageBufferObjectDictionary();
           ssboDictionary.find(bufferName) != ssboDictionary.end()) {
-        const GLint index = getContext().getProgramResourceIndex(
-            shaderStages_->getProgramID(), GL_SHADER_STORAGE_BLOCK, bufferName.c_str());
-        if (IGL_DEBUG_VERIFY(index != GL_INVALID_INDEX)) {
-          bufferUnitMap_[bufferUnit] = loc;
-          usingShaderStorageBuffers_ = true;
-        } else {
-          IGL_LOG_ERROR("Shader storage buffer (%s) not found in shader.\n", bufferName.c_str());
-        }
+        bufferUnitMap_[bufferUnit] = loc;
+        usingShaderStorageBuffers_ = true;
       } else {
         GLint unit = 0;
         getContext().getUniformiv(shaderStages_->getProgramID(), loc, &unit);

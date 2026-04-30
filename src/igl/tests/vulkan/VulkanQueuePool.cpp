@@ -6,8 +6,10 @@
  */
 
 #include <gtest/gtest.h>
-#include <igl/Macros.h>
+
 #include <igl/vulkan/VulkanQueuePool.h>
+
+#include <igl/Macros.h>
 
 namespace igl::vulkan {
 IGL_MAYBE_UNUSED static std::ostream& operator<<(std::ostream& os,

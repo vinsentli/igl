@@ -10,6 +10,7 @@
 package com.facebook.igl.shell;
 
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.PixelFormat;
 import android.opengl.EGL15;
 import android.opengl.GLSurfaceView;
@@ -29,30 +30,37 @@ public class SampleView extends GLSurfaceView {
   private float lastTouchX = 0.0f;
   private float lastTouchY = 0.0f;
   private CountDownLatch renderSessionInitLatch = new CountDownLatch(1);
+  private Intent mIntent;
 
   public SampleView(
       Context context,
       SampleLib.BackendVersion backendVersion,
       int swapchainColorTextureFormat,
-      boolean enableStencilBuffer) {
+      boolean enableStencilBuffer,
+      Intent intent) {
     super(context);
-    init(context, backendVersion, swapchainColorTextureFormat, enableStencilBuffer);
+    init(context, backendVersion, swapchainColorTextureFormat, enableStencilBuffer, intent);
   }
 
   public SampleView(
-      Context context, SampleLib.BackendVersion backendVersion, int swapchainColorTextureFormat) {
+      Context context,
+      SampleLib.BackendVersion backendVersion,
+      int swapchainColorTextureFormat,
+      Intent intent) {
     super(context);
-    init(context, backendVersion, swapchainColorTextureFormat, false);
+    init(context, backendVersion, swapchainColorTextureFormat, false, intent);
   }
 
   private void init(
       Context context,
       SampleLib.BackendVersion backendVersion,
       int swapchainColorTextureFormat,
-      boolean enableStencilBuffer) {
+      boolean enableStencilBuffer,
+      Intent intent) {
 
     // Uncomment to attach debugging
     // android.os.Debug.waitForDebugger();
+    mIntent = intent;
 
     setEGLContextFactory(new ContextFactory(backendVersion));
 
@@ -65,7 +73,8 @@ public class SampleView extends GLSurfaceView {
     setEGLConfigChooser(new ConfigChooser(backendVersion, enableStencilBuffer));
 
     setRenderer(
-        new Renderer(context, backendVersion, swapchainColorTextureFormat, renderSessionInitLatch));
+        new Renderer(
+            context, backendVersion, swapchainColorTextureFormat, renderSessionInitLatch, mIntent));
   }
 
   public boolean isRenderSessionInitialized() {
@@ -225,6 +234,7 @@ public class SampleView extends GLSurfaceView {
   /// Renderer: This class communicates with our JNI library to implement the OpenGL rendering.
   private static class Renderer implements GLSurfaceView.Renderer {
     private final Context mContext;
+    private final Intent mIntent;
     private final SampleLib.BackendVersion mBackendVersion;
     private final int mSwapchainColorTextureFormat;
     private CountDownLatch mRenderSessionInitLatch;
@@ -233,15 +243,18 @@ public class SampleView extends GLSurfaceView {
         Context context,
         SampleLib.BackendVersion backendVersion,
         int swapchainColorTextureFormat,
-        CountDownLatch renderSessionInitLatch) {
+        CountDownLatch renderSessionInitLatch,
+        Intent intent) {
       mContext = context;
+      mIntent = intent;
       mBackendVersion = backendVersion;
       mSwapchainColorTextureFormat = swapchainColorTextureFormat;
       mRenderSessionInitLatch = renderSessionInitLatch;
     }
 
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-      SampleLib.init(mBackendVersion, mSwapchainColorTextureFormat, mContext.getAssets(), null);
+      SampleLib.init(
+          mBackendVersion, mSwapchainColorTextureFormat, mContext.getAssets(), null, mIntent);
 
       // Signal that application has being started.
       mRenderSessionInitLatch.countDown();
@@ -252,7 +265,35 @@ public class SampleView extends GLSurfaceView {
     }
 
     public void onDrawFrame(GL10 gl) {
-      SampleLib.render(mContext.getResources().getDisplayMetrics().density);
+      if (SampleLib.isHeadless()) {
+        // Headless mode: run an unrestricted render loop directly on the GL thread.
+        // This prevents GLSurfaceView from calling eglSwapBuffers (which blocks on vsync)
+        // between frames, allowing maximum throughput for benchmarks.
+        android.util.Log.i("igl", "Starting unrestricted render loop (headless GLES mode)");
+        float density = mContext.getResources().getDisplayMetrics().density;
+        while (true) {
+          if (renderAndCheckExit(density)) {
+            return;
+          }
+        }
+      }
+      renderAndCheckExit(mContext.getResources().getDisplayMetrics().density);
+    }
+
+    private boolean renderAndCheckExit(float density) {
+      boolean shouldExit = SampleLib.render(density);
+      if (shouldExit) {
+        android.util.Log.i(
+            "igl", "[IGL Benchmark] Java: Benchmark complete, waiting for logs to flush...");
+        try {
+          Thread.sleep(2000);
+        } catch (InterruptedException e) {
+          // Ignore
+        }
+        android.util.Log.i("igl", "[IGL Benchmark] Java: Exiting process");
+        System.exit(0);
+      }
+      return shouldExit;
     }
   }
 }

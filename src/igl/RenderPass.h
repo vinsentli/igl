@@ -7,10 +7,13 @@
 
 #pragma once
 
+#include <memory>
 #include <vector>
-#include <igl/Common.h>
+#include <igl/Common.h> // IWYU pragma: keep
 
 namespace igl {
+
+class ITimestampQueries;
 
 /**
  * @brief LoadAction determines the loading time action of the various components of a
@@ -77,6 +80,18 @@ struct RenderPassDesc {
    */
   AttachmentDesc stencilAttachment = {.loadAction = LoadAction::Clear,
                                       .storeAction = StoreAction::DontCare};
+
+  /// Per-render-pass GPU timestamp query attachment.
+  /// When set, the backend measures GPU execution time for this render pass.
+  /// slotIndex is a logical timing slot allocated by GPUTimingCollector.
+  /// Metal maps it to two sampleBufferAttachments indices (slot*2, slot*2+1).
+  /// OpenGL uses it as the GL_TIME_ELAPSED query index.
+  struct TimestampQueryDesc {
+    std::shared_ptr<ITimestampQueries> queries;
+    uint32_t slotIndex = 0; ///< Logical timing slot from GPUTimingCollector
+  };
+  /// Optional per-render-pass GPU timing. Null queries pointer means disabled.
+  TimestampQueryDesc timestampQuery;
 };
 
 } // namespace igl

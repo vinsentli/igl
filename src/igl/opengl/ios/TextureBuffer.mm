@@ -5,9 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#import <Foundation/Foundation.h>
-
 #include <igl/opengl/ios/TextureBuffer.h>
+
+#import <CoreFoundation/CFBase.h>
+#import <CoreVideo/CVOpenGLESTextureCache.h>
+#import <CoreVideo/CVPixelBuffer.h>
+#import <MacTypes.h>
+#import <objc/objc.h>
 
 namespace igl::opengl::ios {
 namespace {
@@ -79,8 +83,9 @@ TextureBuffer::~TextureBuffer() {
 
 #if TARGET_OS_SIMULATOR
   if (getFormat() == TextureFormat::BGRA_UNorm8) {
+    GLuint textureId = getId();
     // We only have a manually generated textureID when it's on simulator and BGRA
-    getContext().deleteTextures({getId()});
+    getContext().deleteTextures(1, &textureId);
   }
 #endif
   setTextureBufferProperties(0, 0);
@@ -216,7 +221,8 @@ bool TextureBuffer::supportsUpload() const {
 Result TextureBuffer::uploadInternal(TextureType /*type*/,
                                      const TextureRangeDesc& /*range*/,
                                      const void* /*data*/,
-                                     size_t /*bytesPerRow*/) const {
+                                     size_t /*bytesPerRow*/,
+                                     const uint32_t* IGL_NULLABLE /*mipLevelBytes*/) const {
   return Result();
 }
 

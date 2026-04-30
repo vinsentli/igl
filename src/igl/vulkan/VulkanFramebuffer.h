@@ -6,7 +6,6 @@
  */
 
 #pragma once
-#include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanHelpers.h>
 
 namespace igl::vulkan {
@@ -33,15 +32,17 @@ class VulkanFramebuffer final {
 
   VulkanFramebuffer(const VulkanFramebuffer&) = delete;
   VulkanFramebuffer& operator=(const VulkanFramebuffer&) = delete;
+  VulkanFramebuffer(VulkanFramebuffer&&) = delete;
+  VulkanFramebuffer& operator=(VulkanFramebuffer&&) = delete;
 
   [[nodiscard]] VkFramebuffer getVkFramebuffer() const {
-    return vkFramebuffer_;
+    return vkFramebuffer;
   }
 
  public:
-  const VulkanContext& ctx_;
-  VkDevice device_ = VK_NULL_HANDLE;
-  VkFramebuffer vkFramebuffer_ = VK_NULL_HANDLE;
+  const VulkanContext& ctx;
+  VkDevice vkDevice = VK_NULL_HANDLE;
+  VkFramebuffer vkFramebuffer = VK_NULL_HANDLE;
 };
 
 } // namespace igl::vulkan

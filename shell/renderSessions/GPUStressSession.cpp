@@ -57,28 +57,28 @@ GPUStressSession::GPUStressSession(std::shared_ptr<Platform> platform) :
   vertexData0_{
       VertexPosUvw{.position = {-kHalf, kHalf, -kHalf},
                    .uvw = {0.0, 1.0, 0.0, 1.0},
-                   .base_color = {1.0, 1.0, 1.0, 1.0}},
+                   .baseColor = {1.0, 1.0, 1.0, 1.0}},
       VertexPosUvw{.position = {kHalf, kHalf, -kHalf},
                    .uvw = {1.0, 1.0, 1.0, 1.0},
-                   .base_color = {1.0, 1.0, 1.0, 1.0}},
+                   .baseColor = {1.0, 1.0, 1.0, 1.0}},
       VertexPosUvw{.position = {-kHalf, -kHalf, -kHalf},
                    .uvw = {0.0, 0.0, 0.0, 0.0},
-                   .base_color = {1.0, 1.0, 1.0, 1.0}},
+                   .baseColor = {1.0, 1.0, 1.0, 1.0}},
       VertexPosUvw{.position = {kHalf, -kHalf, -kHalf},
                    .uvw = {1.0, 0.0, 1.0, 0.0},
-                   .base_color = {1.0, 1.0, 1.0, 1.0}},
+                   .baseColor = {1.0, 1.0, 1.0, 1.0}},
       VertexPosUvw{.position = {kHalf, kHalf, kHalf},
                    .uvw = {1.0, 1.0, 1.0, 1.0},
-                   .base_color = {1.0, 1.0, 1.0, 1.0}},
+                   .baseColor = {1.0, 1.0, 1.0, 1.0}},
       VertexPosUvw{.position = {-kHalf, kHalf, kHalf},
                    .uvw = {0.0, 1.0, 0.0, 1.0},
-                   .base_color = {1.0, 1.0, 1.0, 1.0}},
+                   .baseColor = {1.0, 1.0, 1.0, 1.0}},
       VertexPosUvw{.position = {kHalf, -kHalf, kHalf},
                    .uvw = {1.0, 0.0, 1.0, 0.0},
-                   .base_color = {1.0, 1.0, 1.0, 1.0}},
+                   .baseColor = {1.0, 1.0, 1.0, 1.0}},
       VertexPosUvw{.position = {-kHalf, -kHalf, kHalf},
                    .uvw = {0.0, 0.0, 0.0, 0.0},
-                   .base_color = {1.0, 1.0, 1.0, 1.0}},
+                   .baseColor = {1.0, 1.0, 1.0, 1.0}},
   },
   indexData0_{0, 1, 2, 1, 3, 2, 1, 4, 3, 4, 6, 3, 4, 5, 6, 5, 7, 6,
               5, 0, 7, 0, 2, 7, 5, 4, 0, 4, 1, 0, 2, 3, 7, 3, 6, 7},
@@ -248,12 +248,12 @@ void GPUStressSession::addNormalsToCube() {
       if (indexremap.at(oldIndex) != -1) {
         indexData_.at(i) = indexremap[oldIndex];
       } else if (!normalSet[oldIndex]) {
-        vertexData_.at(oldIndex).base_color = glm::vec4(normal, 1.0);
+        vertexData_.at(oldIndex).baseColor = glm::vec4(normal, 1.0);
         normalSet[oldIndex] = true;
         indexremap.at(oldIndex) = oldIndex;
       } else {
         auto vertex = vertexData0_.at(oldIndex);
-        vertex.base_color = glm::vec4(normal, 1.0);
+        vertex.baseColor = glm::vec4(normal, 1.0);
         vertexData_.push_back(vertex);
         const size_t nextIndex = (vertexData_.size() - 1);
         indexData_.at(i) = nextIndex;
@@ -290,12 +290,11 @@ int setCurrentThreadAffinityMask(int mask) {
     IGL_LOG_ERROR("Set thread affinity failed. with mask 0x%x and error 0x%x\n", mask, err);
     return err;
   }
+  return 0;
 #else
   IGL_LOG_ERROR("Set thread affinity not supported on this platorm");
   return -1;
 #endif
-
-  return 0;
 }
 
 double calcPi(int numberOfDivisions, int core) {
@@ -400,7 +399,6 @@ void GPUStressSession::allocateMemory() {
   }
 }
 
-std::atomic<float> memoryVal;
 void GPUStressSession::thrashMemory() noexcept {
   if (!thrashMemory_) {
     return;
@@ -411,7 +409,7 @@ void GPUStressSession::thrashMemory() noexcept {
   const static size_t kCols = 1024;
 
   if (!threadCount_) {
-    memoryVal.store(doReadWrite(memBlock_, kBlocks, kRows, kCols, -1));
+    memoryVal_.store(doReadWrite(memBlock_, kBlocks, kRows, kCols, -1));
   } else {
     static std::vector<std::future<float>> futures;
     static int memoryThreadId = 0;
@@ -433,7 +431,7 @@ void GPUStressSession::thrashMemory() noexcept {
       auto status = future.wait_for(std::chrono::milliseconds(0));
 
       if (status == std::future_status::ready) {
-        memoryVal.store(future.get());
+        memoryVal_.store(future.get());
         futures.erase(futures.begin() + i);
       }
     }
@@ -553,7 +551,7 @@ void GPUStressSession::createCubes() {
       newPoint.uvw *= glm::vec4(uvScale, uvScale, 1.f, 1.f);
       newPoint.uvw += glm::vec4(offset.x, offset.y, 0.f, 0.f);
       if (!lightCount_) {
-        newPoint.base_color = color;
+        newPoint.baseColor = color;
       }
       vertexData_.push_back(newPoint);
     }
@@ -578,35 +576,95 @@ void GPUStressSession::createCubes() {
   }
 
   auto& device = getPlatform().getDevice();
-  const BufferDesc vb0Desc = BufferDesc(BufferDesc::BufferTypeBits::Vertex,
-                                        vertexData_.data(),
-                                        sizeof(VertexPosUvw) * vertexData_.size());
+  const BufferDesc vb0Desc{.type = BufferDesc::BufferTypeBits::Vertex,
+                           .data = vertexData_.data(),
+                           .length = sizeof(VertexPosUvw) * vertexData_.size()};
   vb0_ = device.createBuffer(vb0Desc, nullptr);
-  const BufferDesc ibDesc = BufferDesc(
-      BufferDesc::BufferTypeBits::Index, indexData_.data(), sizeof(uint16_t) * indexData_.size());
+  const BufferDesc ibDesc{.type = BufferDesc::BufferTypeBits::Index,
+                          .data = indexData_.data(),
+                          .length = sizeof(uint16_t) * indexData_.size()};
   ib0_ = device.createBuffer(ibDesc, nullptr);
 
-  VertexInputStateDesc inputDesc;
-  inputDesc.numAttributes = 3;
-  inputDesc.attributes[0].format = VertexAttributeFormat::Float3;
-  inputDesc.attributes[0].offset = offsetof(VertexPosUvw, position);
-  inputDesc.attributes[0].bufferIndex = 0;
-  inputDesc.attributes[0].name = "position";
-  inputDesc.attributes[0].location = 0;
-  inputDesc.attributes[1].format = VertexAttributeFormat::Float4;
-  inputDesc.attributes[1].offset = offsetof(VertexPosUvw, uvw);
-  inputDesc.attributes[1].bufferIndex = 0;
-  inputDesc.attributes[1].name = "uvw_in";
-  inputDesc.attributes[1].location = 1;
-  inputDesc.numInputBindings = 1;
-  inputDesc.attributes[2].format = VertexAttributeFormat::Float4;
-  inputDesc.attributes[2].offset = offsetof(VertexPosUvw, base_color);
-  inputDesc.attributes[2].bufferIndex = 0;
-  inputDesc.attributes[2].name = "base_color";
-  inputDesc.attributes[2].location = 2;
-  inputDesc.numInputBindings = 1;
-  inputDesc.inputBindings[0].stride = sizeof(VertexPosUvw);
+  VertexInputStateDesc inputDesc = {
+      .numAttributes = 3,
+      .attributes =
+          {
+              {.bufferIndex = 0,
+               .format = VertexAttributeFormat::Float3,
+               .offset = offsetof(VertexPosUvw, position),
+               .name = "position",
+               .location = 0},
+              {.bufferIndex = 0,
+               .format = VertexAttributeFormat::Float4,
+               .offset = offsetof(VertexPosUvw, uvw),
+               .name = "uvw_in",
+               .location = 1},
+              {.bufferIndex = 0,
+               .format = VertexAttributeFormat::Float4,
+               .offset = offsetof(VertexPosUvw, baseColor),
+               .name = "base_color",
+               .location = 2},
+          },
+      .numInputBindings = 1,
+      .inputBindings = {{.stride = sizeof(VertexPosUvw)}},
+  };
   vertexInput0_ = device.createVertexInputState(inputDesc, nullptr);
+}
+
+void GPUStressSession::processCustomParameter(const std::string& key, const std::string& value) {
+  auto toLower = [](std::string str) {
+    std::transform(str.begin(), str.end(), str.begin(), ::tolower);
+    return str;
+  };
+
+  const std::string lowerKey = toLower(key);
+
+  if (lowerKey == "numthreads") {
+    setNumThreads(std::stoi(value));
+  } else if (lowerKey == "thrashmemory") {
+    setThrashMemory(toLower(value) == "true" || value == "1");
+  } else if (lowerKey == "memorysize") {
+    setMemorySize(static_cast<size_t>(std::stoull(value)));
+  } else if (lowerKey == "memoryreads") {
+    setMemoryReads(static_cast<size_t>(std::stoull(value)));
+  } else if (lowerKey == "memorywrites") {
+    setMemoryWrites(static_cast<size_t>(std::stoull(value)));
+  } else if (lowerKey == "goslowoncpu") {
+    setGoSlowOnCpu(std::stoi(value));
+  } else if (lowerKey == "cubecount") {
+    setCubeCount(std::stoi(value));
+  } else if (lowerKey == "drawcount") {
+    setDrawCount(std::stoi(value));
+  } else if (lowerKey == "testoverdraw") {
+    setTestOverdraw(toLower(value) == "true" || value == "1");
+  } else if (lowerKey == "enableblending") {
+    setEnableBlending(toLower(value) == "true" || value == "1");
+  } else if (lowerKey == "usemsaa") {
+    setUseMSAA(toLower(value) == "true" || value == "1");
+  } else if (lowerKey == "lightcount") {
+    setLightCount(std::stoi(value));
+  } else if (lowerKey == "threadcore") {
+    const size_t commaPos = value.find(',');
+    if (commaPos != std::string::npos) {
+      int thread = std::stoi(value.substr(0, commaPos));
+      int core = std::stoi(value.substr(commaPos + 1));
+      if (thread >= 0 && threadCount_ > 0) {
+        setThreadCore(thread, core);
+      } else {
+        IGL_LOG_ERROR(
+            "Invalid threadCore parameter: thread=%d, threadCount=%d. Ensure numThreads > 0 is "
+            "set before threadCore.",
+            thread,
+            threadCount_.load());
+      }
+    }
+  } else if (lowerKey == "dropframeinterval") {
+    setDropFrameInterval(std::stoi(value));
+  } else if (lowerKey == "dropframecount") {
+    setDropFrameCount(std::stoi(value));
+  } else if (lowerKey == "rotatecubes") {
+    setRotateCubes(toLower(value) == "true" || value == "1");
+  }
 }
 
 void GPUStressSession::initialize() noexcept {
@@ -624,6 +682,16 @@ void GPUStressSession::initialize() noexcept {
   //  changed pixels we send to the delphi.
   appParamsRef().sizeX = .5f;
   appParamsRef().sizeY = .5f;
+  // Process custom parameters from ShellParams
+  if (shellParams().benchmarkParams.has_value()) {
+    const auto& benchmarkParams = shellParams().benchmarkParams.value();
+    const auto& customParams = benchmarkParams.customParams;
+    for (const auto& [key, value] : customParams) {
+      IGL_LOG_DEBUG("Processing custom parameter: '%s' = '%s'", key.c_str(), value.c_str());
+      processCustomParameter(key, value);
+    }
+  }
+
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
     return;
@@ -716,34 +784,36 @@ void GPUStressSession::initState(const igl::SurfaceTextures& surfaceTextures) {
     if (useMSAA_) {
       const auto dimensions = surfaceTextures.color->getDimensions();
 
-      const TextureDesc fbTexDesc = {
-          dimensions.width,
-          dimensions.height,
-          1,
-          surfaceTextures.color->getNumLayers(),
-          kMsaaSamples,
-          TextureDesc::TextureUsageBits::Attachment,
-          1,
-          surfaceTextures.color->getNumLayers() > 1 ? TextureType::TwoDArray : TextureType::TwoD,
-          surfaceTextures.color->getFormat(),
-          igl::ResourceStorage::Private};
+      const TextureDesc fbTexDesc = {.width = dimensions.width,
+                                     .height = dimensions.height,
+                                     .depth = 1,
+                                     .numLayers = surfaceTextures.color->getNumLayers(),
+                                     .numSamples = kMsaaSamples,
+                                     .usage = TextureDesc::TextureUsageBits::Attachment,
+                                     .numMipLevels = 1,
+                                     .type = surfaceTextures.color->getNumLayers() > 1
+                                                 ? TextureType::TwoDArray
+                                                 : TextureType::TwoD,
+                                     .format = surfaceTextures.color->getFormat(),
+                                     .storage = igl::ResourceStorage::Private};
 
       framebufferDesc.colorAttachments[0].texture =
           getPlatform().getDevice().createTexture(fbTexDesc, nullptr);
 
       framebufferDesc.colorAttachments[0].resolveTexture = surfaceTextures.color;
 
-      const igl::TextureDesc depthDesc = {
-          dimensions.width,
-          dimensions.height,
-          1,
-          surfaceTextures.depth->getNumLayers(),
-          kMsaaSamples,
-          TextureDesc::TextureUsageBits::Attachment,
-          1,
-          surfaceTextures.depth->getNumLayers() > 1 ? TextureType::TwoDArray : TextureType::TwoD,
-          surfaceTextures.depth->getFormat(),
-          igl::ResourceStorage::Private};
+      const igl::TextureDesc depthDesc = {.width = dimensions.width,
+                                          .height = dimensions.height,
+                                          .depth = 1,
+                                          .numLayers = surfaceTextures.depth->getNumLayers(),
+                                          .numSamples = kMsaaSamples,
+                                          .usage = TextureDesc::TextureUsageBits::Attachment,
+                                          .numMipLevels = 1,
+                                          .type = surfaceTextures.depth->getNumLayers() > 1
+                                                      ? TextureType::TwoDArray
+                                                      : TextureType::TwoD,
+                                          .format = surfaceTextures.depth->getFormat(),
+                                          .storage = igl::ResourceStorage::Private};
 
       framebufferDesc.depthAttachment.texture =
           getPlatform().getDevice().createTexture(depthDesc, nullptr);
@@ -763,27 +833,28 @@ void GPUStressSession::initState(const igl::SurfaceTextures& surfaceTextures) {
 
   constexpr uint32_t textureUnit = 0;
   if (pipelineState_ == nullptr) {
-    // Graphics pipeline: state batch that fully configures GPU for rendering
-
-    RenderPipelineDesc graphicsDesc;
-    graphicsDesc.vertexInputState = vertexInput0_;
-    graphicsDesc.shaderStages = shaderStages_;
-    graphicsDesc.targetDesc.colorAttachments.resize(1);
-    graphicsDesc.targetDesc.colorAttachments[0].textureFormat =
-        framebuffer_->getColorAttachment(0)->getProperties().format;
+    RenderPipelineDesc graphicsDesc = {
+        .vertexInputState = vertexInput0_,
+        .shaderStages = shaderStages_,
+        .targetDesc =
+            {
+                .colorAttachments = {{
+                    .textureFormat = framebuffer_->getColorAttachment(0)->getProperties().format,
+                    .blendEnabled = enableBlending_,
+                    .rgbBlendOp = BlendOp::Add,
+                    .alphaBlendOp = BlendOp::Add,
+                    .srcRGBBlendFactor = BlendFactor::SrcAlpha,
+                    .srcAlphaBlendFactor = BlendFactor::SrcAlpha,
+                    .dstRGBBlendFactor = BlendFactor::OneMinusSrcAlpha,
+                    .dstAlphaBlendFactor = BlendFactor::OneMinusSrcAlpha,
+                }},
+                .depthAttachmentFormat = framebuffer_->getDepthAttachment()->getProperties().format,
+            },
+        .cullMode = igl::CullMode::Back,
+        .frontFaceWinding = igl::WindingMode::Clockwise,
+        .fragmentUnitSamplerMap = {{textureUnit, IGL_NAMEHANDLE("inputImage")}},
+    };
     graphicsDesc.sampleCount = useMSAA_ ? kMsaaSamples : 1;
-    graphicsDesc.targetDesc.depthAttachmentFormat =
-        framebuffer_->getDepthAttachment()->getProperties().format;
-    graphicsDesc.fragmentUnitSamplerMap[textureUnit] = IGL_NAMEHANDLE("inputImage");
-    graphicsDesc.cullMode = igl::CullMode::Back;
-    graphicsDesc.frontFaceWinding = igl::WindingMode::Clockwise;
-    graphicsDesc.targetDesc.colorAttachments[0].blendEnabled = enableBlending_;
-    graphicsDesc.targetDesc.colorAttachments[0].rgbBlendOp = BlendOp::Add;
-    graphicsDesc.targetDesc.colorAttachments[0].alphaBlendOp = BlendOp::Add;
-    graphicsDesc.targetDesc.colorAttachments[0].srcRGBBlendFactor = BlendFactor::SrcAlpha;
-    graphicsDesc.targetDesc.colorAttachments[0].srcAlphaBlendFactor = BlendFactor::SrcAlpha;
-    graphicsDesc.targetDesc.colorAttachments[0].dstRGBBlendFactor = BlendFactor::OneMinusSrcAlpha;
-    graphicsDesc.targetDesc.colorAttachments[0].dstAlphaBlendFactor = BlendFactor::OneMinusSrcAlpha;
 
     pipelineState_ = getPlatform().getDevice().createRenderPipeline(graphicsDesc, nullptr);
   }
@@ -856,20 +927,24 @@ void GPUStressSession::drawCubes(const igl::SurfaceTextures& surfaceTextures,
           info.index = 1;
           info.length = sizeof(VertexFormat);
           info.uniforms = std::vector<UniformDesc>{
-              UniformDesc{"projectionMatrix",
-                          -1,
-                          igl::UniformType::Mat4x4,
-                          1,
-                          offsetof(VertexFormat, projectionMatrix),
-                          0},
-              UniformDesc{"modelViewMatrix",
-                          -1,
-                          igl::UniformType::Mat4x4,
-                          1,
-                          offsetof(VertexFormat, modelViewMatrix),
-                          0},
-              UniformDesc{
-                  "scaleZ", -1, igl::UniformType::Float, 1, offsetof(VertexFormat, scaleZ), 0}};
+              UniformDesc{.name = "projectionMatrix",
+                          .location = -1,
+                          .type = igl::UniformType::Mat4x4,
+                          .numElements = 1,
+                          .offset = offsetof(VertexFormat, projectionMatrix),
+                          .elementStride = 0},
+              UniformDesc{.name = "modelViewMatrix",
+                          .location = -1,
+                          .type = igl::UniformType::Mat4x4,
+                          .numElements = 1,
+                          .offset = offsetof(VertexFormat, modelViewMatrix),
+                          .elementStride = 0},
+              UniformDesc{.name = "scaleZ",
+                          .location = -1,
+                          .type = igl::UniformType::Float,
+                          .numElements = 1,
+                          .offset = offsetof(VertexFormat, scaleZ),
+                          .elementStride = 0}};
 
           vertUniformBuffer = std::make_shared<iglu::ManagedUniformBuffer>(device, info);
           IGL_DEBUG_ASSERT(vertUniformBuffer->result.isOk());
@@ -934,7 +1009,7 @@ void GPUStressSession::update(SurfaceTextures surfaceTextures) noexcept {
                        "FPS: (%f)   PI: (%lf)  Memory (%f)",
                        fps_.getAverageFPS(),
                        pi_,
-                       memoryVal.load());
+                       memoryVal_.load());
     ImGui::End();
     imguiSession_->endFrame(getPlatform().getDevice(), *commands);
   }

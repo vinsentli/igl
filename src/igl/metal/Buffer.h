@@ -7,7 +7,8 @@
 
 #pragma once
 
-#include <Metal/Metal.h>
+#import <Metal/MTLBuffer.h> // @donotremove
+#import <Metal/MTLTypes.h>
 #include <igl/Buffer.h>
 #include <igl/metal/Device.h>
 

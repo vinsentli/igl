@@ -14,12 +14,10 @@ namespace igl::vulkan {
 
 std::unique_ptr<VulkanContext> HWDevice::createContext(const VulkanContextConfig& config,
                                                        void* IGL_NULLABLE window,
-                                                       size_t numExtraInstanceExtensions,
-                                                       const char* IGL_NULLABLE* IGL_NULLABLE
-                                                           extraInstanceExtensions,
                                                        void* IGL_NULLABLE display) {
-  return std::make_unique<VulkanContext>(
-      config, window, numExtraInstanceExtensions, extraInstanceExtensions, display);
+  // @fb-only
+  // @lint-ignore CLANGTIDY
+  return std::make_unique<VulkanContext>(config, window, display);
 }
 
 std::vector<HWDeviceDesc> HWDevice::queryDevices(VulkanContext& ctx,
@@ -32,16 +30,16 @@ std::vector<HWDeviceDesc> HWDevice::queryDevices(VulkanContext& ctx,
   return outDevices;
 }
 
-std::unique_ptr<IDevice> HWDevice::create(std::unique_ptr<VulkanContext> ctx,
-                                          const HWDeviceDesc& desc,
-                                          uint32_t width,
-                                          uint32_t height,
-                                          size_t numExtraDeviceExtensions,
-                                          const char* IGL_NULLABLE* IGL_NULLABLE
-                                              extraDeviceExtensions,
-                                          const igl::vulkan::VulkanFeatures* IGL_NULLABLE features,
-                                          const char* IGL_NULLABLE debugName,
-                                          Result* IGL_NULLABLE outResult) {
+std::unique_ptr<Device> HWDevice::create(std::unique_ptr<VulkanContext> ctx,
+                                         const HWDeviceDesc& desc,
+                                         uint32_t width,
+                                         uint32_t height,
+                                         size_t numExtraDeviceExtensions,
+                                         const char* IGL_NULLABLE* IGL_NULLABLE
+                                             extraDeviceExtensions,
+                                         const igl::vulkan::VulkanFeatures* IGL_NULLABLE features,
+                                         const char* IGL_NULLABLE debugName,
+                                         Result* IGL_NULLABLE outResult) {
   IGL_DEBUG_ASSERT(ctx);
 
   auto result =

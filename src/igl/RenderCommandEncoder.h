@@ -9,7 +9,6 @@
 
 #include <igl/Buffer.h>
 #include <igl/CommandEncoder.h>
-#include <igl/Common.h>
 #include <igl/Framebuffer.h>
 #include <igl/Uniform.h>
 
@@ -20,11 +19,11 @@ class IRenderPipelineState;
 class ISamplerState;
 
 namespace BindTarget {
-const uint8_t kVertex = 0x0001;
-const uint8_t kFragment = 0x0002;
-const uint8_t kAllGraphics = 0x0003;
-const uint8_t kTask = 0x0004;
-const uint8_t kMesh = 0x0008;
+constexpr uint8_t kVertex = 0x0001;
+constexpr uint8_t kFragment = 0x0002;
+constexpr uint8_t kAllGraphics = 0x0003;
+constexpr uint8_t kTask = 0x0004;
+constexpr uint8_t kMesh = 0x0008;
 } // namespace BindTarget
 
 class IRenderCommandEncoder : public ICommandEncoder {
@@ -98,9 +97,9 @@ class IRenderCommandEncoder : public ICommandEncoder {
                            uint32_t firstIndex = 0,
                            int32_t vertexOffset = 0,
                            uint32_t baseInstance = 0) = 0;
-  virtual void drawMesh(const Dimensions& threadgroupsPerGrid,
-                        const Dimensions& threadsPerTaskThreadgroup,
-                        const Dimensions& threadsPerMeshThreadgroup) {}                           
+  virtual void drawMeshTasks(const Dimensions& threadgroupsPerGrid,
+                             const Dimensions& threadsPerTaskThreadgroup,
+                             const Dimensions& threadsPerMeshThreadgroup) = 0;
   virtual void multiDrawIndirect(IBuffer& indirectBuffer,
                                  size_t indirectBufferOffset = 0,
                                  uint32_t drawCount = 1,
