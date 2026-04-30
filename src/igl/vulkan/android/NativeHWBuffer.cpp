@@ -131,6 +131,12 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
     return Result(Result::Code::RuntimeError, "Failed to create vulkan image");
   }
 
+  VK_ASSERT(ivkSetDebugObjectName(&ctx.vf_,
+                                  device,
+                                  VK_OBJECT_TYPE_IMAGE,
+                                  (uint64_t)vk_image,
+                                  "Image: AHB NativeHWTextureBuffer"));
+
   // To import memory created outside of the current Vulkan instance from an
   // Android hardware buffer, add a VkImportAndroidHardwareBufferInfoANDROID
   // structure to the pNext chain of the VkMemoryAllocateInfo structure.
@@ -242,6 +248,11 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
                                            &vulkanImage.samplerYcbcrConversionCreateInfo_,
                                            nullptr,
                                            &conversionInfo.conversion);
+    VK_ASSERT(ivkSetDebugObjectName(&ctx.vf_,
+                                    device,
+                                    VK_OBJECT_TYPE_SAMPLER_YCBCR_CONVERSION,
+                                    (uint64_t)conversionInfo.conversion,
+                                    "YCbCr Conversion: AHB NativeHWTextureBuffer"));
     IGL_LOG_DEBUG("created sampler ycbcr conversion at %x with %d %d %d and %d",
                   conversionInfo.conversion,
                   ahb_format_props.suggestedYcbcrModel,
