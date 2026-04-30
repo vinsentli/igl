@@ -1043,6 +1043,11 @@ Result VulkanContext::initContext(const HWDeviceDesc& desc,
         .pInitialData = config_.pipelineCacheData,
     };
     vf_.vkCreatePipelineCache(device, &ci, nullptr, &pipelineCache_);
+    VK_ASSERT(ivkSetDebugObjectName(&vf_,
+                                    device,
+                                    VK_OBJECT_TYPE_PIPELINE_CACHE,
+                                    (uint64_t)pipelineCache_,
+                                    "Pipeline Cache: VulkanContext::pipelineCache_"));
   }
 
   // Create Vulkan Memory Allocator
