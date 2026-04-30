@@ -496,9 +496,7 @@ std::shared_ptr<IRenderPipelineState> Device::createTraditionalRenderPipeline(co
     return nullptr;
   }
 
-  RenderPipelineDesc descNoShaderStage = desc;
-  descNoShaderStage.shaderStages = nullptr;
-  return std::make_shared<RenderPipelineState>(metalObject, reflection, descNoShaderStage);
+  return std::make_shared<RenderPipelineState>(metalObject, reflection, desc);
 }
 
 std::shared_ptr<IRenderPipelineState> Device::createMeshRenderPipeline(const RenderPipelineDesc& desc,
