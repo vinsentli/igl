@@ -731,7 +731,7 @@ bool hasStencil(VkFormat format) {
          (format == VK_FORMAT_D24_UNORM_S8_UINT) || (format == VK_FORMAT_D32_SFLOAT_S8_UINT);
 }
 
-std::shared_ptr<VulkanSpecializationInfo> createSpecializationInfo(const std::vector<int>& constantValues){
+std::shared_ptr<VulkanSpecializationInfo> createSpecializationInfo(const std::map<uint8_t, int>& constantValues){
     if (constantValues.empty())
         return nullptr;
 
@@ -739,8 +739,8 @@ std::shared_ptr<VulkanSpecializationInfo> createSpecializationInfo(const std::ve
     info->entries.resize(constantValues.size());
 
     int offset = 0;
-    for (size_t index = 0; index != constantValues.size(); ++index) {
-        info->datas.emplace_back(constantValues[index]);
+    for (auto& [index, value] : constantValues) {
+        info->datas.emplace_back(value);
         info->entries[index].constantID = index;
         info->entries[index].offset = offset;
         info->entries[index].size = sizeof(int);

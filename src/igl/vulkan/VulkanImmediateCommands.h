@@ -161,7 +161,6 @@ class VulkanImmediateCommands final {
   /// Returns `VK_NULL_HANDLE` otherwise.
   VkFence getVkFenceFromSubmitHandle(SubmitHandle handle);
 
-  VulkanCommandPool & getCommandPool() { return  commandPool_; }
   /// @brief Stores the file descriptor in the `CommandBufferWrapper` object associated with the
   /// handle. Chceks for bounds, but does not check for validity.
   void storeFDInSubmitHandle(SubmitHandle handle, int fd) noexcept;
@@ -170,6 +169,8 @@ class VulkanImmediateCommands final {
   /// the FD has not been explicitly set with `storeFDInSubmitHandle()`, it returns -1. This
   /// function DOES NOT retrieve the FD from the Vulkan implementation
   [[nodiscard]] int cachedFDFromSubmitHandle(SubmitHandle handle) const noexcept;
+
+  [[nodiscard]] VkCommandPool getVkCommandPool() const { return commandPool_; }
 
  private:
   /// @brief Resets all commands buffers and their associated fences that are valid, are not being
@@ -181,13 +182,12 @@ class VulkanImmediateCommands final {
   /// internally in `VulkanImmediateCommands`. A SubmitHandle handle is also recycled if it's empty
   [[nodiscard]] bool isRecycled(SubmitHandle handle) const;
 
-public:
+ public:
   VkQueue queue_ = VK_NULL_HANDLE;
 
  private:
   const VulkanFunctionTable& vf_;
   VkDevice device_ = VK_NULL_HANDLE;
-  VkQueue queue_ = VK_NULL_HANDLE;
   VkCommandPool commandPool_ = VK_NULL_HANDLE;
   std::string debugName_;
   std::vector<CommandBufferWrapper> buffers_;

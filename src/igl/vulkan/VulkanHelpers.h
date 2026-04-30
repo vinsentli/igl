@@ -133,6 +133,10 @@ uint32_t ivkFindMemoryType(const VkPhysicalDeviceMemoryProperties* memProps,
                            uint32_t memoryTypeBits,
                            VkMemoryPropertyFlags flags);
 
+bool iFindMemoryType(const struct VulkanFunctionTable* vt,
+                     VkPhysicalDevice physDev,
+                     VkMemoryPropertyFlags flags);
+
 VkResult ivkCreateGraphicsPipeline(const struct VulkanFunctionTable* vt,
                                    VkDevice device,
                                    VkPipelineCache pipelineCache,

@@ -117,7 +117,7 @@ SubmitHandle CommandQueue::endCommandBuffer(VulkanContext& ctx,
   cmdBuffer->lastSubmitHandle_ = ctx.immediate_->submit(cmdBuffer->wrapper_, signalSemaphore, signalFence);
   if (signalFence) {
     //如果有signalFence，必须要让wrapper_中的fence_激活一下，否则会一直处于等待状态，导致画面卡住
-    cmdBuffer->wrapper_.fence_.signal(ctx.immediate_->queue_);
+    cmdBuffer->wrapper_.fence.signal(ctx.immediate_->queue_);
   }
 
   if (shouldPresent) {

@@ -12,7 +12,6 @@
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/VulkanContext.h>
-#include <igl/vulkan/VulkanDevice.h>
 #include <igl/vulkan/VulkanSemaphore.h>
 #include <igl/vulkan/VulkanTexture.h>
 #include <unistd.h>
@@ -82,7 +81,7 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
 #if WAIT_SURFACE_FLINGER
   for (size_t i = 0; i != kMaxPendingPresents; ++i) {
     frameSync_[i].acquireFence = std::make_shared<VulkanFence>(ctx_.vf_,
-                                                               ctx_.device_->device_,
+                                                               ctx_.getVkDevice(),
                                                                VK_FENCE_CREATE_SIGNALED_BIT,
                                                                false,
                                                                "VulkanSwapchain_acquire_fence");
@@ -154,7 +153,7 @@ void VulkanSwapchain::OnSurfaceChanged(int width, int height) {
 std::shared_ptr<VulkanSemaphore> VulkanSwapchain::CreateSemaphoreFromFD(int fd) {
   auto semaphore =
       std::make_shared<VulkanSemaphore>(ctx_.vf_,
-                                        ctx_.device_->device_,
+                                        ctx_.getVkDevice(),
                                         false,
                                         IGL_FORMAT("Semaphore: renderReady #{}", frameId_).c_str());
 
@@ -166,7 +165,7 @@ std::shared_ptr<VulkanSemaphore> VulkanSwapchain::CreateSemaphoreFromFD(int fd) 
       .flags = VK_SEMAPHORE_IMPORT_TEMPORARY_BIT,
   };
 
-  VkResult ret = ctx_.vf_.vkImportSemaphoreFdKHR(ctx_.device_->device_, &importInfo);
+  VkResult ret = ctx_.vf_.vkImportSemaphoreFdKHR(ctx_.getVkDevice(), &importInfo);
 
   if (ret == VK_SUCCESS) {
     return semaphore;
@@ -185,7 +184,7 @@ int VulkanSwapchain::ExportFDFromVkSemaphore(VkSemaphore semaphore) {
   };
 
   int fenceFd = -1;
-  const VkResult result = ctx_.vf_.vkGetSemaphoreFdKHR(ctx_.device_->device_, &getFdInfo, &fenceFd);
+  const VkResult result = ctx_.vf_.vkGetSemaphoreFdKHR(ctx_.getVkDevice(), &getFdInfo, &fenceFd);
   if (result != VK_SUCCESS) {
     IGL_LOG_ERROR("VulkanSwapchain::ExportFDFromVkSemaphore failed:%d", result);
   }
@@ -233,7 +232,7 @@ std::shared_ptr<ITexture> VulkanSwapchain::getCurrentVulkanTexture(Device& devic
 #endif
     frameSync_[frameId_].presentReady = std::make_shared<VulkanSemaphore>(
         ctx_.vf_,
-        ctx_.device_->device_,
+        ctx_.getVkDevice(),
         true,
         IGL_FORMAT("Semaphore: presentReady #{}", frameId_).c_str());
 

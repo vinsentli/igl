@@ -759,8 +759,8 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
       
     MTLFunctionConstantValues * constValues = [MTLFunctionConstantValues new];
 
-    for (size_t index = 0; index != info.functionConstantValues.size(); ++index){
-      [constValues setConstantValue:&info.functionConstantValues[index] type:MTLDataTypeInt atIndex:index];
+    for (auto& [index, value] : info.functionConstantValues){
+      [constValues setConstantValue:&value type:MTLDataTypeInt atIndex:index];
     }
 
     auto metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint constantValues:constValues error:&error];

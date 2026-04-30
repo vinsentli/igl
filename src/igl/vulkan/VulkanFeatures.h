@@ -75,8 +75,6 @@ class VulkanFeatures final {
 
   VkPhysicalDeviceDescriptorBufferFeaturesEXT featuresDescriptorBuffer{};
 
-  VkPhysicalDeviceDescriptorBufferFeaturesEXT featuresDescriptorBuffer{};
-
   // We need to reassemble the feature chain because of the pNext pointers
   VulkanFeatures& operator=(const VulkanFeatures& other) noexcept;
 
@@ -116,8 +114,11 @@ class VulkanFeatures final {
   VulkanContextConfig config{};
 
   // NOLINTBEGIN(readability-identifier-naming)
+  bool has_VK_KHR_create_renderpass2 = false;  // promoted to Vulkan 1.2
   bool has_VK_EXT_descriptor_buffer = false;
   bool has_VK_EXT_descriptor_indexing = false; // promoted to Vulkan 1.2
+  bool has_VK_EXT_device_memory_report = false;
+  bool has_VK_KHR_external_semaphore_fd = false;
   bool has_VK_EXT_fragment_density_map = false;
   bool has_VK_EXT_headless_surface = false;
   bool has_VK_EXT_index_type_uint8 = false; // promoted to Vulkan 1.4

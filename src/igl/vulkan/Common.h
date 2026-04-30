@@ -12,6 +12,7 @@
 
 #include <cassert> // IWYU pragma: export
 #include <utility> // IWYU pragma: export
+#include <map>
 
 // set to 1 to see very verbose debug console logs with Vulkan commands
 #define IGL_VULKAN_PRINT_COMMANDS 0
@@ -198,13 +199,6 @@ TextureRangeDesc atVkLayer(TextureType type, const TextureRangeDesc& range, uint
 VkColorSpaceKHR colorSpaceToVkColorSpace(ColorSpace colorSpace);
 ColorSpace vkColorSpaceToColorSpace(VkColorSpaceKHR colorSpace);
 VkComponentMapping componentMappingToVkComponentMapping(const ComponentMapping& mapping);
-struct VulkanSpecializationInfo{
-  VkSpecializationInfo info = {};
-  std::vector<int> datas;
-  std::vector<VkSpecializationMapEntry> entries;
-};
-std::shared_ptr<VulkanSpecializationInfo> createSpecializationInfo(const std::vector<int>& constantValues);
-
 struct VulkanSpecializationInfo{
   VkSpecializationInfo info = {};
   std::vector<int> datas;

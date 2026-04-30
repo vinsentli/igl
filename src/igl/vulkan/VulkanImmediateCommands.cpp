@@ -309,7 +309,7 @@ VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
         .commandBufferCount = 1,
         .pCommandBuffers = &wrapper.cmdBuf,
         .signalSemaphoreCount = 1u,
-        .pSignalSemaphores = signalSemaphore ? &signalSemaphore :  &wrapper.semaphore_.vkSemaphore_,
+        .pSignalSemaphores = signalSemaphore ? &signalSemaphore :  &wrapper.semaphore.vkSemaphore_,
     };
     // @lint-ignore CLANGTIDY
     const VkFence vkFence = wrapper.fence.vkFence_;
@@ -321,7 +321,7 @@ VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
     IGL_PROFILER_ZONE_END();
   }
 
-  lastSubmitSemaphore_.semaphore = signalSemaphore ? VK_NULL_HANDLE : wrapper.semaphore_.vkSemaphore_;
+  lastSubmitSemaphore_.semaphore = signalSemaphore ? VK_NULL_HANDLE : wrapper.semaphore.vkSemaphore_;
   lastSubmitHandle_ = wrapper.handle;
   waitSemaphore_.semaphore = VK_NULL_HANDLE;
   signalSemaphore_.semaphore = VK_NULL_HANDLE;

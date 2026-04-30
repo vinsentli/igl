@@ -35,10 +35,10 @@ add_library(IGLLibrary ${IGLBuildType} ${SRC_FILES} ${HEADER_FILES})
 target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/src")
 target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/glm")
 
-if(NOT IGL_WITH_OPENGL)
-  target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/src/igl/opengl/util")
-  target_sources(IGLLibrary PRIVATE opengl/util/TextureFormat.cpp opengl/util/TextureFormat.h)
-endif()
+#if(NOT IGL_WITH_OPENGL)
+#  target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/src/igl/opengl/util")
+#  target_sources(IGLLibrary PRIVATE opengl/util/TextureFormat.cpp opengl/util/TextureFormat.h)
+#endif()
 
 if(NOT EMSCRIPTEN)
   # Only link fmt if it's available, use PRIVATE to avoid exporting the dependency

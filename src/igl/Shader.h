@@ -55,7 +55,7 @@ struct ShaderModuleInfo {
    * Metal:MTLFunctionConstantValues.
    * Vulkan:SpecializationInfo.
    * index:constant_id, value:constant value.*/
-  std::vector<int> functionConstantValues;
+  std::map<uint8_t, int> functionConstantValues;
 
   std::string debugName;
 
