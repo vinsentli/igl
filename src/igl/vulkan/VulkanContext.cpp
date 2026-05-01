@@ -2111,8 +2111,9 @@ void VulkanContext::updateBindingsStorageImagesByDescriptorBuffer(
     const BindingsStorageImages& data,
     const VulkanDescriptorSetLayout& dsl,
     const util::SpvModuleInfo& info) const {
-  if (info.images.empty())
+  if (info.images.empty()) {
     return;
+  }
 
   // make sure the guard value is always there
   IGL_DEBUG_ASSERT(!textures_.objects_.empty());
@@ -2184,8 +2185,9 @@ void VulkanContext::updateBindingsBuffersByDescriptorBuffer(
     const VulkanDescriptorSetLayout& dsl,
     const util::SpvModuleInfo& info) {
   IGL_PROFILER_FUNCTION();
-  if (info.buffers.empty())
+  if (info.buffers.empty()) {
     return;
+  }
 
   auto uniformBufferDescriptorSize =
       vkPhysicalDeviceDescriptorBufferProperties_.uniformBufferDescriptorSize;
