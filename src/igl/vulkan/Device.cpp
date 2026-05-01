@@ -400,6 +400,25 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(const void* IGL_N
       util::getReflectionData(reinterpret_cast<const uint32_t*>(data), length));
 }
 
+/**
+ * @brief Compiles GLSL source into SPIR-V and creates a
+ *        Vulkan shader module.
+ *
+ * If the source lacks a `#version` directive, a GLSL 460
+ * header with device-appropriate extensions is prepended.
+ * For fragment shaders, bindless texture/sampler layout
+ * declarations are also injected when descriptor indexing
+ * is enabled.
+ *
+ * @param[in] stage  Shader stage (Vertex, Fragment,
+ *                   Compute, Task, or Mesh).
+ * @param[in] source GLSL source code to compile.
+ * @param[in] debugName Label assigned to the Vulkan
+ *                      shader module for debug tooling.
+ * @param[out] outResult Receives the compilation result.
+ * @return The compiled shader module, or nullptr on
+ *         failure.
+ */
 std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage,
                                                                const char* IGL_NULLABLE source,
                                                                const std::string& debugName,
