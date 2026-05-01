@@ -339,6 +339,20 @@ std::shared_ptr<IShaderModule> Device::createShaderModuleInternal(const ShaderMo
   return shaderModule;
 }
 
+/**
+ * @brief Creates a VkShaderModule from pre-compiled
+ *        SPIR-V binary data.
+ *
+ * Optionally dumps the binary to disk when IGL_SHADER_DUMP
+ * is enabled. Assigns a Vulkan debug name if provided.
+ *
+ * @param[in] data SPIR-V binary (as uint32_t words).
+ * @param[in] length Size of the binary data in bytes.
+ * @param[in] debugName Label for Vulkan debug utilities.
+ * @param[out] outResult Receives the operation status.
+ * @return The created module with reflection data, or
+ *         nullptr on failure.
+ */
 std::shared_ptr<VulkanShaderModule> Device::createShaderModule(const void* IGL_NULLABLE data,
                                                                size_t length,
                                                                const std::string& debugName,
