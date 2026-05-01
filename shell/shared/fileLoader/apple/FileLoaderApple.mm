@@ -7,7 +7,10 @@
 
 #include <shell/shared/fileLoader/apple/FileLoaderApple.h>
 
-#import <Foundation/Foundation.h>
+#import <Foundation/NSBundle.h>
+#import <Foundation/NSException.h>
+#import <Foundation/NSFileManager.h>
+#import <Foundation/NSString.h>
 #include <string>
 
 namespace {
