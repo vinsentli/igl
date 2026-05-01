@@ -594,6 +594,18 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibraryInternal(const Shader
   return shaderLibrary;
 }
 
+/**
+ * @brief Queries whether a specific device feature is supported
+ *        by the Vulkan physical device.
+ *
+ * Implements the ICapabilities::hasFeature interface for the
+ * Vulkan backend. Feature support is determined by querying
+ * Vulkan physical device properties, limits, and available
+ * extensions via VulkanContext.
+ *
+ * @param[in] feature The device feature to query.
+ * @return True if the feature is supported, false otherwise.
+ */
 bool Device::hasFeatureInternal(DeviceFeatures feature) const {
   IGL_PROFILER_FUNCTION();
 
