@@ -780,6 +780,19 @@ bool Device::hasRequirementInternal(DeviceRequirement requirement) const {
   return false;
 }
 
+/**
+ * @brief Queries Vulkan physical device limits for a given
+ *        feature limit type.
+ *
+ * Maps IGL DeviceFeatureLimits values to corresponding
+ * VkPhysicalDeviceLimits properties. D3D12-specific descriptor
+ * heap limits are unsupported and return false.
+ *
+ * @param[in] featureLimits The feature limit to query.
+ * @param[out] result Populated with the limit value on
+ *        success, or 0 if unsupported.
+ * @return True if the limit is supported, false otherwise.
+ */
 bool Device::getFeatureLimitsInternal(DeviceFeatureLimits featureLimits, size_t& result) const {
   IGL_PROFILER_FUNCTION();
 
