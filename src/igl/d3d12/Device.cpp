@@ -2872,12 +2872,16 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
 
     for (const auto& info : desc.moduleInfo) {
       // Create a ShaderModuleDesc for this specific module
-      ShaderModuleDesc moduleDesc;
-      moduleDesc.info = info;
-      moduleDesc.input.type = ShaderInputType::String;
-      moduleDesc.input.source = desc.input.source;
-      moduleDesc.input.options = desc.input.options;
-      moduleDesc.debugName = desc.debugName + "_" + info.entryPoint;
+      const ShaderModuleDesc moduleDesc{
+          .info = info,
+          .input =
+              {
+                  .source = desc.input.source,
+                  .options = desc.input.options,
+                  .type = ShaderInputType::String,
+              },
+          .debugName = desc.debugName + "_" + info.entryPoint,
+      };
 
       Result moduleResult;
       auto module = createShaderModule(moduleDesc, &moduleResult);
