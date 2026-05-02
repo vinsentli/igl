@@ -7,8 +7,6 @@
 
 #include <igl/metal/ComputePipelineState.h>
 
-using namespace igl;
-
 namespace igl::metal {
 
 ComputePipelineState::ComputePipelineState(id<MTLComputePipelineState> value,
