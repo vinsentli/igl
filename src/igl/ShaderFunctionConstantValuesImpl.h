@@ -53,13 +53,13 @@ struct FunctionConstantValues::Impl {
       return 12;
     case ConstantValueType::Float4:
       return 16;
-    case ConstantValueType::Bool:
+    case ConstantValueType::Boolean:
       return 4;
-    case ConstantValueType::Bool2:
+    case ConstantValueType::Boolean2:
       return 8;
-    case ConstantValueType::Bool3:
+    case ConstantValueType::Boolean3:
       return 12;
-    case ConstantValueType::Bool4:
+    case ConstantValueType::Boolean4:
       return 16;
     case ConstantValueType::Int:
       return 4;

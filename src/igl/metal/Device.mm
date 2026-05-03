@@ -682,13 +682,13 @@ MTLDataType convertConstantValueType(ConstantValueType type) {
     return MTLDataTypeFloat3;
   case ConstantValueType::Float4:
     return MTLDataTypeFloat4;
-  case ConstantValueType::Bool:
+  case ConstantValueType::Boolean:
     return MTLDataTypeBool;
-  case ConstantValueType::Bool2:
+  case ConstantValueType::Boolean2:
     return MTLDataTypeBool2;
-  case ConstantValueType::Bool3:
+  case ConstantValueType::Boolean3:
     return MTLDataTypeBool3;
-  case ConstantValueType::Bool4:
+  case ConstantValueType::Boolean4:
     return MTLDataTypeBool3;
   case ConstantValueType::Int:
     return MTLDataTypeInt;
