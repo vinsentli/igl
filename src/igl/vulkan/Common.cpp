@@ -734,7 +734,7 @@ bool hasStencil(VkFormat format) {
 
 std::shared_ptr<VulkanSpecializationInfo> createSpecializationInfo(
     const FunctionConstantValues& constantValues) {
-  const auto& values = constantValues.getImpl()->getConstantValue();
+  const auto& values = constantValues.getImpl()->getConstantValues();
   if (values.empty())
     return nullptr;
 

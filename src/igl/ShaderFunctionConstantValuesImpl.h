@@ -29,7 +29,7 @@ struct FunctionConstantValues::Impl {
     memcpy(entry.data.data(), value, dataSize);
   }
 
-  const std::map<uint8_t, Entry>& getConstantValue() const {
+  const std::map<uint8_t, Entry>& getConstantValues() const {
     return values_;
   }
 
