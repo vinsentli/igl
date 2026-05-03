@@ -17,6 +17,7 @@
 #define IGL_VULKAN_PRINT_COMMANDS 0
 
 #include <igl/Macros.h> // IWYU pragma: export
+#include <igl/Shader.h>
 #include <igl/vulkan/VulkanFunctionTable.h> // IWYU pragma: export
 #if IGL_PLATFORM_MACOSX
 #include <vulkan/vulkan_metal.h> // IWYU pragma: export
@@ -196,12 +197,13 @@ TextureRangeDesc atVkLayer(TextureType type, const TextureRangeDesc& range, uint
 VkColorSpaceKHR colorSpaceToVkColorSpace(ColorSpace colorSpace);
 ColorSpace vkColorSpaceToColorSpace(VkColorSpaceKHR colorSpace);
 VkComponentMapping componentMappingToVkComponentMapping(const ComponentMapping& mapping);
-struct VulkanSpecializationInfo{
+struct VulkanSpecializationInfo {
   VkSpecializationInfo info = {};
-  std::vector<int> datas;
+  std::vector<uint8_t> datas;
   std::vector<VkSpecializationMapEntry> entries;
 };
-std::shared_ptr<VulkanSpecializationInfo> createSpecializationInfo(const std::vector<int>& constantValues);
+std::shared_ptr<VulkanSpecializationInfo> createSpecializationInfo(
+    const FunctionConstantValue& constantValues);
 
 /// @brief Transition from the current layout to VK_IMAGE_LAYOUT_GENERAL
 void transitionToGeneral(VkCommandBuffer cmdBuf, ITexture* texture);

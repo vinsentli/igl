@@ -11,6 +11,7 @@
 #include <sstream>
 #include <unordered_set>
 #include <igl/FramebufferWrapper.h>
+#include <igl/ShaderFunctionConstantValueImpl.h>
 #include <igl/metal/Buffer.h>
 #include <igl/metal/BufferSynchronizationManager.h>
 #include <igl/metal/CommandQueue.h>
@@ -669,6 +670,45 @@ std::shared_ptr<IRenderPipelineState> Device::createMeshRenderPipeline(
   }
 }
 
+MTLDataType convertConstantValueType(ConstantValueType type) {
+  switch (type) {
+  case ConstantValueType::Invalid:
+    return MTLDataTypeNone;
+  case ConstantValueType::Float:
+    return MTLDataTypeFloat;
+  case ConstantValueType::Float2:
+    return MTLDataTypeFloat2;
+  case ConstantValueType::Float3:
+    return MTLDataTypeFloat3;
+  case ConstantValueType::Float4:
+    return MTLDataTypeFloat4;
+  case ConstantValueType::Bool:
+    return MTLDataTypeBool;
+  case ConstantValueType::Bool2:
+    return MTLDataTypeBool2;
+  case ConstantValueType::Bool3:
+    return MTLDataTypeBool3;
+  case ConstantValueType::Bool4:
+    return MTLDataTypeBool3;
+  case ConstantValueType::Int:
+    return MTLDataTypeInt;
+  case ConstantValueType::Int2:
+    return MTLDataTypeInt2;
+  case ConstantValueType::Int3:
+    return MTLDataTypeInt3;
+  case ConstantValueType::Int4:
+    return MTLDataTypeInt4;
+  case ConstantValueType::Mat2x2:
+    return MTLDataTypeFloat2x2;
+  case ConstantValueType::Mat3x3:
+    return MTLDataTypeFloat3x3;
+  case ConstantValueType::Mat4x4:
+    return MTLDataTypeFloat4x4;
+  }
+
+  return MTLDataTypeNone;
+}
+
 std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryDesc& desc,
                                                             Result* outResult) const {
   if (IGL_DEBUG_VERIFY_NOT(desc.moduleInfo.empty())) {
@@ -721,14 +761,21 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
       Result::setResult(outResult, Result::Code::RuntimeError);
       return nullptr;
     }
-      
-    MTLFunctionConstantValues * constValues = [MTLFunctionConstantValues new];
 
-    for (size_t index = 0; index != info.functionConstantValues.size(); ++index){
-      [constValues setConstantValue:&info.functionConstantValues[index] type:MTLDataTypeInt atIndex:index];
+    MTLFunctionConstantValues* constValues = [MTLFunctionConstantValues new];
+
+    const auto& functionConstantValues =
+        info.functionConstantValue.getImpl()->getFunctionConstantValue();
+
+    for (auto& [index, entry] : functionConstantValues) {
+      [constValues setConstantValue:entry.data.data()
+                               type:convertConstantValueType(entry.type)
+                            atIndex:index];
     }
 
-    auto metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint constantValues:constValues error:&error];
+    auto metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint
+                                            constantValues:constValues
+                                                     error:&error];
     if (!metalFunction) {
       IGL_DEBUG_ABORT("Could not find function '%s' in library\n", info.entryPoint.c_str());
       Result::setResult(

@@ -31,6 +31,28 @@ enum class ShaderStage : uint8_t {
 };
 
 /**
+ * @brief Type of shader function constant value.
+ */
+enum class ConstantValueType : uint8_t {
+  Invalid = 0,
+  Float,
+  Float2,
+  Float3,
+  Float4,
+  Bool,
+  Bool2,
+  Bool3,
+  Bool4,
+  Int,
+  Int2,
+  Int3,
+  Int4,
+  Mat2x2,
+  Mat3x3,
+  Mat4x4
+};
+
+/**
  * @brief Configuration used when compiling a shader to toggle features such as fast math.
  */
 struct ShaderCompilerOptions {
@@ -42,6 +64,36 @@ struct ShaderCompilerOptions {
   bool operator!=(const ShaderCompilerOptions& other) const;
 };
 
+struct FunctionConstantValue {
+  class Impl;
+
+  FunctionConstantValue();
+  ~FunctionConstantValue();
+  FunctionConstantValue(const FunctionConstantValue& other);
+  FunctionConstantValue& operator=(const FunctionConstantValue& other);
+
+  bool operator==(const FunctionConstantValue& other) const;
+  bool operator!=(const FunctionConstantValue& other) const;
+
+  /**
+   * @brief Set the contant value of function in shader.
+   * Metal:MTLFunctionConstantValues.
+   * Vulkan:SpecializationInfo.
+   * @param index  constant_id
+   * @param value  constant value.
+   */
+  FunctionConstantValue& setFunctionConstantValue(uint8_t index,
+                                                  ConstantValueType type,
+                                                  void* value);
+
+  const std::unique_ptr<Impl>& getImpl() const {
+    return impl_;
+  }
+
+ private:
+  std::unique_ptr<Impl> impl_;
+};
+
 /**
  * @brief Metadata about a shader module.
  */
@@ -50,11 +102,8 @@ struct ShaderModuleInfo {
   ShaderStage stage = ShaderStage::Fragment;
   /** @brief The module's entry point. */
   std::string entryPoint;
-  /** @brief The module's function constant values.
-   * Metal:MTLFunctionConstantValues.
-   * Vulkan:SpecializationInfo.
-   * index:constant_id, value:constant value.*/
-  std::vector<int> functionConstantValues;
+  /** @brief The module's function constant values. */
+  FunctionConstantValue functionConstantValue;
 
   std::string debugName;
 
