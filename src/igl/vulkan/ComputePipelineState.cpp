@@ -106,7 +106,7 @@ VkPipeline ComputePipelineState::getVkPipeline() const {
                             IGL_FORMAT("Pipeline Layout: {}", desc_.debugName.c_str()).c_str()));
 
   const auto& shaderModule = desc_.shaderStages->getComputeModule();
-  auto specializationInfo = createSpecializationInfo(shaderModule->info().functionConstantValue);
+  auto specializationInfo = createSpecializationInfo(shaderModule->info().functionConstantValues);
 
   VulkanComputePipelineBuilder()
       .shaderStage(VkPipelineShaderStageCreateInfo{

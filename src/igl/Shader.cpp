@@ -8,7 +8,7 @@
 #include <igl/Shader.h>
 
 #include <cstring>
-#include <igl/ShaderFunctionConstantValueImpl.h>
+#include <igl/ShaderFunctionConstantValuesImpl.h>
 
 namespace {
 
@@ -67,40 +67,40 @@ bool ShaderCompilerOptions::operator!=(const ShaderCompilerOptions& other) const
   return !(*this == other);
 }
 
-FunctionConstantValue::FunctionConstantValue() {
+FunctionConstantValues::FunctionConstantValues() {
   impl_ = std::make_unique<Impl>();
 }
 
-FunctionConstantValue::~FunctionConstantValue() = default;
+FunctionConstantValues::~FunctionConstantValues() = default;
 
-FunctionConstantValue::FunctionConstantValue(const FunctionConstantValue& other) :
+FunctionConstantValues::FunctionConstantValues(const FunctionConstantValues& other) :
   impl_(std::make_unique<Impl>(*other.impl_)) {}
 
-FunctionConstantValue& FunctionConstantValue::operator=(const FunctionConstantValue& other) {
+FunctionConstantValues& FunctionConstantValues::operator=(const FunctionConstantValues& other) {
   if (this != &other) {
     impl_ = std::make_unique<Impl>(*other.impl_);
   }
   return *this;
 }
 
-FunctionConstantValue& FunctionConstantValue::setFunctionConstantValue(uint8_t index,
-                                                                       ConstantValueType type,
-                                                                       void* value) {
-  impl_->setFunctionConstantValue(index, type, value);
+FunctionConstantValues& FunctionConstantValues::setConstantValue(uint8_t index,
+                                                                 ConstantValueType type,
+                                                                 void* value) {
+  impl_->setConstantValue(index, type, value);
   return *this;
 }
 
-bool FunctionConstantValue::operator==(const FunctionConstantValue& other) const {
+bool FunctionConstantValues::operator==(const FunctionConstantValues& other) const {
   return *impl_ == *other.impl_;
 }
 
-bool FunctionConstantValue::operator!=(const FunctionConstantValue& other) const {
+bool FunctionConstantValues::operator!=(const FunctionConstantValues& other) const {
   return !operator==(other);
 }
 
 bool ShaderModuleInfo::operator==(const ShaderModuleInfo& other) const {
   return stage == other.stage && entryPoint == other.entryPoint &&
-         functionConstantValue == other.functionConstantValue;
+         functionConstantValues == other.functionConstantValues;
 }
 
 bool ShaderModuleInfo::operator!=(const ShaderModuleInfo& other) const {

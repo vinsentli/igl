@@ -489,7 +489,7 @@ VkPipeline RenderPipelineState::getVkPipeline(
 
   if (desc_.shaderStages->getType() == igl::ShaderStagesType::Render) {
     const auto& vertexModule = desc_.shaderStages->getVertexModule();
-    vertexSpecializationInfo = createSpecializationInfo(vertexModule->info().functionConstantValue);
+    vertexSpecializationInfo = createSpecializationInfo(vertexModule->info().functionConstantValues);
     stages.emplace_back(VkPipelineShaderStageCreateInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .stage = VK_SHADER_STAGE_VERTEX_BIT,
@@ -500,7 +500,7 @@ VkPipeline RenderPipelineState::getVkPipeline(
   } else {
     const auto& taskModule = desc_.shaderStages->getTaskModule();
     if (taskModule) {
-      taskSpecializationInfo = createSpecializationInfo(taskModule->info().functionConstantValue);
+      taskSpecializationInfo = createSpecializationInfo(taskModule->info().functionConstantValues);
       stages.emplace_back(VkPipelineShaderStageCreateInfo{
           .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
           .stage = VK_SHADER_STAGE_TASK_BIT_EXT,
@@ -511,7 +511,7 @@ VkPipeline RenderPipelineState::getVkPipeline(
     }
 
     const auto& meshModule = desc_.shaderStages->getMeshModule();
-    meshSpecializationInfo = createSpecializationInfo(meshModule->info().functionConstantValue);
+    meshSpecializationInfo = createSpecializationInfo(meshModule->info().functionConstantValues);
     stages.emplace_back(VkPipelineShaderStageCreateInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .stage = VK_SHADER_STAGE_MESH_BIT_EXT,
@@ -522,7 +522,7 @@ VkPipeline RenderPipelineState::getVkPipeline(
   }
 
   const auto& fragmentModule = desc_.shaderStages->getFragmentModule();
-  fragmentSpecializationInfo = createSpecializationInfo(fragmentModule->info().functionConstantValue);
+  fragmentSpecializationInfo = createSpecializationInfo(fragmentModule->info().functionConstantValues);
   stages.emplace_back(VkPipelineShaderStageCreateInfo{
       .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
       .stage = VK_SHADER_STAGE_FRAGMENT_BIT,

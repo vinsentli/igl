@@ -23,7 +23,7 @@
 // NOLINTEND(facebook-unused-include-check)
 // clang-format on
 
-#include <igl/ShaderFunctionConstantValueImpl.h>
+#include <igl/ShaderFunctionConstantValuesImpl.h>
 #include <igl/vulkan/ShaderModule.h>
 #include <igl/vulkan/Texture.h>
 #include <igl/vulkan/VulkanContext.h>
@@ -733,8 +733,8 @@ bool hasStencil(VkFormat format) {
 }
 
 std::shared_ptr<VulkanSpecializationInfo> createSpecializationInfo(
-    const FunctionConstantValue& constantValues) {
-  const auto& values = constantValues.getImpl()->getFunctionConstantValue();
+    const FunctionConstantValues& constantValues) {
+  const auto& values = constantValues.getImpl()->getConstantValue();
   if (values.empty())
     return nullptr;
 

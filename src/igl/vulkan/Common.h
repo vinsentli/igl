@@ -203,7 +203,7 @@ struct VulkanSpecializationInfo {
   std::vector<VkSpecializationMapEntry> entries;
 };
 std::shared_ptr<VulkanSpecializationInfo> createSpecializationInfo(
-    const FunctionConstantValue& constantValues);
+    const FunctionConstantValues& constantValues);
 
 /// @brief Transition from the current layout to VK_IMAGE_LAYOUT_GENERAL
 void transitionToGeneral(VkCommandBuffer cmdBuf, ITexture* texture);

@@ -64,16 +64,16 @@ struct ShaderCompilerOptions {
   bool operator!=(const ShaderCompilerOptions& other) const;
 };
 
-struct FunctionConstantValue {
+struct FunctionConstantValues {
   class Impl;
 
-  FunctionConstantValue();
-  ~FunctionConstantValue();
-  FunctionConstantValue(const FunctionConstantValue& other);
-  FunctionConstantValue& operator=(const FunctionConstantValue& other);
+  FunctionConstantValues();
+  ~FunctionConstantValues();
+  FunctionConstantValues(const FunctionConstantValues& other);
+  FunctionConstantValues& operator=(const FunctionConstantValues& other);
 
-  bool operator==(const FunctionConstantValue& other) const;
-  bool operator!=(const FunctionConstantValue& other) const;
+  bool operator==(const FunctionConstantValues& other) const;
+  bool operator!=(const FunctionConstantValues& other) const;
 
   /**
    * @brief Set the contant value of function in shader.
@@ -82,9 +82,7 @@ struct FunctionConstantValue {
    * @param index  constant_id
    * @param value  constant value.
    */
-  FunctionConstantValue& setFunctionConstantValue(uint8_t index,
-                                                  ConstantValueType type,
-                                                  void* value);
+  FunctionConstantValues& setConstantValue(uint8_t index, ConstantValueType type, void* value);
 
   const std::unique_ptr<Impl>& getImpl() const {
     return impl_;
@@ -103,7 +101,7 @@ struct ShaderModuleInfo {
   /** @brief The module's entry point. */
   std::string entryPoint;
   /** @brief The module's function constant values. */
-  FunctionConstantValue functionConstantValue;
+  FunctionConstantValues functionConstantValues;
 
   std::string debugName;
 

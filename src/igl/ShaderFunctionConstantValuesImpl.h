@@ -10,14 +10,14 @@
 
 namespace igl {
 
-struct FunctionConstantValue::Impl {
+struct FunctionConstantValues::Impl {
  public:
   struct Entry {
     ConstantValueType type;
     std::vector<uint8_t> data;
   };
 
-  void setFunctionConstantValue(uint8_t index, ConstantValueType type, void* value) {
+  void setConstantValue(uint8_t index, ConstantValueType type, void* value) {
     IGL_DEBUG_ASSERT(type != ConstantValueType::Invalid);
     IGL_DEBUG_ASSERT(value);
     auto dataSize = getContantValueSize(type);
@@ -29,7 +29,7 @@ struct FunctionConstantValue::Impl {
     memcpy(entry.data.data(), value, dataSize);
   }
 
-  const std::map<uint8_t, Entry>& getFunctionConstantValue() const {
+  const std::map<uint8_t, Entry>& getConstantValue() const {
     return values_;
   }
 

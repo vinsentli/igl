@@ -11,7 +11,7 @@
 #include <sstream>
 #include <unordered_set>
 #include <igl/FramebufferWrapper.h>
-#include <igl/ShaderFunctionConstantValueImpl.h>
+#include <igl/ShaderFunctionConstantValuesImpl.h>
 #include <igl/metal/Buffer.h>
 #include <igl/metal/BufferSynchronizationManager.h>
 #include <igl/metal/CommandQueue.h>
@@ -764,8 +764,7 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
 
     MTLFunctionConstantValues* constValues = [MTLFunctionConstantValues new];
 
-    const auto& functionConstantValues =
-        info.functionConstantValue.getImpl()->getFunctionConstantValue();
+    const auto& functionConstantValues = info.functionConstantValues.getImpl()->getConstantValue();
 
     for (auto& [index, entry] : functionConstantValues) {
       [constValues setConstantValue:entry.data.data()
