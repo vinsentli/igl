@@ -235,6 +235,8 @@ void RenderCommandEncoder::bindCullMode(const CullMode& cullMode) {
   case CullMode::Back:
     mode = MTLCullModeBack;
     break;
+  default:
+    break;
   }
   [encoder_ setCullMode:mode];
 }
@@ -647,7 +649,10 @@ MTLPrimitiveType RenderCommandEncoder::convertPrimitiveType(PrimitiveType value)
     return MTLPrimitiveTypeTriangle;
   case PrimitiveType::TriangleStrip:
     return MTLPrimitiveTypeTriangleStrip;
+  default:
+    break;
   }
+  IGL_UNREACHABLE_RETURN(MTLPrimitiveTypeTriangle)
 }
 
 MTLIndexType RenderCommandEncoder::convertIndexType(IndexFormat value) {
@@ -659,7 +664,10 @@ MTLIndexType RenderCommandEncoder::convertIndexType(IndexFormat value) {
     return MTLIndexTypeUInt16;
   case IndexFormat::UInt32:
     return MTLIndexTypeUInt32;
+  default:
+    break;
   }
+  IGL_UNREACHABLE_RETURN(MTLIndexTypeUInt16)
 }
 
 MTLLoadAction RenderCommandEncoder::convertLoadAction(LoadAction value) {
@@ -670,7 +678,10 @@ MTLLoadAction RenderCommandEncoder::convertLoadAction(LoadAction value) {
     return MTLLoadActionClear;
   case LoadAction::Load:
     return MTLLoadActionLoad;
+  default:
+    break;
   }
+  IGL_UNREACHABLE_RETURN(MTLLoadActionDontCare)
 }
 
 MTLStoreAction RenderCommandEncoder::convertStoreAction(StoreAction value) {
@@ -681,7 +692,10 @@ MTLStoreAction RenderCommandEncoder::convertStoreAction(StoreAction value) {
     return MTLStoreActionStore;
   case StoreAction::MsaaResolve:
     return MTLStoreActionMultisampleResolve;
+  default:
+    break;
   }
+  IGL_UNREACHABLE_RETURN(MTLStoreActionDontCare)
 }
 
 MTLClearColor RenderCommandEncoder::convertClearColor(Color value) {
