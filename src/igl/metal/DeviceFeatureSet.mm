@@ -300,7 +300,7 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
     return true;
   case DeviceFeatureLimits::MaxTextureDimension3D:
 #if IGL_PLATFORM_IOS
-    result = (gpuFamily_ <= 2) ? 2048 : 2048;
+    result = 2048;
 #else
     result = 2048;
 #endif
@@ -544,6 +544,8 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getTextureFormatCapab
   // @fb-only
   // @fb-only
     return unsupported;
+  default:
+    break;
   }
   return unsupported;
 }
