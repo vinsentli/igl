@@ -22,7 +22,9 @@
 
 namespace igl::tests {
 
-static std::vector<float> dataIn = {1.0, 2.0, 3.0, 4.0, 5.0f, 6.0f};
+namespace {
+std::vector<float> dataIn = {1.0, 2.0, 3.0, 4.0, 5.0f, 6.0f};
+} // namespace
 
 /**
  * @brief ComputeCommandEncoderTest is a test fixture for all the tests in this file.
