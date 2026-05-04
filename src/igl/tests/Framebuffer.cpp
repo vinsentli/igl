@@ -706,7 +706,7 @@ TEST_F(FramebufferTest, GetColorAttachmentTest) {
                                          0,
                                          pixels.data(),
                                          rangeDesc,
-                                         static_cast<size_t>(outputElementPerRow * channelSize));
+                                         static_cast<size_t>(outputElementPerRow) * channelSize);
 
   for (int i = 0; i < outputImageHeight; i++) {
     for (int j = 0; j < outputElementPerRow; j++) {
