@@ -7,8 +7,6 @@
 
 #include <igl/metal/RenderPipelineState.h>
 
-using namespace igl;
-
 namespace igl::metal {
 
 RenderPipelineState::RenderPipelineState(id<MTLRenderPipelineState> value,
