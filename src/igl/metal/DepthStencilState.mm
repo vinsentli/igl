@@ -31,7 +31,10 @@ MTLCompareFunction DepthStencilState::convertCompareFunction(CompareFunction val
     return MTLCompareFunctionGreaterEqual;
   case CompareFunction::AlwaysPass:
     return MTLCompareFunctionAlways;
+  default:
+    break;
   }
+  IGL_UNREACHABLE_RETURN(MTLCompareFunctionNever)
 }
 
 MTLStencilOperation DepthStencilState::convertStencilOperation(StencilOperation value) {
@@ -52,7 +55,10 @@ MTLStencilOperation DepthStencilState::convertStencilOperation(StencilOperation 
     return MTLStencilOperationIncrementWrap;
   case StencilOperation::DecrementWrap:
     return MTLStencilOperationDecrementWrap;
+  default:
+    break;
   }
+  IGL_UNREACHABLE_RETURN(MTLStencilOperationKeep)
 }
 
 MTLStencilDescriptor* DepthStencilState::convertStencilDescriptor(const StencilStateDesc& desc) {
