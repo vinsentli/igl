@@ -35,11 +35,11 @@ class RenderCommandAdapter final : public WithContext {
 
  private:
   struct BufferState {
-    Buffer* resource = nullptr;
+    Buffer* IGL_NULLABLE resource = nullptr;
     size_t offset = 0;
   };
 
-  using TextureState = std::pair<ITexture*, ISamplerState*>;
+  using TextureState = std::pair<ITexture * IGL_NULLABLE, ISamplerState * IGL_NULLABLE>;
   using TextureStates = std::array<TextureState, IGL_TEXTURE_SAMPLERS_MAX>;
 
  public:
@@ -47,7 +47,7 @@ class RenderCommandAdapter final : public WithContext {
       IContext& context,
       const RenderPassDesc& renderPass,
       const std::shared_ptr<IFramebuffer>& framebuffer,
-      Result* outResult);
+      Result* IGL_NULLABLE outResult);
 
   void setViewport(const Viewport& viewport);
 
@@ -59,54 +59,68 @@ class RenderCommandAdapter final : public WithContext {
   void setDepthBias(float depthBias, float slopeScale, float clamp);
 
   void clearVertexBuffers();
-  void setVertexBuffer(Buffer& buffer, size_t offset, size_t index, Result* outResult = nullptr);
+  void setVertexBuffer(Buffer& buffer,
+                       size_t offset,
+                       size_t index,
+                       Result* IGL_NULLABLE outResult = nullptr);
   void setIndexBuffer(Buffer& buffer);
 
   void clearUniformBuffers();
-  void setUniformBuffer(Buffer* buffer,
+  void setUniformBuffer(Buffer* IGL_NULLABLE buffer,
                         size_t offset,
                         size_t size,
                         uint32_t index,
-                        Result* outResult = nullptr);
-  void setUniform(const UniformDesc& uniformDesc, const void* data, Result* outResult = nullptr);
+                        Result* IGL_NULLABLE outResult = nullptr);
+  void setUniform(const UniformDesc& uniformDesc,
+                  const void* IGL_NONNULL data,
+                  Result* IGL_NULLABLE outResult = nullptr);
 
   void clearVertexTexture();
-  void setVertexTexture(ITexture* texture, size_t index, Result* outResult = nullptr);
-  void setVertexSamplerState(ISamplerState* samplerState,
+  void setVertexTexture(ITexture* IGL_NULLABLE texture,
+                        size_t index,
+                        Result* IGL_NULLABLE outResult = nullptr);
+  void setVertexSamplerState(ISamplerState* IGL_NULLABLE samplerState,
                              size_t index,
-                             Result* outResult = nullptr);
+                             Result* IGL_NULLABLE outResult = nullptr);
 
   void clearFragmentTexture();
-  void setFragmentTexture(ITexture* texture, size_t index, Result* outResult = nullptr);
-  void setFragmentSamplerState(ISamplerState* samplerState,
+  void setFragmentTexture(ITexture* IGL_NULLABLE texture,
+                          size_t index,
+                          Result* IGL_NULLABLE outResult = nullptr);
+  void setFragmentSamplerState(ISamplerState* IGL_NULLABLE samplerState,
                                size_t index,
-                               Result* outResult = nullptr);
+                               Result* IGL_NULLABLE outResult = nullptr);
 
   void setPipelineState(const std::shared_ptr<IRenderPipelineState>& newValue,
-                        Result* outResult = nullptr);
+                        Result* IGL_NULLABLE outResult = nullptr);
 
   void drawArrays(GLenum mode, GLint first, GLsizei count);
-  void drawArraysIndirect(GLenum mode, Buffer& indirectBuffer, const GLvoid* indirectBufferOffset);
+  void drawArraysIndirect(GLenum mode,
+                          Buffer& indirectBuffer,
+                          const GLvoid* IGL_NULLABLE indirectBufferOffset);
   void drawArraysInstanced(GLenum mode, GLint first, GLsizei count, GLsizei instancecount);
-  void drawElements(GLenum mode, GLsizei indexCount, GLenum indexType, const GLvoid* indexOffset);
+  void drawElements(GLenum mode,
+                    GLsizei indexCount,
+                    GLenum indexType,
+                    const GLvoid* IGL_NULLABLE indexOffset);
   void drawElementsInstanced(GLenum mode,
                              GLsizei indexCount,
                              GLenum indexType,
-                             const GLvoid* indexOffset,
+                             const GLvoid* IGL_NULLABLE indexOffset,
                              GLsizei instancecount);
   void drawElementsIndirect(GLenum mode,
                             GLenum indexType,
                             Buffer& indirectBuffer,
-                            const GLvoid* indirectBufferOffset);
+                            const GLvoid* IGL_NULLABLE indirectBufferOffset);
   void multiDrawArraysIndirect(GLenum mode,
                                Buffer& indirectBuffer,
-                               const GLvoid* indirectBufferOffset,
+                               const GLvoid* IGL_NULLABLE indirectBufferOffset,
                                GLsizei drawcount,
                                GLsizei stride);
   void multiDrawElementsIndirect(GLenum mode,
                                  GLenum indexType,
                                  Buffer& indirectBuffer,
-                                 const GLvoid* indirectBufferOffset,
+                                 const GLvoid* IGL_NULLABLE indirectBufferOffset,
                                  GLsizei drawcount,
                                  GLsizei stride);
 
@@ -114,7 +128,7 @@ class RenderCommandAdapter final : public WithContext {
 
   void initialize(const RenderPassDesc& renderPass,
                   const std::shared_ptr<IFramebuffer>& framebuffer,
-                  Result* outResult);
+                  Result* IGL_NULLABLE outResult);
 
   [[nodiscard]] const igl::IRenderPipelineState& pipelineState() const {
     IGL_DEBUG_ASSERT(pipelineState_, "No rendering pipeline is bound");
@@ -125,7 +139,7 @@ class RenderCommandAdapter final : public WithContext {
   explicit RenderCommandAdapter(IContext& context);
 
   void clearDependentResources(const std::shared_ptr<IRenderPipelineState>& newValue,
-                               Result* outResult = nullptr);
+                               Result* IGL_NULLABLE outResult = nullptr);
   void willDraw();
   void didDraw();
   void unbindVertexAttributes();

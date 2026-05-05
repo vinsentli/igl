@@ -41,7 +41,7 @@ std::unique_ptr<RenderCommandAdapter> RenderCommandAdapter::create(
     IContext& context,
     const RenderPassDesc& renderPass,
     const std::shared_ptr<IFramebuffer>& framebuffer,
-    Result* outResult) {
+    Result* IGL_NULLABLE outResult) {
   // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
   std::unique_ptr<RenderCommandAdapter> newAdapter(new RenderCommandAdapter(context));
   newAdapter->initialize(renderPass, framebuffer, outResult);
@@ -50,7 +50,7 @@ std::unique_ptr<RenderCommandAdapter> RenderCommandAdapter::create(
 
 void RenderCommandAdapter::initialize(const RenderPassDesc& renderPass,
                                       const std::shared_ptr<IFramebuffer>& framebuffer,
-                                      Result* outResult) {
+                                      Result* IGL_NULLABLE outResult) {
   if (!IGL_DEBUG_VERIFY(framebuffer)) {
     Result::setResult(outResult, Result::Code::ArgumentNull, "framebuffer is null");
     return;
@@ -113,7 +113,7 @@ void RenderCommandAdapter::clearVertexBuffers() {
 void RenderCommandAdapter::setVertexBuffer(Buffer& buffer,
                                            size_t offset,
                                            size_t index,
-                                           Result* outResult) {
+                                           Result* IGL_NULLABLE outResult) {
   IGL_DEBUG_ASSERT(index < IGL_BUFFER_BINDINGS_MAX,
                    "Buffer index is beyond max, may want to increase limit");
   if (index < IGL_BUFFER_BINDINGS_MAX) {
@@ -134,16 +134,16 @@ void RenderCommandAdapter::clearUniformBuffers() {
 }
 
 void RenderCommandAdapter::setUniform(const UniformDesc& uniformDesc,
-                                      const void* data,
-                                      Result* outResult) {
+                                      const void* IGL_NONNULL data,
+                                      Result* IGL_NULLABLE outResult) {
   uniformAdapter_.setUniform(uniformDesc, data, outResult);
 }
 
-void RenderCommandAdapter::setUniformBuffer(Buffer* buffer,
+void RenderCommandAdapter::setUniformBuffer(Buffer* IGL_NULLABLE buffer,
                                             size_t offset,
                                             size_t size,
                                             uint32_t index,
-                                            Result* outResult) {
+                                            Result* IGL_NULLABLE outResult) {
   uniformAdapter_.setUniformBuffer(buffer, offset, size, index, outResult);
 }
 
@@ -152,7 +152,9 @@ void RenderCommandAdapter::clearVertexTexture() {
   vertexTextureStatesDirty_.reset();
 }
 
-void RenderCommandAdapter::setVertexTexture(ITexture* texture, size_t index, Result* outResult) {
+void RenderCommandAdapter::setVertexTexture(ITexture* IGL_NULLABLE texture,
+                                            size_t index,
+                                            Result* IGL_NULLABLE outResult) {
   if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid);
     return;
@@ -164,9 +166,9 @@ void RenderCommandAdapter::setVertexTexture(ITexture* texture, size_t index, Res
   Result::setOk(outResult);
 }
 
-void RenderCommandAdapter::setVertexSamplerState(ISamplerState* samplerState,
+void RenderCommandAdapter::setVertexSamplerState(ISamplerState* IGL_NULLABLE samplerState,
                                                  size_t index,
-                                                 Result* outResult) {
+                                                 Result* IGL_NULLABLE outResult) {
   if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid);
     return;
@@ -183,7 +185,9 @@ void RenderCommandAdapter::clearFragmentTexture() {
   fragmentTextureStatesDirty_.reset();
 }
 
-void RenderCommandAdapter::setFragmentTexture(ITexture* texture, size_t index, Result* outResult) {
+void RenderCommandAdapter::setFragmentTexture(ITexture* IGL_NULLABLE texture,
+                                              size_t index,
+                                              Result* IGL_NULLABLE outResult) {
   if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid);
     return;
@@ -195,9 +199,9 @@ void RenderCommandAdapter::setFragmentTexture(ITexture* texture, size_t index, R
   Result::setOk(outResult);
 }
 
-void RenderCommandAdapter::setFragmentSamplerState(ISamplerState* samplerState,
+void RenderCommandAdapter::setFragmentSamplerState(ISamplerState* IGL_NULLABLE samplerState,
                                                    size_t index,
-                                                   Result* outResult) {
+                                                   Result* IGL_NULLABLE outResult) {
   if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid);
     return;
@@ -212,7 +216,7 @@ void RenderCommandAdapter::setFragmentSamplerState(ISamplerState* samplerState,
 // When pipelineState is modified, all dependent resources are cleared
 void RenderCommandAdapter::clearDependentResources(
     const std::shared_ptr<IRenderPipelineState>& newValue,
-    Result* outResult) {
+    Result* IGL_NULLABLE outResult) {
   auto* curStateOpenGL = static_cast<RenderPipelineState*>(pipelineState_.get());
   if (!IGL_DEBUG_VERIFY(curStateOpenGL)) {
     Result::setResult(outResult, Result::Code::RuntimeError, "pipeline state is null");
@@ -240,7 +244,7 @@ void RenderCommandAdapter::clearDependentResources(
 }
 
 void RenderCommandAdapter::setPipelineState(const std::shared_ptr<IRenderPipelineState>& newValue,
-                                            Result* outResult) {
+                                            Result* IGL_NULLABLE outResult) {
   Result::setOk(outResult);
   if (pipelineState_) {
     clearDependentResources(newValue, outResult); // Only clear if pipeline state was previously set
@@ -257,7 +261,7 @@ void RenderCommandAdapter::drawArrays(GLenum mode, GLint first, GLsizei count) {
 
 void RenderCommandAdapter::drawArraysIndirect(GLenum mode,
                                               Buffer& indirectBuffer,
-                                              const GLvoid* indirectBufferOffset) {
+                                              const GLvoid* IGL_NULLABLE indirectBufferOffset) {
   willDraw();
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DrawArraysIndirect)) {
     bindBufferWithShaderStorageBufferOverride(indirectBuffer, GL_DRAW_INDIRECT_BUFFER);
@@ -284,7 +288,7 @@ void RenderCommandAdapter::drawArraysInstanced(GLenum mode,
 void RenderCommandAdapter::drawElements(GLenum mode,
                                         GLsizei indexCount,
                                         GLenum indexType,
-                                        const GLvoid* indexOffset) {
+                                        const GLvoid* IGL_NULLABLE indexOffset) {
   willDraw();
   getContext().drawElements(toMockWireframeMode(mode), indexCount, indexType, indexOffset);
   didDraw();
@@ -293,7 +297,7 @@ void RenderCommandAdapter::drawElements(GLenum mode,
 void RenderCommandAdapter::drawElementsInstanced(GLenum mode,
                                                  GLsizei indexCount,
                                                  GLenum indexType,
-                                                 const GLvoid* indexOffset,
+                                                 const GLvoid* IGL_NULLABLE indexOffset,
                                                  GLsizei instancecount) {
   willDraw();
   if (getContext().deviceFeatures().hasFeature(DeviceFeatures::DrawInstanced)) {
@@ -308,7 +312,7 @@ void RenderCommandAdapter::drawElementsInstanced(GLenum mode,
 void RenderCommandAdapter::drawElementsIndirect(GLenum mode,
                                                 GLenum indexType,
                                                 Buffer& indirectBuffer,
-                                                const GLvoid* indirectBufferOffset) {
+                                                const GLvoid* IGL_NULLABLE indirectBufferOffset) {
   willDraw();
   if (getContext().deviceFeatures().hasFeature(DeviceFeatures::DrawIndexedIndirect)) {
     bindBufferWithShaderStorageBufferOverride(indirectBuffer, GL_DRAW_INDIRECT_BUFFER);
@@ -321,7 +325,7 @@ void RenderCommandAdapter::drawElementsIndirect(GLenum mode,
 
 void RenderCommandAdapter::multiDrawArraysIndirect(GLenum mode,
                                                    Buffer& indirectBuffer,
-                                                   const GLvoid* indirectBufferOffset,
+                                                   const GLvoid* IGL_NULLABLE indirectBufferOffset,
                                                    GLsizei drawcount,
                                                    GLsizei stride) {
   willDraw();
@@ -338,7 +342,8 @@ void RenderCommandAdapter::multiDrawArraysIndirect(GLenum mode,
 void RenderCommandAdapter::multiDrawElementsIndirect(GLenum mode,
                                                      GLenum indexType,
                                                      Buffer& indirectBuffer,
-                                                     const GLvoid* indirectBufferOffset,
+                                                     const GLvoid* IGL_NULLABLE
+                                                         indirectBufferOffset,
                                                      GLsizei drawcount,
                                                      GLsizei stride) {
   willDraw();
