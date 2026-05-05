@@ -7,9 +7,11 @@
 
 #include <shell/shared/fileLoader/apple/FileLoaderApple.h>
 
+#import <Foundation/NSArray.h> // NOLINT(facebook-unused-include-check)
 #import <Foundation/NSBundle.h>
 #import <Foundation/NSException.h>
 #import <Foundation/NSFileManager.h>
+#import <Foundation/NSObject.h>
 #import <Foundation/NSString.h>
 #include <string>
 
