@@ -119,6 +119,8 @@ struct ShaderModuleInfo {
   ShaderStage stage = ShaderStage::Fragment;
   /** @brief The module's entry point. */
   std::string entryPoint;
+  /** @brief The module's function constant values. */
+  FunctionConstantValues functionConstantValues;
 
   std::string debugName;
 
@@ -422,6 +424,11 @@ namespace std {
 template<>
 struct hash<igl::ShaderCompilerOptions> {
   size_t operator()(const igl::ShaderCompilerOptions& /*key*/) const;
+};
+
+template<>
+struct hash<igl::FunctionConstantValues> {
+  size_t operator()(const igl::FunctionConstantValues& /*key*/) const;
 };
 
 template<>

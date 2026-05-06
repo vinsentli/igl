@@ -154,7 +154,8 @@ bool FunctionConstantValues::operator==(const FunctionConstantValues& other) con
 }
 
 bool ShaderModuleInfo::operator==(const ShaderModuleInfo& other) const {
-  return stage == other.stage && entryPoint == other.entryPoint;
+  return stage == other.stage && entryPoint == other.entryPoint &&
+         functionConstantValues == other.functionConstantValues;
 }
 
 bool ShaderModuleInfo::operator!=(const ShaderModuleInfo& other) const {
@@ -368,10 +369,33 @@ size_t hash<igl::ShaderCompilerOptions>::operator()(const igl::ShaderCompilerOpt
   return result;
 }
 
+size_t hash<igl::FunctionConstantValues>::operator()(const igl::FunctionConstantValues& key) const {
+  // Hash logically (per-binding type + constant bytes), matching FunctionConstantValues::==.
+  // Orphan gap bytes in `data_` from prior different-size overwrites are intentionally not
+  // hashed, so two FCVs with the same logical content always hash the same.
+  size_t result = 0;
+  const auto& values = key.getConstantValues();
+  const uint8_t* data = key.getData().data();
+  for (size_t i = 0; i < values.size(); ++i) {
+    const auto& entry = values[i];
+    if (entry.type == igl::ConstantValueType::Invalid) {
+      continue;
+    }
+    result ^= std::hash<size_t>()(i);
+    result ^= std::hash<uint8_t>()(static_cast<uint8_t>(entry.type));
+    const size_t size = igl::getConstantValueSize(entry.type);
+    for (size_t b = 0; b < size; ++b) {
+      result ^= std::hash<uint8_t>()(data[entry.offset + b]);
+    }
+  }
+  return result;
+}
+
 size_t hash<igl::ShaderModuleInfo>::operator()(const igl::ShaderModuleInfo& key) const {
   static_assert(std::is_same_v<uint8_t, std::underlying_type<igl::ShaderStage>::type>);
   size_t result = std::hash<uint8_t>()(static_cast<uint8_t>(key.stage));
   result ^= std::hash<string>()(key.entryPoint);
+  result ^= std::hash<igl::FunctionConstantValues>()(key.functionConstantValues);
   return result;
 }
 
