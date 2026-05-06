@@ -8,7 +8,6 @@
 #include <igl/vulkan/RenderCommandEncoder.h>
 
 #include <algorithm>
-#include <array>
 #include <igl/IGLSafeC.h>
 #include <igl/RenderPass.h>
 #include <igl/vulkan/Buffer.h>
@@ -97,9 +96,7 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
 
   const FramebufferDesc& desc = static_cast<const Framebuffer&>((*framebuffer)).getDesc();
 
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
-  std::array<VkClearValue, 2 * IGL_COLOR_ATTACHMENTS_MAX + 2> clearValues; // uninitialized
-  uint32_t numClearValues = 0;
+  std::vector<VkClearValue> clearValues;
   uint32_t mipLevel = 0;
   uint32_t layer = 0;
 
@@ -133,12 +130,12 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
     }
 
     const auto& descColor = renderPass.colorAttachments[i];
-    clearValues[numClearValues++] = VkClearValue{.color = {.float32 = {
-                                                               descColor.clearColor.r,
-                                                               descColor.clearColor.g,
-                                                               descColor.clearColor.b,
-                                                               descColor.clearColor.a,
-                                                           }}};
+    clearValues.push_back(VkClearValue{.color = {.float32 = {
+                                                     descColor.clearColor.r,
+                                                     descColor.clearColor.g,
+                                                     descColor.clearColor.b,
+                                                     descColor.clearColor.a,
+                                                 }}});
     const uint32_t colorLayer = getVkLayer(colorTexture.getType(), descColor.face, descColor.layer);
     if (mipLevel) {
       IGL_DEBUG_ASSERT(descColor.mipLevel == mipLevel,
@@ -167,12 +164,12 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
       builder.addColorResolve(textureFormatToVkFormat(colorResolveTexture.getFormat()),
                               VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                               VK_ATTACHMENT_STORE_OP_STORE);
-      clearValues[numClearValues++] = VkClearValue{.color = {.float32 = {
-                                                                 descColor.clearColor.r,
-                                                                 descColor.clearColor.g,
-                                                                 descColor.clearColor.b,
-                                                                 descColor.clearColor.a,
-                                                             }}};
+      clearValues.push_back(VkClearValue{.color = {.float32 = {
+                                                       descColor.clearColor.r,
+                                                       descColor.clearColor.g,
+                                                       descColor.clearColor.b,
+                                                       descColor.clearColor.a,
+                                                   }}});
     }
   }
 
@@ -188,10 +185,10 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
                      "Depth attachment should have the same mip-level as color attachments");
     IGL_DEBUG_ASSERT(getVkLayer(depthTexture.getType(), descDepth.face, descDepth.layer) == layer,
                      "Depth attachment should have the same face or layer as color attachments");
-    clearValues[numClearValues++] = VkClearValue{.depthStencil = {
-                                                     .depth = descDepth.clearDepth,
-                                                     .stencil = descStencil.clearStencil,
-                                                 }};
+    clearValues.push_back(VkClearValue{.depthStencil = {
+                                           .depth = descDepth.clearDepth,
+                                           .stencil = descStencil.clearStencil,
+                                       }});
     const auto initialLayout = descDepth.loadAction == igl::LoadAction::Load
                                    ? depthTexture.getVulkanTexture().image_.imageLayout_
                                    : VK_IMAGE_LAYOUT_UNDEFINED;
@@ -217,10 +214,10 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
                                      VK_ATTACHMENT_STORE_OP_STORE,
                                      initialLayout,
                                      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-      clearValues[numClearValues++] = VkClearValue{.depthStencil = {
-                                                       .depth = descDepth.clearDepth,
-                                                       .stencil = descStencil.clearStencil,
-                                                   }};
+      clearValues.push_back(VkClearValue{.depthStencil = {
+                                             .depth = descDepth.clearDepth,
+                                             .stencil = descStencil.clearStencil,
+                                         }});
     }
   }
 
@@ -232,7 +229,7 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
   dynamicState_.depthBiasEnable = false;
 
   const VkRenderPassBeginInfo bi = fb.getRenderPassBeginInfo(
-      renderPassHandle.pass, mipLevel, layer, numClearValues, clearValues.data());
+      renderPassHandle.pass, mipLevel, layer, (uint32_t)clearValues.size(), clearValues.data());
 
   const uint32_t width = std::max(fb.getWidth() >> mipLevel, 1u);
   const uint32_t height = std::max(fb.getHeight() >> mipLevel, 1u);
