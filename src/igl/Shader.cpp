@@ -58,6 +58,44 @@ size_t safeCStrHash(const char* IGL_NULLABLE s) {
 
 namespace igl {
 
+size_t getConstantValueSize(ConstantValueType type) noexcept {
+  switch (type) {
+  case ConstantValueType::Invalid:
+    return 0;
+  case ConstantValueType::Float1:
+    return 4;
+  case ConstantValueType::Float2:
+    return 8;
+  case ConstantValueType::Float3:
+    return 12;
+  case ConstantValueType::Float4:
+    return 16;
+  case ConstantValueType::Boolean1:
+    return 4;
+  case ConstantValueType::Boolean2:
+    return 8;
+  case ConstantValueType::Boolean3:
+    return 12;
+  case ConstantValueType::Boolean4:
+    return 16;
+  case ConstantValueType::Int1:
+    return 4;
+  case ConstantValueType::Int2:
+    return 8;
+  case ConstantValueType::Int3:
+    return 12;
+  case ConstantValueType::Int4:
+    return 16;
+  case ConstantValueType::Mat2x2:
+    return 16;
+  case ConstantValueType::Mat3x3:
+    return 36;
+  case ConstantValueType::Mat4x4:
+    return 64;
+  }
+  return 0;
+}
+
 bool ShaderCompilerOptions::operator==(const ShaderCompilerOptions& other) const {
   return fastMathEnabled == other.fastMathEnabled;
 }

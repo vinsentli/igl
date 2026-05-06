@@ -31,6 +31,32 @@ enum class ShaderStage : uint8_t {
 };
 
 /**
+ * @brief Type of shader function constant value.
+ */
+enum class ConstantValueType : uint8_t {
+  Invalid = 0,
+  Float1,
+  Float2,
+  Float3,
+  Float4,
+  Boolean1,
+  Boolean2,
+  Boolean3,
+  Boolean4,
+  Int1,
+  Int2,
+  Int3,
+  Int4,
+  Mat2x2,
+  Mat3x3,
+  Mat4x4
+};
+
+/// @brief Returns the byte size of a shader function constant value of the given type.
+/// Returns 0 for ConstantValueType::Invalid.
+[[nodiscard]] size_t getConstantValueSize(ConstantValueType type) noexcept;
+
+/**
  * @brief Configuration used when compiling a shader to toggle features such as fast math.
  */
 struct ShaderCompilerOptions {
