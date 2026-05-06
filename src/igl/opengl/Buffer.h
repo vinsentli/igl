@@ -30,7 +30,7 @@ class Buffer : public WithContext, public IBuffer {
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
     return 0;
   }
-  virtual void initialize(const BufferDesc& desc, Result* outResult) = 0;
+  virtual void initialize(const BufferDesc& desc, Result* IGL_NULLABLE outResult) = 0;
   [[nodiscard]] virtual Type getType() const noexcept = 0;
 
   [[nodiscard]] BufferDesc::BufferAPIHint requestedApiHints() const noexcept override {
@@ -59,7 +59,7 @@ class ArrayBuffer : public Buffer {
 
   Result upload(const void* data, const BufferRange& range) override;
 
-  void* map(const BufferRange& range, Result* outResult) override;
+  void* map(const BufferRange& range, Result* IGL_NULLABLE outResult) override;
   void unmap() override;
 
   [[nodiscard]] BufferDesc::BufferAPIHint acceptedApiHints() const noexcept override {
@@ -82,12 +82,12 @@ class ArrayBuffer : public Buffer {
     return target_;
   }
 
-  void initialize(const BufferDesc& desc, Result* outResult) override;
+  void initialize(const BufferDesc& desc, Result* IGL_NULLABLE outResult) override;
 
   void bind();
   void unbind();
 
-  void bindBase(size_t index, Result* outResult);
+  void bindBase(size_t index, Result* IGL_NULLABLE outResult);
 
   void bindForTarget(GLenum target);
 
@@ -121,8 +121,8 @@ class UniformBlockBuffer : public ArrayBuffer {
   }
 
   void setBlockBinding(GLuint pid, GLuint blockIndex, GLuint bindingPoint);
-  void bindBase(size_t index, Result* outResult);
-  void bindRange(size_t index, size_t offset, size_t size, Result* outResult);
+  void bindBase(size_t index, Result* IGL_NULLABLE outResult);
+  void bindRange(size_t index, size_t offset, size_t size, Result* IGL_NULLABLE outResult);
 
   [[nodiscard]] BufferDesc::BufferAPIHint acceptedApiHints() const noexcept override {
     return BufferDesc::BufferAPIHintBits::UniformBlock;
