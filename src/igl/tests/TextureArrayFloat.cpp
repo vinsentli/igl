@@ -290,6 +290,7 @@ class TextureArrayFloatTest : public ::testing::Test {
   size_t textureUnit_ = 0;
 };
 
+// NOLINTBEGIN(clang-diagnostic-global-constructors)
 // clang-format off
 const TestColorType kR = igl::tests::util::convertSRGBToLinear(glm::vec4(0x1F / 255.0, 0x00/255.0, 0x00/255.0, 0x0F/255.0)); // 0x1F00000F
 const TestColorType kG = igl::tests::util::convertSRGBToLinear(glm::vec4(0x00 / 255.0, 0x2F/255.0, 0x00/255.0, 0x1F/255.0)); // 0x002F001F;
@@ -321,6 +322,7 @@ const std::array<TestColorType, 12> kModifiedTextureData = {
   kB, kB, kB, kY, // Layer 2
 };
 // clang-format on
+// NOLINTEND(clang-diagnostic-global-constructors)
 
 const std::array<const TestColorType*, kNumLayers> kTextureLayerData = {
     kTextureData.data() + 0,
