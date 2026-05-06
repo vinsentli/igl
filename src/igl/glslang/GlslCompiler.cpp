@@ -76,6 +76,7 @@ void initializeCompiler() noexcept {
   glslang_initialize_process();
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 Result compileShader(ShaderStage stage,
                      const char* code,
                      std::vector<uint32_t>& outSPIRV,
