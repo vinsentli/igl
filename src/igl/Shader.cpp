@@ -8,6 +8,7 @@
 #include <igl/Shader.h>
 
 #include <cstring>
+#include <igl/IGLSafeC.h>
 
 namespace {
 
@@ -102,6 +103,54 @@ bool ShaderCompilerOptions::operator==(const ShaderCompilerOptions& other) const
 
 bool ShaderCompilerOptions::operator!=(const ShaderCompilerOptions& other) const {
   return !(*this == other);
+}
+
+FunctionConstantValues& FunctionConstantValues::setConstantValue(uint8_t index,
+                                                                 ConstantValueType type,
+                                                                 void* IGL_NONNULL value) {
+  IGL_DEBUG_ASSERT(type != ConstantValueType::Invalid);
+  IGL_DEBUG_ASSERT(value);
+  const size_t dataSize = getConstantValueSize(type);
+  IGL_DEBUG_ASSERT(dataSize);
+
+  if (values_.size() <= index) {
+    values_.resize(index + 1);
+  }
+  auto& entry = values_[index];
+  if (getConstantValueSize(entry.type) != dataSize) {
+    // New entry, or the size changed: append to `data_`. Bytes for the previous slot, if
+    // any, are left as a small gap; backends index by offset and never read them.
+    entry.offset = static_cast<uint32_t>(data_.size());
+    data_.resize(data_.size() + dataSize);
+  }
+  entry.type = type;
+  checked_memcpy(data_.data() + entry.offset, data_.size() - entry.offset, value, dataSize);
+  return *this;
+}
+
+bool FunctionConstantValues::operator==(const FunctionConstantValues& other) const {
+  // Compare logically (per-binding type + bytes) rather than the raw `data_` buffer, because
+  // setConstantValue can leave orphan gap bytes when an entry is overwritten with a different
+  // type/size. Two FCVs with the same logical content but different construction histories
+  // would otherwise spuriously compare unequal.
+  if (values_.size() != other.values_.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < values_.size(); ++i) {
+    const auto& a = values_[i];
+    const auto& b = other.values_[i];
+    if (a.type != b.type) {
+      return false;
+    }
+    if (a.type == ConstantValueType::Invalid) {
+      continue;
+    }
+    const auto size = getConstantValueSize(a.type);
+    if (memcmp(data_.data() + a.offset, other.data_.data() + b.offset, size) != 0) {
+      return false;
+    }
+  }
+  return true;
 }
 
 bool ShaderModuleInfo::operator==(const ShaderModuleInfo& other) const {

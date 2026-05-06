@@ -68,6 +68,49 @@ struct ShaderCompilerOptions {
   bool operator!=(const ShaderCompilerOptions& other) const;
 };
 
+struct FunctionConstantValues {
+  /// @brief One stored constant. The slot's position in `values_` is the binding index;
+  /// `type == ConstantValueType::Invalid` marks the slot as unused. Each entry's bytes live
+  /// in `data_` at `[offset, offset + getConstantValueSize(type))`.
+  struct Entry {
+    ConstantValueType type = ConstantValueType::Invalid;
+    uint32_t offset = 0; // byte offset into `data_`
+  };
+
+  /**
+   * @brief Set the contant value of function in shader.
+   * Metal:MTLFunctionConstantValues.
+   * Vulkan:SpecializationInfo.
+   * @param index  constant_id
+   * @param value  constant value.
+   */
+  FunctionConstantValues& setConstantValue(uint8_t index,
+                                           ConstantValueType type,
+                                           void* IGL_NONNULL value);
+
+  /// @brief Logical equality: compares per-binding type + raw constant bytes. `data_` may
+  /// contain orphan "gap" bytes from prior overwrites; those are correctly ignored here.
+  bool operator==(const FunctionConstantValues& other) const;
+
+  /// @brief All stored constants, indexed by binding ID. Slots with `type == Invalid` are
+  /// unused — consumers must skip them. Spec-constant counts are tiny (typically <10), so
+  /// the storage waste from sparse indexing is negligible.
+  [[nodiscard]] const std::vector<Entry>& getConstantValues() const noexcept {
+    return values_;
+  }
+
+  /// @brief Single contiguous byte buffer holding every constant's data; entries reference
+  /// it via `Entry::offset` / `Entry::size`. Vulkan can pass `data().data()` as
+  /// `VkSpecializationInfo::pData` directly (zero-copy).
+  [[nodiscard]] const std::vector<uint8_t>& getData() const noexcept {
+    return data_;
+  }
+
+ private:
+  std::vector<Entry> values_;
+  std::vector<uint8_t> data_;
+};
+
 /**
  * @brief Metadata about a shader module.
  */
