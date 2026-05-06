@@ -139,6 +139,18 @@ void RenderCommandEncoder::beginEncoding(const RenderPassDesc& renderPass,
   Result::setOk(outResult);
 }
 
+/**
+ * @brief Ends render command encoding, restores GL state,
+ *        and resolves MSAA framebuffers.
+ *
+ * Restores the GL_SCISSOR_TEST state saved during
+ * beginEncoding(), disables GL_POLYGON_OFFSET_FILL, resets
+ * depth bias, and delegates to the adapter's endEncoding().
+ * The adapter is then returned to the context's pool for
+ * reuse. If a GPU timestamp query was started, it is ended
+ * here. If a resolve framebuffer is present, the primary
+ * framebuffer is blitted to it for MSAA resolve.
+ */
 void RenderCommandEncoder::endEncoding() {
   if (IGL_DEBUG_VERIFY(adapter_)) {
     // Restore caller state

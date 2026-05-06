@@ -330,6 +330,8 @@ MTLTextureType Texture::convertType(TextureType value, size_t numSamples, Textur
     return MTLTextureType3D;
   case TextureType::Cube:
     return MTLTextureTypeCube;
+  default:
+    return MTLTextureType1D;
   }
 }
 

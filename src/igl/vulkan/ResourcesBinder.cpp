@@ -124,7 +124,7 @@ void ResourcesBinder::bindTexture(uint32_t index, Texture* tex) {
 
 #if IGL_DEBUG_ABORT_ENABLED
   if (newTexture) {
-    const igl::vulkan::VulkanImage& img = newTexture->image_;
+    const igl::vulkan::VulkanImage& img = newTexture->image;
     IGL_DEBUG_ASSERT(img.samples_ == VK_SAMPLE_COUNT_1_BIT,
                      "Multisampled images cannot be sampled in shaders");
     if (bindPoint_ == VK_PIPELINE_BIND_POINT_GRAPHICS) {
@@ -143,8 +143,8 @@ void ResourcesBinder::bindTexture(uint32_t index, Texture* tex) {
   // multisampled images cannot be directly accessed from shaders
   const bool isTextureAvailable =
       (newTexture != nullptr) &&
-      ((newTexture->image_.samples_ & VK_SAMPLE_COUNT_1_BIT) == VK_SAMPLE_COUNT_1_BIT);
-  const bool isSampledImage = isTextureAvailable && newTexture->image_.isSampledImage();
+      ((newTexture->image.samples_ & VK_SAMPLE_COUNT_1_BIT) == VK_SAMPLE_COUNT_1_BIT);
+  const bool isSampledImage = isTextureAvailable && newTexture->image.isSampledImage();
 
   VkImageView imageView = isSampledImage ? newTexture->imageView_.vkImageView : VK_NULL_HANDLE;
 
@@ -175,7 +175,7 @@ void ResourcesBinder::bindStorageImage(uint32_t index, Texture* tex) {
 
 #if IGL_DEBUG_ABORT_ENABLED
   if (newTexture) {
-    const igl::vulkan::VulkanImage& img = newTexture->image_;
+    const igl::vulkan::VulkanImage& img = newTexture->image;
     IGL_DEBUG_ASSERT(img.samples_ == VK_SAMPLE_COUNT_1_BIT,
                      "Multisampled images cannot be sampled in shaders");
     // If you trip this assert, then you are likely using an IGL texture
@@ -189,8 +189,8 @@ void ResourcesBinder::bindStorageImage(uint32_t index, Texture* tex) {
   // multisampled images cannot be directly accessed from shaders
   const bool isTextureAvailable =
       (newTexture != nullptr) &&
-      ((newTexture->image_.samples_ & VK_SAMPLE_COUNT_1_BIT) == VK_SAMPLE_COUNT_1_BIT);
-  const bool isStorageImage = isTextureAvailable && newTexture->image_.isStorageImage();
+      ((newTexture->image.samples_ & VK_SAMPLE_COUNT_1_BIT) == VK_SAMPLE_COUNT_1_BIT);
+  const bool isStorageImage = isTextureAvailable && newTexture->image.isStorageImage();
 
   VkImageView imageView = isStorageImage ? newTexture->imageView_.vkImageView : VK_NULL_HANDLE;
 

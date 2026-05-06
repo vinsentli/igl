@@ -42,6 +42,8 @@ VulkanQueuePool::VulkanQueuePool(std::set<VulkanQueueDescriptor> availableDescri
   availableDescriptors_(std::move(availableDescriptors)) {}
 
 VulkanQueueDescriptor VulkanQueuePool::findQueueDescriptor(VkQueueFlags flags) const {
+  IGL_PROFILER_FUNCTION();
+
   auto findDedicatedQueue = [&](VkQueueFlags required,
                                 VkQueueFlags avoid) -> VulkanQueueDescriptor {
     if (flags & required) {
@@ -95,12 +97,16 @@ VulkanQueueDescriptor VulkanQueuePool::findQueueDescriptor(VkQueueFlags flags) c
 }
 
 void VulkanQueuePool::reserveQueue(const VulkanQueueDescriptor& queueDescriptor) {
+  IGL_PROFILER_FUNCTION();
+
   if (availableDescriptors_.erase(queueDescriptor) != 0) {
     reservedDescriptors_.insert(queueDescriptor);
   }
 }
 
 std::vector<VkDeviceQueueCreateInfo> VulkanQueuePool::getQueueCreationInfos() const {
+  IGL_PROFILER_FUNCTION();
+
   std::map<uint32_t, std::vector<VulkanQueueDescriptor>> queues;
   for (const auto& queue : reservedDescriptors_) {
     queues[queue.familyIndex].push_back(queue);

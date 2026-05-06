@@ -230,7 +230,7 @@ VkImage VulkanSwapchain::getDepthVkImage() const {
   if (!depthTexture_) {
     lazyAllocateDepthBuffer();
   }
-  return depthTexture_->image_.getVkImage();
+  return depthTexture_->image.getVkImage();
 }
 
 VkImageView VulkanSwapchain::getDepthVkImageView() const {

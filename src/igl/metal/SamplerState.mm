@@ -19,7 +19,10 @@ MTLSamplerMinMagFilter SamplerState::convertMinMagFilter(SamplerMinMagFilter val
     return MTLSamplerMinMagFilterNearest;
   case SamplerMinMagFilter::Linear:
     return MTLSamplerMinMagFilterLinear;
+  default:
+    break;
   }
+  IGL_UNREACHABLE_RETURN(MTLSamplerMinMagFilterNearest)
 }
 
 MTLSamplerMipFilter SamplerState::convertMipFilter(SamplerMipFilter value) {
@@ -30,7 +33,10 @@ MTLSamplerMipFilter SamplerState::convertMipFilter(SamplerMipFilter value) {
     return MTLSamplerMipFilterNearest;
   case SamplerMipFilter::Linear:
     return MTLSamplerMipFilterLinear;
+  default:
+    break;
   }
+  IGL_UNREACHABLE_RETURN(MTLSamplerMipFilterNotMipmapped)
 }
 
 MTLSamplerAddressMode SamplerState::convertAddressMode(SamplerAddressMode value) {
@@ -46,7 +52,10 @@ MTLSamplerAddressMode SamplerState::convertAddressMode(SamplerAddressMode value)
       return MTLSamplerAddressModeClampToBorderColor;
     }
     return MTLSamplerAddressModeClampToZero;
+  default:
+    break;
   }
+  IGL_UNREACHABLE_RETURN(MTLSamplerAddressModeRepeat)
 }
 
 bool SamplerState::isYUV() const noexcept {

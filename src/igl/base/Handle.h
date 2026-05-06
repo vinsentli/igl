@@ -18,7 +18,7 @@ namespace igl {
 
 // Non-ref counted handles; based on:
 // https://enginearchitecture.realtimerendering.com/downloads/reac2023_modern_mobile_rendering_at_hypehype.pdf
-// https://github.com/corporateshark/lightweightvk/blob/main/lvk/LVK.h
+// https://github.com/corporateshark/lightweightvk/blob/72f3508b52d9e81534fcb0ca64c6a0fc1aabbf78/lvk/LVK.h#L91
 template<typename ObjectType>
 class Handle final {
  public:

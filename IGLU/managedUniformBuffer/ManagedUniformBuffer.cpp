@@ -116,6 +116,10 @@ ManagedUniformBuffer::~ManagedUniformBuffer() {
 void ManagedUniformBuffer::bind(const igl::IDevice& device,
                                 const igl::IRenderPipelineState& pipelineState,
                                 igl::IRenderCommandEncoder& encoder) {
+  if (data_ == nullptr) {
+    IGL_LOG_ERROR_ONCE("ManagedUniformBuffer::bind called with null data\n");
+    return;
+  }
   if (device.getBackendType() == igl::BackendType::OpenGL) {
 #if IGL_BACKEND_OPENGL && !IGL_PLATFORM_MACCATALYST
     for (auto& uniform : uniformInfo.uniforms) {

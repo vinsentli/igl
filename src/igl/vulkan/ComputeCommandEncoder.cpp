@@ -182,22 +182,22 @@ void ComputeCommandEncoder::bindTexture(uint32_t index, ITexture* texture) {
 
   const igl::vulkan::Texture* tex = static_cast<Texture*>(texture);
   const igl::vulkan::VulkanTexture& vkTex = tex->getVulkanTexture();
-  const igl::vulkan::VulkanImage* vkImage = &vkTex.image_;
+  const igl::vulkan::VulkanImage* vkImage = &vkTex.image;
 
   IGL_DEBUG_ASSERT(vkImage);
 
   if (vkImage->isSampledImage()) {
     igl::vulkan::transitionToShaderReadOnly(cmdBuffer_, texture);
+    binder_.bindTexture(index, static_cast<Texture*>(texture));
   } else if (vkImage->isStorageImage()) {
     igl::vulkan::transitionToGeneral(cmdBuffer_, texture);
+    binder_.bindStorageImage(index, static_cast<Texture*>(texture));
   } else {
     IGL_DEBUG_ASSERT(false, "A texture should be Sampled or Storage");
   }
 
   restoreLayout_.push_back(vkImage);
   restoreLayoutAspectFlags_.push_back(vkTex.imageView_.getVkImageAspectFlags());
-
-  binder_.bindTexture(index, static_cast<Texture*>(texture));
 }
 
 void ComputeCommandEncoder::bindImageTexture(uint32_t index,
@@ -210,7 +210,7 @@ void ComputeCommandEncoder::bindImageTexture(uint32_t index,
   (void)format;
 
   auto* tex = static_cast<Texture*>(texture);
-  const VulkanImage* vkImage = tex ? &tex->getVulkanTexture().image_ : nullptr;
+  const VulkanImage* vkImage = tex ? &tex->getVulkanTexture().image : nullptr;
 
   IGL_DEBUG_ASSERT(vkImage);
 

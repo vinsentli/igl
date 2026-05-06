@@ -341,6 +341,20 @@ std::shared_ptr<IShaderModule> Device::createShaderModuleInternal(const ShaderMo
   return shaderModule;
 }
 
+/**
+ * @brief Creates a VkShaderModule from pre-compiled
+ *        SPIR-V binary data.
+ *
+ * Optionally dumps the binary to disk when IGL_SHADER_DUMP
+ * is enabled. Assigns a Vulkan debug name if provided.
+ *
+ * @param[in] data SPIR-V binary (as uint32_t words).
+ * @param[in] length Size of the binary data in bytes.
+ * @param[in] debugName Label for Vulkan debug utilities.
+ * @param[out] outResult Receives the operation status.
+ * @return The created module with reflection data, or
+ *         nullptr on failure.
+ */
 std::shared_ptr<VulkanShaderModule> Device::createShaderModule(const void* IGL_NULLABLE data,
                                                                size_t length,
                                                                const std::string& debugName,
@@ -402,6 +416,25 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(const void* IGL_N
       util::getReflectionData(reinterpret_cast<const uint32_t*>(data), length));
 }
 
+/**
+ * @brief Compiles GLSL source into SPIR-V and creates a
+ *        Vulkan shader module.
+ *
+ * If the source lacks a `#version` directive, a GLSL 460
+ * header with device-appropriate extensions is prepended.
+ * For fragment shaders, bindless texture/sampler layout
+ * declarations are also injected when descriptor indexing
+ * is enabled.
+ *
+ * @param[in] stage  Shader stage (Vertex, Fragment,
+ *                   Compute, Task, or Mesh).
+ * @param[in] source GLSL source code to compile.
+ * @param[in] debugName Label assigned to the Vulkan
+ *                      shader module for debug tooling.
+ * @param[out] outResult Receives the compilation result.
+ * @return The compiled shader module, or nullptr on
+ *         failure.
+ */
 std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage,
                                                                const char* IGL_NULLABLE source,
                                                                const std::string& debugName,
@@ -600,6 +633,18 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibraryInternal(const Shader
   return shaderLibrary;
 }
 
+/**
+ * @brief Queries whether a specific device feature is supported
+ *        by the Vulkan physical device.
+ *
+ * Implements the ICapabilities::hasFeature interface for the
+ * Vulkan backend. Feature support is determined by querying
+ * Vulkan physical device properties, limits, and available
+ * extensions via VulkanContext.
+ *
+ * @param[in] feature The device feature to query.
+ * @return True if the feature is supported, false otherwise.
+ */
 bool Device::hasFeatureInternal(DeviceFeatures feature) const {
   IGL_PROFILER_FUNCTION();
 
@@ -745,6 +790,19 @@ bool Device::hasRequirementInternal(DeviceRequirement requirement) const {
   return false;
 }
 
+/**
+ * @brief Queries Vulkan physical device limits for a given
+ *        feature limit type.
+ *
+ * Maps IGL DeviceFeatureLimits values to corresponding
+ * VkPhysicalDeviceLimits properties. D3D12-specific descriptor
+ * heap limits are unsupported and return false.
+ *
+ * @param[in] featureLimits The feature limit to query.
+ * @param[out] result Populated with the limit value on
+ *        success, or 0 if unsupported.
+ * @return True if the limit is supported, false otherwise.
+ */
 bool Device::getFeatureLimitsInternal(DeviceFeatureLimits featureLimits, size_t& result) const {
   IGL_PROFILER_FUNCTION();
 

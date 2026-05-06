@@ -364,8 +364,8 @@ TEST_F(TextureTest, GetEstimatedSizeInBytes) {
     }
 
     if (iglDev_->hasFeature(DeviceFeatures::TextureFormatRG)) {
-      const auto rBytes = 1;
-      const auto rgBytes = 2;
+      const size_t rBytes = 1;
+      const size_t rgBytes = 2;
       bytes = static_cast<size_t>((16 + 8 + 4 + 2 + 1) * rBytes);
       ASSERT_EQ(calcSize(16, 1, TextureFormat::R_UNorm8, 5), bytes);
       if (!iglDev_->hasFeature(DeviceFeatures::TexturePartialMipChain)) {

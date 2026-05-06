@@ -506,7 +506,7 @@ void transitionToGeneral(VkCommandBuffer cmdBuf, ITexture* texture) {
   }
 
   const vulkan::Texture& tex = static_cast<Texture&>(*texture);
-  const vulkan::VulkanImage& img = tex.getVulkanTexture().image_;
+  const vulkan::VulkanImage& img = tex.getVulkanTexture().image;
   const vulkan::VulkanImageView& imgView = tex.getVulkanTexture().imageView_;
 
   if (!img.isStorageImage()) {
@@ -539,7 +539,7 @@ void transitionToColorAttachment(VkCommandBuffer cmdBuf, ITexture* colorTex) {
   }
 
   const auto& vkTex = static_cast<Texture&>(*colorTex);
-  const igl::vulkan::VulkanImage& img = vkTex.getVulkanTexture().image_;
+  const igl::vulkan::VulkanImage& img = vkTex.getVulkanTexture().image;
   if (IGL_DEBUG_VERIFY_NOT(img.isDepthFormat_ || img.isStencilFormat_)) {
     IGL_DEBUG_ABORT("Color attachments cannot have depth/stencil formats");
     IGL_LOG_ERROR("Color attachments cannot have depth/stencil formats");
@@ -573,7 +573,7 @@ void transitionToDepthStencilAttachment(VkCommandBuffer cmdBuf, ITexture* depthS
   }
 
   const auto& vkTex = static_cast<Texture&>(*depthStencilTex);
-  const igl::vulkan::VulkanImage& img = vkTex.getVulkanTexture().image_;
+  const igl::vulkan::VulkanImage& img = vkTex.getVulkanTexture().image;
   if (IGL_DEBUG_VERIFY_NOT(!img.isDepthFormat_ && !img.isStencilFormat_)) {
     IGL_DEBUG_ABORT("Only depth/stencil formats are accepted");
     IGL_LOG_ERROR("Only depth/stencil formats are accepted");
@@ -613,7 +613,7 @@ void transitionToShaderReadOnly(VkCommandBuffer cmdBuf, ITexture* texture) {
   }
 
   const vulkan::Texture& tex = static_cast<Texture&>(*texture);
-  const vulkan::VulkanImage& img = tex.getVulkanTexture().image_;
+  const vulkan::VulkanImage& img = tex.getVulkanTexture().image;
   const igl::vulkan::VulkanImageView& imgView = tex.getVulkanTexture().imageView_;
 
   const bool isColor = (imgView.getVkImageAspectFlags() & VK_IMAGE_ASPECT_COLOR_BIT) > 0;
@@ -638,7 +638,7 @@ void overrideImageLayout(ITexture* texture, VkImageLayout layout) {
     return;
   }
   const vulkan::Texture* tex = static_cast<Texture*>(texture);
-  tex->getVulkanTexture().image_.imageLayout_ = layout;
+  tex->getVulkanTexture().image.imageLayout_ = layout;
 }
 
 void ensureShaderModule(IShaderModule* sm) {

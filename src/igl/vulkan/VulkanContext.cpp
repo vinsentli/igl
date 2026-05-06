@@ -1066,6 +1066,11 @@ Result VulkanContext::initContext(const HWDeviceDesc& desc,
         .pInitialData = config_.pipelineCacheData,
     };
     vf_.vkCreatePipelineCache(device, &ci, nullptr, &pipelineCache_);
+    VK_ASSERT(ivkSetDebugObjectName(&vf_,
+                                    device,
+                                    VK_OBJECT_TYPE_PIPELINE_CACHE,
+                                    (uint64_t)pipelineCache_,
+                                    "Pipeline Cache: VulkanContext::pipelineCache_"));
   }
 
   // Create Vulkan Memory Allocator
@@ -1144,7 +1149,7 @@ Result VulkanContext::initContext(const HWDeviceDesc& desc,
     const VkImageAspectFlags imageAspectFlags =
         (*textures_.get(pimpl_->dummyTexture))->imageView_.getVkImageAspectFlags();
     stagingDevice_->imageData(
-        (*textures_.get(pimpl_->dummyTexture))->image_,
+        (*textures_.get(pimpl_->dummyTexture))->image,
         TextureType::TwoD,
         TextureRangeDesc::new2D(0, 0, 1, 1),
         TextureFormatProperties::fromTextureFormat(TextureFormat::RGBA_UNorm8),
@@ -1623,9 +1628,9 @@ VkResult VulkanContext::checkAndUpdateDescriptorSets() {
     if (texture) {
       // multisampled images cannot be directly accessed from shaders
       const bool isTextureAvailable =
-          (texture->image_.samples_ & VK_SAMPLE_COUNT_1_BIT) == VK_SAMPLE_COUNT_1_BIT;
-      const bool isSampledImage = isTextureAvailable && texture->image_.isSampledImage();
-      const bool isStorageImage = isTextureAvailable && texture->image_.isStorageImage();
+          (texture->image.samples_ & VK_SAMPLE_COUNT_1_BIT) == VK_SAMPLE_COUNT_1_BIT;
+      const bool isSampledImage = isTextureAvailable && texture->image.isSampledImage();
+      const bool isStorageImage = isTextureAvailable && texture->image.isStorageImage();
       infoSampledImages.push_back(
           {.sampler = dummySampler,
            .imageView = isSampledImage ? texture->imageView_.getVkImageView() : dummyImageView,
@@ -2138,8 +2143,9 @@ void VulkanContext::updateBindingsStorageImagesByDescriptorBuffer(
     const BindingsStorageImages& data,
     const VulkanDescriptorSetLayout& dsl,
     const util::SpvModuleInfo& info) const {
-  if (info.images.empty())
+  if (info.images.empty()) {
     return;
+  }
 
   // make sure the guard value is always there
   IGL_DEBUG_ASSERT(!textures_.objects_.empty());
@@ -2211,8 +2217,9 @@ void VulkanContext::updateBindingsBuffersByDescriptorBuffer(
     const VulkanDescriptorSetLayout& dsl,
     const util::SpvModuleInfo& info) {
   IGL_PROFILER_FUNCTION();
-  if (info.buffers.empty())
+  if (info.buffers.empty()) {
     return;
+  }
 
   auto uniformBufferDescriptorSize =
       vkPhysicalDeviceDescriptorBufferProperties_.uniformBufferDescriptorSize;
@@ -2550,8 +2557,8 @@ BindGroupTextureHandle VulkanContext::createBindGroup(const BindGroupTextureDesc
 
     // multisampled images cannot be directly accessed from shaders
     const bool isTextureAvailable =
-        (texture.image_.samples_ & VK_SAMPLE_COUNT_1_BIT) == VK_SAMPLE_COUNT_1_BIT;
-    const bool isSampledImage = isTextureAvailable && texture.image_.isSampledImage();
+        (texture.image.samples_ & VK_SAMPLE_COUNT_1_BIT) == VK_SAMPLE_COUNT_1_BIT;
+    const bool isSampledImage = isTextureAvailable && texture.image.isSampledImage();
 
     if (!IGL_DEBUG_VERIFY(isSampledImage)) {
       IGL_LOG_ERROR("Each bound texture should have TextureUsageBits::Sampled (slot = %u)", loc);

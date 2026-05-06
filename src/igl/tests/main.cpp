@@ -20,10 +20,12 @@
 #include <windows.h>
 #endif
 
-static void signalHandler(int signum) {
+namespace {
+void signalHandler(int signum) {
   std::printf("CRASH: Signal %d caught\n", signum);
   std::_Exit(signum);
 }
+} // namespace
 
 int main(int argc, char** argv) {
   // Install basic signal handler for early crash diagnostics

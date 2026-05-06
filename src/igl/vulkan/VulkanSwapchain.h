@@ -37,7 +37,7 @@ class VulkanSwapchain final {
   Result present(VkSemaphore waitSemaphore);
   VkImage getCurrentVkImage() const {
     if (IGL_DEBUG_VERIFY(currentImageIndex_ < numSwapchainImages_)) {
-      return swapchainTextures_[currentImageIndex_]->image_.getVkImage();
+      return swapchainTextures_[currentImageIndex_]->image.getVkImage();
     }
     return VK_NULL_HANDLE;
   }

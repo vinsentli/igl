@@ -22,7 +22,7 @@ namespace igl {
 
 // A Pool of objects which is compatible with the abovementioned Handle<> types; based on:
 // https://enginearchitecture.realtimerendering.com/downloads/reac2023_modern_mobile_rendering_at_hypehype.pdf
-// https://github.com/corporateshark/lightweightvk/blob/main/lvk/Pool.h
+// https://github.com/corporateshark/lightweightvk/blob/72f3508b52d9e81534fcb0ca64c6a0fc1aabbf78/lvk/Pool.h#L13
 template<typename ObjectType, typename ImplObjectType>
 class Pool {
   static constexpr uint32_t kListEndSentinel = 0xffffffff;

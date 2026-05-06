@@ -98,7 +98,7 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* Not Used */,
                                      imageRegion,
                                      vkTex.getProperties(),
                                      VK_FORMAT_R8G8B8A8_UNORM,
-                                     vkTex.getVulkanTexture().image_.imageLayout_,
+                                     vkTex.getVulkanTexture().image.imageLayout_,
                                      vkTex.getVulkanTexture().imageView_.getVkImageAspectFlags(),
                                      pixelBytes,
                                      static_cast<uint32_t>(bytesPerRow),
@@ -163,7 +163,7 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
                         VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
 
   // 2. Transition src into TRANSFER_SRC_OPTIMAL
-  srcVkTex.getVulkanTexture().image_.transitionLayout(
+  srcVkTex.getVulkanTexture().image.transitionLayout(
       cmdBuf,
       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
       VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, // Wait for all previous operation to
@@ -188,14 +188,14 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
                          &copy);
 
   // 4. Transition images back
-  srcVkTex.getVulkanTexture().image_.transitionLayout(
+  srcVkTex.getVulkanTexture().image.transitionLayout(
       cmdBuf,
       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       VK_PIPELINE_STAGE_TRANSFER_BIT, // Wait for Copy to be done
       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, // Don't start anything until Copy is
                                          // done
       VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
-  dstVkTex.getVulkanTexture().image_.transitionLayout(
+  dstVkTex.getVulkanTexture().image.transitionLayout(
       cmdBuf,
       dstVkTex.isSwapchainTexture() ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
                                     : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,

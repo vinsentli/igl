@@ -120,14 +120,9 @@ MTLVertexFormat VertexInputState::convertAttributeFormat(VertexAttributeFormat v
   case VertexAttributeFormat::Int_2_10_10_10_REV:
     return MTLVertexFormatInt1010102Normalized;
 
-    // The 'default' case below is commented out, so that compiler will catch and error
-    // on any unhandled cases.
-
-    // default:
-    //  return MTLVertexFormatInvalid;
+  default:
+    return MTLVertexFormatInvalid;
   }
-
-  return MTLVertexFormatInvalid;
 }
 
 MTLVertexStepFunction VertexInputState::convertSampleFunction(VertexSampleFunction value) {
@@ -138,6 +133,9 @@ MTLVertexStepFunction VertexInputState::convertSampleFunction(VertexSampleFuncti
     return MTLVertexStepFunctionPerVertex;
   case VertexSampleFunction::Instance:
     return MTLVertexStepFunctionPerInstance;
+
+  default:
+    return MTLVertexStepFunctionPerVertex;
   }
 }
 } // namespace igl::metal

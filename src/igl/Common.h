@@ -300,7 +300,7 @@ void destroy(IDevice* IGL_NULLABLE device, DepthStencilStateHandle handle);
 /// MARK: - Holder
 
 // RAII wrapper around Handle<>; based on:
-// https://github.com/corporateshark/lightweightvk/blob/main/lvk/LVK.h
+// https://github.com/corporateshark/lightweightvk/blob/72f3508b52d9e81534fcb0ca64c6a0fc1aabbf78/lvk/LVK.h#L163
 template<typename HandleType>
 class Holder final {
  public:

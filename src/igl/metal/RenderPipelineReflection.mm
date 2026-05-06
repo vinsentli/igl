@@ -18,8 +18,6 @@
 #define NON_EXHAUSTIVE_SWITCH_END
 #endif // !defined(IGL_CMAKE_BUILD)
 
-using namespace igl;
-
 namespace {
 
 igl::UniformType metalDataTypeToIGLUniformType(MTLDataType type) {
