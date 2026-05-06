@@ -451,6 +451,25 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipeline(const RenderP
   }
 }
 
+/**
+ * @brief Creates a Metal render pipeline state for
+ *        traditional vertex/fragment shaders.
+ *
+ * Translates the IGL render pipeline descriptor into an
+ * MTLRenderPipelineDescriptor, configures vertex input,
+ * shader functions, color attachment blending, and
+ * depth/stencil formats, then creates the
+ * MTLRenderPipelineState with reflection enabled.
+ *
+ * @param[in] desc Render pipeline descriptor providing
+ *        shader stages, vertex input state, sample count,
+ *        color/depth/stencil attachment configuration,
+ *        and blending parameters.
+ * @param[out] outResult Optional receiver for the
+ *        creation result status.
+ * @return The created pipeline state, or nullptr on
+ *         failure.
+ */
 std::shared_ptr<IRenderPipelineState> Device::createTraditionalRenderPipeline(
     const RenderPipelineDesc& desc,
     Result* outResult) const {
