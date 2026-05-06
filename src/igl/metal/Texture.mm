@@ -135,7 +135,7 @@ Result Texture::uploadInternal(TextureType type,
           return result;
         }
       }
-      generateMipmap(*cmdQueue, nullptr);
+      generateMipmap(*cmdQueue);
       mipmapsAreAvailableAndUploaded_ = true;
     } else {
       return Result(igl::Result::Code::RuntimeError,
@@ -231,7 +231,7 @@ uint32_t Texture::getNumMipLevels() const {
   return [get() mipmapLevelCount];
 }
 
-void Texture::generateMipmap(ICommandQueue& cmdQueue, const TextureRangeDesc* range) const {
+void Texture::generateMipmap(ICommandQueue& cmdQueue, const TextureRangeDesc* IGL_NULLABLE range) const {
   if (range) {
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   }
@@ -247,7 +247,7 @@ void Texture::generateMipmap(ICommandQueue& cmdQueue, const TextureRangeDesc* ra
   }
 }
 
-void Texture::generateMipmap(ICommandBuffer& cmdBuffer, const TextureRangeDesc* range) const {
+void Texture::generateMipmap(ICommandBuffer& cmdBuffer, const TextureRangeDesc* IGL_NULLABLE range) const {
   if (range) {
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   }

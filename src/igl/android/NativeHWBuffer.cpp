@@ -142,7 +142,7 @@ TextureDesc::TextureUsage getIglBufferUsage(uint32_t nativeUsage) {
   return bufferUsage;
 }
 
-Result allocateNativeHWBuffer(AHardwareBufferFunctionTable* funcTable,
+Result allocateNativeHWBuffer(AHardwareBufferFunctionTable* IGL_NONNULL funcTable,
                               const TextureDesc& desc,
                               bool surfaceComposite,
                               AHardwareBuffer** buffer) {

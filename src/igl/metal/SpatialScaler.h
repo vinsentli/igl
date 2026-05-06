@@ -77,18 +77,18 @@ class SpatialScaler final : public ISpatialScaler {
   SpatialScalerDesc desc_;
 
   // Retained MTLDevice for creating internal textures
-  void* mtlDevice_ = nullptr;  // id<MTLDevice>
+  void* IGL_NULLABLE mtlDevice_ = nullptr;  // id<MTLDevice>
     
 #if IGL_METALFX_AVAILABLE
   // Use void* to avoid API availability issues in header
   // Cast to id<MTLFXSpatialScaler> in .mm file at runtime
-  void* scaler_ = nullptr;
+  void* IGL_NULLABLE scaler_ = nullptr;
 
   // Internal output texture with ShaderWrite usage for MetalFX
   // MetalFX requires output texture to have MTLTextureUsageShaderWrite,
   // but engine's FrameBuffer only creates textures with RenderTarget|ShaderRead.
   // We create an internal texture with the correct usage and blit to the external output.
-  void* internalOutputTexture_ = nullptr;  // id<MTLTexture>
+  void* IGL_NULLABLE internalOutputTexture_ = nullptr;  // id<MTLTexture>
   uint32_t internalOutputWidth_ = 0;
   uint32_t internalOutputHeight_ = 0;
 #endif

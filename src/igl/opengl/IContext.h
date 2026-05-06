@@ -279,7 +279,11 @@ class IContext {
                                            GLenum pname,
                                            GLint* IGL_NULLABLE params) const;
   void getIntegerv(GLenum pname, GLint* IGL_NULLABLE params) const;
-  void getProgramBinary(GLuint program, GLsizei bufSize, GLsizei* length, GLenum* binaryFormat, GLvoid* binary);
+  void getProgramBinary(GLuint program,
+                        GLsizei bufSize,
+                        GLsizei* IGL_NULLABLE length,
+                        GLenum* IGL_NULLABLE binaryFormat,
+                        GLvoid* IGL_NULLABLE binary);
   void getProgramiv(GLuint program, GLenum pname, GLint* IGL_NULLABLE params) const;
   void getProgramInterfaceiv(GLuint program,
                              GLenum programInterface,
@@ -336,7 +340,7 @@ class IContext {
   void pixelStorei(GLenum pname, GLint param);
   void polygonOffsetClamp(GLfloat factor, GLfloat units, float clamp);
   void popDebugGroup();
-  void programBinary(GLuint program, GLenum binaryFormat, const GLvoid* binary, GLsizei length);
+  void programBinary(GLuint program, GLenum binaryFormat, const GLvoid* IGL_NULLABLE binary, GLsizei length);
   void programParameteri(GLuint program, GLenum pname, GLint value);
   void pushDebugGroup(GLenum source, GLuint id, GLsizei length, const GLchar* IGL_NULLABLE message);
   void readPixels(GLint x,

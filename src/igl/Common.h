@@ -44,7 +44,8 @@ constexpr uint32_t IGL_VERTEX_ATTRIBUTES_MAX = 24;
 // in https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
 constexpr uint32_t IGL_BUFFER_BINDINGS_MAX = 31;
 
-constexpr uint32_t IGL_UNIFORM_BLOCKS_BINDING_MAX = 16;
+//为了兼容Mesh shader，从16升级到32
+constexpr uint32_t IGL_UNIFORM_BLOCKS_BINDING_MAX = 32;
 
 // See GL_MAX_COLOR_ATTACHMENTS in
 // https://www.khronos.org/registry/OpenGL-Refpages/es3.0/html/glGet.xhtml

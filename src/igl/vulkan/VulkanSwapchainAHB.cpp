@@ -48,7 +48,7 @@ AHBTexturePool::PoolEntry AHBTexturePool::Acquire(Device& device, int width, int
       auto size = entry.texture->getSize();
       if (size.width == width && size.height == height) {
         // 标记这是一个交换链Texture，才能进行Present.
-        entry.texture->getVulkanTexture().image_.isExternallyManaged_ = true;
+        entry.texture->getVulkanTexture().image.isExternallyManaged_ = true;
         return entry;
       }
     }
@@ -63,7 +63,7 @@ void AHBTexturePool::Clear() {
 
   // 需要将isExternallyManaged_置成false，否则VulkanImage不会释放。
   for (auto& entry : pool_) {
-    entry.texture->getVulkanTexture().image_.isExternallyManaged_ = false;
+    entry.texture->getVulkanTexture().image.isExternallyManaged_ = false;
   }
 
   pool_.clear();
@@ -213,9 +213,9 @@ VulkanSwapchain::CreateAHBTexture(Device& device, int width, int height) {
   assert(texture);
 
   // 析构时要立即FreeMemory，不要延迟到下一帧，否则切到后台时，AHBuffer不会立即释放，达不到预期效果。
-  texture->getVulkanTexture().image_.isDeferFreeMemory_ = false;
+  texture->getVulkanTexture().image.isDeferFreeMemory_ = false;
   // 标记这是一个交换链Texture，才能进行Present.
-  texture->getVulkanTexture().image_.isExternallyManaged_ = true;
+  texture->getVulkanTexture().image.isExternallyManaged_ = true;
 
   return texture;
 }
@@ -304,7 +304,7 @@ void VulkanSwapchain::SubmitFrameToSystem(int gpuFenceFd, VkSemaphore waitSemaph
         auto thiz = data->swapchain.lock();
         auto texture = std::move(data->texture);
         // 防止VulkanImage不能释放
-        texture->getVulkanTexture().image_.isExternallyManaged_ = false;
+        texture->getVulkanTexture().image.isExternallyManaged_ = false;
         delete data;
 
         if (!thiz)

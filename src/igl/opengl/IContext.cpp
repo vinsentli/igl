@@ -3168,9 +3168,9 @@ void IContext::getIntegerv(GLenum pname, GLint* params) const {
 
 void IContext::getProgramBinary(GLuint program,
                                 GLsizei bufSize,
-                                GLsizei* length,
-                                GLenum* binaryFormat,
-                                GLvoid* binary) {
+                                GLsizei* IGL_NULLABLE length,
+                                GLenum* IGL_NULLABLE binaryFormat,
+                                GLvoid* IGL_NULLABLE binary) {
   GLCALL(GetProgramBinary)(program, bufSize, length, binaryFormat, binary);
   APILOG(
       "glGetProgramBinary(%u, %d, %p, %p, %p)\n", program, bufSize, length, binaryFormat, binary);
@@ -3560,7 +3560,7 @@ void IContext::pixelStorei(GLenum pname, GLint param) {
 
 void IContext::programBinary(GLuint program,
                              GLenum binaryFormat,
-                             const GLvoid* binary,
+                             const GLvoid* IGL_NULLABLE binary,
                              GLsizei length) {
   GLCALL(ProgramBinary)(program, binaryFormat, binary, length);
   APILOG("glProgramBinary(%u, %u, %p, %d)\n", program, binaryFormat, binary, length);

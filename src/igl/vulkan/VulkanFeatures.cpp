@@ -216,7 +216,7 @@ VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
   }),
   featuresFragmentDensityMap({
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT,
-      .fragmentDensityMap = VK_TRUE,
+      .fragmentDensityMap = VK_FALSE,
   }),
   featuresVulkanMemoryModel({
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES_KHR,
@@ -691,8 +691,8 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
   has_VK_EXT_descriptor_indexing =
       enable(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, ExtensionType::Device);
 
-  has_VK_EXT_fragment_density_map =
-      enable(VK_EXT_FRAGMENT_DENSITY_MAP_EXTENSION_NAME, ExtensionType::Device);
+//  has_VK_EXT_fragment_density_map =
+//      enable(VK_EXT_FRAGMENT_DENSITY_MAP_EXTENSION_NAME, ExtensionType::Device);
 
 #ifndef NDEBUG
   has_VK_EXT_device_memory_report = enable(VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME, ExtensionType::Device);
@@ -709,7 +709,7 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
 
   // Enable fragment shading rate extension (required when primitiveFragmentShadingRateMeshShader is
   // used)
-  enable(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, ExtensionType::Device);
+//  enable(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, ExtensionType::Device);
 }
 
 bool VulkanFeatures::enabled(const char* extensionName) const {

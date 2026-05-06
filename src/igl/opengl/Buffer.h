@@ -57,9 +57,9 @@ class ArrayBuffer : public Buffer {
   ArrayBuffer(ArrayBuffer&&) = delete;
   ArrayBuffer& operator=(ArrayBuffer&&) = delete;
 
-  Result upload(const void* data, const BufferRange& range) override;
+  Result upload(const void* IGL_NULLABLE data, const BufferRange& range) override;
 
-  void* map(const BufferRange& range, Result* IGL_NULLABLE outResult) override;
+  void* IGL_NULLABLE map(const BufferRange& range, Result* IGL_NULLABLE outResult) override;
   void unmap() override;
 
   [[nodiscard]] BufferDesc::BufferAPIHint acceptedApiHints() const noexcept override {
