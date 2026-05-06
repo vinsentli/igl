@@ -101,6 +101,7 @@ SubmitHandle CommandQueue::submit(const igl::ICommandBuffer& commandBuffer, bool
       FOLLY_CLANG_DISABLE_WARNING("-Wtautological-compare")
       // Disable warning; local debug builds may set kIGLMetalEndCommandBufferToCapture to a
       // non-zero value
+      // NOLINTNEXTLINE(clang-diagnostic-tautological-unsigned-zero-compare)
     } else if (currentCommandBuffer >= kIGLMetalEndCommandBufferToCapture) {
       FOLLY_POP_WARNING
       stopCapture();
