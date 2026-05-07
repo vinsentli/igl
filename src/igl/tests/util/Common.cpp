@@ -42,10 +42,10 @@ void createShaderStages(const std::shared_ptr<IDevice>& dev,
                         std::unique_ptr<IShaderStages>& stages) {
   Result ret;
   stages = ShaderStagesCreator::fromModuleStringInput(*dev,
-                                                      vertexSource.data(),
+                                                      std::string(vertexSource).c_str(),
                                                       std::string(vertexEntryPoint),
                                                       "",
-                                                      fragmentSource.data(),
+                                                      std::string(fragmentSource).c_str(),
                                                       std::string(fragmentEntryPoint),
                                                       "",
                                                       &ret);
@@ -61,7 +61,7 @@ void createShaderStages(const std::shared_ptr<IDevice>& dev,
                         std::unique_ptr<IShaderStages>& stages) {
   Result ret;
   stages = ShaderStagesCreator::fromLibraryStringInput(*dev,
-                                                       librarySource.data(),
+                                                       std::string(librarySource).c_str(),
                                                        std::string(vertexEntryPoint),
                                                        std::string(fragmentEntryPoint),
                                                        "",

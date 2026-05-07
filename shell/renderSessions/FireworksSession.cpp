@@ -597,6 +597,7 @@ void main() {
   IGL_UNREACHABLE_RETURN(nullptr)
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void FireworksSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
 
@@ -717,6 +718,7 @@ void FireworksSession::initialize() noexcept {
   gpuVertices_.reserve(static_cast<size_t>(kMaxParticles));
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void FireworksSession::update(SurfaceTextures surfaceTextures) noexcept {
   if (!surfaceTextures.color) {
     return;
@@ -1041,6 +1043,7 @@ void FireworksSession::update(SurfaceTextures surfaceTextures) noexcept {
 
   // Use shell-provided clear color (transparent for passthrough, black otherwise)
   if (shellParams().clearColorValue.has_value()) {
+    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
     const auto& c = shellParams().clearColorValue.value();
     renderPass_.colorAttachments[0].clearColor = {c.r, c.g, c.b, c.a};
   }

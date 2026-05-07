@@ -282,6 +282,7 @@ TinyMeshSession::TinyMeshSession(std::shared_ptr<Platform> platform) :
                                                          getPlatform().getInputDispatcher());
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void TinyMeshSession::initialize() noexcept {
   device_ = &getPlatform().getDevice();
 

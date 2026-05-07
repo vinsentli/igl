@@ -82,7 +82,7 @@ ResourceStorage getIndexBufferResourceStorage(const igl::IDevice& device) {
     // @fb-only
   // @fb-only
 // @fb-only
-  return igl::BufferDesc{}.storage;
+  return BufferDesc{}.storage;
 }
 
 std::string getVersion() {
@@ -472,6 +472,7 @@ std::unique_ptr<IShaderStages> ColorSession::getShaderStagesForBackend(IDevice& 
   IGL_UNREACHABLE_RETURN(nullptr)
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void ColorSession::initialize() noexcept {
   IDevice& device = getPlatform().getDevice();
   const glm::vec3 fLinearOrangeColor =
@@ -579,6 +580,7 @@ void ColorSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(fragmentParamBuffer_ != nullptr);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void ColorSession::update(SurfaceTextures surfaceTextures) noexcept {
   if (framebuffer_ == nullptr) {
     Result ret;

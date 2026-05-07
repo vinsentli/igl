@@ -486,53 +486,58 @@ VkPipeline RenderPipelineState::getVkPipeline(
 
   std::vector<VkPipelineShaderStageCreateInfo> stages;
 
-  std::shared_ptr<VulkanSpecializationInfo> vertexSpecializationInfo;
-  std::shared_ptr<VulkanSpecializationInfo> taskSpecializationInfo;
-  std::shared_ptr<VulkanSpecializationInfo> meshSpecializationInfo;
-  std::shared_ptr<VulkanSpecializationInfo> fragmentSpecializationInfo;
+  std::vector<VkSpecializationMapEntry> vertEntries;
+  std::vector<VkSpecializationMapEntry> taskEntries;
+  std::vector<VkSpecializationMapEntry> meshEntries;
+  std::vector<VkSpecializationMapEntry> fragEntries;
+  VkSpecializationInfo vertSpecInfo{};
+  VkSpecializationInfo taskSpecInfo{};
+  VkSpecializationInfo meshSpecInfo{};
+  VkSpecializationInfo fragSpecInfo{};
 
   if (desc_.shaderStages->getType() == igl::ShaderStagesType::Render) {
-    const auto& vertexModule = desc_.shaderStages->getVertexModule();
-    vertexSpecializationInfo = createSpecializationInfo(vertexModule->info().functionConstantValues);
+    const auto& vertModule = desc_.shaderStages->getVertexModule();
+    vertSpecInfo = buildSpecializationInfo(vertModule->info().functionConstantValues, vertEntries);
     stages.emplace_back(VkPipelineShaderStageCreateInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .stage = VK_SHADER_STAGE_VERTEX_BIT,
-        .module = igl::vulkan::ShaderModule::getVkShaderModule(vertexModule),
-        .pName = vertexModule->info().entryPoint.c_str(),
-        .pSpecializationInfo = vertexSpecializationInfo ? &vertexSpecializationInfo->info : NULL,
+        .module = igl::vulkan::ShaderModule::getVkShaderModule(vertModule),
+        .pName = vertModule->info().entryPoint.c_str(),
+        .pSpecializationInfo = vertSpecInfo.mapEntryCount ? &vertSpecInfo : nullptr,
     });
   } else {
     const auto& taskModule = desc_.shaderStages->getTaskModule();
     if (taskModule) {
-      taskSpecializationInfo = createSpecializationInfo(taskModule->info().functionConstantValues);
+      taskSpecInfo =
+          buildSpecializationInfo(taskModule->info().functionConstantValues, taskEntries);
       stages.emplace_back(VkPipelineShaderStageCreateInfo{
           .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
           .stage = VK_SHADER_STAGE_TASK_BIT_EXT,
           .module = igl::vulkan::ShaderModule::getVkShaderModule(taskModule),
           .pName = taskModule->info().entryPoint.c_str(),
-          .pSpecializationInfo = taskSpecializationInfo ? &taskSpecializationInfo->info : NULL,
+          .pSpecializationInfo = taskSpecInfo.mapEntryCount ? &taskSpecInfo : nullptr,
       });
     }
 
     const auto& meshModule = desc_.shaderStages->getMeshModule();
-    meshSpecializationInfo = createSpecializationInfo(meshModule->info().functionConstantValues);
+    meshSpecInfo = buildSpecializationInfo(meshModule->info().functionConstantValues, meshEntries);
     stages.emplace_back(VkPipelineShaderStageCreateInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .stage = VK_SHADER_STAGE_MESH_BIT_EXT,
         .module = igl::vulkan::ShaderModule::getVkShaderModule(meshModule),
         .pName = meshModule->info().entryPoint.c_str(),
-        .pSpecializationInfo = meshSpecializationInfo ? &meshSpecializationInfo->info : NULL,
+        .pSpecializationInfo = meshSpecInfo.mapEntryCount ? &meshSpecInfo : nullptr,
     });
   }
 
-  const auto& fragmentModule = desc_.shaderStages->getFragmentModule();
-  fragmentSpecializationInfo = createSpecializationInfo(fragmentModule->info().functionConstantValues);
+  const auto& fragModule = desc_.shaderStages->getFragmentModule();
+  fragSpecInfo = buildSpecializationInfo(fragModule->info().functionConstantValues, fragEntries);
   stages.emplace_back(VkPipelineShaderStageCreateInfo{
       .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
       .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-      .module = igl::vulkan::ShaderModule::getVkShaderModule(fragmentModule),
-      .pName = fragmentModule->info().entryPoint.c_str(),
-      .pSpecializationInfo = fragmentSpecializationInfo ? &fragmentSpecializationInfo->info : NULL,
+      .module = igl::vulkan::ShaderModule::getVkShaderModule(fragModule),
+      .pName = fragModule->info().entryPoint.c_str(),
+      .pSpecializationInfo = fragSpecInfo.mapEntryCount ? &fragSpecInfo : nullptr,
   });
 
   VK_ASSERT_RETURN_NULL_HANDLE(

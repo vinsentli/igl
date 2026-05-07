@@ -152,7 +152,7 @@ class StbJpegTextureLoaderTest : public ::testing::Test {
   iglu::textureloader::stb::jpeg::TextureLoaderFactory factory_;
 };
 
-TEST_F(StbJpegTextureLoaderTest, EmptyBuffer_Fails) {
+TEST_F(StbJpegTextureLoaderTest, EmptyBufferFails) {
   std::vector<uint8_t> buffer;
   buffer.resize(iglu::textureloader::stb::jpeg::kHeaderLength);
 
@@ -164,7 +164,7 @@ TEST_F(StbJpegTextureLoaderTest, EmptyBuffer_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(StbJpegTextureLoaderTest, MinimumValidHeader_Succeeds) {
+TEST_F(StbJpegTextureLoaderTest, MinimumValidHeaderSucceeds) {
   const auto buffer = populateMinimalValidFile(64, 32);
 
   Result ret;
@@ -175,7 +175,7 @@ TEST_F(StbJpegTextureLoaderTest, MinimumValidHeader_Succeeds) {
   EXPECT_TRUE(ret.isOk()) << ret.message;
 }
 
-TEST_F(StbJpegTextureLoaderTest, ValidHeaderWithExtraData_Succeeds) {
+TEST_F(StbJpegTextureLoaderTest, ValidHeaderWithExtraDataSucceeds) {
   auto buffer = populateMinimalValidFile(64, 32);
   buffer.resize(buffer.size() + 1);
 
@@ -188,7 +188,7 @@ TEST_F(StbJpegTextureLoaderTest, ValidHeaderWithExtraData_Succeeds) {
   EXPECT_TRUE(ret.isOk()) << ret.message;
 }
 
-TEST_F(StbJpegTextureLoaderTest, InsufficientData_Fails) {
+TEST_F(StbJpegTextureLoaderTest, InsufficientDataFails) {
   auto buffer = populateMinimalValidFile(64, 32);
   buffer.resize(buffer.size() - 5);
 
@@ -200,7 +200,7 @@ TEST_F(StbJpegTextureLoaderTest, InsufficientData_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(StbJpegTextureLoaderTest, ValidData_Succceeds) {
+TEST_F(StbJpegTextureLoaderTest, ValidDataSuccceeds) {
   Result ret;
   auto reader = *iglu::textureloader::DataReader::tryCreate(
       kTestImageData.data(), static_cast<uint32_t>(kTestImageData.size()), nullptr);
@@ -209,7 +209,7 @@ TEST_F(StbJpegTextureLoaderTest, ValidData_Succceeds) {
   EXPECT_TRUE(ret.isOk()) << ret.message;
 }
 
-TEST_F(StbJpegTextureLoaderTest, LargeData_Succeeds) {
+TEST_F(StbJpegTextureLoaderTest, LargeDataSucceeds) {
   Result ret;
   auto reader = *iglu::textureloader::DataReader::tryCreate(
       kTestLargeImageData.data(), static_cast<uint32_t>(kTestLargeImageData.size()), nullptr);
@@ -218,7 +218,7 @@ TEST_F(StbJpegTextureLoaderTest, LargeData_Succeeds) {
   EXPECT_TRUE(ret.isOk()) << ret.message;
 }
 
-TEST_F(StbJpegTextureLoaderTest, VeryLargeData_Succeeds) {
+TEST_F(StbJpegTextureLoaderTest, VeryLargeDataSucceeds) {
   Result ret;
   auto reader = *iglu::textureloader::DataReader::tryCreate(
       kTestVeryLargeImageData.data(),
@@ -229,7 +229,7 @@ TEST_F(StbJpegTextureLoaderTest, VeryLargeData_Succeeds) {
   EXPECT_TRUE(ret.isOk()) << ret.message;
 }
 
-TEST_F(StbJpegTextureLoaderTest, OversizedData_Fails) {
+TEST_F(StbJpegTextureLoaderTest, OversizedDataFails) {
   Result ret;
   auto reader = *iglu::textureloader::DataReader::tryCreate(
       kTestOversizedImageData.data(),
@@ -240,7 +240,7 @@ TEST_F(StbJpegTextureLoaderTest, OversizedData_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(StbJpegTextureLoaderTest, CorruptedData_Fails) {
+TEST_F(StbJpegTextureLoaderTest, CorruptedDataFails) {
   Result ret;
   auto reader = *iglu::textureloader::DataReader::tryCreate(
       kTestCorruptedImageData.data(),
@@ -251,7 +251,7 @@ TEST_F(StbJpegTextureLoaderTest, CorruptedData_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(StbJpegTextureLoaderTest, JpegData_Succeeds) {
+TEST_F(StbJpegTextureLoaderTest, JpegDataSucceeds) {
   Result ret;
   auto reader = *iglu::textureloader::DataReader::tryCreate(
       kSingleWhitePixelGrayscreenJPG.data(),
@@ -262,7 +262,7 @@ TEST_F(StbJpegTextureLoaderTest, JpegData_Succeeds) {
   EXPECT_TRUE(ret.isOk()) << ret.message;
 }
 
-TEST_F(StbJpegTextureLoaderTest, PngData_Fails) {
+TEST_F(StbJpegTextureLoaderTest, PngDataFails) {
   Result ret;
   auto reader = *iglu::textureloader::DataReader::tryCreate(
       kSingleBlackPixelGrayscreenPNG.data(),

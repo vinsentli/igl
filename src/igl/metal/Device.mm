@@ -148,6 +148,23 @@ std::shared_ptr<ISamplerState> Device::createSamplerState(const SamplerStateDesc
   return platformDevice_.createSamplerState(desc, outResult);
 }
 
+/**
+ * @brief Creates a Metal texture from the given descriptor.
+ *
+ * Sanitizes the descriptor to ensure valid minimum values
+ * for dimensions, layers, samples, and mip levels. Rejects
+ * array textures unless type is TwoDArray, and rejects
+ * exportable textures. For multisample textures, mip level
+ * count is forced to 1.
+ *
+ * @param[in] desc Texture descriptor specifying format,
+ *        dimensions, usage, storage, and other properties.
+ * @param[out] outResult Optional error reporting. Set to
+ *        Unsupported for invalid format or array type
+ *        mismatch, Unimplemented for exportable textures,
+ *        or RuntimeError if Metal texture allocation fails.
+ * @return The created texture, or nullptr on failure.
+ */
 std::shared_ptr<ITexture> Device::createTexture( // NOLINT(bugprone-exception-escape)
     const TextureDesc& desc,
     Result* outResult) const noexcept {
@@ -463,6 +480,25 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipeline(const RenderP
   }
 }
 
+/**
+ * @brief Creates a Metal render pipeline state for
+ *        traditional vertex/fragment shaders.
+ *
+ * Translates the IGL render pipeline descriptor into an
+ * MTLRenderPipelineDescriptor, configures vertex input,
+ * shader functions, color attachment blending, and
+ * depth/stencil formats, then creates the
+ * MTLRenderPipelineState with reflection enabled.
+ *
+ * @param[in] desc Render pipeline descriptor providing
+ *        shader stages, vertex input state, sample count,
+ *        color/depth/stencil attachment configuration,
+ *        and blending parameters.
+ * @param[out] outResult Optional receiver for the
+ *        creation result status.
+ * @return The created pipeline state, or nullptr on
+ *         failure.
+ */
 std::shared_ptr<IRenderPipelineState> Device::createTraditionalRenderPipeline(
     const RenderPipelineDesc& desc,
     Result* outResult) const {
@@ -704,6 +740,45 @@ std::shared_ptr<IRenderPipelineState> Device::createTileRenderPipeline(const Til
     return std::make_shared<RenderPipelineState>(metalObject, reflection, fake_desc);
 }
 
+static MTLDataType convertConstantValueType(ConstantValueType type) {
+  switch (type) {
+  case ConstantValueType::Invalid:
+    return MTLDataTypeNone;
+  case ConstantValueType::Float1:
+    return MTLDataTypeFloat;
+  case ConstantValueType::Float2:
+    return MTLDataTypeFloat2;
+  case ConstantValueType::Float3:
+    return MTLDataTypeFloat3;
+  case ConstantValueType::Float4:
+    return MTLDataTypeFloat4;
+  case ConstantValueType::Boolean1:
+    return MTLDataTypeBool;
+  case ConstantValueType::Boolean2:
+    return MTLDataTypeBool2;
+  case ConstantValueType::Boolean3:
+    return MTLDataTypeBool3;
+  case ConstantValueType::Boolean4:
+    return MTLDataTypeBool4;
+  case ConstantValueType::Int1:
+    return MTLDataTypeInt;
+  case ConstantValueType::Int2:
+    return MTLDataTypeInt2;
+  case ConstantValueType::Int3:
+    return MTLDataTypeInt3;
+  case ConstantValueType::Int4:
+    return MTLDataTypeInt4;
+  case ConstantValueType::Mat2x2:
+    return MTLDataTypeFloat2x2;
+  case ConstantValueType::Mat3x3:
+    return MTLDataTypeFloat3x3;
+  case ConstantValueType::Mat4x4:
+    return MTLDataTypeFloat4x4;
+  default:
+    return MTLDataTypeNone;
+  }
+}
+
 std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryDesc& desc,
                                                             Result* outResult) const {
   if (IGL_DEBUG_VERIFY_NOT(desc.moduleInfo.empty())) {
@@ -759,11 +834,27 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
       
     MTLFunctionConstantValues * constValues = [MTLFunctionConstantValues new];
 
-    for (auto& [index, value] : info.functionConstantValues){
-      [constValues setConstantValue:&value type:MTLDataTypeInt atIndex:index];
+    const auto& constantValues = info.functionConstantValues.getConstantValues();
+    id<MTLFunction> metalFunction = nil;
+    if (constantValues.empty()) {
+      // Fast path: no specialization constants — skip MTLFunctionConstantValues allocation.
+      metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint];
+    } else {
+      MTLFunctionConstantValues* metalConstantValues = [MTLFunctionConstantValues new];
+      const uint8_t* constantsBase = info.functionConstantValues.getData().data();
+      for (size_t i = 0; i < constantValues.size(); ++i) {
+        const auto& entry = constantValues[i];
+        if (entry.type == ConstantValueType::Invalid) {
+          continue;
+        }
+        [metalConstantValues setConstantValue:(constantsBase + entry.offset)
+                                         type:convertConstantValueType(entry.type)
+                                      atIndex:i];
+      }
+      metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint
+                                         constantValues:metalConstantValues
+                                                  error:&error];
     }
-
-    auto metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint constantValues:constValues error:&error];
     if (!metalFunction) {
       IGL_DEBUG_ABORT("Could not find function '%s' in library\n", info.entryPoint.c_str());
       Result::setResult(

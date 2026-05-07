@@ -272,10 +272,11 @@ ResourceStorage getIndexBufferResourceStorage(const igl::IDevice& device) {
     // @fb-only
   // @fb-only
 // @fb-only
-  return igl::BufferDesc{}.storage;
+  return BufferDesc{}.storage;
 }
 } // namespace
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void TQSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
 
@@ -369,6 +370,7 @@ void TQSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(fragmentParamBuffer_ != nullptr);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void TQSession::update(SurfaceTextures surfaceTextures) noexcept {
   Result ret;
   if (framebuffer_ == nullptr) {

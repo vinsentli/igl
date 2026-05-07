@@ -12,10 +12,12 @@
 
 namespace igl::tests {
 namespace {
+// NOLINTBEGIN(clang-diagnostic-global-constructors,facebook-static-object-destructor-check)
 NameHandle a = IGL_NAMEHANDLE("a");
 NameHandle b = IGL_NAMEHANDLE("b");
 NameHandle c = IGL_NAMEHANDLE("c");
 NameHandle someLongerString = IGL_NAMEHANDLE("someLongerString");
+// NOLINTEND(clang-diagnostic-global-constructors,facebook-static-object-destructor-check)
 } // namespace
 
 TEST(NameHandleTests, string) {

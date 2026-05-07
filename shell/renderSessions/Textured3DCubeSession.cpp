@@ -292,6 +292,7 @@ void Textured3DCubeSession::createSamplerAndTextures(const igl::IDevice& device)
   tex0_->upload(range, textureData.data());
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void Textured3DCubeSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
@@ -369,6 +370,7 @@ void Textured3DCubeSession::setVertexParams(float aspectRatio) {
   vertexParameters_.scaleZ = scaleZ;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void Textured3DCubeSession::update(SurfaceTextures surfaceTextures) noexcept {
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {

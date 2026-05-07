@@ -38,6 +38,7 @@ constexpr size_t kOffscreenTexWidth = 2;
 constexpr size_t kOffscreenTexHeight = 2;
 
 // clang-format off
+// NOLINTBEGIN(clang-diagnostic-global-constructors)
 const glm::vec4 kR = igl::tests::util::convertSRGBToLinear(glm::vec4(0x1F / 255.0, 0x00/255.0, 0x00/255.0, 0x0F/255.0)); // 0x1F00000F
 const glm::vec4 kG = igl::tests::util::convertSRGBToLinear(glm::vec4(0x00 / 255.0, 0x2F/255.0, 0x00/255.0, 0x1F/255.0)); // 0x002F001F;
 const glm::vec4 kB = igl::tests::util::convertSRGBToLinear(glm::vec4(0x00 / 255.0, 0x00/255.0, 0x3F/255.0, 0x2F/255.0)); // 0x00003F2F;
@@ -84,6 +85,7 @@ const std::array<util::TestHalf, 15> kTextureDataRHalf = {
   util::TestHalf(kM.y),             // Mip 1, Layer 1
   util::TestHalf(kY.y),             // Mip 1, Layer 2
 };
+// NOLINTEND(clang-diagnostic-global-constructors)
 // clang-format on
 
 struct VertexUniforms {

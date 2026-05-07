@@ -341,11 +341,11 @@ void runUploadTest(IDevice& device, ICommandQueue& cmdQueue, bool singleUpload) 
 }
 } // namespace
 
-TEST_F(TextureCubeTest, Upload_SingleUpload) {
+TEST_F(TextureCubeTest, UploadSingleUpload) {
   runUploadTest(*iglDev_, *cmdQueue_, true);
 }
 
-TEST_F(TextureCubeTest, Upload_FaceByFace) {
+TEST_F(TextureCubeTest, UploadFaceByFace) {
   runUploadTest(*iglDev_, *cmdQueue_, false);
 }
 
@@ -395,11 +395,11 @@ void runUploadToMipTest(IDevice& device, ICommandQueue& cmdQueue, bool singleUpl
 }
 } // namespace
 
-TEST_F(TextureCubeTest, UploadToMip_SingleUpload) {
+TEST_F(TextureCubeTest, UploadToMipSingleUpload) {
   runUploadToMipTest(*iglDev_, *cmdQueue_, true);
 }
 
-TEST_F(TextureCubeTest, UploadToMip_LevelByLevel) {
+TEST_F(TextureCubeTest, UploadToMipLevelByLevel) {
   runUploadToMipTest(*iglDev_, *cmdQueue_, false);
 }
 
@@ -409,7 +409,7 @@ TEST_F(TextureCubeTest, UploadToMip_LevelByLevel) {
 // This test uses a simple shader to copy a face of the input cube texture to an
 // output texture that matches the size of the input texture face
 //
-TEST_F(TextureCubeTest, Passthrough_SampleFromCube) {
+TEST_F(TextureCubeTest, PassthroughSampleFromCube) {
   Result ret;
   std::shared_ptr<IRenderPipelineState> pipelineState;
 
@@ -504,7 +504,7 @@ TEST_F(TextureCubeTest, Passthrough_SampleFromCube) {
 // a single face of the cube output texture. The size of the input texture matches the size of a
 // single face in the output texture.
 //
-TEST_F(TextureCubeTest, Passthrough_RenderToCube) {
+TEST_F(TextureCubeTest, PassthroughRenderToCube) {
   Result ret;
   std::shared_ptr<IRenderPipelineState> pipelineState;
 

@@ -32,6 +32,7 @@ uint32_t TextureLoaderFactory::maxHeaderLength() const noexcept {
   return maxHeaderLength_;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 bool TextureLoaderFactory::canCreateInternal(DataReader headerReader,
                                              igl::Result* IGL_NULLABLE outResult) const noexcept {
   for (const auto& factory : factories_) {
@@ -44,6 +45,7 @@ bool TextureLoaderFactory::canCreateInternal(DataReader headerReader,
   return false;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 std::unique_ptr<ITextureLoader> TextureLoaderFactory::tryCreateInternal(
     DataReader reader,
     igl::TextureFormat preferredFormat,

@@ -29,9 +29,10 @@ namespace error_checking {
     errorStr = #egl_error_code;              \
     break;
 
-static EGLint checkForEGLErrors(IGL_MAYBE_UNUSED const char* fileName,
-                                IGL_MAYBE_UNUSED const char* callerName,
-                                IGL_MAYBE_UNUSED size_t lineNum) {
+namespace {
+EGLint checkForEGLErrors(IGL_MAYBE_UNUSED const char* fileName,
+                         IGL_MAYBE_UNUSED const char* callerName,
+                         IGL_MAYBE_UNUSED size_t lineNum) {
   const EGLint errorCode = eglGetError();
   if (errorCode != EGL_SUCCESS) {
     IGL_MAYBE_UNUSED const char* errorStr = nullptr;
@@ -64,6 +65,7 @@ static EGLint checkForEGLErrors(IGL_MAYBE_UNUSED const char* fileName,
   }
   return errorCode;
 }
+} // namespace
 
 } // namespace error_checking
 

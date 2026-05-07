@@ -44,10 +44,13 @@ static const uint16_t kIndexData[] = {
     2,
 };
 
-static bool isDeviceCompatible(IDevice& device) noexcept {
+namespace {
+bool isDeviceCompatible(IDevice& device) noexcept {
   return device.hasFeature(DeviceFeatures::Compute);
 }
+} // namespace
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void ComputeSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
@@ -192,6 +195,7 @@ void ComputeSession::createOrUpdateDefaultFramebuffer(const igl::SurfaceTextures
   IGL_DEBUG_ASSERT(framebuffer_ != nullptr);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void ComputeSession::update(SurfaceTextures surfaceTextures) noexcept {
   if (!isSupported_) {
     return;

@@ -18,6 +18,7 @@
 #define IGL_VULKAN_PRINT_COMMANDS 0
 
 #include <igl/Macros.h> // IWYU pragma: export
+#include <igl/Shader.h>
 #include <igl/vulkan/VulkanFunctionTable.h> // IWYU pragma: export
 #if IGL_PLATFORM_MACOSX
 #include <vulkan/vulkan_metal.h> // IWYU pragma: export
@@ -199,12 +200,15 @@ TextureRangeDesc atVkLayer(TextureType type, const TextureRangeDesc& range, uint
 VkColorSpaceKHR colorSpaceToVkColorSpace(ColorSpace colorSpace);
 ColorSpace vkColorSpaceToColorSpace(VkColorSpaceKHR colorSpace);
 VkComponentMapping componentMappingToVkComponentMapping(const ComponentMapping& mapping);
-struct VulkanSpecializationInfo{
-  VkSpecializationInfo info = {};
-  std::vector<int> datas;
-  std::vector<VkSpecializationMapEntry> entries;
-};
-std::shared_ptr<VulkanSpecializationInfo> createSpecializationInfo(const std::map<uint8_t, int>& constantValues);
+/// @brief Build a `VkSpecializationInfo` from IGL function constants.
+///
+/// Fills `outEntries` with the Vulkan map entries derived from the IGL constants. The returned
+/// `VkSpecializationInfo` has `pMapEntries` pointing into `outEntries` and `pData` pointing
+/// directly into `constantValues.getData()` (zero-copy). `outEntries` and `constantValues`
+/// must outlive any use of the returned info. When there are no constants the returned info
+/// is zero-initialized (`mapEntryCount == 0`); pass `nullptr` to Vulkan in that case.
+VkSpecializationInfo buildSpecializationInfo(const FunctionConstantValues& constantValues,
+                                             std::vector<VkSpecializationMapEntry>& outEntries);
 
 /// @brief Transition from the current layout to VK_IMAGE_LAYOUT_GENERAL
 void transitionToGeneral(VkCommandBuffer cmdBuf, ITexture* texture);

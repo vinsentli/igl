@@ -22,8 +22,8 @@
 #include <igl/win/LogDefault.h>
 #endif
 
-// Returns a "handle" (i.e. ptr to ptr) to func
-static IGLLogHandlerFunc* getHandle() {
+namespace {
+IGLLogHandlerFunc* getHandle() {
 #if IGL_PLATFORM_ANDROID
   static IGLLogHandlerFunc sHandler = IGLAndroidLogDefaultHandler;
 //#elif IGL_PLATFORM_IOS
@@ -35,6 +35,7 @@ static IGLLogHandlerFunc* getHandle() {
 #endif
   return &sHandler;
 }
+} // namespace
 
 IGL_API int IGLLog(IGLLogLevel logLevel, const char* IGL_RESTRICT format, ...) {
   va_list ap;

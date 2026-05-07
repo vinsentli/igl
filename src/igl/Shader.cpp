@@ -8,6 +8,7 @@
 #include <igl/Shader.h>
 
 #include <cstring>
+#include <igl/IGLSafeC.h>
 
 namespace {
 
@@ -58,6 +59,44 @@ size_t safeCStrHash(const char* IGL_NULLABLE s) {
 
 namespace igl {
 
+size_t getConstantValueSize(ConstantValueType type) noexcept {
+  switch (type) {
+  case ConstantValueType::Invalid:
+    return 0;
+  case ConstantValueType::Float1:
+    return 4;
+  case ConstantValueType::Float2:
+    return 8;
+  case ConstantValueType::Float3:
+    return 12;
+  case ConstantValueType::Float4:
+    return 16;
+  case ConstantValueType::Boolean1:
+    return 4;
+  case ConstantValueType::Boolean2:
+    return 8;
+  case ConstantValueType::Boolean3:
+    return 12;
+  case ConstantValueType::Boolean4:
+    return 16;
+  case ConstantValueType::Int1:
+    return 4;
+  case ConstantValueType::Int2:
+    return 8;
+  case ConstantValueType::Int3:
+    return 12;
+  case ConstantValueType::Int4:
+    return 16;
+  case ConstantValueType::Mat2x2:
+    return 16;
+  case ConstantValueType::Mat3x3:
+    return 36;
+  case ConstantValueType::Mat4x4:
+    return 64;
+  }
+  return 0;
+}
+
 bool ShaderCompilerOptions::operator==(const ShaderCompilerOptions& other) const {
   return fastMathEnabled == other.fastMathEnabled;
 }
@@ -66,8 +105,57 @@ bool ShaderCompilerOptions::operator!=(const ShaderCompilerOptions& other) const
   return !(*this == other);
 }
 
+FunctionConstantValues& FunctionConstantValues::setConstantValue(uint8_t index,
+                                                                 ConstantValueType type,
+                                                                 void* IGL_NONNULL value) {
+  IGL_DEBUG_ASSERT(type != ConstantValueType::Invalid);
+  IGL_DEBUG_ASSERT(value);
+  const size_t dataSize = getConstantValueSize(type);
+  IGL_DEBUG_ASSERT(dataSize);
+
+  if (values_.size() <= index) {
+    values_.resize(index + 1);
+  }
+  auto& entry = values_[index];
+  if (getConstantValueSize(entry.type) != dataSize) {
+    // New entry, or the size changed: append to `data_`. Bytes for the previous slot, if
+    // any, are left as a small gap; backends index by offset and never read them.
+    entry.offset = static_cast<uint32_t>(data_.size());
+    data_.resize(data_.size() + dataSize);
+  }
+  entry.type = type;
+  checked_memcpy(data_.data() + entry.offset, data_.size() - entry.offset, value, dataSize);
+  return *this;
+}
+
+bool FunctionConstantValues::operator==(const FunctionConstantValues& other) const {
+  // Compare logically (per-binding type + bytes) rather than the raw `data_` buffer, because
+  // setConstantValue can leave orphan gap bytes when an entry is overwritten with a different
+  // type/size. Two FCVs with the same logical content but different construction histories
+  // would otherwise spuriously compare unequal.
+  if (values_.size() != other.values_.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < values_.size(); ++i) {
+    const auto& a = values_[i];
+    const auto& b = other.values_[i];
+    if (a.type != b.type) {
+      return false;
+    }
+    if (a.type == ConstantValueType::Invalid) {
+      continue;
+    }
+    const auto size = getConstantValueSize(a.type);
+    if (memcmp(data_.data() + a.offset, other.data_.data() + b.offset, size) != 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool ShaderModuleInfo::operator==(const ShaderModuleInfo& other) const {
-  return stage == other.stage && entryPoint == other.entryPoint && functionConstantValues == other.functionConstantValues;
+  return stage == other.stage && entryPoint == other.entryPoint &&
+         functionConstantValues == other.functionConstantValues;
 }
 
 bool ShaderModuleInfo::operator!=(const ShaderModuleInfo& other) const {
@@ -281,10 +369,33 @@ size_t hash<igl::ShaderCompilerOptions>::operator()(const igl::ShaderCompilerOpt
   return result;
 }
 
+size_t hash<igl::FunctionConstantValues>::operator()(const igl::FunctionConstantValues& key) const {
+  // Hash logically (per-binding type + constant bytes), matching FunctionConstantValues::==.
+  // Orphan gap bytes in `data_` from prior different-size overwrites are intentionally not
+  // hashed, so two FCVs with the same logical content always hash the same.
+  size_t result = 0;
+  const auto& values = key.getConstantValues();
+  const uint8_t* data = key.getData().data();
+  for (size_t i = 0; i < values.size(); ++i) {
+    const auto& entry = values[i];
+    if (entry.type == igl::ConstantValueType::Invalid) {
+      continue;
+    }
+    result ^= std::hash<size_t>()(i);
+    result ^= std::hash<uint8_t>()(static_cast<uint8_t>(entry.type));
+    const size_t size = igl::getConstantValueSize(entry.type);
+    for (size_t b = 0; b < size; ++b) {
+      result ^= std::hash<uint8_t>()(data[entry.offset + b]);
+    }
+  }
+  return result;
+}
+
 size_t hash<igl::ShaderModuleInfo>::operator()(const igl::ShaderModuleInfo& key) const {
   static_assert(std::is_same_v<uint8_t, std::underlying_type<igl::ShaderStage>::type>);
   size_t result = std::hash<uint8_t>()(static_cast<uint8_t>(key.stage));
   result ^= std::hash<string>()(key.entryPoint);
+  result ^= std::hash<igl::FunctionConstantValues>()(key.functionConstantValues);
   return result;
 }
 

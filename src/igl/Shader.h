@@ -32,6 +32,32 @@ enum class ShaderStage : uint8_t {
 };
 
 /**
+ * @brief Type of shader function constant value.
+ */
+enum class ConstantValueType : uint8_t {
+  Invalid = 0,
+  Float1,
+  Float2,
+  Float3,
+  Float4,
+  Boolean1,
+  Boolean2,
+  Boolean3,
+  Boolean4,
+  Int1,
+  Int2,
+  Int3,
+  Int4,
+  Mat2x2,
+  Mat3x3,
+  Mat4x4
+};
+
+/// @brief Returns the byte size of a shader function constant value of the given type.
+/// Returns 0 for ConstantValueType::Invalid.
+[[nodiscard]] size_t getConstantValueSize(ConstantValueType type) noexcept;
+
+/**
  * @brief Configuration used when compiling a shader to toggle features such as fast math.
  */
 struct ShaderCompilerOptions {
@@ -43,6 +69,49 @@ struct ShaderCompilerOptions {
   bool operator!=(const ShaderCompilerOptions& other) const;
 };
 
+struct FunctionConstantValues {
+  /// @brief One stored constant. The slot's position in `values_` is the binding index;
+  /// `type == ConstantValueType::Invalid` marks the slot as unused. Each entry's bytes live
+  /// in `data_` at `[offset, offset + getConstantValueSize(type))`.
+  struct Entry {
+    ConstantValueType type = ConstantValueType::Invalid;
+    uint32_t offset = 0; // byte offset into `data_`
+  };
+
+  /**
+   * @brief Set the contant value of function in shader.
+   * Metal:MTLFunctionConstantValues.
+   * Vulkan:SpecializationInfo.
+   * @param index  constant_id
+   * @param value  constant value.
+   */
+  FunctionConstantValues& setConstantValue(uint8_t index,
+                                           ConstantValueType type,
+                                           void* IGL_NONNULL value);
+
+  /// @brief Logical equality: compares per-binding type + raw constant bytes. `data_` may
+  /// contain orphan "gap" bytes from prior overwrites; those are correctly ignored here.
+  bool operator==(const FunctionConstantValues& other) const;
+
+  /// @brief All stored constants, indexed by binding ID. Slots with `type == Invalid` are
+  /// unused — consumers must skip them. Spec-constant counts are tiny (typically <10), so
+  /// the storage waste from sparse indexing is negligible.
+  [[nodiscard]] const std::vector<Entry>& getConstantValues() const noexcept {
+    return values_;
+  }
+
+  /// @brief Single contiguous byte buffer holding every constant's data; entries reference
+  /// it via `Entry::offset` / `Entry::size`. Vulkan can pass `data().data()` as
+  /// `VkSpecializationInfo::pData` directly (zero-copy).
+  [[nodiscard]] const std::vector<uint8_t>& getData() const noexcept {
+    return data_;
+  }
+
+ private:
+  std::vector<Entry> values_;
+  std::vector<uint8_t> data_;
+};
+
 /**
  * @brief Metadata about a shader module.
  */
@@ -51,11 +120,8 @@ struct ShaderModuleInfo {
   ShaderStage stage = ShaderStage::Fragment;
   /** @brief The module's entry point. */
   std::string entryPoint;
-  /** @brief The module's function constant values.
-   * Metal:MTLFunctionConstantValues.
-   * Vulkan:SpecializationInfo.
-   * index:constant_id, value:constant value.*/
-  std::map<uint8_t, int> functionConstantValues;
+  /** @brief The module's function constant values. */
+  FunctionConstantValues functionConstantValues;
 
   std::string debugName;
 
@@ -373,6 +439,11 @@ namespace std {
 template<>
 struct hash<igl::ShaderCompilerOptions> {
   size_t operator()(const igl::ShaderCompilerOptions& /*key*/) const;
+};
+
+template<>
+struct hash<igl::FunctionConstantValues> {
+  size_t operator()(const igl::FunctionConstantValues& /*key*/) const;
 };
 
 template<>

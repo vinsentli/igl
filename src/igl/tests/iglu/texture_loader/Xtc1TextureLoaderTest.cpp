@@ -110,7 +110,7 @@ TEST_F(Xtc1TextureLoaderTest, HeaderTagValidation) {
   EXPECT_FALSE(invalidHeader.tagIsValid());
 }
 
-TEST_F(Xtc1TextureLoaderTest, EmptyBuffer_Fails) {
+TEST_F(Xtc1TextureLoaderTest, EmptyBufferFails) {
   // Create a buffer that's too small (less than header size)
   std::vector<uint8_t> buffer(4); // Only 4 bytes, need at least 8 for header
 
@@ -122,7 +122,7 @@ TEST_F(Xtc1TextureLoaderTest, EmptyBuffer_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(Xtc1TextureLoaderTest, MinimalHeader_Succeeds) {
+TEST_F(Xtc1TextureLoaderTest, MinimalHeaderSucceeds) {
   const uint32_t width = 64u;
   const uint32_t height = 64u;
 
@@ -145,7 +145,7 @@ TEST_F(Xtc1TextureLoaderTest, MinimalHeader_Succeeds) {
   }
 }
 
-TEST_F(Xtc1TextureLoaderTest, InvalidHeader_Fails) {
+TEST_F(Xtc1TextureLoaderTest, InvalidHeaderFails) {
   std::vector<uint8_t> buffer(sizeof(iglu::textureloader::xtc1::Header));
   auto* header = reinterpret_cast<iglu::textureloader::xtc1::Header*>(buffer.data());
   header->width = 0; // Invalid width
@@ -159,7 +159,7 @@ TEST_F(Xtc1TextureLoaderTest, InvalidHeader_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(Xtc1TextureLoaderTest, ExcessiveWidth_Fails) {
+TEST_F(Xtc1TextureLoaderTest, ExcessiveWidthFails) {
   std::vector<uint8_t> buffer(sizeof(iglu::textureloader::xtc1::Header));
   auto* header = reinterpret_cast<iglu::textureloader::xtc1::Header*>(buffer.data());
   // @fb-only
@@ -173,7 +173,7 @@ TEST_F(Xtc1TextureLoaderTest, ExcessiveWidth_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(Xtc1TextureLoaderTest, LoadData_Succeeds) {
+TEST_F(Xtc1TextureLoaderTest, LoadDataSucceeds) {
   const uint32_t width = 64u;
   const uint32_t height = 64u;
 

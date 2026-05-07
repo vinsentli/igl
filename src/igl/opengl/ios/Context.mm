@@ -35,14 +35,14 @@ EAGLContext* createEAGLContext(BackendVersion backendVersion, EAGLSharegroup* sh
 }
 
 void* getOrGenerateContextUniqueID(EAGLContext* context) {
-  static const void* uniqueIdKey = &uniqueIdKey;
+  static const char kUniqueIdKey = 0;
   static uint64_t idCounter = 0;
-  NSNumber* key = objc_getAssociatedObject(context, &uniqueIdKey);
+  NSNumber* key = objc_getAssociatedObject(context, &kUniqueIdKey);
   uint64_t contextId = 0;
   if (key == nullptr) {
     // Generate and set id if it doesn't exist
     contextId = idCounter++;
-    objc_setAssociatedObject(context, &uniqueIdKey, @(contextId), OBJC_ASSOCIATION_RETAIN);
+    objc_setAssociatedObject(context, &kUniqueIdKey, @(contextId), OBJC_ASSOCIATION_RETAIN);
   } else {
     contextId = key.integerValue;
   }

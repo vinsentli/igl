@@ -165,7 +165,7 @@ void ComputeImageStoreTest::runImageStoreTest(TextureFormat format) {
   ASSERT_TRUE(colorBuffer != nullptr);
 
   // Compile compute shader
-  std::string_view source;
+  std::string source;
   std::string_view entryName;
   if (iglDev_->getBackendType() == igl::BackendType::OpenGL) {
     source = kOglImageStoreShader;

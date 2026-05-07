@@ -47,9 +47,11 @@ static const uint16_t kIndexData[] = {
     2,
 };
 
+namespace {
+
 enum class ShaderPrecision { Low, Medium, High };
 
-static std::string getPrecisionProlog(ShaderPrecision precision) {
+std::string getPrecisionProlog(ShaderPrecision precision) {
 #if IGL_BACKEND_OPENGL && IGL_OPENGL_ES
   switch (precision) {
   case ShaderPrecision::Low:
@@ -64,7 +66,7 @@ static std::string getPrecisionProlog(ShaderPrecision precision) {
 #endif
 }
 
-static std::string getVersionProlog() {
+std::string getVersionProlog() {
 #if IGL_BACKEND_OPENGL
 #if IGL_OPENGL_ES
   return "#version 300 es\n";
@@ -76,7 +78,7 @@ static std::string getVersionProlog() {
 #endif
 }
 
-static std::string getMetalShaderSource(int metalShaderIdx) {
+std::string getMetalShaderSource(int metalShaderIdx) {
   switch (metalShaderIdx) {
   case 0:
     return R"(
@@ -163,7 +165,7 @@ static std::string getMetalShaderSource(int metalShaderIdx) {
   }
 }
 
-static std::string getOpenGLVertexShaderSource() {
+std::string getOpenGLVertexShaderSource() {
   return getVersionProlog() + getPrecisionProlog(ShaderPrecision::High) + R"(
                 in vec3 position;
                 in vec2 uv_in;
@@ -175,7 +177,7 @@ static std::string getOpenGLVertexShaderSource() {
                 })";
 }
 
-static std::string getOpenGLFragmentShaderSource(int programIndex) {
+std::string getOpenGLFragmentShaderSource(int programIndex) {
   if (programIndex == 0) {
     return getVersionProlog() + getPrecisionProlog(ShaderPrecision::High) + R"(
                 uniform sampler2D inputImage;
@@ -199,7 +201,7 @@ static std::string getOpenGLFragmentShaderSource(int programIndex) {
   }
 }
 
-static std::string getVulkanVertexShaderSource() {
+std::string getVulkanVertexShaderSource() {
   return getPrecisionProlog(ShaderPrecision::High) + R"(
                 layout(location = 0) in vec3 position;
                 layout(location = 1) in vec2 uv_in;
@@ -211,7 +213,7 @@ static std::string getVulkanVertexShaderSource() {
                 })";
 }
 
-static std::string getVulkanFragmentShaderSource(int programIndex) {
+std::string getVulkanFragmentShaderSource(int programIndex) {
   if (programIndex == 0) {
     return getPrecisionProlog(ShaderPrecision::High) + R"(
                 layout(location = 0) in vec2 uv;
@@ -240,8 +242,8 @@ static std::string getVulkanFragmentShaderSource(int programIndex) {
   }
 }
 
-static std::unique_ptr<IShaderStages> createShaderStagesForBackend(const IDevice& device,
-                                                                   int programIndex) {
+std::unique_ptr<IShaderStages> createShaderStagesForBackend(const IDevice& device,
+                                                            int programIndex) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
     IGL_DEBUG_ASSERT_NOT_REACHED();
@@ -319,9 +321,11 @@ static std::unique_ptr<IShaderStages> createShaderStagesForBackend(const IDevice
   IGL_UNREACHABLE_RETURN(nullptr)
 }
 
-static bool isDeviceCompatible(IDevice& device) noexcept {
+bool isDeviceCompatible(IDevice& device) noexcept {
   return device.hasFeature(DeviceFeatures::MultipleRenderTargets);
 }
+
+} // namespace
 
 void MRTSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();

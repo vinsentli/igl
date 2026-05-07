@@ -194,7 +194,8 @@ void ManagedUniformBuffer::buildUniformLUT() {
   }
 }
 
-static int findUniformByName(const std::vector<igl::UniformDesc>& uniforms, const char* name) {
+namespace {
+int findUniformByName(const std::vector<igl::UniformDesc>& uniforms, const char* name) {
   for (size_t i = 0; i < uniforms.size(); ++i) {
     if (strcmp(name, uniforms[i].name.c_str()) == 0) {
       return i;
@@ -202,6 +203,7 @@ static int findUniformByName(const std::vector<igl::UniformDesc>& uniforms, cons
   }
   return -1;
 }
+} // namespace
 
 int ManagedUniformBuffer::getIndex(const char* name) const {
   if (uniformLUT_) {

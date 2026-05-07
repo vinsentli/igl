@@ -109,7 +109,9 @@ VkPipeline ComputePipelineState::getVkPipeline() const {
                             IGL_FORMAT("Pipeline Layout: {}", desc_.debugName.c_str()).c_str()));
 
   const auto& shaderModule = desc_.shaderStages->getComputeModule();
-  auto specializationInfo = createSpecializationInfo(shaderModule->info().functionConstantValues);
+  std::vector<VkSpecializationMapEntry> specEntries;
+  const VkSpecializationInfo specInfo =
+      buildSpecializationInfo(shaderModule->info().functionConstantValues, specEntries);
 
   VulkanComputePipelineBuilder()
       .shaderStage(VkPipelineShaderStageCreateInfo{
@@ -117,7 +119,7 @@ VkPipeline ComputePipelineState::getVkPipeline() const {
           .stage = VK_SHADER_STAGE_COMPUTE_BIT,
           .module = igl::vulkan::ShaderModule::getVkShaderModule(shaderModule),
           .pName = shaderModule->info().entryPoint.c_str(),
-          .pSpecializationInfo = specializationInfo ? &specializationInfo->info : NULL,
+          .pSpecializationInfo = specInfo.mapEntryCount ? &specInfo : nullptr,
       })
       .build(ctx.vf_,
              device,
