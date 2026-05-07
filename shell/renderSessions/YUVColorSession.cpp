@@ -132,9 +132,8 @@ YUVColorSession::YUVColorSession(std::shared_ptr<Platform> platform) :
                                                          getPlatform().getInputDispatcher());
 }
 
-// clang-tidy off
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void YUVColorSession::initialize() noexcept {
-  // clang-tidy on
   auto& device = getPlatform().getDevice();
 
   // Vertex & Index buffer
@@ -227,6 +226,7 @@ void YUVColorSession::initialize() noexcept {
   };
 } // namespace igl::shell
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void YUVColorSession::update(SurfaceTextures surfaceTextures) noexcept {
   Result ret;
   framebufferDesc_.colorAttachments[0].texture = surfaceTextures.color;
