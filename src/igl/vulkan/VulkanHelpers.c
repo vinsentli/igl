@@ -640,28 +640,6 @@ void ivkBufferBarrier(const struct VulkanFunctionTable* vt,
   vt->vkCmdPipelineBarrier(cmdBuffer, srcStageMask, dstStageMask, 0, 0, NULL, 1, &barrier, 0, NULL);
 }
 
-void ivkBufferMemoryBarrier(const struct VulkanFunctionTable* vt,
-                            VkCommandBuffer cmdBuffer,
-                            VkBuffer buffer,
-                            VkAccessFlags srcAccessMask,
-                            VkAccessFlags dstAccessMask,
-                            VkDeviceSize offset,
-                            VkDeviceSize size,
-                            VkPipelineStageFlags srcStageMask,
-                            VkPipelineStageFlags dstStageMask) {
-  const VkBufferMemoryBarrier barrier = {
-      .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-      .srcAccessMask = srcAccessMask,
-      .dstAccessMask = dstAccessMask,
-      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .buffer = buffer,
-      .offset = offset,
-      .size = size,
-  };
-  vt->vkCmdPipelineBarrier(cmdBuffer, srcStageMask, dstStageMask, 0, 0, NULL, 1, &barrier, 0, NULL);
-}
-
 void ivkCmdBlitImage(const struct VulkanFunctionTable* vt,
                      VkCommandBuffer buffer,
                      VkImage srcImage,

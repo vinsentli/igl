@@ -192,16 +192,6 @@ void ivkImageMemoryBarrier(const struct VulkanFunctionTable* vt,
                            VkPipelineStageFlags dstStageMask,
                            VkImageSubresourceRange subresourceRange);
 
-void ivkBufferMemoryBarrier(const struct VulkanFunctionTable* vt,
-                            VkCommandBuffer cmdBuffer,
-                            VkBuffer buffer,
-                            VkAccessFlags srcAccessMask,
-                            VkAccessFlags dstAccessMask,
-                            VkDeviceSize offset,
-                            VkDeviceSize size,
-                            VkPipelineStageFlags srcStageMask,
-                            VkPipelineStageFlags dstStageMask);
-
 void ivkBufferBarrier(const struct VulkanFunctionTable* vt,
                       VkCommandBuffer cmdBuffer,
                       VkBuffer buffer,
