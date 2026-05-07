@@ -339,6 +339,7 @@ BindGroupSession::BindGroupSession(std::shared_ptr<Platform> platform) :
                                                          getPlatform().getInputDispatcher());
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void BindGroupSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
 
@@ -395,6 +396,7 @@ void BindGroupSession::initialize() noexcept {
   };
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void BindGroupSession::update(SurfaceTextures surfaceTextures) noexcept {
   auto& device = getPlatform().getDevice();
 
