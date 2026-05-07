@@ -139,6 +139,23 @@ std::shared_ptr<ISamplerState> Device::createSamplerState(const SamplerStateDesc
   return platformDevice_.createSamplerState(desc, outResult);
 }
 
+/**
+ * @brief Creates a Metal texture from the given descriptor.
+ *
+ * Sanitizes the descriptor to ensure valid minimum values
+ * for dimensions, layers, samples, and mip levels. Rejects
+ * array textures unless type is TwoDArray, and rejects
+ * exportable textures. For multisample textures, mip level
+ * count is forced to 1.
+ *
+ * @param[in] desc Texture descriptor specifying format,
+ *        dimensions, usage, storage, and other properties.
+ * @param[out] outResult Optional error reporting. Set to
+ *        Unsupported for invalid format or array type
+ *        mismatch, Unimplemented for exportable textures,
+ *        or RuntimeError if Metal texture allocation fails.
+ * @return The created texture, or nullptr on failure.
+ */
 std::shared_ptr<ITexture> Device::createTexture( // NOLINT(bugprone-exception-escape)
     const TextureDesc& desc,
     Result* outResult) const noexcept {
