@@ -12,6 +12,7 @@
 #include <atomic>
 #include <mutex>
 #import <objc/objc.h>
+#import <os/availability.h>
 #include <vector>
 #include <igl/TimestampQueries.h>
 
@@ -19,12 +20,12 @@ namespace igl::metal {
 
 class CommandQueue;
 
-class API_AVAILABLE(ios(14.0)) TimestampQueries : public ITimestampQueries {
+class API_AVAILABLE(macos(10.15), ios(14.0)) TimestampQueries : public ITimestampQueries {
  public:
   /// Each timing slot uses two counter samples: vertex-start and fragment-end.
   static constexpr uint32_t kSamplesPerTimingSlot = 2;
 
-  API_AVAILABLE(ios(14.0))
+  API_AVAILABLE(macos(10.15), ios(14.0))
   TimestampQueries(id<MTLCounterSampleBuffer> sampleBuffer, uint32_t maxTimestamps);
   ~TimestampQueries() override;
 
@@ -35,7 +36,7 @@ class API_AVAILABLE(ios(14.0)) TimestampQueries : public ITimestampQueries {
   uint64_t getElapsedNanos(uint32_t slotIndex) const override;
 
   /// Called from CommandQueue completion handler -- resolves counter data
-  API_AVAILABLE(ios(14.0))
+  API_AVAILABLE(macos(10.15), ios(14.0))
   void resolveTimestamps(id<MTLCounterSampleBuffer> csb);
 
   /// Attach a GPU completion handler to an externally-managed command buffer
