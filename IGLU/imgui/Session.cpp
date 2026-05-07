@@ -371,7 +371,7 @@ Session::Renderer::Renderer(igl::IDevice& device) {
 Session::Renderer::~Renderer() {
   const ImGuiIO& io = ImGui::GetIO();
   fontTexture_ = nullptr;
-  io.Fonts->TexID = 0;
+  io.Fonts->TexID = (ImTextureID)0;
 }
 
 void Session::Renderer::newFrame(const igl::FramebufferDesc& desc) {
@@ -461,7 +461,7 @@ void Session::Renderer::renderDrawData(igl::IDevice& device,
   const bool isD3D12 = device.getBackendType() == igl::BackendType::D3D12;
   const bool usesDirectBinding = isVulkan || isD3D12;
 
-  ImTextureID lastBoundTextureId = 0;
+  ImTextureID lastBoundTextureId = (ImTextureID)0;
 
   for (int n = 0; n < drawData->CmdListsCount; n++) {
     const ImDrawList* cmdList = drawData->CmdLists[n];
@@ -499,9 +499,9 @@ void Session::Renderer::renderDrawData(igl::IDevice& device,
                                   .height = uint32_t(clipMax.y - clipMin.y)};
       cmdEncoder.bindScissorRect(rect);
 
-      if (cmd.TextureId != lastBoundTextureId) {
-        lastBoundTextureId = cmd.TextureId;
-        auto* tex = reinterpret_cast<igl::ITexture*>((ImTextureID)(intptr_t)cmd.TextureId);
+      if (cmd.GetTexID() != lastBoundTextureId) {
+        lastBoundTextureId = cmd.GetTexID();
+        auto* tex = reinterpret_cast<igl::ITexture*>((ImTextureID)(intptr_t)cmd.GetTexID());
         if (usesDirectBinding) {
           // D3D12 and Vulkan use direct slot binding
           // Add Vulkan support for texture reflection info in ShaderUniforms so we don't need to
