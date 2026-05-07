@@ -159,9 +159,11 @@ GLint SamplerState::convertMinMipFilter(SamplerMinMagFilter minFilter, SamplerMi
   case SamplerMipFilter::Linear:
     return (minFilter == SamplerMinMagFilter::Nearest) ? GL_NEAREST_MIPMAP_LINEAR
                                                        : GL_LINEAR_MIPMAP_LINEAR;
-  }
 
-  return 0;
+  default:
+    IGL_DEBUG_ASSERT_NOT_REACHED();
+    return 0;
+  }
 }
 
 GLint SamplerState::convertMagFilter(SamplerMinMagFilter magFilter) {
@@ -227,9 +229,11 @@ GLint SamplerState::convertAddressMode(SamplerAddressMode addressMode) {
 
   case SamplerAddressMode::ClampToBorder:
     return GL_CLAMP_TO_BORDER;
-  }
 
-  return 0;
+  default:
+    IGL_DEBUG_ASSERT_NOT_REACHED();
+    return 0;
+  }
 }
 
 SamplerAddressMode SamplerState::convertGLAddressMode(GLint glAddressMode) {
