@@ -200,6 +200,7 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
 
 } // namespace
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void DrawInstancedSession::initialize() noexcept {
   // Command queue: backed by different types of GPU HW queues
   commandQueue_ = getPlatform().getDevice().createCommandQueue({}, nullptr);
@@ -220,6 +221,7 @@ void DrawInstancedSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(indexBuffer_);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void DrawInstancedSession::update(SurfaceTextures surfaceTextures) noexcept {
   const auto dimensions = surfaceTextures.color->getDimensions();
   framebuffer_ = getPlatform().getDevice().createFramebuffer(
