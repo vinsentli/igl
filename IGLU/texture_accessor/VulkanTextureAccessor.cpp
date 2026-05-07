@@ -42,8 +42,8 @@ void VulkanTextureAccessor::assignTexture(std::shared_ptr<igl::ITexture> texture
   const auto textureFormatProperties =
       igl::TextureFormatProperties::fromTextureFormat(texture->getFormat());
   numBytesRequired_ =
-      static_cast<size_t>(textureFormatProperties.getBytesPerRow(texture->getSize().width) *
-                          textureFormatProperties.getRows(texture->getFullRange()));
+      static_cast<size_t>(textureFormatProperties.getBytesPerRow(texture->getSize().width)) *
+      textureFormatProperties.getRows(texture->getFullRange());
 
   textureWidth_ = texture->getSize().width;
   textureHeight_ = texture->getSize().height;
