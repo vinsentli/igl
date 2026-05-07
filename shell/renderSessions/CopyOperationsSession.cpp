@@ -234,6 +234,7 @@ void CopyOperationsSession::initialize() noexcept {
   };
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void CopyOperationsSession::update(SurfaceTextures textures) noexcept {
   Result ret;
 
