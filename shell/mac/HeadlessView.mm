@@ -47,6 +47,7 @@
   [self startTimer];
 }
 
+// NOLINTNEXTLINE(misc-use-anonymous-namespace)
 static CVReturn displayLinkCallback(
     CVDisplayLinkRef /*displayLink*/, // NOLINT(readability-identifier-naming)
     const CVTimeStamp* /*now*/,
