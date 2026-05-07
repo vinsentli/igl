@@ -27,6 +27,7 @@
 @synthesize viewController = _viewController;
 
 - (id)initWithFrame:(NSRect)frame {
+  // NOLINTNEXTLINE(bugprone-assignment-in-if-condition)
   if (self = [super initWithFrame:frame]) {
     [self addFullScreenTrackingArea];
   }
@@ -68,6 +69,7 @@
   [self startTimer];
 }
 
+// NOLINTNEXTLINE(misc-use-anonymous-namespace)
 static CVReturn displayLinkCallback(CVDisplayLinkRef /*displayLink*/,
                                     const CVTimeStamp* /*now*/,
                                     const CVTimeStamp* /*outputTime*/,
@@ -97,6 +99,7 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef /*displayLink*/,
   NSOpenGLContext* glContext = [self openGLContext];
   CGLContextObj cglContext = [glContext CGLContextObj];
   CGLPixelFormatObj cglPixelFormat = [[glContext pixelFormat] CGLPixelFormatObj];
+  // NOLINTNEXTLINE(clang-analyzer-nullability.NullablePassedToNonnull)
   CVDisplayLinkSetCurrentCGDisplayFromOpenGLContext(_displayLink, cglContext, cglPixelFormat);
 }
 
