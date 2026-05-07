@@ -8,6 +8,7 @@
 #include <igl/metal/ColorSpace.h>
 
 namespace igl::metal {
+// NOLINTBEGIN(clang-analyzer-osx.cocoa.RetainCount)
 CGColorSpaceRef colorSpaceToCGColorSpace(ColorSpace colorSpace) {
   switch (colorSpace) {
   case ColorSpace::SRGBLinear:
@@ -57,4 +58,5 @@ CGColorSpaceRef colorSpaceToCGColorSpace(ColorSpace colorSpace) {
   }
   IGL_UNREACHABLE_RETURN(CGColorSpaceCreateWithName(kCGColorSpaceSRGB));
 }
+// NOLINTEND(clang-analyzer-osx.cocoa.RetainCount)
 } // namespace igl::metal
