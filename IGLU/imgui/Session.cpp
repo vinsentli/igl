@@ -24,7 +24,9 @@ namespace iglu::imgui {
 #define PLAIN_SHADER_STRINGIFY(...) #__VA_ARGS__
 #define PLAIN_SHADER(...) PLAIN_SHADER_STRINGIFY(__VA_ARGS__)
 
-static const char* metalShaderStr() {
+namespace {
+
+const char* metalShaderStr() {
   return PLAIN_SHADER(
       using namespace metal;
 
@@ -62,7 +64,7 @@ static const char* metalShaderStr() {
   );
 }
 
-static std::string getOpenGLVertexShaderSource(igl::ShaderVersion shaderVersion) {
+std::string getOpenGLVertexShaderSource(igl::ShaderVersion shaderVersion) {
   std::string shader;
   if (shaderVersion.majorVersion > 1 || shaderVersion.minorVersion > 30 ||
       shaderVersion.family == igl::ShaderFamily::GlslEs) {
@@ -83,7 +85,7 @@ static std::string getOpenGLVertexShaderSource(igl::ShaderVersion shaderVersion)
 
   return shader;
 }
-static const char* getVulkanVertexShaderSource() {
+const char* getVulkanVertexShaderSource() {
   return R"(
 layout(location = 0) in vec2 position;
 layout(location = 1) in vec2 texCoords;
@@ -105,7 +107,7 @@ void main() {
 })";
 }
 
-static std::string getOpenGLFragmentShaderSource(igl::ShaderVersion shaderVersion) {
+std::string getOpenGLFragmentShaderSource(igl::ShaderVersion shaderVersion) {
   std::string shader;
   if (shaderVersion.majorVersion > 1 || shaderVersion.minorVersion > 30 ||
       shaderVersion.family == igl::ShaderFamily::GlslEs) {
@@ -119,7 +121,7 @@ static std::string getOpenGLFragmentShaderSource(igl::ShaderVersion shaderVersio
                    void main() { gl_FragColor = Frag_Color * texture2D(texture, Frag_UV.st); });
   return shader;
 }
-static const char* getVulkanFragmentShaderSource() {
+const char* getVulkanFragmentShaderSource() {
   return R"(
 layout(location = 0) out vec4 fColor;
 layout(location = 0) in vec4 color;
@@ -135,7 +137,7 @@ void main() {
 // Note: D3D12 shader source functions are kept for reference but not used.
 // The D3D12 backend uses pre-compiled binary shaders.
 #if IGL_PLATFORM_WINDOWS
-static const char* getD3D12VertexShaderSource() {
+const char* getD3D12VertexShaderSource() {
   return R"(
 cbuffer Uniforms : register(b0) {
   float4x4 projectionMatrix;
@@ -164,7 +166,7 @@ PSInput main(VSInput input) {
 })";
 }
 
-static const char* getD3D12FragmentShaderSource() {
+const char* getD3D12FragmentShaderSource() {
   return R"(
 struct PSInput {
   float4 position : SV_Position;
@@ -181,7 +183,7 @@ float4 main(PSInput input) : SV_Target {
 }
 #endif
 
-static std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
+std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
   igl::Result result;
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
@@ -229,6 +231,8 @@ static std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevic
   }
   IGL_UNREACHABLE_RETURN(nullptr)
 }
+
+} // namespace
 
 namespace {
 struct DrawableData {
