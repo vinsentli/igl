@@ -49,6 +49,7 @@ XrSwapchainProvider::~XrSwapchainProvider() noexcept {
   }
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 bool XrSwapchainProvider::initialize() noexcept {
   uint32_t numSwapchainFormats = 0;
   XR_CHECK(xrEnumerateSwapchainFormats(session_, 0, &numSwapchainFormats, nullptr));
