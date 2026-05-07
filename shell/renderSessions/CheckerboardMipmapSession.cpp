@@ -96,7 +96,7 @@ ResourceStorage getIndexBufferResourceStorage(const igl::IDevice& device) {
     // @fb-only
   // @fb-only
 // @fb-only
-  return igl::BufferDesc{}.storage;
+  return BufferDesc{}.storage;
 }
 
 std::string getVersion() {
@@ -251,6 +251,7 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
 
 } // namespace
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void CheckerboardMipmapSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
 
@@ -330,6 +331,7 @@ void CheckerboardMipmapSession::initialize() noexcept {
   renderPass_.depthAttachment.clearDepth = 1.0;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void CheckerboardMipmapSession::update(SurfaceTextures surfaceTextures) noexcept {
   Result ret;
   if (framebuffer_ == nullptr) {
