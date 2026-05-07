@@ -24,6 +24,7 @@ ShaderCross::~ShaderCross() noexcept {
   igl::glslang::finalizeCompiler();
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 std::string ShaderCross::entryPointName(igl::ShaderStage /*stage*/) const noexcept {
   if (device_.getBackendType() == igl::BackendType::Metal) {
     return "main0";
@@ -34,6 +35,7 @@ std::string ShaderCross::entryPointName(igl::ShaderStage /*stage*/) const noexce
   return {};
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 std::string ShaderCross::crossCompileFromVulkanSource(const char* source,
                                                       igl::ShaderStage stage,
                                                       igl::Result* IGL_NULLABLE
