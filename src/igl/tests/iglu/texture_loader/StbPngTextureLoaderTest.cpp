@@ -83,7 +83,7 @@ class StbPngTextureLoaderTest : public ::testing::Test {
   iglu::textureloader::stb::png::TextureLoaderFactory factory_;
 };
 
-TEST_F(StbPngTextureLoaderTest, EmptyBuffer_Fails) {
+TEST_F(StbPngTextureLoaderTest, EmptyBufferFails) {
   std::vector<uint8_t> buffer;
   buffer.resize(iglu::textureloader::stb::png::kHeaderLength);
 
@@ -95,7 +95,7 @@ TEST_F(StbPngTextureLoaderTest, EmptyBuffer_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(StbPngTextureLoaderTest, MinimumValidHeader_Succeeds) {
+TEST_F(StbPngTextureLoaderTest, MinimumValidHeaderSucceeds) {
   const auto buffer = populateMinimalValidFile(32u, 64u);
 
   Result ret;
@@ -106,7 +106,7 @@ TEST_F(StbPngTextureLoaderTest, MinimumValidHeader_Succeeds) {
   EXPECT_TRUE(ret.isOk()) << ret.message;
 }
 
-TEST_F(StbPngTextureLoaderTest, ValidHeaderWithExtraData_Succeeds) {
+TEST_F(StbPngTextureLoaderTest, ValidHeaderWithExtraDataSucceeds) {
   auto buffer = populateMinimalValidFile(32u, 64u);
   buffer.resize(buffer.size() + 1);
 
@@ -119,7 +119,7 @@ TEST_F(StbPngTextureLoaderTest, ValidHeaderWithExtraData_Succeeds) {
   EXPECT_TRUE(ret.isOk()) << ret.message;
 }
 
-TEST_F(StbPngTextureLoaderTest, InsufficientData_Fails) {
+TEST_F(StbPngTextureLoaderTest, InsufficientDataFails) {
   auto buffer = populateMinimalValidFile(32u, 64u);
   buffer.resize(buffer.size() - 8);
 
@@ -131,7 +131,7 @@ TEST_F(StbPngTextureLoaderTest, InsufficientData_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(StbPngTextureLoaderTest, JpegData_Fails) {
+TEST_F(StbPngTextureLoaderTest, JpegDataFails) {
   Result ret;
   auto reader = *iglu::textureloader::DataReader::tryCreate(
       kSingleWhitePixelGrayscreenJPG.data(),
@@ -142,7 +142,7 @@ TEST_F(StbPngTextureLoaderTest, JpegData_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(StbPngTextureLoaderTest, PngData_Succeeds) {
+TEST_F(StbPngTextureLoaderTest, PngDataSucceeds) {
   Result ret;
   auto reader = *iglu::textureloader::DataReader::tryCreate(
       kSingleBlackPixelGrayscreenPNG.data(),
@@ -153,7 +153,7 @@ TEST_F(StbPngTextureLoaderTest, PngData_Succeeds) {
   EXPECT_TRUE(ret.isOk()) << ret.message;
 }
 
-TEST_F(StbPngTextureLoaderTest, PngData2x2_Succeeds) {
+TEST_F(StbPngTextureLoaderTest, PngData2x2Succeeds) {
   Result ret;
   auto reader = *iglu::textureloader::DataReader::tryCreate(
       kRed2x2PNG.data(), static_cast<uint32_t>(kRed2x2PNG.size()), nullptr);
