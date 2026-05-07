@@ -102,6 +102,7 @@ std::shared_ptr<igl::ITexture> ITextureLoader::create(const igl::IDevice& device
   return create(device, igl::TextureFormat::Invalid, usage, outResult);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 std::shared_ptr<igl::ITexture> ITextureLoader::create(const igl::IDevice& device,
                                                       igl::TextureFormat preferredFormat,
                                                       igl::TextureDesc::TextureUsage usage,
@@ -114,6 +115,7 @@ std::shared_ptr<igl::ITexture> ITextureLoader::create(const igl::IDevice& device
   return device.createTexture(desc, outResult);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void ITextureLoader::upload(igl::ITexture& texture,
                             igl::Result* IGL_NULLABLE outResult) const noexcept {
   const auto dimensions = texture.getDimensions();
@@ -134,6 +136,7 @@ std::unique_ptr<IData> ITextureLoader::load(igl::Result* IGL_NULLABLE outResult)
   return loadInternal(outResult);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void ITextureLoader::loadToExternalMemory(uint8_t* IGL_NONNULL data,
                                           uint32_t length,
                                           igl::Result* IGL_NULLABLE outResult) const noexcept {
@@ -173,6 +176,7 @@ void ITextureLoader::defaultUpload(igl::ITexture& texture,
   igl::Result::setResult(outResult, std::move(result));
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 std::unique_ptr<IData> ITextureLoader::defaultLoad(
     igl::Result* IGL_NULLABLE outResult) const noexcept {
   const uint32_t length = memorySizeInBytes();
@@ -187,6 +191,7 @@ std::unique_ptr<IData> ITextureLoader::defaultLoad(
   return IData::tryCreate(std::move(data), length, outResult);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void ITextureLoader::defaultLoadToExternalMemory(uint8_t* IGL_NONNULL data,
                                                  uint32_t length,
                                                  igl::Result* IGL_NULLABLE
