@@ -328,6 +328,7 @@ TinyMeshBindGroupSession::TinyMeshBindGroupSession(std::shared_ptr<Platform> pla
                                                          getPlatform().getInputDispatcher());
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void TinyMeshBindGroupSession::initialize() noexcept {
   device_ = &getPlatform().getDevice();
 
@@ -545,6 +546,7 @@ std::shared_ptr<ITexture> TinyMeshBindGroupSession::getVulkanNativeDepth() {
   return nullptr;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void TinyMeshBindGroupSession::update(SurfaceTextures surfaceTextures) noexcept {
   width = surfaceTextures.color->getSize().width;
   height = surfaceTextures.color->getSize().height;
