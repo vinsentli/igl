@@ -196,6 +196,7 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
 }
 } // namespace
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void MeshShaderTriangleSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
 
@@ -229,6 +230,7 @@ void MeshShaderTriangleSession::initialize() noexcept {
   };
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void MeshShaderTriangleSession::update(SurfaceTextures surfaceTextures) noexcept {
   Result ret;
   if (!framebuffer_) {
