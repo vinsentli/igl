@@ -173,6 +173,7 @@ TextureRangeDesc TextureRangeDesc::withNumFaces(uint32_t newNumFaces) const noex
   return newRange;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 Result TextureRangeDesc::validate() const noexcept {
   if (IGL_DEBUG_VERIFY_NOT(width == 0 || height == 0 || depth == 0 || numLayers == 0 ||
                            numMipLevels == 0 || numFaces == 0)) {
@@ -571,6 +572,7 @@ size_t ITexture::getEstimatedSizeInBytes() const {
   return properties_.getBytesPerRange(range);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 Result ITexture::validateRange(const igl::TextureRangeDesc& range) const noexcept {
   auto result = range.validate();
   if (!result.isOk()) {
