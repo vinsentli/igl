@@ -799,12 +799,8 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
     }
 
     const auto& constantValues = info.functionConstantValues.getConstantValues();
-    id<MTLFunction> metalFunction = nil;
-    if (constantValues.empty()) {
-      // Fast path: no specialization constants — skip MTLFunctionConstantValues allocation.
-      metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint];
-    } else {
-      MTLFunctionConstantValues* metalConstantValues = [MTLFunctionConstantValues new];
+    MTLFunctionConstantValues* metalConstantValues = [MTLFunctionConstantValues new];
+    if (!constantValues.empty()) {
       const uint8_t* constantsBase = info.functionConstantValues.getData().data();
       for (size_t i = 0; i < constantValues.size(); ++i) {
         const auto& entry = constantValues[i];
@@ -815,10 +811,10 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
                                          type:convertConstantValueType(entry.type)
                                       atIndex:i];
       }
-      metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint
-                                         constantValues:metalConstantValues
-                                                  error:&error];
     }
+    id<MTLFunction> metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint
+                                                       constantValues:metalConstantValues
+                                                                error:&error];
     if (!metalFunction) {
       IGL_DEBUG_ABORT("Could not find function '%s' in library\n", info.entryPoint.c_str());
       Result::setResult(
