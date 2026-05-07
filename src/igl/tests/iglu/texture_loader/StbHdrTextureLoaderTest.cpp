@@ -37,7 +37,7 @@ class StbHdrTextureLoaderTest : public ::testing::Test {
   iglu::textureloader::stb::hdr::TextureLoaderFactory factory_;
 };
 
-TEST_F(StbHdrTextureLoaderTest, EmptyBuffer_Fails) {
+TEST_F(StbHdrTextureLoaderTest, EmptyBufferFails) {
   std::string buffer;
   buffer.resize(iglu::textureloader::stb::hdr::kHeaderLength);
 
@@ -51,7 +51,7 @@ TEST_F(StbHdrTextureLoaderTest, EmptyBuffer_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(StbHdrTextureLoaderTest, MinimumValidRadianceHeader_Succeeds) {
+TEST_F(StbHdrTextureLoaderTest, MinimumValidRadianceHeaderSucceeds) {
   const uint32_t width = 64u;
   const uint32_t height = 32u;
   const bool radiance = true;
@@ -68,7 +68,7 @@ TEST_F(StbHdrTextureLoaderTest, MinimumValidRadianceHeader_Succeeds) {
   EXPECT_TRUE(ret.isOk()) << ret.message;
 }
 
-TEST_F(StbHdrTextureLoaderTest, MinimumValidRgbeHeader_Succeeds) {
+TEST_F(StbHdrTextureLoaderTest, MinimumValidRgbeHeaderSucceeds) {
   const uint32_t width = 64u;
   const uint32_t height = 32u;
   const bool radiance = false;
@@ -85,7 +85,7 @@ TEST_F(StbHdrTextureLoaderTest, MinimumValidRgbeHeader_Succeeds) {
   EXPECT_TRUE(ret.isOk()) << ret.message;
 }
 
-TEST_F(StbHdrTextureLoaderTest, ValidHeaderWithExtraData_Succeeds) {
+TEST_F(StbHdrTextureLoaderTest, ValidHeaderWithExtraDataSucceeds) {
   const uint32_t width = 64u;
   const uint32_t height = 32u;
   const bool radiance = true;
@@ -103,7 +103,7 @@ TEST_F(StbHdrTextureLoaderTest, ValidHeaderWithExtraData_Succeeds) {
   EXPECT_TRUE(ret.isOk()) << ret.message;
 }
 
-TEST_F(StbHdrTextureLoaderTest, InsufficientData_Fails) {
+TEST_F(StbHdrTextureLoaderTest, InsufficientDataFails) {
   std::string buffer = "?RADIANCE\n";
 
   Result ret;
