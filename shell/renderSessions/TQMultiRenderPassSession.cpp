@@ -15,27 +15,28 @@
 #include <igl/ShaderCreator.h>
 
 namespace igl::shell {
+namespace {
 struct VertexPosUv {
   iglu::simdtypes::float3 position; // SIMD 128b aligned
   iglu::simdtypes::float2 uv; // SIMD 128b aligned
 };
 // clang-format off
-static const VertexPosUv vertexData0[] = {
+const VertexPosUv kVertexData0[] = {
     {.position = {-1.0f,  1.0f, 0.0f}, .uv = {0.0f, 1.0f}},
     {.position = { 1.0f,  1.0f, 0.0f}, .uv = {1.0f, 1.0f}},
     {.position = {-1.0f, -1.0f, 0.0f}, .uv = {0.0f, 0.0f}},
     {.position = { 1.0f, -1.0f, 0.0f}, .uv = {1.0f, 0.0f}},
 };
-static const VertexPosUv vertexData1[] = {
+const VertexPosUv kVertexData1[] = {
     {.position = {-0.8f,  0.8f, 0.0f}, .uv = {0.0f, 1.0f}},
     {.position = { 0.8f,  0.8f, 0.0f}, .uv = {1.0f, 1.0f}},
     {.position = {-0.8f, -0.8f, 0.0f}, .uv = {0.0f, 0.0f}},
     {.position = { 0.8f, -0.8f, 0.0f}, .uv = {1.0f, 0.0f}},
 };
-static constexpr uint16_t indexData[] = {0, 1, 2, 1, 3, 2};
+constexpr uint16_t kIndexData[] = {0, 1, 2, 1, 3, 2};
 // clang-format on
 
-static std::string getMetalShaderSource() {
+std::string getMetalShaderSource() {
   return R"(
               using namespace metal;
 
@@ -71,7 +72,7 @@ static std::string getMetalShaderSource() {
     )";
 }
 
-static std::string getOpenGLVertexShaderSource() {
+std::string getOpenGLVertexShaderSource() {
   return R"(#version 100
                 attribute vec3 position;
                 attribute vec2 uv_in;
@@ -84,7 +85,7 @@ static std::string getOpenGLVertexShaderSource() {
                 })";
 }
 
-static std::string getOpenGLFragmentShaderSource() {
+std::string getOpenGLFragmentShaderSource() {
   return R"(#version 100
                 precision highp float;
 
@@ -99,7 +100,7 @@ static std::string getOpenGLFragmentShaderSource() {
                 })";
 }
 
-static std::string getD3D12VertexShaderSource() {
+std::string getD3D12VertexShaderSource() {
   return R"(
 struct VertexIn {
   float3 position : POSITION;
@@ -120,7 +121,7 @@ VertexOut main(VertexIn IN) {
 )";
 }
 
-static std::string getD3D12FragmentShaderSource() {
+std::string getD3D12FragmentShaderSource() {
   return R"(
 cbuffer UniformBlock : register(b0) {
   float3 color;
@@ -141,7 +142,7 @@ float4 main(VertexOut IN) : SV_Target {
 )";
 }
 
-static std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
+std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
     IGL_DEBUG_ASSERT_NOT_REACHED();
@@ -180,19 +181,19 @@ static std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device)
   IGL_UNREACHABLE_RETURN(nullptr)
 }
 
-static void render(std::shared_ptr<ICommandBuffer>& buffer,
-                   std::shared_ptr<IBuffer>& vertexBuffer,
-                   std::shared_ptr<ITexture>& inputTexture,
-                   std::shared_ptr<IRenderPipelineState>& pipelineState,
-                   std::shared_ptr<IFramebuffer>& framebuffer,
-                   RenderPassDesc& renderPass,
-                   std::shared_ptr<ISamplerState>& samplerState,
-                   std::shared_ptr<IBuffer>& ib,
-                   size_t textureUnit,
-                   BackendType& backend,
-                   std::shared_ptr<IBuffer>& fragmentParamBuffer,
-                   std::vector<UniformDesc>& fragmentUniformDescriptors,
-                   FragmentFormat fragmentParameters) {
+void render(std::shared_ptr<ICommandBuffer>& buffer,
+            std::shared_ptr<IBuffer>& vertexBuffer,
+            std::shared_ptr<ITexture>& inputTexture,
+            std::shared_ptr<IRenderPipelineState>& pipelineState,
+            std::shared_ptr<IFramebuffer>& framebuffer,
+            RenderPassDesc& renderPass,
+            std::shared_ptr<ISamplerState>& samplerState,
+            std::shared_ptr<IBuffer>& ib,
+            size_t textureUnit,
+            BackendType& backend,
+            std::shared_ptr<IBuffer>& fragmentParamBuffer,
+            std::vector<UniformDesc>& fragmentUniformDescriptors,
+            FragmentFormat fragmentParameters) {
   // Submit commands
   const std::shared_ptr<IRenderCommandEncoder> commands =
       buffer->createRenderCommandEncoder(renderPass, framebuffer);
@@ -216,22 +217,24 @@ static void render(std::shared_ptr<ICommandBuffer>& buffer,
   commands->drawIndexed(6);
   commands->endEncoding();
 }
+} // namespace
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void TQMultiRenderPassSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
 
   // Vertex buffer, Index buffer and Vertex Input
   vb0_ = device.createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Vertex,
-                                        .data = vertexData0,
-                                        .length = sizeof(vertexData0)},
+                                        .data = kVertexData0,
+                                        .length = sizeof(kVertexData0)},
                              nullptr);
   vb1_ = device.createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Vertex,
-                                        .data = vertexData1,
-                                        .length = sizeof(vertexData1)},
+                                        .data = kVertexData1,
+                                        .length = sizeof(kVertexData1)},
                              nullptr);
   ib0_ = device.createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Index,
-                                        .data = indexData,
-                                        .length = sizeof(indexData)},
+                                        .data = kIndexData,
+                                        .length = sizeof(kIndexData)},
                              nullptr);
 
   const VertexInputStateDesc inputDesc = {
@@ -312,6 +315,7 @@ void TQMultiRenderPassSession::initialize() noexcept {
                                              nullptr);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void TQMultiRenderPassSession::update(SurfaceTextures surfaceTextures) noexcept {
   Result ret;
   if (framebuffer0_ == nullptr) {
