@@ -694,6 +694,24 @@ void XrApp::createActions() {
     }
   }
 
+  // Right thumbstick (vector2f — separate from button actions)
+  {
+    XrActionCreateInfo actionInfo = {XR_TYPE_ACTION_CREATE_INFO};
+    actionInfo.actionType = XR_ACTION_TYPE_VECTOR2F_INPUT;
+    snprintf(actionInfo.actionName, sizeof(actionInfo.actionName), "%s", "right_thumbstick");
+    snprintf(actionInfo.localizedActionName,
+             sizeof(actionInfo.localizedActionName),
+             "%s",
+             "Right Thumbstick");
+    actionInfo.countSubactionPaths = 1;
+    actionInfo.subactionPaths = &rightHandPath;
+    res = xrCreateAction(actionSet_, &actionInfo, &rightThumbstickAction_);
+    if (res != XR_SUCCESS) {
+      IGL_LOG_ERROR("Failed to create right thumbstick action: %d\n", res);
+      return;
+    }
+  }
+
   // Binding paths for Oculus Touch controllers
   struct BindingDef {
     Button id;
@@ -710,12 +728,20 @@ void XrApp::createActions() {
   };
 
   constexpr size_t kNumBindings = sizeof(bindingDefs) / sizeof(bindingDefs[0]);
-  XrActionSuggestedBinding bindings[kNumBindings];
+  constexpr size_t kTotalBindings = kNumBindings + 1; // +1 for right thumbstick
+  XrActionSuggestedBinding bindings[kTotalBindings];
   for (size_t i = 0; i < kNumBindings; ++i) {
     XrPath bindingPath = 0;
     xrStringToPath(instance_, bindingDefs[i].path, &bindingPath);
     bindings[i] = {.action = buttonActions_[static_cast<int>(bindingDefs[i].id)],
                    .binding = bindingPath};
+  }
+
+  // Right thumbstick binding
+  {
+    XrPath thumbstickPath = 0;
+    xrStringToPath(instance_, "/user/hand/right/input/thumbstick", &thumbstickPath);
+    bindings[kNumBindings] = {.action = rightThumbstickAction_, .binding = thumbstickPath};
   }
 
   XrPath profilePath = 0;
@@ -724,7 +750,7 @@ void XrApp::createActions() {
   XrInteractionProfileSuggestedBinding suggestedBindings = {
       .type = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
       .interactionProfile = profilePath,
-      .countSuggestedBindings = kNumBindings,
+      .countSuggestedBindings = kTotalBindings,
       .suggestedBindings = bindings,
   };
   res = xrSuggestInteractionProfileBindings(instance_, &suggestedBindings);
@@ -1011,6 +1037,26 @@ void XrApp::update() {
             rayEvent.buttonPressed = (state.currentState != 0u);
             platform_->getInputDispatcher().queueEvent(rayEvent);
           }
+        }
+      }
+
+      // Right thumbstick → virtual left/right buttons
+      if (rightThumbstickAction_ != XR_NULL_HANDLE) {
+        XrActionStateGetInfo getInfo = {
+            .type = XR_TYPE_ACTION_STATE_GET_INFO,
+            .action = rightThumbstickAction_,
+        };
+        XrActionStateVector2f state = {.type = XR_TYPE_ACTION_STATE_VECTOR2F};
+        if (xrGetActionStateVector2f(session_, &getInfo, &state) == XR_SUCCESS && state.isActive) {
+          RayEvent leftEvent;
+          leftEvent.button = Button::RightThumbstickLeft;
+          leftEvent.buttonPressed = state.currentState.x < -0.5f;
+          platform_->getInputDispatcher().queueEvent(leftEvent);
+
+          RayEvent rightEvent;
+          rightEvent.button = Button::RightThumbstickRight;
+          rightEvent.buttonPressed = state.currentState.x > 0.5f;
+          platform_->getInputDispatcher().queueEvent(rightEvent);
         }
       }
     }

@@ -174,5 +174,6 @@ class XrApp {
   // OpenXR controller input
   XrActionSet actionSet_ = XR_NULL_HANDLE;
   std::array<XrAction, static_cast<int>(igl::shell::Button::Count)> buttonActions_{};
+  XrAction rightThumbstickAction_ = XR_NULL_HANDLE;
 };
 } // namespace igl::shell::openxr
