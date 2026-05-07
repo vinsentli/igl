@@ -139,7 +139,8 @@ UBO getUniformBuffer(float aspectRatio) {
 
 } // namespace
 
-static bool isDeviceCompatible(IDevice& device) noexcept {
+namespace {
+bool isDeviceCompatible(IDevice& device) noexcept {
   const auto backendtype = device.getBackendType();
   if (backendtype == BackendType::OpenGL) {
     return device.hasFeature(DeviceFeatures::Compute);
@@ -151,7 +152,9 @@ static bool isDeviceCompatible(IDevice& device) noexcept {
 
   return false;
 }
+} // namespace
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void ClothSimulationSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
@@ -170,7 +173,7 @@ void ClothSimulationSession::initialize() noexcept {
   const BufferDesc clothIndexBufferDesc{
       .type = BufferDesc::BufferTypeBits::Storage | BufferDesc::BufferTypeBits::Index,
       .data = clothIndexData.data(),
-      .length = static_cast<size_t>(kNumTriangles * 3) * sizeof(uint32_t)};
+      .length = static_cast<size_t>(kNumTriangles) * 3 * sizeof(uint32_t)};
   clothIndexBuffer_ = device.createBuffer(clothIndexBufferDesc, nullptr);
   IGL_DEBUG_ASSERT(clothIndexBuffer_ != nullptr);
 
@@ -321,6 +324,7 @@ void ClothSimulationSession::createOrUpdateDefaultFramebuffer(
   uniformBuffer_->upload(&ubo, BufferRange(sizeof(ubo), 0));
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void ClothSimulationSession::update(SurfaceTextures surfaceTextures) noexcept {
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
@@ -439,7 +443,7 @@ void ClothSimulationSession::update(SurfaceTextures surfaceTextures) noexcept {
     renderEncoder->bindIndexBuffer(*clothIndexBuffer_, IndexFormat::UInt32);
     renderEncoder->bindBuffer(1, uniformBuffer_.get());
     renderEncoder->bindRenderPipelineState(clothRenderPipelineState_);
-    renderEncoder->drawIndexed(static_cast<size_t>(kNumTriangles * 3));
+    renderEncoder->drawIndexed(static_cast<size_t>(kNumTriangles) * 3);
 
     renderEncoder->bindVertexBuffer(0, *obstacleVertexBuffer_);
     renderEncoder->bindIndexBuffer(*obstacleIndexBuffer_, IndexFormat::UInt32);
