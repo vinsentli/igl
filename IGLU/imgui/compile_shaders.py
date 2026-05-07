@@ -6,6 +6,8 @@
 
 """Compile D3D12 ImGui shaders"""
 
+from __future__ import annotations
+
 import os
 import subprocess
 import sys
@@ -13,7 +15,7 @@ import sys
 FXC = r"C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\fxc.exe"
 
 
-def compile_shader(shader_file, profile, output_cso):
+def compile_shader(shader_file: str, profile: str, output_cso: str) -> bool:
     """Compile HLSL shader to CSO"""
     print(f"Compiling {shader_file}...")
     cmd = [FXC, "/T", profile, "/E", "main", "/Fo", output_cso, shader_file]
@@ -25,7 +27,7 @@ def compile_shader(shader_file, profile, output_cso):
     return True
 
 
-def cso_to_header(cso_file, header_file, var_name):
+def cso_to_header(cso_file: str, header_file: str, var_name: str) -> None:
     """Convert CSO binary to C header"""
     print(f"Converting {cso_file} to {header_file}...")
     with open(cso_file, "rb") as f:
@@ -43,7 +45,7 @@ def cso_to_header(cso_file, header_file, var_name):
     print(f"  SUCCESS: {header_file} ({len(data)} bytes)")
 
 
-def main():
+def main() -> int:
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     # Compile vertex shader
