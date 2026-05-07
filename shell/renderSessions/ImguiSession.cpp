@@ -24,6 +24,7 @@ void ImguiSession::initialize() noexcept {
                                                          getPlatform().getInputDispatcher());
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void ImguiSession::update(SurfaceTextures surfaceTextures) noexcept {
   const igl::DeviceScope deviceScope(getPlatform().getDevice());
 
