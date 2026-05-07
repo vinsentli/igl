@@ -180,6 +180,7 @@ struct Vertex {
 }
 } // namespace
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void HandsOpenXRSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
@@ -278,6 +279,7 @@ void HandsOpenXRSession::initialize() noexcept {
   renderPass_.depthAttachment.clearDepth = 1.0;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void HandsOpenXRSession::update(SurfaceTextures surfaceTextures) noexcept {
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
