@@ -99,6 +99,7 @@ ImageLoader::ImageLoader(FileLoader& fileLoader) :
   fileLoader_(fileLoader),
   factory_(std::make_unique<iglu::textureloader::TextureLoaderFactory>(createLoaderFactories())) {}
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 ImageData ImageLoader::defaultLoadImageData(const std::string& imageName,
                                             std::optional<TextureFormat> preferredFormat) noexcept {
   const std::string fullName = fileLoader().fullPath(imageName);
@@ -117,6 +118,7 @@ ImageData ImageLoader::loadImageDataFromFile(
   return {};
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 ImageData ImageLoader::loadImageDataFromMemory(
     const uint8_t* data,
     uint32_t length,
