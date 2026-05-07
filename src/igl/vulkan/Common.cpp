@@ -731,6 +731,33 @@ bool hasStencil(VkFormat format) {
          (format == VK_FORMAT_D24_UNORM_S8_UINT) || (format == VK_FORMAT_D32_SFLOAT_S8_UINT);
 }
 
+VkSpecializationInfo buildSpecializationInfo(const FunctionConstantValues& constantValues,
+                                             std::vector<VkSpecializationMapEntry>& outEntries) {
+  VkSpecializationInfo info{};
+  const auto& iglEntries = constantValues.getConstantValues();
+  outEntries.clear();
+  outEntries.reserve(iglEntries.size());
+  for (size_t i = 0; i < iglEntries.size(); ++i) {
+    const auto& entry = iglEntries[i];
+    if (entry.type == ConstantValueType::Invalid) {
+      continue; // sparse
+    }
+    outEntries.push_back({
+        .constantID = static_cast<uint32_t>(i),
+        .offset = entry.offset,
+        .size = getConstantValueSize(entry.type),
+    });
+  }
+
+  // `pData` points directly into IGL's contiguous constant data buffer; no copy is made.
+  const auto& data = constantValues.getData();
+  info.mapEntryCount = static_cast<uint32_t>(outEntries.size());
+  info.pMapEntries = outEntries.data();
+  info.dataSize = data.size();
+  info.pData = data.data();
+  return info;
+}
+
 } // namespace igl::vulkan
 
 namespace igl::vulkan::functions {
