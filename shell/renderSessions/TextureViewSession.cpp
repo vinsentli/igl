@@ -194,6 +194,7 @@ TextureViewSession::TextureViewSession(std::shared_ptr<Platform> platform) :
                                                          getPlatform().getInputDispatcher());
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void TextureViewSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
 
@@ -294,6 +295,7 @@ void TextureViewSession::initialize() noexcept {
   commandQueue_->submit(*buffer);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void TextureViewSession::update(SurfaceTextures surfaceTextures) noexcept {
   auto& device = getPlatform().getDevice();
 
