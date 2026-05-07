@@ -306,7 +306,7 @@ class Ktx2TextureLoaderTest : public ::testing::Test {
   iglu::textureloader::ktx2::TextureLoaderFactory factory_;
 };
 
-TEST_F(Ktx2TextureLoaderTest, EmptyBuffer_Fails) {
+TEST_F(Ktx2TextureLoaderTest, EmptyBufferFails) {
   const uint32_t width = 64u;
   const uint32_t height = 32u;
   const uint32_t numMipLevels = 1u;
@@ -325,7 +325,7 @@ TEST_F(Ktx2TextureLoaderTest, EmptyBuffer_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(Ktx2TextureLoaderTest, MinimumValidHeader_Succeeds) {
+TEST_F(Ktx2TextureLoaderTest, MinimumValidHeaderSucceeds) {
   const uint32_t width = 64u;
   const uint32_t height = 32u;
   const uint32_t numMipLevels = 1u;
@@ -347,7 +347,7 @@ TEST_F(Ktx2TextureLoaderTest, MinimumValidHeader_Succeeds) {
   EXPECT_TRUE(ret.isOk()) << ret.message;
 }
 
-TEST_F(Ktx2TextureLoaderTest, HeaderWithMipLevels_Succeeds) {
+TEST_F(Ktx2TextureLoaderTest, HeaderWithMipLevelsSucceeds) {
   const uint32_t width = 64u;
   const uint32_t height = 32u;
   const uint32_t numMipLevels = 5u;
@@ -375,7 +375,7 @@ TEST_F(Ktx2TextureLoaderTest, HeaderWithMipLevels_Succeeds) {
   EXPECT_TRUE(ret.isOk()) << ret.message;
 }
 
-TEST_F(Ktx2TextureLoaderTest, ValidHeaderWithExtraData_Succeeds) {
+TEST_F(Ktx2TextureLoaderTest, ValidHeaderWithExtraDataSucceeds) {
   const uint32_t width = 64u;
   const uint32_t height = 32u;
   const uint32_t numMipLevels = 1u;
@@ -397,7 +397,7 @@ TEST_F(Ktx2TextureLoaderTest, ValidHeaderWithExtraData_Succeeds) {
   EXPECT_TRUE(ret.isOk()) << ret.message;
 }
 
-TEST_F(Ktx2TextureLoaderTest, InsufficientData_Fails) {
+TEST_F(Ktx2TextureLoaderTest, InsufficientDataFails) {
   const uint32_t width = 64u;
   const uint32_t height = 32u;
   const uint32_t numMipLevels = 1u;
@@ -419,7 +419,7 @@ TEST_F(Ktx2TextureLoaderTest, InsufficientData_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(Ktx2TextureLoaderTest, InsufficientDataWithMipLevels_Fails) {
+TEST_F(Ktx2TextureLoaderTest, InsufficientDataWithMipLevelsFails) {
   const uint32_t width = 64u;
   const uint32_t height = 32u;
   const uint32_t numMipLevels = 6u;
@@ -448,7 +448,7 @@ TEST_F(Ktx2TextureLoaderTest, InsufficientDataWithMipLevels_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(Ktx2TextureLoaderTest, ValidHeaderWithInvalidImageSize_Fails) {
+TEST_F(Ktx2TextureLoaderTest, ValidHeaderWithInvalidImageSizeFails) {
   const uint32_t width = 64u;
   const uint32_t height = 32u;
   const uint32_t numMipLevels = 1u;
@@ -470,7 +470,7 @@ TEST_F(Ktx2TextureLoaderTest, ValidHeaderWithInvalidImageSize_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(Ktx2TextureLoaderTest, InvalidHeaderWithExcessiveImageSize_Fails) {
+TEST_F(Ktx2TextureLoaderTest, InvalidHeaderWithExcessiveImageSizeFails) {
   const uint32_t width = 64u;
   const uint32_t height = 32u;
   const uint32_t numMipLevels = 1u;
@@ -492,7 +492,7 @@ TEST_F(Ktx2TextureLoaderTest, InvalidHeaderWithExcessiveImageSize_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(Ktx2TextureLoaderTest, InvalidHeaderWithExcessiveMipLevels_Fails) {
+TEST_F(Ktx2TextureLoaderTest, InvalidHeaderWithExcessiveMipLevelsFails) {
   const uint32_t width = 64u;
   const uint32_t height = 32u;
   const uint32_t numMipLevels = 4294967290u;
@@ -520,7 +520,7 @@ TEST_F(Ktx2TextureLoaderTest, InvalidHeaderWithExcessiveMipLevels_Fails) {
   EXPECT_FALSE(ret.isOk());
 }
 
-TEST_F(Ktx2TextureLoaderTest, InvalidHeaderWithExcessiveKeyValueData_Fails) {
+TEST_F(Ktx2TextureLoaderTest, InvalidHeaderWithExcessiveKeyValueDataFails) {
   const uint32_t width = 64u;
   const uint32_t height = 32u;
   const uint32_t numMipLevels = 1u;
