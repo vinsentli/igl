@@ -199,6 +199,7 @@ void HelloOpenXRSession::createSamplerAndTextures(const igl::IDevice& device) {
   tex0_ = getPlatform().loadTexture("macbeth.png");
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void HelloOpenXRSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
@@ -288,6 +289,7 @@ void HelloOpenXRSession::updateUniformBlock() {
   ub_.scaleZ = scaleZ;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void HelloOpenXRSession::update(SurfaceTextures surfaceTextures) noexcept {
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
