@@ -26,6 +26,19 @@ namespace igl::vulkan {
 
 #if !USE_DEFAULT_SWAPCHAIN
 
+SurfaceControl::SurfaceControl(ASurfaceControl* surfaceControl,
+                               std::shared_ptr<AHardwareBufferFunctionTable> funcTable) :
+  impl(surfaceControl), funcTable_(funcTable) {
+  IGL_DEBUG_ASSERT(impl);
+  IGL_DEBUG_ASSERT(funcTable_);
+}
+
+SurfaceControl::~SurfaceControl() {
+  if (impl && funcTable_) {
+    funcTable_->ASurfaceControl_release(impl);
+  }
+}
+
 AHBTexturePool::~AHBTexturePool() {
   Clear();
 }
@@ -78,7 +91,6 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
 
   frameSync_.resize(kMaxPendingPresents);
 
-#if WAIT_SURFACE_FLINGER
   for (size_t i = 0; i != kMaxPendingPresents; ++i) {
     frameSync_[i].acquireFence = std::make_shared<VulkanFence>(ctx_.vf_,
                                                                ctx_.getVkDevice(),
@@ -86,26 +98,16 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
                                                                false,
                                                                "VulkanSwapchain_acquire_fence");
   }
-#endif
 }
 
 VulkanSwapchain::~VulkanSwapchain() {
-  IGL_DEBUG_ASSERT(funcTable_);
-
-  if (surfaceControl_ && funcTable_) {
-    funcTable_->ASurfaceControl_release(surfaceControl_);
-  }
-
+  surfaceControl_ = nullptr;
   texturePool_.Clear();
 }
 
 VkSemaphore VulkanSwapchain::getWaitSemaphore() const noexcept {
-#if WAIT_SURFACE_FLINGER
   auto sep = frameSync_[frameId_].renderReady;
   return sep ? sep->vkSemaphore_ : VK_NULL_HANDLE;
-#else
-  return VK_NULL_HANDLE;
-#endif
 }
 
 VkSemaphore VulkanSwapchain::getSignalSemaphore() const noexcept {
@@ -114,17 +116,12 @@ VkSemaphore VulkanSwapchain::getSignalSemaphore() const noexcept {
 }
 
 VkFence VulkanSwapchain::getAcquireFence() const noexcept {
-#if WAIT_SURFACE_FLINGER
   auto sep = frameSync_[frameId_].acquireFence;
   return sep ? sep->vkFence_ : VK_NULL_HANDLE;
-#else
-  return VK_NULL_HANDLE;
-#endif
 }
 
 void VulkanSwapchain::OnSurfaceCreated(ANativeWindow* nativeWindow) {
-  if (nativeWindow_ != nativeWindow && surfaceControl_ && funcTable_) {
-    funcTable_->ASurfaceControl_release(surfaceControl_);
+  if (nativeWindow_ != nativeWindow && surfaceControl_) {
     surfaceControl_ = nullptr;
   }
   nativeWindow_ = nativeWindow;
@@ -226,10 +223,8 @@ std::shared_ptr<ITexture> VulkanSwapchain::getCurrentVulkanTexture(Device& devic
 
     frameId_ = (frameId_ + 1) % kMaxPendingPresents;
 
-#if WAIT_SURFACE_FLINGER
     frameSync_[frameId_].acquireFence->wait();
     frameSync_[frameId_].acquireFence->reset();
-#endif
     frameSync_[frameId_].presentReady = std::make_shared<VulkanSemaphore>(
         ctx_.vf_,
         ctx_.getVkDevice(),
@@ -244,9 +239,7 @@ std::shared_ptr<ITexture> VulkanSwapchain::getCurrentVulkanTexture(Device& devic
     frameSync_[frameId_].renderReady = nullptr;
 
     if (poolEntry.fence >= 0) {
-#if WAIT_SURFACE_FLINGER
       frameSync_[frameId_].renderReady = CreateSemaphoreFromFD(poolEntry.fence);
-#endif
     }
   }
 
@@ -264,6 +257,7 @@ Result VulkanSwapchain::present(VkSemaphore waitSemaphore) {
 
 struct TransactionInFlightData {
   std::weak_ptr<VulkanSwapchain> swapchain;
+  std::weak_ptr<SurfaceControl> surfaceControl;
   std::shared_ptr<igl::vulkan::android::NativeHWTextureBuffer> texture;
 };
 
@@ -277,31 +271,31 @@ void VulkanSwapchain::SubmitFrameToSystem(int gpuFenceFd, VkSemaphore waitSemaph
 #endif
 
   if (surfaceControl_ == nullptr) {
-    surfaceControl_ =
-        funcTable_->ASurfaceControl_createFromWindow(nativeWindow_, surfaceControlName_.c_str());
-    IGL_DEBUG_ASSERT(surfaceControl_);
+    surfaceControl_ = std::make_shared<SurfaceControl>(
+        funcTable_->ASurfaceControl_createFromWindow(nativeWindow_, surfaceControlName_.c_str()),
+        funcTable_);
   }
 
   ASurfaceTransaction* transaction = funcTable_->ASurfaceTransaction_create();
 
   funcTable_->ASurfaceTransaction_setBuffer(
-      transaction, surfaceControl_, texture->getHardwareBuffer(), gpuFenceFd);
+      transaction, surfaceControl_->impl, texture->getHardwareBuffer(), gpuFenceFd);
 
-  //设置非透明解决小米切后台时闪烁问题。
-  funcTable_->ASurfaceTransaction_setBufferTransparency(transaction, surfaceControl_, ASURFACE_TRANSACTION_TRANSPARENCY_OPAQUE);
+  // 设置非透明解决小米切后台时闪烁问题。
+  funcTable_->ASurfaceTransaction_setBufferTransparency(
+      transaction, surfaceControl_->impl, IglASURFACE_TRANSACTION_TRANSPARENCY_OPAQUE);
 
   TransactionInFlightData* inFlightData = nullptr;
-#if WAIT_SURFACE_FLINGER
   inFlightData = new TransactionInFlightData();
   inFlightData->swapchain = weak_from_this();
+  inFlightData->surfaceControl = surfaceControl_;
   inFlightData->texture = texture;
-#endif
 
   funcTable_->ASurfaceTransaction_setOnComplete(
       transaction, inFlightData, [](void* context, ASurfaceTransactionStats* stats) {
-#if WAIT_SURFACE_FLINGER
         auto data = reinterpret_cast<TransactionInFlightData*>(context);
         auto thiz = data->swapchain.lock();
+        auto surfaceControl = data->surfaceControl.lock();
         auto texture = std::move(data->texture);
         // 防止VulkanImage不能释放
         texture->getVulkanTexture().image.isExternallyManaged_ = false;
@@ -310,15 +304,17 @@ void VulkanSwapchain::SubmitFrameToSystem(int gpuFenceFd, VkSemaphore waitSemaph
         if (!thiz)
           return;
 
-        int releaseFd = thiz->funcTable_->ASurfaceTransactionStats_getPreviousReleaseFenceFd(
-            stats, thiz->surfaceControl_);
+        int releaseFd = -1;
+        if (surfaceControl) {
+          releaseFd = thiz->funcTable_->ASurfaceTransactionStats_getPreviousReleaseFenceFd(
+              stats, surfaceControl->impl);
+        }
 
         std::lock_guard<std::mutex> lock(thiz->currentlyDisplayedTextureMutex_);
         auto previous_texture = thiz->currentlyDisplayedTexture_;
         thiz->currentlyDisplayedTexture_ = std::move(texture);
 
         thiz->texturePool_.Push(previous_texture, releaseFd);
-#endif
       });
 
   funcTable_->ASurfaceTransaction_apply(transaction);

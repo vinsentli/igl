@@ -20,11 +20,11 @@ struct ASurfaceTransactionStats;
 extern "C" {
 #endif
 
-typedef enum ASurfaceTransactionTransparency {
-    ASURFACE_TRANSACTION_TRANSPARENCY_TRANSPARENT = 0,
-    ASURFACE_TRANSACTION_TRANSPARENCY_TRANSLUCENT = 1,
-    ASURFACE_TRANSACTION_TRANSPARENCY_OPAQUE = 2,
-} ASurfaceTransactionTransparency;
+typedef enum IglASurfaceTransactionTransparency {
+    IglASURFACE_TRANSACTION_TRANSPARENCY_TRANSPARENT = 0,
+    IglASURFACE_TRANSACTION_TRANSPARENCY_TRANSLUCENT = 1,
+    IglASURFACE_TRANSACTION_TRANSPARENCY_OPAQUE = 2,
+} IglASurfaceTransactionTransparency;
 
 using PFAHardwareBuffer_allocate = int (*)(const AHardwareBuffer_Desc* desc,
                                            AHardwareBuffer** outBuffer);
@@ -52,7 +52,7 @@ using PFASurfaceTransaction_delete = void (*)(ASurfaceTransaction*);
 using PFASurfaceTransaction_apply = void (*)(ASurfaceTransaction*);
 using PFASurfaceTransaction_setBuffer = void (*)(ASurfaceTransaction *, ASurfaceControl *, AHardwareBuffer *, int);
 using PFASurfaceTransaction_setBufferDataSpace = void (*)(ASurfaceTransaction* transaction, ASurfaceControl* surface_control, int32_t data_space);
-using PFASurfaceTransaction_setBufferTransparency = void (*)(ASurfaceTransaction* transaction, ASurfaceControl* surface_control, ASurfaceTransactionTransparency transparency);
+using PFASurfaceTransaction_setBufferTransparency = void (*)(ASurfaceTransaction* transaction, ASurfaceControl* surface_control, IglASurfaceTransactionTransparency transparency);
 typedef void(* ASurfaceTransaction_OnComplete_Callback)(void *_Null_unspecified context, ASurfaceTransactionStats *_Nonnull stats);
 using PFASurfaceTransaction_setOnComplete = void (*)(
   ASurfaceTransaction *_Nonnull transaction,

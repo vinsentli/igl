@@ -27,15 +27,21 @@ class VulkanFence;
 class VulkanSemaphore;
 class VulkanSwapchain;
 
-#define WAIT_SURFACE_FLINGER 1
-
 struct AHBFrameSynchronizerVK {
-#if WAIT_SURFACE_FLINGER
   std::shared_ptr<VulkanFence> acquireFence;
   std::shared_ptr<VulkanSemaphore> renderReady;
-#endif
-
   std::shared_ptr<VulkanSemaphore> presentReady;
+};
+
+class SurfaceControl {
+ public:
+  SurfaceControl(ASurfaceControl* sc, std::shared_ptr<AHardwareBufferFunctionTable> funcTable);
+  virtual ~SurfaceControl();
+
+  ASurfaceControl* impl = nullptr;
+
+ private:
+  std::shared_ptr<AHardwareBufferFunctionTable> funcTable_;
 };
 
 class AHBTexturePool {
@@ -139,7 +145,7 @@ class VulkanSwapchain : public std::enable_shared_from_this<VulkanSwapchain> {
   uint32_t height_ = 0;
   ANativeWindow* nativeWindow_ = nullptr;
   std::string surfaceControlName_;
-  ASurfaceControl* surfaceControl_ = nullptr;
+  std::shared_ptr<SurfaceControl> surfaceControl_ = nullptr;
 
   ANativeWindowTransform transform_ = ANATIVEWINDOW_TRANSFORM_IDENTITY;
 
