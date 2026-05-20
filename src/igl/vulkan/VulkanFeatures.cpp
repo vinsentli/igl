@@ -73,7 +73,7 @@ std::string VkObjectTypeToString(VkObjectType type){
     return "???";
 }
 
-void DeviceMemoryReportCallbackEXT(const VkDeviceMemoryReportCallbackDataEXT*  pCallbackData, void* pUserData){
+VKAPI_ATTR void VKAPI_CALL DeviceMemoryReportCallbackEXT(const VkDeviceMemoryReportCallbackDataEXT*  pCallbackData, void* pUserData){
     std::string memoryAction;
     bool isPrintError = false;
     isPrintError = pCallbackData->size >= 1024 * 1024;
@@ -193,6 +193,8 @@ VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
 #ifndef NDEBUG
   deviceMemoryReportCreateInfo({
       .sType = VK_STRUCTURE_TYPE_DEVICE_DEVICE_MEMORY_REPORT_CREATE_INFO_EXT,
+      .pNext = nullptr,
+      .flags = VkDeviceMemoryReportFlagsEXT{},
       .pfnUserCallback = DeviceMemoryReportCallbackEXT,
   }),
 #endif
