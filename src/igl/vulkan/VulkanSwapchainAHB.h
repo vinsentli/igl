@@ -14,6 +14,7 @@
 #include <android/hardware_buffer.h>
 #include <android/native_window.h>
 #include <android/surface_control.h>
+#include <igl/android/UniqueFd.h>
 #include <igl/vulkan/android/NativeHWBuffer.h>
 #endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
@@ -44,23 +45,46 @@ class SurfaceControl {
   std::shared_ptr<AHardwareBufferFunctionTable> funcTable_;
 };
 
+class SwapchainTexture {
+ public:
+  explicit SwapchainTexture(std::shared_ptr<igl::vulkan::android::NativeHWTextureBuffer> texture);
+  ~SwapchainTexture();
+
+  SwapchainTexture(const SwapchainTexture&) = delete;
+  SwapchainTexture& operator=(const SwapchainTexture&) = delete;
+  SwapchainTexture(SwapchainTexture&&) = delete;
+  SwapchainTexture& operator=(SwapchainTexture&&) = delete;
+
+  const std::shared_ptr<igl::vulkan::android::NativeHWTextureBuffer>& texture() const {
+    return texture_;
+  }
+
+ private:
+  std::shared_ptr<igl::vulkan::android::NativeHWTextureBuffer> texture_;
+};
+
 class AHBTexturePool {
  public:
   struct PoolEntry {
-    std::shared_ptr<igl::vulkan::android::NativeHWTextureBuffer> texture;
-    int fence = -1;
+    std::shared_ptr<SwapchainTexture> texture;
+    igl::android::UniqueFd fence;
 
-    explicit PoolEntry(std::shared_ptr<igl::vulkan::android::NativeHWTextureBuffer> __texture,
-                       int __fence) :
-      texture(std::move(__texture)), fence(__fence) {}
+    PoolEntry() = default;
+    PoolEntry(std::shared_ptr<SwapchainTexture> texture, igl::android::UniqueFd fence) :
+      texture(std::move(texture)), fence(std::move(fence)) {}
+
+    PoolEntry(const PoolEntry&) = delete;
+    PoolEntry& operator=(const PoolEntry&) = delete;
+    PoolEntry(PoolEntry&&) noexcept = default;
+    PoolEntry& operator=(PoolEntry&&) noexcept = default;
   };
 
   AHBTexturePool(VulkanSwapchain& swapchain) : swapchain_(swapchain) {}
   ~AHBTexturePool();
 
-  void Push(std::shared_ptr<igl::vulkan::android::NativeHWTextureBuffer> texture, int fence);
-  PoolEntry Acquire(Device& device, int width, int height);
-  void Clear();
+  void push(std::shared_ptr<SwapchainTexture> texture, igl::android::UniqueFd fence);
+  PoolEntry acquire(Device& device, int width, int height);
+  void clear();
 
  private:
   VulkanSwapchain& swapchain_;
@@ -73,16 +97,20 @@ class VulkanSwapchain : public std::enable_shared_from_this<VulkanSwapchain> {
   VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t height);
   ~VulkanSwapchain();
 
-  void OnSurfaceCreated(ANativeWindow* nativeWindow);
+  void onSurfaceCreated(ANativeWindow* nativeWindow);
 
-  void OnSurfaceDestroyed();
+  void onSurfaceDestroyed();
 
-  void OnSurfaceChanged(int width, int height);
+  void onSurfaceChanged(int width, int height);
 
   Result present(VkSemaphore waitSemaphore);
 
   std::shared_ptr<ITexture> getCurrentVulkanTexture(Device& device);
 
+  // AHB swapchain does not support native depth attachment.
+  // Caller (e.g. PlatformDevice::createTextureFromNativeDepth) must handle the
+  // nullptr return and allocate its own depth texture if needed.
+  // TODO: revisit if native depth via AHB becomes a requirement.
   std::shared_ptr<VulkanTexture> getCurrentDepthTexture() {
     return nullptr;
   }
@@ -121,15 +149,17 @@ class VulkanSwapchain : public std::enable_shared_from_this<VulkanSwapchain> {
     return frameNumber_;
   }
 
-  std::shared_ptr<igl::vulkan::android::NativeHWTextureBuffer> CreateAHBTexture(Device& device,
+  std::shared_ptr<igl::vulkan::android::NativeHWTextureBuffer> createAHBTexture(Device& device,
                                                                                 int width,
                                                                                 int height);
 
  private:
-  void SubmitFrameToSystem(int gpuFenceFd, VkSemaphore waitSemaphore);
-  std::shared_ptr<VulkanSemaphore> CreateSemaphoreFromFD(int fd);
-  int ExportFDFromVkSemaphore(VkSemaphore semaphore);
-  void PrintFileDescriptorCount() const;
+  void submitFrameToSystem(int gpuFenceFd, VkSemaphore waitSemaphore, Result& outResult);
+  std::shared_ptr<VulkanSemaphore> createSemaphoreFromFD(igl::android::UniqueFd fd);
+  int exportFDFromVkSemaphore(VkSemaphore semaphore);
+  void printFileDescriptorCount() const;
+  void drainPendingTransactions();
+  void resetSwapchainTextures();
 
  public:
   uint32_t numSwapchainImages_ = 0;
@@ -138,7 +168,11 @@ class VulkanSwapchain : public std::enable_shared_from_this<VulkanSwapchain> {
   VkSurfaceFormatKHR surfaceFormat_{};
 
  private:
-  const int kMaxPendingPresents = 2;
+  static constexpr int kMaxPendingPresents = 2;
+  // Aligned with kMaxPendingPresents: caps the number of in-flight transactions on the system
+  // side, preventing unbounded growth of fd / AHB / VkSemaphore resources when SurfaceFlinger
+  // callbacks are delayed.
+  static constexpr int kMaxInFlightTransactions = kMaxPendingPresents;
   uint32_t frameId_ = 0;
   VulkanContext& ctx_;
   uint32_t width_ = 0;
@@ -147,17 +181,19 @@ class VulkanSwapchain : public std::enable_shared_from_this<VulkanSwapchain> {
   std::string surfaceControlName_;
   std::shared_ptr<SurfaceControl> surfaceControl_ = nullptr;
 
-  ANativeWindowTransform transform_ = ANATIVEWINDOW_TRANSFORM_IDENTITY;
-
   std::vector<AHBFrameSynchronizerVK> frameSync_;
   std::shared_ptr<AHardwareBufferFunctionTable> funcTable_;
   bool getNextImage_ = true;
 
-  std::shared_ptr<igl::vulkan::android::NativeHWTextureBuffer> currentAcquireTexture_;
+  std::shared_ptr<SwapchainTexture> currentAcquireTexture_;
 
   std::mutex currentlyDisplayedTextureMutex_;
-  std::shared_ptr<igl::vulkan::android::NativeHWTextureBuffer> currentlyDisplayedTexture_;
+  std::shared_ptr<SwapchainTexture> currentlyDisplayedTexture_;
   AHBTexturePool texturePool_;
+
+  std::mutex transactionMutex_;
+  int transactionCount_{0};
+  std::condition_variable transactionCV_;
 };
 
 } // namespace igl::vulkan

@@ -39,46 +39,56 @@ SurfaceControl::~SurfaceControl() {
   }
 }
 
-AHBTexturePool::~AHBTexturePool() {
-  Clear();
+SwapchainTexture::SwapchainTexture(
+    std::shared_ptr<igl::vulkan::android::NativeHWTextureBuffer> texture) :
+  texture_(std::move(texture)) {
+  IGL_DEBUG_ASSERT(texture_);
+  texture_->getVulkanTexture().image.isExternallyManaged_ = true;
+  // FreeMemory must happen immediately on destruction, not deferred to the next frame.
+  // Otherwise the AHardwareBuffer is not released right away when the app goes to background,
+  // which defeats the intended behavior.
+  texture_->getVulkanTexture().image.isDeferFreeMemory_ = false;
 }
 
-void AHBTexturePool::Push(std::shared_ptr<igl::vulkan::android::NativeHWTextureBuffer> texture,
-                          int fence) {
+SwapchainTexture::~SwapchainTexture() {
+  if (texture_) {
+    texture_->getVulkanTexture().image.isExternallyManaged_ = false;
+  }
+}
+
+AHBTexturePool::~AHBTexturePool() {
+  clear();
+}
+
+void AHBTexturePool::push(std::shared_ptr<SwapchainTexture> texture, igl::android::UniqueFd fence) {
   if (!texture)
     return;
 
   std::lock_guard<std::mutex> lock(mutex_);
-  pool_.emplace_back(std::move(texture), fence);
+  pool_.emplace_back(std::move(texture), std::move(fence));
 }
 
-AHBTexturePool::PoolEntry AHBTexturePool::Acquire(Device& device, int width, int height) {
+AHBTexturePool::PoolEntry AHBTexturePool::acquire(Device& device, int width, int height) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     while (!pool_.empty()) {
-      auto entry = pool_.front();
+      auto entry = std::move(pool_.front());
       pool_.pop_front();
-      auto size = entry.texture->getSize();
+      auto size = entry.texture->texture()->getSize();
       if (size.width == width && size.height == height) {
-        // 标记这是一个交换链Texture，才能进行Present.
-        entry.texture->getVulkanTexture().image.isExternallyManaged_ = true;
         return entry;
       }
     }
   }
 
   // no need lock
-  return AHBTexturePool::PoolEntry(swapchain_.CreateAHBTexture(device, width, height), -1);
+  return AHBTexturePool::PoolEntry(
+      std::make_shared<SwapchainTexture>(swapchain_.createAHBTexture(device, width, height)),
+      igl::android::UniqueFd{});
 }
 
-void AHBTexturePool::Clear() {
+void AHBTexturePool::clear() {
   std::lock_guard<std::mutex> lock(mutex_);
-
-  // 需要将isExternallyManaged_置成false，否则VulkanImage不会释放。
-  for (auto& entry : pool_) {
-    entry.texture->getVulkanTexture().image.isExternallyManaged_ = false;
-  }
-
   pool_.clear();
 }
 
@@ -101,8 +111,24 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
 }
 
 VulkanSwapchain::~VulkanSwapchain() {
+  resetSwapchainTextures();
   surfaceControl_ = nullptr;
-  texturePool_.Clear();
+}
+
+void VulkanSwapchain::drainPendingTransactions() {
+  std::unique_lock<std::mutex> lock(transactionMutex_);
+  transactionCV_.wait(lock, [this] { return this->transactionCount_ <= 0; });
+}
+
+void VulkanSwapchain::resetSwapchainTextures() {
+  drainPendingTransactions();
+
+  texturePool_.clear();
+  currentAcquireTexture_ = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(currentlyDisplayedTextureMutex_);
+    currentlyDisplayedTexture_ = nullptr;
+  }
 }
 
 VkSemaphore VulkanSwapchain::getWaitSemaphore() const noexcept {
@@ -111,8 +137,8 @@ VkSemaphore VulkanSwapchain::getWaitSemaphore() const noexcept {
 }
 
 VkSemaphore VulkanSwapchain::getSignalSemaphore() const noexcept {
-  auto sep = frameSync_[frameId_].presentReady;
-  return sep ? sep->vkSemaphore_ : VK_NULL_HANDLE;
+  IGL_DEBUG_ASSERT(frameSync_[frameId_].presentReady);
+  return frameSync_[frameId_].presentReady->vkSemaphore_;
 }
 
 VkFence VulkanSwapchain::getAcquireFence() const noexcept {
@@ -120,44 +146,41 @@ VkFence VulkanSwapchain::getAcquireFence() const noexcept {
   return sep ? sep->vkFence_ : VK_NULL_HANDLE;
 }
 
-void VulkanSwapchain::OnSurfaceCreated(ANativeWindow* nativeWindow) {
+void VulkanSwapchain::onSurfaceCreated(ANativeWindow* nativeWindow) {
   if (nativeWindow_ != nativeWindow && surfaceControl_) {
     surfaceControl_ = nullptr;
   }
   nativeWindow_ = nativeWindow;
 }
 
-void VulkanSwapchain::OnSurfaceDestroyed() {
-  texturePool_.Clear();
+void VulkanSwapchain::onSurfaceDestroyed() {
+  resetSwapchainTextures();
+}
 
-  currentAcquireTexture_ = nullptr;
-
-  {
-    std::lock_guard<std::mutex> lock(currentlyDisplayedTextureMutex_);
-    currentlyDisplayedTexture_ = nullptr;
+void VulkanSwapchain::onSurfaceChanged(int width, int height) {
+  if (width_ != width || height_ != height) {
+    resetSwapchainTextures();
+    width_ = width;
+    height_ = height;
   }
 }
 
-void VulkanSwapchain::OnSurfaceChanged(int width, int height) {
-  IGL_DEBUG_ASSERT(width_ != width || height_ != height);
+std::shared_ptr<VulkanSemaphore> VulkanSwapchain::createSemaphoreFromFD(igl::android::UniqueFd fd) {
+  if (!fd) {
+    return nullptr;
+  }
 
-  width_ = width;
-  height_ = height;
-
-  texturePool_.Clear();
-}
-
-std::shared_ptr<VulkanSemaphore> VulkanSwapchain::CreateSemaphoreFromFD(int fd) {
   auto semaphore =
       std::make_shared<VulkanSemaphore>(ctx_.vf_,
                                         ctx_.getVkDevice(),
                                         false,
                                         IGL_FORMAT("Semaphore: renderReady #{}", frameId_).c_str());
 
+  const int rawFd = fd.get();
   VkImportSemaphoreFdInfoKHR importInfo{
       .sType = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR,
       .semaphore = semaphore->vkSemaphore_,
-      .fd = fd,
+      .fd = rawFd,
       .handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT,
       .flags = VK_SEMAPHORE_IMPORT_TEMPORARY_BIT,
   };
@@ -165,15 +188,15 @@ std::shared_ptr<VulkanSemaphore> VulkanSwapchain::CreateSemaphoreFromFD(int fd) 
   VkResult ret = ctx_.vf_.vkImportSemaphoreFdKHR(ctx_.getVkDevice(), &importInfo);
 
   if (ret == VK_SUCCESS) {
+    (void)fd.release();
     return semaphore;
   } else {
-    IGL_LOG_ERROR("VulkanSwapchain::vkImportSemaphoreFdKHR:ret=%d, dup fd=%d", ret, fd);
-    close(fd);
+    IGL_LOG_ERROR("VulkanSwapchain::vkImportSemaphoreFdKHR:ret=%d, fd=%d", ret, rawFd);
     return nullptr;
   }
 }
 
-int VulkanSwapchain::ExportFDFromVkSemaphore(VkSemaphore semaphore) {
+int VulkanSwapchain::exportFDFromVkSemaphore(VkSemaphore semaphore) {
   const VkSemaphoreGetFdInfoKHR getFdInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR,
       .semaphore = semaphore,
@@ -190,7 +213,7 @@ int VulkanSwapchain::ExportFDFromVkSemaphore(VkSemaphore semaphore) {
 }
 
 std::shared_ptr<igl::vulkan::android::NativeHWTextureBuffer>
-VulkanSwapchain::CreateAHBTexture(Device& device, int width, int height) {
+VulkanSwapchain::createAHBTexture(Device& device, int width, int height) {
   auto& platformDevice = device.getPlatformDevice();
 
   funcTable_ = platformDevice.getFunctionTable();
@@ -206,13 +229,8 @@ VulkanSwapchain::CreateAHBTexture(Device& device, int width, int height) {
   desc.debugName = "VulkanSwapchainAHB Image";
   auto texture = std::dynamic_pointer_cast<igl::vulkan::android::NativeHWTextureBuffer>(
       platformDevice.createTextureWithSharedMemory(desc, &result));
-  assert(result.isOk());
-  assert(texture);
-
-  // 析构时要立即FreeMemory，不要延迟到下一帧，否则切到后台时，AHBuffer不会立即释放，达不到预期效果。
-  texture->getVulkanTexture().image.isDeferFreeMemory_ = false;
-  // 标记这是一个交换链Texture，才能进行Present.
-  texture->getVulkanTexture().image.isExternallyManaged_ = true;
+  IGL_DEBUG_ASSERT(result.isOk());
+  IGL_DEBUG_ASSERT(texture);
 
   return texture;
 }
@@ -231,98 +249,133 @@ std::shared_ptr<ITexture> VulkanSwapchain::getCurrentVulkanTexture(Device& devic
         true,
         IGL_FORMAT("Semaphore: presentReady #{}", frameId_).c_str());
 
-    auto poolEntry = texturePool_.Acquire(device, width_, height_);
+    auto poolEntry = texturePool_.acquire(device, width_, height_);
 
     currentAcquireTexture_ = poolEntry.texture;
     IGL_DEBUG_ASSERT(currentAcquireTexture_);
 
     frameSync_[frameId_].renderReady = nullptr;
 
-    if (poolEntry.fence >= 0) {
-      frameSync_[frameId_].renderReady = CreateSemaphoreFromFD(poolEntry.fence);
+    if (poolEntry.fence) {
+      frameSync_[frameId_].renderReady = createSemaphoreFromFD(std::move(poolEntry.fence));
     }
   }
 
-  return currentAcquireTexture_;
+  return currentAcquireTexture_ ? currentAcquireTexture_->texture() : nullptr;
 }
 
 Result VulkanSwapchain::present(VkSemaphore waitSemaphore) {
   getNextImage_ = true;
 
-  int fenceFd = ExportFDFromVkSemaphore(frameSync_[frameId_].presentReady->vkSemaphore_);
-  SubmitFrameToSystem(fenceFd, waitSemaphore);
+  IGL_DEBUG_ASSERT(frameSync_[frameId_].presentReady);
+  int fenceFd = exportFDFromVkSemaphore(frameSync_[frameId_].presentReady->vkSemaphore_);
+  if (fenceFd < 0) {
+    return Result(Result::Code::RuntimeError,
+                  "VulkanSwapchain::present: exportFDFromVkSemaphore failed");
+  }
 
-  return Result();
+  Result result;
+  submitFrameToSystem(fenceFd, waitSemaphore, result);
+  return result;
 }
 
 struct TransactionInFlightData {
-  std::weak_ptr<VulkanSwapchain> swapchain;
+  VulkanSwapchain* swapchain = nullptr;
   std::weak_ptr<SurfaceControl> surfaceControl;
-  std::shared_ptr<igl::vulkan::android::NativeHWTextureBuffer> texture;
+  std::shared_ptr<SwapchainTexture> texture;
 };
 
-void VulkanSwapchain::SubmitFrameToSystem(int gpuFenceFd, VkSemaphore waitSemaphore) {
-  auto& texture = currentAcquireTexture_;
-  IGL_DEBUG_ASSERT(texture && texture->getHardwareBuffer());
+void VulkanSwapchain::submitFrameToSystem(int gpuFenceFd,
+                                          VkSemaphore waitSemaphore,
+                                          Result& outResult) {
+  igl::android::UniqueFd gpuFence{gpuFenceFd};
+
+  auto& swapchainTexture = currentAcquireTexture_;
+  IGL_DEBUG_ASSERT(swapchainTexture && swapchainTexture->texture());
+  IGL_DEBUG_ASSERT(swapchainTexture->texture()->getHardwareBuffer());
   IGL_DEBUG_ASSERT(funcTable_);
 
 #if PRINT_FILE_DESCRIPTOR_COUNT
-  PrintFileDescriptorCount();
+  printFileDescriptorCount();
 #endif
 
   if (surfaceControl_ == nullptr) {
-    surfaceControl_ = std::make_shared<SurfaceControl>(
-        funcTable_->ASurfaceControl_createFromWindow(nativeWindow_, surfaceControlName_.c_str()),
-        funcTable_);
+    ASurfaceControl* sc =
+        funcTable_->ASurfaceControl_createFromWindow(nativeWindow_, surfaceControlName_.c_str());
+    if (sc == nullptr) {
+      outResult = Result(Result::Code::RuntimeError,
+                         "ASurfaceControl_createFromWindow failed");
+      return;
+    }
+    surfaceControl_ = std::make_shared<SurfaceControl>(sc, funcTable_);
   }
 
   ASurfaceTransaction* transaction = funcTable_->ASurfaceTransaction_create();
+  if (transaction == nullptr) {
+    outResult = Result(Result::Code::RuntimeError, "ASurfaceTransaction_create failed");
+    return;
+  }
 
-  funcTable_->ASurfaceTransaction_setBuffer(
-      transaction, surfaceControl_->impl, texture->getHardwareBuffer(), gpuFenceFd);
+  funcTable_->ASurfaceTransaction_setBuffer(transaction,
+                                            surfaceControl_->impl,
+                                            swapchainTexture->texture()->getHardwareBuffer(),
+                                            gpuFence.release());
 
-  // 设置非透明解决小米切后台时闪烁问题。
+  // Set as opaque to fix the flicker issue on Xiaomi devices when switching to background.
   funcTable_->ASurfaceTransaction_setBufferTransparency(
       transaction, surfaceControl_->impl, IglASURFACE_TRANSACTION_TRANSPARENCY_OPAQUE);
 
-  TransactionInFlightData* inFlightData = nullptr;
-  inFlightData = new TransactionInFlightData();
-  inFlightData->swapchain = weak_from_this();
+  auto inFlightData = std::make_unique<TransactionInFlightData>();
+  inFlightData->swapchain = this;
   inFlightData->surfaceControl = surfaceControl_;
-  inFlightData->texture = texture;
+  inFlightData->texture = swapchainTexture;
 
   funcTable_->ASurfaceTransaction_setOnComplete(
-      transaction, inFlightData, [](void* context, ASurfaceTransactionStats* stats) {
-        auto data = reinterpret_cast<TransactionInFlightData*>(context);
-        auto thiz = data->swapchain.lock();
+      transaction, inFlightData.release(), [](void* context, ASurfaceTransactionStats* stats) {
+        std::unique_ptr<TransactionInFlightData> data{
+            reinterpret_cast<TransactionInFlightData*>(context)};
+        auto thiz = data->swapchain;
         auto surfaceControl = data->surfaceControl.lock();
         auto texture = std::move(data->texture);
-        // 防止VulkanImage不能释放
-        texture->getVulkanTexture().image.isExternallyManaged_ = false;
-        delete data;
 
-        if (!thiz)
+        if (!thiz) {
+          IGL_DEBUG_ASSERT(false);
           return;
+        }
 
         int releaseFd = -1;
         if (surfaceControl) {
           releaseFd = thiz->funcTable_->ASurfaceTransactionStats_getPreviousReleaseFenceFd(
               stats, surfaceControl->impl);
         }
+        igl::android::UniqueFd releaseFence{releaseFd};
 
-        std::lock_guard<std::mutex> lock(thiz->currentlyDisplayedTextureMutex_);
-        auto previous_texture = thiz->currentlyDisplayedTexture_;
-        thiz->currentlyDisplayedTexture_ = std::move(texture);
-
-        thiz->texturePool_.Push(previous_texture, releaseFd);
+        std::shared_ptr<SwapchainTexture> previousTexture;
+        {
+          std::lock_guard<std::mutex> lock(thiz->currentlyDisplayedTextureMutex_);
+          previousTexture = std::move(thiz->currentlyDisplayedTexture_);
+          thiz->currentlyDisplayedTexture_ = std::move(texture);
+        }
+        thiz->texturePool_.push(std::move(previousTexture), std::move(releaseFence));
+        {
+          std::lock_guard<std::mutex> lock(thiz->transactionMutex_);
+          thiz->transactionCount_--;
+        }
+        thiz->transactionCV_.notify_all();
       });
 
+  {
+    std::unique_lock<std::mutex> lock(transactionMutex_);
+    transactionCV_.wait(lock,
+                        [this] { return transactionCount_ < kMaxInFlightTransactions; });
+    transactionCount_++;
+  }
   funcTable_->ASurfaceTransaction_apply(transaction);
   funcTable_->ASurfaceTransaction_delete(transaction);
 }
 
-// 打印当前创建的句柄数量
-void VulkanSwapchain::PrintFileDescriptorCount() const {
+// Print the current number of open file descriptors.
+void VulkanSwapchain::printFileDescriptorCount() const {
 #if PRINT_FILE_DESCRIPTOR_COUNT
   DIR* d = opendir("/proc/self/fd");
   if (d) {
@@ -331,7 +384,7 @@ void VulkanSwapchain::PrintFileDescriptorCount() const {
     while ((de = readdir(d)))
       count++;
     closedir(d);
-    IGL_LOG_INFO("Current open FDs: %d", count - 2); // 减去 . 和 ..
+    IGL_LOG_INFO("Current open FDs: %d", count - 2); // subtract . and ..
   }
 #endif
 }
