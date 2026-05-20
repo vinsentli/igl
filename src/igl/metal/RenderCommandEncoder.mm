@@ -629,15 +629,20 @@ void RenderCommandEncoder::multiDrawIndexedIndirect(IBuffer& indirectBuffer,
 
   for (uint32_t drawIndex = 0; drawIndex < drawCount; drawIndex++) {
     getCommandBuffer().incrementCurrentDrawCount();
-    [encoder_ drawIndexedPrimitives:metalPrimitive_
-                          indexType:indexType_
-                        indexBuffer:indexBuffer_
-                  indexBufferOffset:indexBufferOffset_
-                     indirectBuffer:indirectBufferRef.get()
-               indirectBufferOffset:indirectBufferOffset +
-                                    (stride ? static_cast<size_t>(stride)
-                                            : sizeof(MTLDrawIndexedPrimitivesIndirectArguments)) *
-                                        drawIndex];
+    @try {
+      [encoder_ drawIndexedPrimitives:metalPrimitive_
+                            indexType:indexType_
+                          indexBuffer:indexBuffer_
+                    indexBufferOffset:indexBufferOffset_
+                       indirectBuffer:indirectBufferRef.get()
+                 indirectBufferOffset:indirectBufferOffset +
+                                      (stride ? static_cast<size_t>(stride)
+                                              : sizeof(MTLDrawIndexedPrimitivesIndirectArguments)) *
+                                          drawIndex];
+    } @catch (NSException *exception) {
+      // APINotSupported：部分系统不支持此API
+      // https://bugly.woa.com/v2/exception/crash/issues/detail?productId=900016562&pid=2&token=de9d46225f74f6ddebda57b395ea2dca&feature=D2B6498631306599F17D7E752E32B232&tapd=true&cId=C86F4251-922F-4CC7-93E8-AE591396DC1E
+    }
   }
 }
 
