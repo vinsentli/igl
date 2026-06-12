@@ -53,6 +53,7 @@ class ICommandQueue {
   [[nodiscard]] uint32_t getLastFrameDrawCount() const {
     return statistics_.lastFrameDrawCount;
   }
+  virtual bool beginFrame() { return true; }
   void endFrame() {
     statistics_.lastFrameDrawCount = statistics_.currentDrawCount;
     statistics_.currentDrawCount = 0;

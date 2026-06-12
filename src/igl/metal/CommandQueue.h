@@ -23,6 +23,12 @@ class CommandQueue final : public ICommandQueue {
                DeviceStatistics& deviceStatistics) noexcept;
   std::shared_ptr<ICommandBuffer> createCommandBuffer(const CommandBufferDesc& desc,
                                                       Result* outResult) override;
+    
+  /**
+   * CPU wait GPU finish, if time out, return false.
+   */
+  bool beginFrame() override;
+    
   SubmitHandle submit(const igl::ICommandBuffer& commandBuffer, bool endOfFrame = false) override;
 
   IGL_INLINE id<MTLCommandQueue> get() const {

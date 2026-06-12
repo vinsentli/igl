@@ -50,6 +50,10 @@ std::shared_ptr<ICommandBuffer> CommandQueue::createCommandBuffer(const CommandB
   return resource;
 }
 
+bool CommandQueue::beginFrame() {
+  return bufferSyncManager_->manageEndOfFrameSync();
+}
+
 SubmitHandle CommandQueue::submit(const igl::ICommandBuffer& commandBuffer, bool endOfFrame) {
   incrementDrawCount(commandBuffer.getCurrentDrawCount());
   deviceStatistics_.incrementDrawCount(commandBuffer.getCurrentDrawCount());
@@ -88,9 +92,10 @@ SubmitHandle CommandQueue::submit(const igl::ICommandBuffer& commandBuffer, bool
 
   [metalCommandBuffer.get() commit];
 
-  if (endOfFrame) {
-    bufferSyncManager_->manageEndOfFrameSync();
-  }
+    // move to beginFrame
+//  if (endOfFrame) {
+//    bufferSyncManager_->manageEndOfFrameSync();
+//  }
 
   if constexpr (kIGLMetalNumberCommandBuffersToCapture > 0) {
     static uint32_t currentCommandBuffer = 0;

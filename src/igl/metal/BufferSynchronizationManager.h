@@ -36,7 +36,7 @@ class BufferSynchronizationManager {
     return maxInFlightBuffers_;
   }
 
-  void manageEndOfFrameSync();
+  bool manageEndOfFrameSync();
 
   // Upon completion of this command buffer's execution, trigger buffer synchronization.
   void markCommandBufferAsEndOfFrame(const igl::ICommandBuffer& commandBuffer);

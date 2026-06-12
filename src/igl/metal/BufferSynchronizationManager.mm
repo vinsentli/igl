@@ -42,14 +42,19 @@ void BufferSynchronizationManager::markCommandBufferAsEndOfFrame(
       }];
 }
 
-void BufferSynchronizationManager::manageEndOfFrameSync() {
+bool BufferSynchronizationManager::manageEndOfFrameSync() {
   // Decrement the counting semaphore and
   // if the resulting value is less than zero, block the current thread from executing further
   // until the semaphore's value is >= 0
-  dispatch_semaphore_wait(frameBoundarySemaphore_, dispatch_walltime(NULL, 1000 / 60 * NSEC_PER_MSEC));
+  auto result = dispatch_semaphore_wait(frameBoundarySemaphore_, dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC));
+  if (result != 0){
+    // time out
+    return false;
+  }
 
   // increment currentInFlightBufferIndex
   currentInFlightBufferIndex_ = (currentInFlightBufferIndex_ + 1) % maxInFlightBuffers_;
+  return true;
 }
 
 } // namespace igl::metal
