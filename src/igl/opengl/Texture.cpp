@@ -25,6 +25,10 @@ uint32_t Texture::getSamples() const {
   return numSamples_;
 }
 
+void* Texture::getMapMemoryAddress() const {
+  return NULL;
+}
+
 void Texture::generateMipmap(ICommandQueue& /* unused */,
                              const TextureRangeDesc* IGL_NULLABLE /* unused */) const {
   IGL_DEBUG_ABORT("Can only generate mipmap for R/W texture (eg. TextureBuffer).");

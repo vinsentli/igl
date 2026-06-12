@@ -32,6 +32,7 @@ class Texture : public WithContext, public ITexture {
   [[nodiscard]] Dimensions getDimensions() const override;
   [[nodiscard]] uint32_t getNumLayers() const override;
   [[nodiscard]] uint32_t getSamples() const override;
+  [[nodiscard]] void* getMapMemoryAddress() const override;
   void generateMipmap(ICommandQueue& cmdQueue,
                       const TextureRangeDesc* IGL_NULLABLE range = nullptr) const override;
   void generateMipmap(ICommandBuffer& cmdBuffer,

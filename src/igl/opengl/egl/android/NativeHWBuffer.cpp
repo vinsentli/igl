@@ -58,6 +58,14 @@ uint64_t NativeHWTextureBuffer::getTextureId() const {
   return getId();
 }
 
+void* NativeHWTextureBuffer::getMapMemoryAddress() const {
+  return igl::android::INativeHWTextureBuffer::getCpuReadMemoryAddress();
+}
+
+size_t NativeHWTextureBuffer::getMapBytesPerRow() const {
+  return igl::android::INativeHWTextureBuffer::getCpuReadBytesPerRow();
+}
+
 bool NativeHWTextureBuffer::supportsUpload() const {
   return true;
 }

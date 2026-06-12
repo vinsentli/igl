@@ -8,6 +8,8 @@
 #include <igl/metal/Device.h>
 
 #import <Foundation/Foundation.h>
+#import <IOSurface/IOSurfaceRef.h>
+#include <TargetConditionals.h>
 #include <sstream>
 #include <unordered_set>
 #include <igl/FramebufferWrapper.h>
@@ -66,6 +68,170 @@ id<MTLBuffer> createMetalBuffer(id<MTLDevice> device,
     metalObject = [device newBufferWithLength:desc.length options:options];
   }
   metalObject.label = [NSString stringWithUTF8String:desc.debugName.c_str()];
+  return metalObject;
+}
+
+/// Map a subset of MTLPixelFormat values to an IOSurface FourCC pixel format.
+/// Returns 0 if the format is not supported as an IOSurface backing.
+///
+/// Notes:
+/// - IOSurface does not publish public constants for these FourCC codes; the
+///   values below are the de-facto codes accepted by IOSurface / CoreVideo on
+///   Apple platforms (matching CVPixelBuffer kCVPixelFormatType_* values where
+///   applicable).
+/// - Some packed formats (e.g. RGB565 / RGBA4 / RGB5A1) only exist as
+///   MTLPixelFormat on iOS/tvOS/Catalyst — they are intentionally guarded by
+///   TARGET_OS_IPHONE so this file still compiles on macOS.
+uint32_t mtlPixelFormatToIOSurfacePixelFormat(MTLPixelFormat format) {
+  switch (format) {
+    // 8-bit per channel ----------------------------------------------------
+    case MTLPixelFormatRGBA8Unorm:
+    case MTLPixelFormatRGBA8Unorm_sRGB:
+      return 'RGBA'; // 32-bit RGBA, 8 bits per channel
+    case MTLPixelFormatBGRA8Unorm:
+    case MTLPixelFormatBGRA8Unorm_sRGB:
+      return 'BGRA'; // 32-bit BGRA, 8 bits per channel
+    case MTLPixelFormatR8Unorm:
+      return 'L008'; // 8-bit single channel
+    case MTLPixelFormatRG8Unorm:
+      return '2C08'; // 8-bit two-channel
+
+    // Packed 16-bit (iOS-only MTLPixelFormats) ----------------------------
+#if TARGET_OS_IPHONE
+    case MTLPixelFormatB5G6R5Unorm:
+      // RGB565, little-endian. Matches kCVPixelFormatType_16LE565.
+      return 'B565';
+    case MTLPixelFormatABGR4Unorm:
+      // RGBA4 (4-bit per channel). Matches kCVPixelFormatType_16LE4444.
+      return 'B4A4';
+    case MTLPixelFormatBGR5A1Unorm:
+      // RGB5A1 (5-5-5-1). Matches kCVPixelFormatType_16LE555.
+      return 'B5A1';
+#endif
+
+    // Packed 32-bit -------------------------------------------------------
+    case MTLPixelFormatRGB10A2Unorm:
+      return 'l10r'; // little-endian 2-10-10-10
+
+    // 16-bit float --------------------------------------------------------
+    case MTLPixelFormatR16Float:
+      return 'L0h '; // half-float single channel
+    case MTLPixelFormatRG16Float:
+      return '2Ch '; // half-float two-channel
+    case MTLPixelFormatRGBA16Float:
+      return 'RGhA';
+
+    // 32-bit float --------------------------------------------------------
+    case MTLPixelFormatRGBA32Float:
+      return 'RGfA';
+
+    default:
+      return 0;
+  }
+}
+
+/// Create an IOSurface-backed `MTLTexture` for shared CPU/GPU memory.
+///
+/// On success, `outIOSurface` receives a +1 retained `IOSurfaceRef` whose
+/// ownership is transferred to the caller (caller is responsible for
+/// `CFRelease`-ing it when the texture is destroyed). On failure, returns nil
+/// and `outIOSurface` is set to nullptr; `outResult` is populated with the
+/// reason.
+///
+/// IOSurface is preferred over an `MTLBuffer`-backed linear texture because:
+///   - it works on the iOS simulator (MTLBuffer linear textures don't);
+///   - it can be shared across processes via mach ports;
+///   - it interoperates with CoreVideo / AVFoundation / CoreImage zero-copy.
+///
+/// **Row-pitch contract (important):**
+///   The IOSurface row pitch is decided by IOSurface itself, not by the caller.
+///   We propose `width * bytesPerPixel` rounded up to
+///   `[device minimumLinearTextureAlignmentForPixelFormat:]`, but IOSurface is
+///   still allowed to pad it further. The authoritative row stride is whatever
+///   `IOSurfaceGetBytesPerRow()` returns, which is exposed to the caller via
+///   `ITexture::getMapBytesPerRow()`. Callers writing/reading through the
+///   mapped pointer MUST use that value as their row stride — never assume
+///   `width * bytesPerPixel`.
+id<MTLTexture> createIOSurfaceBackedTexture(id<MTLDevice> device,
+                                            MTLTextureDescriptor* metalDesc,
+                                            const TextureDesc& desc,
+                                            const TextureDesc& sanitized,
+                                            IOSurfaceRef* outIOSurface,
+                                            Result* outResult) {
+  if (outIOSurface) {
+    *outIOSurface = nullptr;
+  }
+
+  const TextureFormatProperties props =
+      TextureFormatProperties::fromTextureFormat(sanitized.format);
+  const uint32_t bytesPerPixel = props.bytesPerBlock;
+  const uint32_t iosurfacePixelFormat =
+      mtlPixelFormatToIOSurfacePixelFormat(metalDesc.pixelFormat);
+
+  if (iosurfacePixelFormat == 0 || bytesPerPixel == 0 ||
+      sanitized.type != TextureType::TwoD || sanitized.depth > 1 ||
+      sanitized.numLayers > 1 || sanitized.numSamples > 1) {
+    Result::setResult(
+        outResult,
+        Result::Code::Unsupported,
+        "IOSurface-backed shared texture requires a 2D, single-sample, single-layer "
+        "texture in a supported pixel format.");
+    return nil;
+  }
+
+  // Round the proposed row pitch up to the device-required linear-texture
+  // alignment. IOSurface may still increase it further; the real value is
+  // queried via IOSurfaceGetBytesPerRow() after creation.
+  const size_t rowAlignment =
+      [device minimumLinearTextureAlignmentForPixelFormat:metalDesc.pixelFormat];
+  const size_t alignment = rowAlignment > 0 ? rowAlignment : 16;
+  const size_t tightBytesPerRow = static_cast<size_t>(sanitized.width) * bytesPerPixel;
+  const size_t proposedBytesPerRow =
+      (tightBytesPerRow + (alignment - 1)) & ~(alignment - 1);
+
+  // Page-align the total allocation size as recommended for IOSurface.
+  const size_t allocSize = proposedBytesPerRow * sanitized.height;
+  const size_t pageSize = 4096;
+  const size_t alignedAllocSize = (allocSize + (pageSize - 1)) & ~(pageSize - 1);
+
+  NSDictionary* surfaceProps = @{
+    (id)kIOSurfaceWidth : @(sanitized.width),
+    (id)kIOSurfaceHeight : @(sanitized.height),
+    (id)kIOSurfaceBytesPerElement : @(bytesPerPixel),
+    (id)kIOSurfaceBytesPerRow : @(proposedBytesPerRow),
+    (id)kIOSurfaceAllocSize : @(alignedAllocSize),
+    (id)kIOSurfacePixelFormat : @(iosurfacePixelFormat),
+  };
+  IOSurfaceRef ioSurface = IOSurfaceCreate((__bridge CFDictionaryRef)surfaceProps);
+  if (!ioSurface) {
+    Result::setResult(outResult, Result::Code::RuntimeError, "Failed to create IOSurface");
+    return nil;
+  }
+
+  // IOSurface-backed textures must use Shared storage and cannot be memoryless.
+  metalDesc.storageMode = MTLStorageModeShared;
+  metalDesc.resourceOptions =
+      MTLResourceCPUCacheModeDefaultCache | MTLResourceStorageModeShared;
+
+  id<MTLTexture> metalObject = [device newTextureWithDescriptor:metalDesc
+                                                      iosurface:ioSurface
+                                                          plane:0];
+  if (!metalObject) {
+    CFRelease(ioSurface);
+    Result::setResult(outResult,
+                      Result::Code::RuntimeError,
+                      "Failed to create Metal texture from IOSurface");
+    return nil;
+  }
+
+  if (outIOSurface) {
+    *outIOSurface = ioSurface; // ownership transferred to caller
+  } else {
+    // Caller doesn't want the surface; release our reference. (The MTLTexture
+    // retains its own internal reference to the IOSurface.)
+    CFRelease(ioSurface);
+  }
+  Result::setOk(outResult);
   return metalObject;
 }
 } // namespace
@@ -168,6 +334,13 @@ std::shared_ptr<ISamplerState> Device::createSamplerState(const SamplerStateDesc
 std::shared_ptr<ITexture> Device::createTexture( // NOLINT(bugprone-exception-escape)
     const TextureDesc& desc,
     Result* outResult) const noexcept {
+  return createTexture(TextureNative::kMetal, desc, outResult);    
+}
+
+std::shared_ptr<ITexture> Device::createTexture( // NOLINT(bugprone-exception-escape)
+    TextureNative nativeType, 
+    const TextureDesc& desc,
+    Result* outResult) const noexcept {    
   const auto sanitized = sanitize(desc);
   if (desc.numLayers > 1 && desc.type != TextureType::TwoDArray) {
     Result::setResult(outResult,
@@ -226,8 +399,24 @@ std::shared_ptr<ITexture> Device::createTexture( // NOLINT(bugprone-exception-es
 
   metalDesc.resourceOptions =
       MTLResourceCPUCacheModeDefaultCache | toMTLResourceStorageMode(sanitized.storage);
+        
+  id<MTLTexture> metalObject = nil;
+  IOSurfaceRef ioSurface = nullptr;
 
-  id<MTLTexture> metalObject = [device_ newTextureWithDescriptor:metalDesc];
+  if (nativeType == TextureNative::kIOSurface) {
+    metalObject = createIOSurfaceBackedTexture(device_,
+                                               metalDesc,
+                                               desc,
+                                               sanitized,
+                                               &ioSurface,
+                                               outResult);
+    if (!metalObject) {
+      return nullptr;
+    }
+  } else {
+    metalObject = [device_ newTextureWithDescriptor:metalDesc];
+  }
+        
   if (!metalObject) {
     Result::setResult(outResult, Result::Code::RuntimeError, "Failed to create Metal texture");
     IGL_DEBUG_ABORT(outResult->message.c_str());
@@ -235,6 +424,7 @@ std::shared_ptr<ITexture> Device::createTexture( // NOLINT(bugprone-exception-es
   }
   metalObject.label = [NSString stringWithUTF8String:desc.debugName.c_str()];
   auto iglObject = std::make_shared<Texture>(metalObject, *this, desc.mipmapGeneration);
+  iglObject->iosurface_ = ioSurface; // ownership transferred; released in ~Texture
   if (hasResourceTracker()) {
     iglObject->initResourceTracker(getResourceTracker(), desc.debugName);
   }

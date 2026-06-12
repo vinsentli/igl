@@ -455,6 +455,10 @@ uint32_t Texture::getSamples() const {
   return desc_.numSamples;
 }
 
+void* Texture::getMapMemoryAddress() const {
+  return NULL;
+}
+
 uint32_t Texture::getNumMipLevels() const {
   return desc_.numMipLevels;
 }

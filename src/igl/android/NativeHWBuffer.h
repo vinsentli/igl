@@ -74,11 +74,21 @@ class INativeHWTextureBuffer {
 
   [[nodiscard]] TextureDesc getTextureDesc() const;
 
+  [[nodiscard]] void* getCpuReadMemoryAddress() const;
+
+  /// Returns the row stride (bytes per row) of the CPU-visible mapping returned
+  /// by getCpuReadMemoryAddress(). AHardwareBuffer drivers commonly pad the row
+  /// stride for hardware-alignment reasons (e.g. 64-pixel alignment on Mali /
+  /// Adreno), so this is NOT necessarily width * bytesPerPixel. Returns 0 if
+  /// the backing hardware buffer is not available.
+  [[nodiscard]] size_t getCpuReadBytesPerRow() const;
+
  protected:
   virtual Result createTextureInternal(AHardwareBuffer* IGL_NULLABLE buffer) = 0;
   AHardwareBuffer* IGL_NULLABLE hwBuffer_ = nullptr;
   TextureDesc textureDesc_;
-    std::shared_ptr<AHardwareBufferFunctionTable> funcTable_ = nullptr;
+  mutable void * cpuReadMemoryAddress_ = nullptr;
+  std::shared_ptr<AHardwareBufferFunctionTable> funcTable_ = nullptr;
 };
 
 // utils

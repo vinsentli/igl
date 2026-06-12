@@ -37,6 +37,10 @@ class DummyTexture : public ITexture {
     IGL_DEBUG_ASSERT_NOT_REACHED();
     return 1;
   }
+  [[nodiscard]] void* getMapMemoryAddress() const override {
+    IGL_DEBUG_ASSERT_NOT_REACHED();
+    return NULL;
+  }
   void generateMipmap(ICommandQueue& /* unused */,
                       const TextureRangeDesc* IGL_NULLABLE /* unused */) const override {
     IGL_DEBUG_ASSERT_NOT_REACHED();

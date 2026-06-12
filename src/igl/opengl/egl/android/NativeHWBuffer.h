@@ -33,6 +33,8 @@ class NativeHWTextureBuffer : public igl::android::INativeHWTextureBuffer,
   void bind() override;
   void bindImage(size_t unit) override;
   uint64_t getTextureId() const override;
+  void* getMapMemoryAddress() const override;
+  size_t getMapBytesPerRow() const override;
 
   bool supportsUpload() const final;
   static bool isValidFormat(TextureFormat format);

@@ -45,6 +45,10 @@ Texture::Texture(id<CAMetalDrawable> drawable,
 
 Texture::~Texture() {
   value_ = nil;
+  if (iosurface_) {
+    CFRelease(iosurface_);
+    iosurface_ = nullptr;
+  }
 }
 
 bool Texture::needsRepacking(const TextureRangeDesc& range, size_t bytesPerRow) const {
@@ -225,6 +229,23 @@ TextureDesc::TextureUsage Texture::getUsage() const {
 
 uint32_t Texture::getSamples() const {
   return [get() sampleCount];
+}
+
+void* Texture::getMapMemoryAddress() const {
+  if (!cpuReadMemoryAddress_) {
+    IGL_DEBUG_ASSERT(iosurface_);
+    cpuReadMemoryAddress_ = IOSurfaceGetBaseAddress(iosurface_);
+    IGL_DEBUG_ASSERT(cpuReadMemoryAddress_);
+  }
+  return cpuReadMemoryAddress_;
+}
+
+size_t Texture::getMapBytesPerRow() const {
+  // The IOSurface row pitch is the source of truth: IOSurface is free to
+  // round the row stride up to its own alignment requirement, so callers
+  // must NOT assume `width * bytesPerPixel`. This is a constant-time lookup;
+  // no caching required.
+  return iosurface_ ? IOSurfaceGetBytesPerRow(iosurface_) : 0;
 }
 
 uint32_t Texture::getNumMipLevels() const {

@@ -19,6 +19,12 @@ namespace igl::metal {
 
 class BufferSynchronizationManager;
 
+enum class TextureNative{
+  kMetal,
+  kIOSurface,
+  kCVImageBuffer,
+};
+
 class Device : public IDevice {
   friend class HWDevice;
 
@@ -52,6 +58,8 @@ class Device : public IDevice {
                                                     Result* IGL_NULLABLE outResult) const override;
   std::shared_ptr<ITexture> createTexture(const TextureDesc& desc,
                                           Result* IGL_NULLABLE outResult) const noexcept override;
+  std::shared_ptr<ITexture> createTexture(TextureNative nativeType, const TextureDesc& desc,
+                                            Result* IGL_NULLABLE outResult) const noexcept;
   std::shared_ptr<ITexture> createTextureView(std::shared_ptr<ITexture> texture,
                                               const TextureViewDesc& desc,
                                               Result* IGL_NULLABLE

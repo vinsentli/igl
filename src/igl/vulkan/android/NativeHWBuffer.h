@@ -31,6 +31,9 @@ class NativeHWTextureBuffer : public igl::android::INativeHWTextureBuffer, publi
   NativeHWTextureBuffer(igl::vulkan::Device& device, std::shared_ptr<AHardwareBufferFunctionTable> funcTable, TextureFormat format);
   ~NativeHWTextureBuffer() override;
 
+  void* getMapMemoryAddress() const override;
+  size_t getMapBytesPerRow() const override;
+
  protected:
   // Texture overrides
   Result create(const TextureDesc& desc) override;

@@ -12,6 +12,7 @@
 #import <Metal/MTLPixelFormat.h>
 #import <Metal/MTLTexture.h>
 #import <QuartzCore/CAMetalLayer.h>
+#import <IOSurface/IOSurfaceRef.h>
 #include <igl/DeviceFeatures.h>
 #include <igl/Macros.h>
 #include <igl/Texture.h>
@@ -49,6 +50,8 @@ class Texture final : public ITexture {
   [[nodiscard]] TextureType getType() const override;
   [[nodiscard]] TextureDesc::TextureUsage getUsage() const override;
   [[nodiscard]] uint32_t getSamples() const override;
+  [[nodiscard]] void* getMapMemoryAddress() const override;
+  [[nodiscard]] size_t getMapBytesPerRow() const override;
   [[nodiscard]] uint32_t getNumMipLevels() const override;
   void generateMipmap(ICommandQueue& cmdQueue,
                       const TextureRangeDesc* IGL_NULLABLE range = nullptr) const override;
@@ -81,6 +84,11 @@ class Texture final : public ITexture {
   static TextureRangeDesc atMetalSlice(TextureType type,
                                        const TextureRangeDesc& range,
                                        NSUInteger metalSlice);
+    
+ public:
+  /// IOSurface backing for cross-process / CPU-GPU shared texture memory.
+  /// When non-null, getMapMemoryAddress() returns its locked base address.
+  IOSurfaceRef _Nullable iosurface_ = nullptr;
 
  private:
   [[nodiscard]] bool needsRepacking(const TextureRangeDesc& range, size_t bytesPerRow) const final;
@@ -98,6 +106,7 @@ class Texture final : public ITexture {
 
   id<MTLTexture> _Nullable value_;
   id<CAMetalDrawable> _Nullable drawable_;
+  mutable void* cpuReadMemoryAddress_ = nullptr;
   const ICapabilities& capabilities_;
   TextureDesc::TextureMipmapGeneration mipmapGeneration_ =
       TextureDesc::TextureMipmapGeneration::Manual;

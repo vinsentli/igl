@@ -300,6 +300,43 @@ TextureDesc INativeHWTextureBuffer::getTextureDesc() const {
   return textureDesc_;
 }
 
+void* INativeHWTextureBuffer::getCpuReadMemoryAddress() const{
+  if (!cpuReadMemoryAddress_) {
+    IGL_DEBUG_ASSERT(funcTable_);
+    IGL_DEBUG_ASSERT(hwBuffer_);  
+    if (0 != funcTable_->AHardwareBuffer_lock(hwBuffer_,
+                                              AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN,
+                                              -1,
+                                              nullptr,
+                                              reinterpret_cast<void**>(&cpuReadMemoryAddress_))) {
+      IGL_DEBUG_ABORT("Failed to lock hardware buffer");
+    }
+    IGL_DEBUG_ASSERT(cpuReadMemoryAddress_);
+  }
+
+  IGL_DEBUG_ASSERT(cpuReadMemoryAddress_);
+  return cpuReadMemoryAddress_;
+}
+
+size_t INativeHWTextureBuffer::getCpuReadBytesPerRow() const {
+  // AHardwareBuffer reports row stride in pixels (not bytes), and that stride
+  // is decided by the allocator — drivers commonly pad it (Mali/Adreno often
+  // round to 64 / 128 pixels). The caller MUST use this value as the row
+  // stride when reading/writing the mapped pointer; assuming
+  // width * bytesPerPixel will land on the wrong offset from row 1 onward.
+  if (!hwBuffer_ || !funcTable_) {
+    return 0;
+  }
+  AHardwareBuffer_Desc hwbDesc{};
+  funcTable_->AHardwareBuffer_describe(hwBuffer_, &hwbDesc);
+  const auto props =
+      TextureFormatProperties::fromTextureFormat(getIglFormat(hwbDesc.format));
+  if (props.bytesPerBlock == 0) {
+    return 0;
+  }
+  return static_cast<size_t>(hwbDesc.stride) * props.bytesPerBlock;
+}
+
 } // namespace igl::android
 
 #endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)

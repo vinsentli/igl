@@ -867,6 +867,28 @@ class ITexture : public ITrackedResource<ITexture>, public base::IAttachmentInte
    */
   [[nodiscard]] virtual uint32_t getSamples() const = 0;
   /**
+   * @brief Returns memory address mapped from the gpu buffer, only available on iOS IOSurface texture or android AHardwareBuffer texture.
+   *
+   * @return The memory address mapped from the gpu buffer
+   */
+  [[nodiscard]] virtual void* getMapMemoryAddress() const = 0;
+  /**
+   * @brief Returns the row stride (bytes per row) of the CPU-visible mapping
+   *        returned by getMapMemoryAddress().
+   *
+   * The underlying shared-memory backing (IOSurface on Apple,
+   * AHardwareBuffer on Android, ...) may pad rows for hardware-alignment
+   * reasons, so the real row pitch is NOT necessarily width * bytesPerPixel.
+   * Callers that read or write pixels through the mapped pointer MUST use
+   * this value as the row stride; otherwise the second row onward will land
+   * at the wrong offset.
+   *
+   * Implementations that do not support memory mapping should return 0.
+   *
+   * @return Bytes per row of the mapped memory, or 0 if mapping is not supported.
+   */
+  [[nodiscard]] virtual size_t getMapBytesPerRow() const { return 0; }
+  /**
    * @brief Generates mipmap command using the command queue
    *
    * @param cmdQueue The command queue that is generated from the graphics device.

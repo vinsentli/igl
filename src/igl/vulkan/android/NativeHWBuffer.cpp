@@ -48,6 +48,14 @@ NativeHWTextureBuffer::~NativeHWTextureBuffer() {
   IGL_LOG_INFO("Destroy NativeHWTextureBuffer : %s", textureDesc_.debugName.c_str());
 }
 
+void* NativeHWTextureBuffer::getMapMemoryAddress() const {
+  return igl::android::INativeHWTextureBuffer::getCpuReadMemoryAddress();
+}
+
+size_t NativeHWTextureBuffer::getMapBytesPerRow() const {
+  return igl::android::INativeHWTextureBuffer::getCpuReadBytesPerRow();
+}
+
 Result NativeHWTextureBuffer::create(const TextureDesc& desc) {
   return createHWBuffer(desc, false, false);
 }
