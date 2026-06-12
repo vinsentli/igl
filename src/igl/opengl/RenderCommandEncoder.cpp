@@ -162,8 +162,6 @@ void RenderCommandEncoder::endEncoding() {
 
     adapter_->endEncoding();
     getContext().getAdapterPool().push_back(std::move(adapter_));
-      
-    framebuffer_->unbind();
 
     // GPU timing: end the GL_TIME_ELAPSED query after all draw calls.
     if (timestampQueries_) {
@@ -227,6 +225,7 @@ void RenderCommandEncoder::endEncoding() {
         IGL_DEBUG_ASSERT_NOT_REACHED();
       }
     }
+    framebuffer_->unbind();
   }
 }
 
