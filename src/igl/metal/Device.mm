@@ -705,6 +705,7 @@ std::shared_ptr<IRenderPipelineState> Device::createTraditionalRenderPipeline(
 
   metalDesc.sampleCount = desc.sampleCount;
   metalDesc.rasterSampleCount = desc.sampleCount;
+  metalDesc.alphaToCoverageEnabled = desc.alphaToCoverageEnabled ? YES : NO;
         
   // (optional, can be null) Vertex input
   auto vertexInput = desc.vertexInputState;
