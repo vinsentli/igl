@@ -357,7 +357,7 @@ struct ShaderStagesDesc {
   std::shared_ptr<IShaderModule> meshModule;
   /** @brief for opengl only.*/
   uint32_t programBinaryFormat{0};
-  std::shared_ptr<std::vector<uint8_t>> programBinary;
+  std::vector<uint8_t> programBinary;
   /** @brief The type of shader stages: render or compute. */
   ShaderStagesType type = ShaderStagesType::Render;
   /** @brief Identifier used for debugging */

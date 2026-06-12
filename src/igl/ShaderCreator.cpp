@@ -176,7 +176,7 @@ std::unique_ptr<IShaderStages> ShaderStagesCreator::fromModuleStringInput(
   }
 
   return (result && result->isOk())
-             ? fromRenderModules(device, std::move(vertexModule), std::move(fragmentModule), 0, nullptr, result)
+             ? fromRenderModules(device, std::move(vertexModule), std::move(fragmentModule), 0, {}, result)
              : nullptr;
 }
 
@@ -214,7 +214,7 @@ std::unique_ptr<IShaderStages> ShaderStagesCreator::fromModuleBinaryInput(
   }
 
   return (result && result->isOk())
-             ? fromRenderModules(device, std::move(vertexModule), std::move(fragmentModule), 0, nullptr, result)
+             ? fromRenderModules(device, std::move(vertexModule), std::move(fragmentModule), 0, {}, result)
              : nullptr;
 }
 
@@ -303,12 +303,12 @@ std::unique_ptr<IShaderStages> ShaderStagesCreator::fromRenderModules(
     std::shared_ptr<IShaderModule> vertexModule,
     std::shared_ptr<IShaderModule> fragmentModule,
     uint32_t programBinaryFormat,
-    std::shared_ptr<std::vector<uint8_t>> programBinary,
+    std::vector<uint8_t> programBinary,
     Result* IGL_NULLABLE outResult) {
   auto desc =
       ShaderStagesDesc::fromRenderModules(std::move(vertexModule), std::move(fragmentModule));
   desc.programBinaryFormat = programBinaryFormat;
-  desc.programBinary = programBinary;
+  desc.programBinary = std::move(programBinary);
   return device.createShaderStages(desc, outResult);
 }
 
@@ -365,7 +365,7 @@ std::unique_ptr<IShaderStages> fromLibraryDesc(const IDevice& device,
   }
 
   return ShaderStagesCreator::fromRenderModules(
-      device, std::move(vertexModule), std::move(fragmentModule), 0, nullptr, result);
+      device, std::move(vertexModule), std::move(fragmentModule), 0, {}, result);
 }
 } // namespace
 } // namespace igl

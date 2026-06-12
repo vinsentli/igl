@@ -69,11 +69,11 @@ void ShaderStages::createRenderProgram(Result* result) {
     return;
   }
 
-  if (numProgramBinayFormats && desc_.programBinaryFormat && desc_.programBinary && !desc_.programBinary->empty()) {
+  if (numProgramBinayFormats && desc_.programBinaryFormat && desc_.programBinary.size()) {
     getContext().programBinary(programID,
                                desc_.programBinaryFormat,
-                               desc_.programBinary->data(),
-                               desc_.programBinary->size());
+                               desc_.programBinary.data(),
+                               desc_.programBinary.size());
     GLint status = 0;
     getContext().getProgramiv(programID, GL_LINK_STATUS, &status);
     if (status) {
