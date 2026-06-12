@@ -8,6 +8,7 @@
 #include <array>
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -522,13 +523,14 @@ VulkanContext::VulkanContext(VulkanContextConfig config,
   pimpl_ = std::make_unique<VulkanContextImpl>();
 
 #if defined(IGL_CMAKE_BUILD)
-  const auto result = volkInitialize();
-
-  // Do not remove for backward compatibility with projects using global functions.
-  if (result != VK_SUCCESS) {
-    IGL_LOG_ERROR("volkInitialize() failed with error code %d\n", static_cast<int>(result));
-    abort();
-  };
+  static std::once_flag sVolkInitFlag;
+  std::call_once(sVolkInitFlag, []() {
+    const auto result = volkInitialize();
+    if (result != VK_SUCCESS) {
+      IGL_LOG_ERROR("volkInitialize() failed with error code %d\n", static_cast<int>(result));
+      abort();
+    }
+  });
 #endif // IGL_CMAKE_BUILD
   vulkan::functions::initialize(*tableImpl_);
 
@@ -611,6 +613,10 @@ VulkanContext::~VulkanContext() {
 
   swapchain_ = nullptr; // Swapchain has to be destroyed prior to Surface
 
+  pimpl_->arenaCombinedImageSamplers.clear();
+  pimpl_->arenaStorageImages.clear();
+  pimpl_->arenaBuffers.clear();
+
   waitDeferredTasks();
 
   immediate_.reset(nullptr);
@@ -625,9 +631,6 @@ VulkanContext::~VulkanContext() {
         vf_.vkDestroySamplerYcbcrConversion(vkDevice_, p.second.conversion, nullptr);
       }
     }
-    pimpl_->arenaCombinedImageSamplers.clear();
-    pimpl_->arenaStorageImages.clear();
-    pimpl_->arenaBuffers.clear();
     vf_.vkDestroyPipelineCache(vkDevice_, pipelineCache_, nullptr);
   }
 
@@ -643,11 +646,11 @@ VulkanContext::~VulkanContext() {
   if (vkDevice_) {
     vf_.vkDestroyDevice(vkDevice_, nullptr); // Device has to be destroyed prior to Instance
   }
-#if !IGL_PLATFORM_ANDROID
+#if !IGL_PLATFORM_APPLE
   if (vf_.vkDestroyDebugUtilsMessengerEXT != nullptr) {
     vf_.vkDestroyDebugUtilsMessengerEXT(vkInstance_, vkDebugUtilsMessenger_, nullptr);
   }
-#endif // !IGL_PLATFORM_ANDROID
+#endif // !IGL_PLATFORM_APPLE
   if (vf_.vkDestroyInstance != nullptr) {
     vf_.vkDestroyInstance(vkInstance_, nullptr);
   }
@@ -666,7 +669,7 @@ VulkanContext::~VulkanContext() {
 #endif // IGL_LOGGING_ENABLED
 
 #if defined(IGL_CMAKE_BUILD)
-  volkFinalize();
+  // volkFinalize();
 #endif
 
 #if IGL_VULKAN_VALIDATION_LAYER_ERROR_SUMMARY
@@ -769,7 +772,11 @@ void VulkanContext::createInstance() {
 
 #if defined(IGL_CMAKE_BUILD)
   // Do not remove for backward compatibility with projects using global functions.
-  volkLoadInstance(vkInstance_);
+  {
+    static std::mutex sVolkLoadMutex;
+    std::lock_guard<std::mutex> lock(sVolkLoadMutex);
+    volkLoadInstance(vkInstance_);
+  }
 #endif
   const bool enableExtDebugUtils =
       features_.enable(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VulkanFeatures::ExtensionType::Instance);

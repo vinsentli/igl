@@ -241,7 +241,10 @@ std::shared_ptr<ITexture> VulkanSwapchain::getCurrentVulkanTexture(Device& devic
 
     frameId_ = (frameId_ + 1) % kMaxPendingPresents;
 
-    frameSync_[frameId_].acquireFence->wait();
+    // 超时：1秒 = 1000 * 1000 * 1000 纳秒。
+    if (!frameSync_[frameId_].acquireFence->wait(1000000000)){
+        return nullptr;
+    }
     frameSync_[frameId_].acquireFence->reset();
     frameSync_[frameId_].presentReady = std::make_shared<VulkanSemaphore>(
         ctx_.vf_,
