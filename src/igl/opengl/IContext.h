@@ -48,6 +48,7 @@ class IContext {
   virtual ~IContext();
 
   void flushDeletionQueue();
+  const DeviceFeatureSet& getDeviceFeatureSet() const { return deviceFeatureSet_; }
 
  protected:
   bool shouldQueueAPI() const;
