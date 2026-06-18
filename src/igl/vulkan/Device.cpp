@@ -884,6 +884,11 @@ bool Device::getFeatureLimitsInternal(DeviceFeatureLimits featureLimits, size_t&
   case DeviceFeatureLimits::MaxColorAttachments:
     result = limits.maxColorAttachments;
     return true;
+  case DeviceFeatureLimits::MaxVertexShaderStorageBlocks:
+  case DeviceFeatureLimits::MaxFragmentShaderStorageBlocks:
+  case DeviceFeatureLimits::MaxComputeShaderStorageBlocks:
+    result = limits.maxPerStageDescriptorStorageBuffers;
+    return true;
   // D3D12-specific descriptor heap limits - not applicable to Vulkan
   case DeviceFeatureLimits::MaxDescriptorHeapCbvSrvUav:
   case DeviceFeatureLimits::MaxDescriptorHeapSamplers:

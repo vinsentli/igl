@@ -1319,6 +1319,27 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
     glContext_.getIntegerv(GL_MAX_COLOR_ATTACHMENTS, &tsize);
     result = (size_t)tsize;
     return true;
+  case DeviceFeatureLimits::MaxVertexShaderStorageBlocks:
+    tsize = 0;
+    if (hasFeature(DeviceFeatures::StorageBuffers)) {
+      glContext_.getIntegerv(GL_MAX_VERTEX_SHADER_STORAGE_BLOCKS, &tsize);
+    }
+    result = (size_t)tsize;
+    return true;
+  case DeviceFeatureLimits::MaxFragmentShaderStorageBlocks:
+    tsize = 0;
+    if (hasFeature(DeviceFeatures::StorageBuffers)) {
+      glContext_.getIntegerv(GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS, &tsize);
+    }
+    result = (size_t)tsize;
+    return true;
+  case DeviceFeatureLimits::MaxComputeShaderStorageBlocks:
+    tsize = 0;
+    if (hasFeature(DeviceFeatures::StorageBuffers) && hasFeature(DeviceFeatures::Compute)) {
+      glContext_.getIntegerv(GL_MAX_COMPUTE_SHADER_STORAGE_BLOCKS, &tsize);
+    }
+    result = (size_t)tsize;
+    return true;
   default:
     IGL_DEBUG_ABORT(
         "invalid feature limit query: feature limit query is not implemented or does "

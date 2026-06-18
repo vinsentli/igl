@@ -334,6 +334,11 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
   case DeviceFeatureLimits::MaxColorAttachments:
     result = 8;
     return true;
+  case DeviceFeatureLimits::MaxVertexShaderStorageBlocks:
+  case DeviceFeatureLimits::MaxFragmentShaderStorageBlocks:
+  case DeviceFeatureLimits::MaxComputeShaderStorageBlocks:
+    result = 31;
+    return true;
   default:
     IGL_DEBUG_ABORT(
         "invalid feature limit query: feature limit query is not implemented or does not exist\n");
