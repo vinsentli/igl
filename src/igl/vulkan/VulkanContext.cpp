@@ -2536,14 +2536,21 @@ void VulkanContext::updateBindingsBuffersByDescriptorBuffer(
     VkCommandBuffer IGL_NONNULL cmdBuf,
     VkPipelineLayout layout,
     VkPipelineBindPoint bindPoint,
+    uint32_t descriptorSet,
     VulkanImmediateCommands::SubmitHandle nextSubmitHandle,
     BindingsBuffers& data,
     const VulkanDescriptorSetLayout& dsl,
-    const util::SpvModuleInfo& info) {
+    const std::vector<util::BufferDescription>& info) {
   IGL_PROFILER_FUNCTION();
-  if (info.buffers.empty()) {
+  if (info.empty()) {
     return;
   }
+
+  auto expectBufferCount = std::count_if(info.begin(), info.end(),[descriptorSet](const util::BufferDescription& buffer){
+    return buffer.descriptorSet == descriptorSet;
+  });
+
+  if (!expectBufferCount) return;
 
   auto uniformBufferDescriptorSize =
       vkPhysicalDeviceDescriptorBufferProperties_.uniformBufferDescriptorSize;
@@ -2559,8 +2566,8 @@ void VulkanContext::updateBindingsBuffersByDescriptorBuffer(
   auto originOffset = descriptorBuffer.offset;
   descriptorBuffer.offset += layoutSize;
 
-  for (const util::BufferDescription& b : info.buffers) {
-    IGL_DEBUG_ASSERT(b.descriptorSet == kBindPoint_Buffers);
+  for (const util::BufferDescription& b : info) {
+    if (b.descriptorSet != descriptorSet) continue;
     IGL_DEBUG_ASSERT(
         data.buffers[b.bindingLocation].buffer != VK_NULL_HANDLE,
         IGL_FORMAT("Did you forget to call bindBuffer() for a buffer at the binding location {}?",
@@ -2604,7 +2611,7 @@ void VulkanContext::updateBindingsBuffersByDescriptorBuffer(
   uint32_t bufferIndex = 0;
   VkDeviceSize offsets = originOffset;
   vf_.vkCmdSetDescriptorBufferOffsetsEXT(
-      cmdBuf, bindPoint, layout, kBindPoint_Buffers, 1, &bufferIndex, &offsets);
+      cmdBuf, bindPoint, layout, descriptorSet, 1, &bufferIndex, &offsets);
 }
 
 void VulkanContext::deferredTask(std::packaged_task<void()>&& task, SubmitHandle handle) const {

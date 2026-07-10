@@ -420,10 +420,11 @@ private:
       VkCommandBuffer IGL_NONNULL cmdBuf,
       VkPipelineLayout IGL_NULLABLE layout,
       VkPipelineBindPoint bindPoint,
+      uint32_t descriptorSet,
       VulkanImmediateCommands::SubmitHandle nextSubmitHandle,
       BindingsBuffers& data,
       const VulkanDescriptorSetLayout& dsl,
-      const util::SpvModuleInfo& info);
+      const std::vector<util::BufferDescription>& info);
   void updateBindingsStorageImagesByDescriptorBuffer(
       VkCommandBuffer IGL_NONNULL cmdBuf,
       VkPipelineLayout IGL_NULLABLE layout,
