@@ -26,6 +26,7 @@
 #include <igl/opengl/UnbindPolicy.h>
 #include <igl/opengl/Version.h>
 #include <igl/opengl/WithContext.h>
+#include <ldrutils/lutils/Pool.h>
 
 namespace igl::opengl {
 

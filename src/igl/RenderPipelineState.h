@@ -202,8 +202,6 @@ struct RenderPipelineDesc {
 
   uint32_t sampleCount = 1u; // MSAA
 
-  bool alphaToCoverageEnabled = false; // Alpha-to-Coverage for MSAA
-
   // Vulkan only: specify if buffer binding locations correspond to Vulkan dynamic buffers
   uint32_t isDynamicBufferMask = 0; // one bit per each buffer binding slot
 

@@ -12,7 +12,7 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <igl/Config.h>
+#include <igl/IGLConfig.h>
 #include <igl/IGLFolly.h>
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)

@@ -55,6 +55,7 @@ void* NativeHWTextureBuffer::getMapMemoryAddress() const {
 
 size_t NativeHWTextureBuffer::getMapBytesPerRow() const {
   return igl::android::INativeHWTextureBuffer::getCpuReadBytesPerRow();
+}
 
 VkSamplerYcbcrConversion NativeHWTextureBuffer::getVkSamplerYcbcrConversion() const noexcept {
   // Null texture_ and null ycbcrConversion_ are both valid "not available" states.

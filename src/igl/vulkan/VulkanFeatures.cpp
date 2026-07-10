@@ -462,9 +462,6 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& contextConf
       IGL_LOG_ERROR("VK_QCOM_multiview_per_view_viewports extension not supported\n");
     }
   }
-  if (hasExtension(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)) {
-    ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresDescriptorBuffer);
-  }
   // Fragment shading rate must be added before mesh shader to ensure the dependency is properly
   // handled when primitiveFragmentShadingRateMeshShader requires primitiveFragmentShadingRate
   if (hasExtension(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME)) {
