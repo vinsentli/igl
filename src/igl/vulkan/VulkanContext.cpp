@@ -197,6 +197,82 @@ bool validateImageLimits(VkImageType imageType,
 
 namespace igl::vulkan {
 
+// FNV-1a（Fowler-Noll-Vo）Non-cryptographic Hash Function）
+namespace {
+inline size_t fnv1aBytes(const void* data, size_t size) {
+  // 64-bit FNV-1a
+  const auto* p = static_cast<const uint8_t*>(data);
+  size_t h = 0xCBF29CE484222325ull;    // standard FNV-1a-64 offset basis
+  for (size_t i = 0; i < size; ++i) {
+    h ^= p[i];
+    h *= 0x100000001B3ull;   // standard FNV-1a-64 prime
+  }
+  return h;
+}
+} // namespace
+
+struct TexturesKey {
+  struct Slot {
+    VkImageView view{};
+    VkSampler sampler{};
+  };
+  uint32_t maxLoc{};
+  std::array<Slot, IGL_TEXTURE_SAMPLERS_MAX> slots{};
+  bool operator==(const TexturesKey& o) const {
+    return maxLoc == o.maxLoc &&
+           std::memcmp(slots.data(), o.slots.data(), maxLoc * sizeof(Slot)) == 0;
+  }
+  struct Hash {
+    size_t operator()(const TexturesKey& k) const noexcept {
+      // maxLoc + the first maxLoc slots' bytes. A shader that only samples slot 0 or 1 hashes
+      // ~32 bytes instead of the full 256 -- an ~8x reduction on the FNV inner loop.
+      constexpr size_t kHead = offsetof(TexturesKey, slots);
+      const size_t bodyBytes = k.maxLoc * sizeof(Slot);
+      return fnv1aBytes(&k, kHead + bodyBytes);
+    }
+  };
+};
+
+struct StorageImagesKey {
+  std::array<VkImageView, IGL_TEXTURE_SAMPLERS_MAX> views{};
+  bool operator==(const StorageImagesKey& o) const {
+    return views == o.views;
+  }
+  struct Hash {
+    size_t operator()(const StorageImagesKey& k) const noexcept {
+      return fnv1aBytes(&k, sizeof(k));
+    }
+  };
+};
+
+struct BuffersKey {
+  struct Slot {
+    uint32_t binding{};
+    VkBuffer buffer{};
+    VkDeviceSize offset{};
+    VkDeviceSize range{};
+    bool operator==(const Slot& o) const {
+      return binding == o.binding && buffer == o.buffer && offset == o.offset &&
+             range == o.range;
+    }
+  };
+  uint32_t count{};
+  std::array<Slot, IGL_UNIFORM_BLOCKS_BINDING_MAX> slots{};
+  bool operator==(const BuffersKey& o) const {
+    return count == o.count &&
+           std::memcmp(slots.data(), o.slots.data(), count * sizeof(Slot)) == 0;
+  }
+  struct Hash {
+    size_t operator()(const BuffersKey& k) const noexcept {
+      // count + the first k.count slots' bytes (trailing zero-padding is skipped so a
+      // typical dynamic-UBO call with count == 1..4 hashes ~100 bytes instead of ~776).
+      constexpr size_t kHead = offsetof(BuffersKey, slots);
+      const size_t bodyBytes = k.count * sizeof(Slot);
+      return fnv1aBytes(&k, kHead + bodyBytes);
+    }
+  };
+};
+
 // @fb-only
 class DescriptorPoolsArena final {
  public:
