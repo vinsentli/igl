@@ -677,6 +677,10 @@ struct VulkanContextImpl final {
     if (it != arenaBuffers.end()) {
       return *it->second;
     }
+    const VkDescriptorType uboType = useDynamic ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+                                                : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    const VkDescriptorType ssboType = useDynamic ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
+                                                 : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     arenaBuffers[dsl] = std::make_unique<DescriptorPoolsArena<BuffersKey>>(
         ctx,
         uboType,

@@ -148,8 +148,13 @@ PipelineState::PipelineState(
   {
     std::vector<VkDescriptorSetLayoutBinding> bindings;
     bindings.reserve(info.buffers.size());
+    const bool useDescriptorBuffer = ctx.features().has_VK_EXT_descriptor_buffer;
     for (const auto& b : info.buffers) {
-      const bool isDynamic = (isDynamicBufferMask & (1ul << b.bindingLocation)) != 0;
+      if (b.descriptorSet != kBindPoint_Buffers)
+        continue;
+      // vinsentli 使用动态UBO需要修改成true，但是VK_EXT_descriptor_buffer不能使用DYNAMIC。
+      const bool isDynamic =
+          !useDescriptorBuffer; //(isDynamicBufferMask & (1ul << b.bindingLocation)) != 0;
       const VkDescriptorType type = b.isStorage
                                         ? (isDynamic ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
                                                      : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
