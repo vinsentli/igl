@@ -2153,18 +2153,8 @@ void VulkanContext::updateBindingsTextures(VkCommandBuffer IGL_NONNULL cmdBuf,
                                            const util::SpvModuleInfo& info) const {
   IGL_PROFILER_FUNCTION();
 
-  DescriptorPoolsArena& arena = pimpl_->getOrCreateArena_CombinedImageSamplers(
+  auto& arena = pimpl_->getOrCreateArena_CombinedImageSamplers(
       *this, dsl.getVkDescriptorSetLayout(), dsl.numBindings);
-
-  VkDescriptorSet dset = arena.getNextDescriptorSet(*immediate_, nextSubmitHandle);
-
-  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  VkDescriptorImageInfo infoSampledImages[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
-  uint32_t numImages = 0;
-
-  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  VkWriteDescriptorSet writes[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
-  uint32_t numWrites = 0;
 
   // make sure the guard value is always there
   IGL_DEBUG_ASSERT(!textures_.objects_.empty());
@@ -2176,6 +2166,8 @@ void VulkanContext::updateBindingsTextures(VkCommandBuffer IGL_NONNULL cmdBuf,
 
   const bool isGraphics = bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS;
 
+  // Build the type-safe cache key.
+  TexturesKey key{};
   for (const util::TextureDescription& d : info.textures) {
     IGL_DEBUG_ASSERT(d.descriptorSet == kBindPoint_CombinedImageSamplers);
     const uint32_t loc = d.bindingLocation;
@@ -2186,26 +2178,50 @@ void VulkanContext::updateBindingsTextures(VkCommandBuffer IGL_NONNULL cmdBuf,
       IGL_DEBUG_ASSERT(data.samplers[loc], "A sampler should be bound to every bound texture slot");
     }
     VkSampler sampler = data.samplers[loc] ? data.samplers[loc] : dummySampler;
-    writes[numWrites++] = ivkGetWriteDescriptorSetImageInfo(
-        dset, loc, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &infoSampledImages[numImages]);
-    infoSampledImages[numImages++] = VkDescriptorImageInfo{
-        .sampler = hasTexture ? sampler : dummySampler,
-        .imageView = hasTexture ? texture : dummyImageView,
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    };
+    key.slots[loc].view = hasTexture ? texture : dummyImageView;
+    key.slots[loc].sampler = hasTexture ? sampler : dummySampler;
+    // Track the used-prefix length so Hash/operator== can skip the trailing zero slots.
+    if (loc + 1 > key.maxLoc) {
+      key.maxLoc = loc + 1;
+    }
   }
 
-  if (numWrites) {
+  auto [dset, isFresh] = arena.acquireDescriptorSet(*immediate_, nextSubmitHandle, key);
+
+  if (isFresh) {
+    // NOLINTNEXTLINE(modernize-avoid-c-arrays)
+    VkDescriptorImageInfo infoSampledImages[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
+    uint32_t numImages = 0;
+
+    // NOLINTNEXTLINE(modernize-avoid-c-arrays)
+    VkWriteDescriptorSet writes[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
+    uint32_t numWrites = 0;
+
+    for (const util::TextureDescription& d : info.textures) {
+      const uint32_t loc = d.bindingLocation;
+      writes[numWrites++] = ivkGetWriteDescriptorSetImageInfo(
+          dset, loc, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &infoSampledImages[numImages]);
+      infoSampledImages[numImages++] = VkDescriptorImageInfo{
+          .sampler = key.slots[loc].sampler,
+          .imageView = key.slots[loc].view,
+          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      };
+    }
+
+    if (!numWrites) {
+      return;
+    }
+
     IGL_PROFILER_ZONE("vkUpdateDescriptorSets()", IGL_PROFILER_COLOR_UPDATE);
     vf_.vkUpdateDescriptorSets(vkDevice_, numWrites, writes, 0, nullptr);
     IGL_PROFILER_ZONE_END();
+  }
 
 #if IGL_VULKAN_PRINT_COMMANDS
-    IGL_LOG_INFO("%p vkCmdBindDescriptorSets(%u) - textures\n", cmdBuf, bindPoint);
+  IGL_LOG_INFO("%p vkCmdBindDescriptorSets(%u) - textures\n", cmdBuf, bindPoint);
 #endif // IGL_VULKAN_PRINT_COMMANDS
-    vf_.vkCmdBindDescriptorSets(
-        cmdBuf, bindPoint, layout, kBindPoint_CombinedImageSamplers, 1, &dset, 0, nullptr);
-  }
+  vf_.vkCmdBindDescriptorSets(
+      cmdBuf, bindPoint, layout, kBindPoint_CombinedImageSamplers, 1, &dset, 0, nullptr);
 }
 
 void VulkanContext::updateBindingsStorageImages(
