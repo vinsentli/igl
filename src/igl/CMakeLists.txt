@@ -34,9 +34,6 @@ add_library(IGLLibrary ${IGLBuildType} ${SRC_FILES} ${HEADER_FILES})
 
 target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/src")
 target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src/glm")
-# ldrutils is header-only here (Handle.h/Pool.h); add the parent dir so that
-# <ldrutils/lutils/...> resolves, matching the Buck include form.
-target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/third-party/deps/src")
 
 #if(NOT IGL_WITH_OPENGL)
 #  target_include_directories(IGLLibrary PUBLIC "${IGL_ROOT_DIR}/src/igl/opengl/util")
