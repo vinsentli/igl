@@ -341,6 +341,35 @@ class DescriptorPoolsArena final {
     return dset;
   }
 
+  // Acquire a descriptor set for a given binding key.
+  //   - On cache hit: returns {cachedDset, /*isFresh=*/false}. Caller can bind directly and MUST
+  //     NOT call vkUpdateDescriptorSets on it (that would corrupt other in-flight uses).
+  //   - On miss: bump-allocates a new dset, records it in the cache, and returns
+  //     {dset, /*isFresh=*/true}. Caller is expected to vkUpdateDescriptorSets before binding.
+  [[nodiscard]] std::pair<VkDescriptorSet, bool> acquireDescriptorSet(
+      VulkanImmediateCommands& ic,
+      VulkanImmediateCommands::SubmitHandle nextSubmitHandle,
+      const Key& key) {
+    // Fast path: consecutive draws typically re-issue the same binding key. A single
+    // Key equality comparison beats hashing + bucket walk on the hot path. The
+    // hasLast_ flag is invalidated by switchToNewDescriptorPool alongside dsetCache_.
+    if (hasLast_ && lastKey_ == key) {
+      return {lastDset_, false};
+    }
+    if (auto it = dsetCache_.find(key); it != dsetCache_.end()) {
+      lastKey_ = key;
+      lastDset_ = it->second;
+      hasLast_ = true;
+      return {it->second, false};
+    }
+    VkDescriptorSet dset = getNextDescriptorSet(ic, nextSubmitHandle);
+    dsetCache_.emplace(key, dset);
+    lastKey_ = key;
+    lastDset_ = dset;
+    hasLast_ = true;
+    return {dset, true};
+  }
+
  private:
   void switchToNewDescriptorPool(VulkanImmediateCommands& ic,
                                  VulkanImmediateCommands::SubmitHandle nextSubmitHandle) {
@@ -357,6 +386,10 @@ class DescriptorPoolsArena final {
         pool_ = p.pool;
         allocedDSet_ = p.allocedDSet;
         dsetCursor_ = 0;
+        // The old pool is being recycled: every dset it produced is about to be re-issued
+        // by the bump allocator, so any cached key->dset mapping is stale.
+        dsetCache_.clear();
+        hasLast_ = false;
         isNewPool_ = false;
         extinct_.pop_front();
         return;
@@ -379,11 +412,25 @@ class DescriptorPoolsArena final {
         &ctx_.vf_, device_, VK_OBJECT_TYPE_DESCRIPTOR_POOL, (uint64_t)pool_, dpDebugName_.c_str()));
     allocedDSet_.clear();
     dsetCursor_ = 0;
+    // A brand new pool has no dsets yet; drop cached mappings that pointed into old pools.
+    dsetCache_.clear();
+    hasLast_ = false;
     isNewPool_ = true;
   }
 
- private:
-  static constexpr uint32_t kNumDSetsPerPool = 32;
+private:
+  // Full key->dset cache within the current pool. Cleared whenever the arena advances to a
+  // fresh pool or recycles an extinct one (see switchToNewDescriptorPool). A cached dset is
+  // safe to bind again as long as we don't rewrite it, which is exactly what a hit does.
+  std::unordered_map<Key, VkDescriptorSet, typename Key::Hash> dsetCache_;
+
+  // Single-slot fast path in front of dsetCache_. Kept in sync with dsetCache_: any code
+  // that clears the map must also set hasLast_ = false.
+  Key lastKey_{};
+  VkDescriptorSet lastDset_ = VK_NULL_HANDLE;
+  bool hasLast_ = false;
+
+  static constexpr uint32_t kNumDSetsPerPool = 64;
 
   const VulkanContext& ctx_;
   VkDevice device_ = VK_NULL_HANDLE;
