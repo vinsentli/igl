@@ -554,7 +554,7 @@ void RenderCommandEncoder::bindPushConstants(const void* data, size_t length, si
                                      // of 4
 
   IGL_DEBUG_ASSERT(rps_, "Did you forget to call bindRenderPipelineState()?");
-  IGL_DEBUG_ASSERT(rps_->pushConstantRange.size,
+  IGL_DEBUG_ASSERT(rps_->info.hasPushConstants,
                    "Currently bound render pipeline state has no push constants");
   IGL_DEBUG_ASSERT(offset + length <= rps_->pushConstantRange.offset + rps_->pushConstantRange.size,
                    "Push constants size exceeded");

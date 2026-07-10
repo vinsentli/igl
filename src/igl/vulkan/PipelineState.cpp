@@ -19,7 +19,7 @@ void PipelineState::initializeSpvModuleInfoFromShaderStages(const VulkanContext&
                                                             IShaderStages* stages) {
   const ShaderStagesType shaderStagesType = stages->getType();
 
-  VkShaderStageFlags pushConstantMask = 0;
+  VkShaderStageFlags pushConstantStageFlags = 0;
 
   switch (shaderStagesType) {
   case igl::ShaderStagesType::Compute: {
@@ -30,11 +30,8 @@ void PipelineState::initializeSpvModuleInfoFromShaderStages(const VulkanContext&
 
     info = smComp->getVulkanShaderModule().getSpvModuleInfo();
 
-    if (info.hasPushConstants) {
-      pushConstantMask |= VK_SHADER_STAGE_COMPUTE_BIT;
-    }
-
     stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    pushConstantStageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
   } break;
   case igl::ShaderStagesType::Render: {
     auto* smVert = static_cast<ShaderModule*>(stages->getVertexModule().get());
@@ -47,16 +44,10 @@ void PipelineState::initializeSpvModuleInfoFromShaderStages(const VulkanContext&
     const util::SpvModuleInfo& infoVert = smVert->getVulkanShaderModule().getSpvModuleInfo();
     const util::SpvModuleInfo& infoFrag = smFrag->getVulkanShaderModule().getSpvModuleInfo();
 
-    if (infoVert.hasPushConstants) {
-      pushConstantMask |= VK_SHADER_STAGE_VERTEX_BIT;
-    }
-    if (infoFrag.hasPushConstants) {
-      pushConstantMask |= VK_SHADER_STAGE_FRAGMENT_BIT;
-    }
-
     info = util::mergeReflectionData(infoVert, infoFrag);
 
     stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    pushConstantStageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
   } break;
   case igl::ShaderStagesType::RenderMeshShader: {
     auto* smTask = static_cast<ShaderModule*>(stages->getTaskModule().get());
@@ -69,13 +60,6 @@ void PipelineState::initializeSpvModuleInfoFromShaderStages(const VulkanContext&
     const util::SpvModuleInfo& infoMesh = smMesh->getVulkanShaderModule().getSpvModuleInfo();
     const util::SpvModuleInfo& infoFrag = smFrag->getVulkanShaderModule().getSpvModuleInfo();
 
-    if (infoMesh.hasPushConstants) {
-      pushConstantMask |= VK_SHADER_STAGE_MESH_BIT_EXT;
-    }
-    if (infoFrag.hasPushConstants) {
-      pushConstantMask |= VK_SHADER_STAGE_FRAGMENT_BIT;
-    }
-
     info = util::mergeReflectionData(infoMesh, infoFrag);
 
     stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -85,24 +69,23 @@ void PipelineState::initializeSpvModuleInfoFromShaderStages(const VulkanContext&
 
       const util::SpvModuleInfo& infoTask = smTask->getVulkanShaderModule().getSpvModuleInfo();
 
-      if (infoTask.hasPushConstants) {
-        pushConstantMask |= VK_SHADER_STAGE_TASK_BIT_EXT;
-      }
-
       info = util::mergeReflectionData(info, infoTask);
 
       stageFlags |= VK_SHADER_STAGE_TASK_BIT_EXT;
     }
+
+    pushConstantStageFlags =
+        VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT;
   } break;
   default:
     IGL_DEBUG_ASSERT_NOT_REACHED();
     break;
   };
 
-  if (pushConstantMask) {
+  if (pushConstantStageFlags) {
     const VkPhysicalDeviceLimits& limits = ctx.getVkPhysicalDeviceProperties().limits;
 
-    constexpr uint32_t kPushConstantsSize = 128;
+    constexpr uint32_t kPushConstantsSize = 256;
 
     if (!IGL_DEBUG_VERIFY(kPushConstantsSize <= limits.maxPushConstantsSize)) {
       IGL_LOG_ERROR("Push constants size exceeded %u (max %u bytes)",
@@ -111,7 +94,7 @@ void PipelineState::initializeSpvModuleInfoFromShaderStages(const VulkanContext&
     }
 
     pushConstantRange = VkPushConstantRange{
-        .stageFlags = pushConstantMask,
+        .stageFlags = pushConstantStageFlags,
         .offset = 0u,
         .size = kPushConstantsSize,
     };

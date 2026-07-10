@@ -92,8 +92,8 @@ VkPipeline ComputePipelineState::getVkPipeline() const {
                                                   ? IGL_ARRAY_NUM_ELEMENTS(DSLs)
                                                   : IGL_ARRAY_NUM_ELEMENTS(DSLs) - 1u),
       .pSetLayouts = DSLs,
-      .pushConstantRangeCount = info.hasPushConstants ? 1u : 0u,
-      .pPushConstantRanges = info.hasPushConstants ? &pushConstantRange : nullptr,
+      .pushConstantRangeCount = 1u,
+      .pPushConstantRanges = &pushConstantRange,
   };
 
   const VkPipelineCreateFlags flags = ctx.features().has_VK_EXT_descriptor_buffer
