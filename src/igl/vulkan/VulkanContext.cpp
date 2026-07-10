@@ -699,8 +699,9 @@ struct VulkanContextImpl final {
     }
     const VkDescriptorType uboType = useDynamic ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
                                                 : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    const VkDescriptorType ssboType = useDynamic ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
-                                                 : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    // SSBO 始终不使用 DYNAMIC 类型，避免超过设备
+    // maxDescriptorSetStorageBuffersDynamic 上限（部分 Android GPU 仅为 4）。
+    const VkDescriptorType ssboType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     arenaBuffers[dsl] = std::make_unique<DescriptorPoolsArena<BuffersKey>>(
         ctx,
         uboType,
@@ -2393,8 +2394,10 @@ void VulkanContext::updateBindingsBuffers(
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   bool slotIsStorage[IGL_UNIFORM_BLOCKS_BINDING_MAX] = {};
 
+  // 仅 UBO 使用 DYNAMIC 类型，因此 pDynamicOffsets 只对 UBO 的 slot 生效。
+  // SSBO 使用 non-dynamic，其 offset 会直接写入 VkDescriptorBufferInfo。
   std::array<uint32_t, IGL_UNIFORM_BLOCKS_BINDING_MAX> offsets{};
-  uint32_t bufferCount = 0;
+  uint32_t dynamicOffsetCount = 0;
 
   for (const util::BufferDescription& b : info) {
     if (b.descriptorSet != descriptorSet)
@@ -2409,10 +2412,14 @@ void VulkanContext::updateBindingsBuffers(
     auto& s = key.slots[key.count++];
     s.binding = b.bindingLocation;
     s.buffer = data.buffers[b.bindingLocation].buffer;
-    s.offset = 0;
+    // 对于 SSBO (non-dynamic) 需要把真实 offset 写入 descriptor，range 也据此裁剪；
+    // 对于 UBO (dynamic) 保留 offset=0，运行时通过 pDynamicOffsets 提供偏移。
+    s.offset = b.isStorage ? data.buffers[b.bindingLocation].offset : 0;
     s.range = data.buffers[b.bindingLocation].range;
 
-    offsets[bufferCount++] = data.buffers[b.bindingLocation].offset;
+    if (!b.isStorage) {
+      offsets[dynamicOffsetCount++] = data.buffers[b.bindingLocation].offset;
+    }
   }
 
   auto [dset, isFresh] = arena.acquireDescriptorSet(*immediate_, nextSubmitHandle, key);
@@ -2426,11 +2433,14 @@ void VulkanContext::updateBindingsBuffers(
 
     for (uint32_t i = 0; i < key.count; ++i) {
       const auto& s = key.slots[i];
-      cloneData.buffers[s.binding].offset = 0;
+      // UBO (dynamic) 通过 dynamic offset 提供偏移，descriptor 里 offset 应为 0。
+      // SSBO (non-dynamic) 必须把真实 offset 写入 descriptor。
+      cloneData.buffers[s.binding].offset =
+          slotIsStorage[i] ? data.buffers[s.binding].offset : 0;
       writes[numWrites++] = ivkGetWriteDescriptorSetBufferInfo(
           dset,
           s.binding,
-          slotIsStorage[i] ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
+          slotIsStorage[i] ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
                            : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
           1,
           &cloneData.buffers[s.binding]);
@@ -2448,7 +2458,7 @@ void VulkanContext::updateBindingsBuffers(
     IGL_LOG_INFO("%p vkCmdBindDescriptorSets(%u) - buffers\n", cmdBuf, bindPoint);
 #endif // IGL_VULKAN_PRINT_COMMANDS
     vf_.vkCmdBindDescriptorSets(
-        cmdBuf, bindPoint, layout, descriptorSet, 1, &dset, bufferCount, offsets.data());
+        cmdBuf, bindPoint, layout, descriptorSet, 1, &dset, dynamicOffsetCount, offsets.data());
   }
 }
 
