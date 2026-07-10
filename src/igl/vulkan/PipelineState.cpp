@@ -82,6 +82,24 @@ void PipelineState::initializeSpvModuleInfoFromShaderStages(const VulkanContext&
     break;
   };
 
+  std::sort(info.buffers.begin(),
+            info.buffers.end(),
+            [](const util::BufferDescription& a, const util::BufferDescription& b) {
+              return a.bindingLocation < b.bindingLocation;
+            });
+
+  std::sort(info.textures.begin(),
+            info.textures.end(),
+            [](const util::TextureDescription& a, const util::TextureDescription& b) {
+              return a.bindingLocation < b.bindingLocation;
+            });
+
+  std::sort(info.images.begin(),
+            info.images.end(),
+            [](const util::ImageDescription& a, const util::ImageDescription& b) {
+              return a.bindingLocation < b.bindingLocation;
+            });
+
   if (pushConstantStageFlags) {
     const VkPhysicalDeviceLimits& limits = ctx.getVkPhysicalDeviceProperties().limits;
 
