@@ -16,6 +16,10 @@
 #include <igl/vulkan/VulkanTexture.h>
 #include <unistd.h>
 
+#if defined(__ANDROID__)
+#include <pthread.h>
+#endif
+
 #define PRINT_FILE_DESCRIPTOR_COUNT 0
 
 #if PRINT_FILE_DESCRIPTOR_COUNT
@@ -25,6 +29,59 @@
 namespace igl::vulkan {
 
 #if !USE_DEFAULT_SWAPCHAIN
+
+ApplyThread::ApplyThread() {
+  thread_ = std::thread([this] { run(); });
+}
+
+ApplyThread::~ApplyThread() {
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    stop_ = true;
+  }
+  cv_.notify_all();
+  if (thread_.joinable()) {
+    thread_.join();
+  }
+}
+
+void ApplyThread::post(std::function<void()> task) {
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    queue_.push(std::move(task));
+  }
+  cv_.notify_one();
+}
+
+void ApplyThread::drain() {
+  std::unique_lock<std::mutex> lock(mutex_);
+  idleCv_.wait(lock, [this] { return queue_.empty() && !busy_; });
+}
+
+void ApplyThread::run() {
+#if defined(__ANDROID__)
+  pthread_setname_np(pthread_self(), "AHBSwapApply");
+#endif
+  for (;;) {
+    std::function<void()> task;
+    {
+      std::unique_lock<std::mutex> lock(mutex_);
+      cv_.wait(lock, [this] { return stop_ || !queue_.empty(); });
+      if (stop_ && queue_.empty()) {
+        return;
+      }
+      task = std::move(queue_.front());
+      queue_.pop();
+      busy_ = true;
+    }
+    task();
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      busy_ = false;
+    }
+    idleCv_.notify_all();
+  }
+}
 
 SurfaceControl::SurfaceControl(ASurfaceControl* surfaceControl,
                                std::shared_ptr<AHardwareBufferFunctionTable> funcTable) :
@@ -116,6 +173,10 @@ VulkanSwapchain::~VulkanSwapchain() {
 }
 
 void VulkanSwapchain::drainPendingTransactions() {
+  // First make sure every queued task actually ran ASurfaceTransaction_apply,
+  // otherwise transactionCount_ may stay > 0 forever (apply was never issued
+  // but ++ already happened in submitFrameToSystem).
+  applyThread_.drain();
   std::unique_lock<std::mutex> lock(transactionMutex_);
   transactionCV_.wait(lock, [this] { return this->transactionCount_ <= 0; });
 }
@@ -373,8 +434,15 @@ void VulkanSwapchain::submitFrameToSystem(int gpuFenceFd,
                         [this] { return transactionCount_ < kMaxInFlightTransactions; });
     transactionCount_++;
   }
-  funcTable_->ASurfaceTransaction_apply(transaction);
-  funcTable_->ASurfaceTransaction_delete(transaction);
+  // Move ASurfaceTransaction_apply / _delete off the render thread.
+  // The worker is single-threaded, so transactions stay strictly FIFO on the
+  // same ASurfaceControl, which is required by SurfaceFlinger.
+  // Capturing `this` is safe: ~VulkanSwapchain drains applyThread_ before
+  // members are destroyed, and funcTable_ is set once and never reassigned.
+  applyThread_.post([this, transaction]() {
+    funcTable_->ASurfaceTransaction_apply(transaction);
+    funcTable_->ASurfaceTransaction_delete(transaction);
+  });
 }
 
 // Print the current number of open file descriptors.

@@ -18,8 +18,12 @@
 #include <igl/vulkan/android/NativeHWBuffer.h>
 #endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
+#include <condition_variable>
 #include <deque>
+#include <functional>
 #include <mutex>
+#include <queue>
+#include <thread>
 
 namespace igl::vulkan {
 
@@ -90,6 +94,32 @@ class AHBTexturePool {
   VulkanSwapchain& swapchain_;
   std::mutex mutex_;
   std::deque<PoolEntry> pool_;
+};
+
+// Single-threaded serial queue used to move ASurfaceTransaction_apply / _delete
+// off the render thread. Transactions on the same ASurfaceControl must be
+// applied in order, so this MUST stay a single consumer.
+class ApplyThread {
+ public:
+  ApplyThread();
+  ~ApplyThread();
+
+  ApplyThread(const ApplyThread&) = delete;
+  ApplyThread& operator=(const ApplyThread&) = delete;
+
+  void post(std::function<void()> task);
+  void drain(); // block until the queue is empty AND no task is running
+
+ private:
+  void run();
+
+  std::thread thread_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  std::condition_variable idleCv_;
+  std::queue<std::function<void()>> queue_;
+  bool busy_ = false;
+  bool stop_ = false;
 };
 
 class VulkanSwapchain : public std::enable_shared_from_this<VulkanSwapchain> {
@@ -194,6 +224,11 @@ class VulkanSwapchain : public std::enable_shared_from_this<VulkanSwapchain> {
   std::mutex transactionMutex_;
   int transactionCount_{0};
   std::condition_variable transactionCV_;
+
+  // Worker thread that owns ASurfaceTransaction_apply / _delete calls.
+  // Declared last so it is destroyed first; together with drainPendingTransactions()
+  // in resetSwapchainTextures() this guarantees no task references *this after dtor.
+  ApplyThread applyThread_;
 };
 
 } // namespace igl::vulkan
