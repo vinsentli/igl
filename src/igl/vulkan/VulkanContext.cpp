@@ -494,7 +494,9 @@ struct VulkanContextImpl final {
                      DescriptorSetLayoutCacheKeyHash>
       dslCache;
   std::unique_ptr<VulkanDescriptorSetLayout> dslBindless; // everything
+  std::unique_ptr<VulkanDescriptorSetLayout> dslGlobalBuffers;
   std::unique_ptr<DescriptorBuffersArena> descriptorBuffersArena;
+  std::vector<util::BufferDescription> dslGlobalBufferDescs;
   VkDescriptorPool dpBindless = VK_NULL_HANDLE;
   VkDescriptorSet dsBindless = VK_NULL_HANDLE;
   uint32_t currentMaxBindlessTextures = 8;
@@ -680,6 +682,7 @@ VulkanContext::~VulkanContext() {
   }
 
   pimpl_->dslBindless.reset(nullptr);
+  pimpl_->dslGlobalBuffers.reset(nullptr);
 
   swapchain_ = nullptr; // Swapchain has to be destroyed prior to Surface
 
@@ -1279,6 +1282,41 @@ Result VulkanContext::initContext(const HWDeviceDesc& desc,
 
   growBindlessDescriptorPool(pimpl_->currentMaxBindlessTextures,
                              pimpl_->currentMaxBindlessSamplers);
+
+  {
+    const VkDescriptorType descriptorType =
+            features().has_VK_EXT_descriptor_buffer
+            ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+            : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    // NOLINTNEXTLINE(modernize-avoid-c-arrays)
+    VkDescriptorSetLayoutBinding globalBindings[kNumGlobalBufferBindings] = {};
+    for (uint32_t i = 0; i < kNumGlobalBufferBindings; ++i) {
+      globalBindings[i] = VkDescriptorSetLayoutBinding{
+          .binding = kGlobalBufferBindings[i],
+          .descriptorType = descriptorType,
+          .descriptorCount = 1,
+          .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
+                        VK_SHADER_STAGE_COMPUTE_BIT,
+          .pImmutableSamplers = nullptr,
+      };
+      pimpl_->dslGlobalBufferDescs.push_back({
+        .bindingLocation = kGlobalBufferBindings[i],
+        .descriptorSet = kBindPoint_GlobalBuffers,
+        .isStorage = false,
+        });
+    }
+    const VkDescriptorSetLayoutCreateFlags flag =
+            features().has_VK_EXT_descriptor_buffer
+            ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT
+            : VkDescriptorSetLayoutCreateFlags{};
+    pimpl_->dslGlobalBuffers = std::make_unique<VulkanDescriptorSetLayout>(
+        *this,
+        flag,
+        kNumGlobalBufferBindings,
+        globalBindings,
+        /*bindingFlags=*/nullptr,
+        "Descriptor Set Layout: VulkanContext::dslGlobalBuffers_");
+  }
 
   querySurfaceCapabilities();
 
@@ -2458,6 +2496,15 @@ int VulkanContext::getFenceFdFromSubmitHandle(igl::SubmitHandle handle) const no
 VkDescriptorSetLayout VulkanContext::getBindlessVkDescriptorSetLayout() const {
   return config_.enableDescriptorIndexing ? pimpl_->dslBindless->getVkDescriptorSetLayout()
                                           : VK_NULL_HANDLE;
+}
+
+const VulkanDescriptorSetLayout& VulkanContext::getGlobalUBOVulkanDescriptorSetLayout() const {
+  IGL_DEBUG_ASSERT(pimpl_->dslGlobalBuffers);
+  return *pimpl_->dslGlobalBuffers;
+}
+
+const std::vector<util::BufferDescription>& VulkanContext::getGlobalUBOBufferDescs() const{
+  return pimpl_->dslGlobalBufferDescs;
 }
 
 VkDescriptorSet VulkanContext::getBindlessVkDescriptorSet() const {

@@ -56,18 +56,24 @@ struct VulkanImageViewCreateInfo;
 
 /*
  * Descriptor sets:
- *  0 - combined image samplers
+ *  0 - global uniform/storage buffers
  *  1 - uniform/storage buffers
- *  2 - storage images
- *  3 - bindless textures/samplers  <--  optional
+ *  2 - combined image samplers
+ *  3 - storage images
+ *  4 - bindless textures/samplers  <--  optional
  */
 // NOLINTBEGIN(readability-identifier-naming)
 enum {
-  kBindPoint_CombinedImageSamplers = 0,
+  kBindPoint_GlobalBuffers = 0,
   kBindPoint_Buffers = 1,
-  kBindPoint_StorageImages = 2,
-  kBindPoint_Bindless = 3,
+  kBindPoint_CombinedImageSamplers = 2,
+  kBindPoint_StorageImages = 3,
+  kBindPoint_Bindless = 4,
 };
+
+constexpr uint32_t kGlobalBufferBindings[] = {10u, 11u, 12u};
+constexpr uint32_t kNumGlobalBufferBindings =
+    static_cast<uint32_t>(sizeof(kGlobalBufferBindings) / sizeof(kGlobalBufferBindings[0]));
 // NOLINTEND(readability-identifier-naming)
 
 struct DeviceQueues {
@@ -220,6 +226,8 @@ class VulkanContext final {
   }
   VkDescriptorSetLayout IGL_NULLABLE getBindlessVkDescriptorSetLayout() const;
   VkDescriptorSet IGL_NULLABLE getBindlessVkDescriptorSet() const;
+  const VulkanDescriptorSetLayout& getGlobalUBOVulkanDescriptorSetLayout() const;
+  const std::vector<util::BufferDescription>& getGlobalUBOBufferDescs() const;
 
   std::vector<uint8_t> getPipelineCacheData() const;
 

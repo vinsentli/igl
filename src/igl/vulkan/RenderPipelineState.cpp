@@ -403,8 +403,9 @@ VkPipeline RenderPipelineState::getVkPipeline(
   if (!pipelineLayout) {
     // NOLINTNEXTLINE(modernize-avoid-c-arrays)
     const VkDescriptorSetLayout dsls[] = {
-        dslCombinedImageSamplers->getVkDescriptorSetLayout(),
+        ctx.getGlobalUBOVulkanDescriptorSetLayout().getVkDescriptorSetLayout(),
         dslBuffers->getVkDescriptorSetLayout(),
+        dslCombinedImageSamplers->getVkDescriptorSetLayout(),
         dslStorageImages->getVkDescriptorSetLayout(),
         ctx.getBindlessVkDescriptorSetLayout(),
     };

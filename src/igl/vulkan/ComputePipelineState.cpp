@@ -79,8 +79,9 @@ VkPipeline ComputePipelineState::getVkPipeline() const {
   // NOLINTBEGIN(readability-identifier-naming)
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   const VkDescriptorSetLayout DSLs[] = {
-      dslCombinedImageSamplers->getVkDescriptorSetLayout(),
+      ctx.getGlobalUBOVulkanDescriptorSetLayout().getVkDescriptorSetLayout(),
       dslBuffers->getVkDescriptorSetLayout(),
+      dslCombinedImageSamplers->getVkDescriptorSetLayout(),
       dslStorageImages->getVkDescriptorSetLayout(),
       ctx.getBindlessVkDescriptorSetLayout(),
   };

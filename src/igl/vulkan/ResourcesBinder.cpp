@@ -221,6 +221,18 @@ void ResourcesBinder::updateBindingsByDescriptorBuffer(VkPipelineLayout layout,
                                                   state.info);
   }
   if (isDirtyFlags_ & DirtyFlagBits_Buffers) {
+    if (!hasBindGlobalUbo_) {
+      hasBindGlobalUbo_ = true;
+      ctx_.updateBindingsBuffersByDescriptorBuffer(cmdBuffer_,
+                                                   layout,
+                                                   bindPoint_,
+                                                   kBindPoint_GlobalBuffers,
+                                                   nextSubmitHandle_,
+                                                   bindingsBuffers_,
+                                                   ctx_.getGlobalUBOVulkanDescriptorSetLayout(),
+                                                   ctx_.getGlobalUBOBufferDescs());
+    }
+
     ctx_.updateBindingsBuffersByDescriptorBuffer(cmdBuffer_,
                                                  layout,
                                                  bindPoint_,
@@ -258,6 +270,17 @@ void ResourcesBinder::updateBindingsByDescriptorSet(VkPipelineLayout layout,
                                 state.info);
   }
   if (isDirtyFlags_ & DirtyFlagBits_Buffers) {
+    if (!hasBindGlobalUbo_) {
+      hasBindGlobalUbo_ = true;
+      ctx_.updateBindingsBuffers(cmdBuffer_,
+                                 layout,
+                                 bindPoint_,
+                                 kBindPoint_GlobalBuffers,
+                                 nextSubmitHandle_,
+                                 bindingsBuffers_,
+                                 ctx_.getGlobalUBOVulkanDescriptorSetLayout(),
+                                 ctx_.getGlobalUBOBufferDescs());
+    }
     ctx_.updateBindingsBuffers(cmdBuffer_,
                                layout,
                                bindPoint_,

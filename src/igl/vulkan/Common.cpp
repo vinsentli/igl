@@ -657,10 +657,12 @@ void ensureShaderModule(IShaderModule* sm) {
     }
   }
   for (const auto& b : info.buffers) {
-    if (!IGL_DEBUG_VERIFY(b.descriptorSet == kBindPoint_Buffers)) {
+    if (!IGL_DEBUG_VERIFY(b.descriptorSet == kBindPoint_GlobalBuffers ||
+                          b.descriptorSet == kBindPoint_Buffers)) {
       IGL_LOG_ERROR(
           "Missing descriptor set id for buffers: the shader should contain \"layout(set = "
-          "%u, ...)\"",
+          "%u/%u, ...)\"",
+          kBindPoint_GlobalBuffers,
           kBindPoint_Buffers);
       continue;
     }
