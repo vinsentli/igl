@@ -318,11 +318,8 @@ void* INativeHWTextureBuffer::getCpuReadMemoryAddress() const{
 }
 
 size_t INativeHWTextureBuffer::getCpuReadBytesPerRow() const {
-  // AHardwareBuffer reports row stride in pixels (not bytes), and that stride
-  // is decided by the allocator — drivers commonly pad it (Mali/Adreno often
-  // round to 64 / 128 pixels). The caller MUST use this value as the row
-  // stride when reading/writing the mapped pointer; assuming
-  // width * bytesPerPixel will land on the wrong offset from row 1 onward.
+  // AHB stride is in pixels and may be padded by the driver — caller MUST use
+  // this value as row stride; width * bytesPerPixel is wrong from row 1 onward.
   if (!hwBuffer_ || !funcTable_) {
     return 0;
   }
@@ -334,6 +331,41 @@ size_t INativeHWTextureBuffer::getCpuReadBytesPerRow() const {
     return 0;
   }
   return static_cast<size_t>(hwbDesc.stride) * props.bytesPerBlock;
+}
+
+Result INativeHWTextureBuffer::uploadToHWBuffer(const TextureFormatProperties& props,
+                                                const TextureRangeDesc& range,
+                                                const void* IGL_NULLABLE data,
+                                                size_t bytesPerRow) const {
+  if (hwBuffer_ == nullptr || funcTable_ == nullptr) {
+    return Result{Result::Code::RuntimeError,
+                  "INativeHWTextureBuffer: hardware buffer not initialized"};
+  }
+
+  std::byte* dst = nullptr;
+  RangeDesc outRange;
+  Result lockResult;
+  auto lockGuard [[maybe_unused]] =
+      lockHWBuffer(reinterpret_cast<std::byte**>(&dst), outRange, &lockResult);
+
+  const size_t internalBpr = props.getBytesPerRow(outRange.stride);
+  const size_t srcBpr = bytesPerRow ? bytesPerRow : props.getBytesPerRow(range);
+
+  if (lockResult.isOk() && dst != nullptr && data != nullptr && srcBpr <= internalBpr &&
+      range.width == outRange.width && range.height == outRange.height) {
+    const std::byte* src = static_cast<const std::byte*>(data);
+    size_t srcOffset = 0;
+    size_t dstOffset = 0;
+    for (uint32_t i = 0; i < outRange.height; ++i) {
+      memcpy(dst + dstOffset, src + srcOffset, srcBpr);
+      dstOffset += internalBpr;
+      srcOffset += srcBpr;
+    }
+    return Result{};
+  }
+
+  return Result{Result::Code::Unsupported,
+                "INativeHWTextureBuffer: upload preconditions not met"};
 }
 
 } // namespace igl::android
