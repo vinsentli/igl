@@ -274,6 +274,7 @@ struct BuffersKey {
 };
 
 // @fb-only
+template <typename Key>
 class DescriptorPoolsArena final {
  public:
   DescriptorPoolsArena(const VulkanContext& ctx,
@@ -555,10 +556,11 @@ struct VulkanContextImpl final {
   // Vulkan Memory Allocator
   VmaAllocator vma = VK_NULL_HANDLE;
   // :)
-  std::unordered_map<VkDescriptorSetLayout, std::unique_ptr<DescriptorPoolsArena>>
+  std::unordered_map<VkDescriptorSetLayout, std::unique_ptr<DescriptorPoolsArena<TexturesKey>>>
       arenaCombinedImageSamplers;
-  std::unordered_map<VkDescriptorSetLayout, std::unique_ptr<DescriptorPoolsArena>> arenaBuffers;
-  std::unordered_map<VkDescriptorSetLayout, std::unique_ptr<DescriptorPoolsArena>>
+  std::unordered_map<VkDescriptorSetLayout, std::unique_ptr<DescriptorPoolsArena<BuffersKey>>>
+      arenaBuffers;
+  std::unordered_map<VkDescriptorSetLayout, std::unique_ptr<DescriptorPoolsArena<StorageImagesKey>>>
       arenaStorageImages;
   // Cache of VkDescriptorSetLayout handles keyed by their descriptor bindings/flags. Since the
   // engine only uses a handful of distinct binding layouts, this collapses per-pipeline dsl
@@ -585,9 +587,10 @@ struct VulkanContextImpl final {
   TextureHandle dummyTexture = {};
 
   // NOLINTBEGIN(readability-identifier-naming)
-  DescriptorPoolsArena& getOrCreateArena_CombinedImageSamplers(const VulkanContext& ctx,
-                                                               VkDescriptorSetLayout dsl,
-                                                               uint32_t numBindings)
+  DescriptorPoolsArena<TexturesKey>& getOrCreateArena_CombinedImageSamplers(
+      const VulkanContext& ctx,
+      VkDescriptorSetLayout dsl,
+      uint32_t numBindings)
   // NOLINTEND(readability-identifier-naming)
   {
     auto it = arenaCombinedImageSamplers.find(dsl);
@@ -595,43 +598,45 @@ struct VulkanContextImpl final {
       return *it->second;
     }
     arenaCombinedImageSamplers[dsl] =
-        std::make_unique<DescriptorPoolsArena>(ctx,
-                                               VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                               dsl,
-                                               numBindings,
-                                               "arenaCombinedImageSamplers_");
+        std::make_unique<DescriptorPoolsArena<TexturesKey>>(ctx,
+                                                            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                                            dsl,
+                                                            numBindings,
+                                                            "arenaCombinedImageSamplers_");
     return *arenaCombinedImageSamplers[dsl].get();
   }
   // NOLINTBEGIN(readability-identifier-naming)
-  DescriptorPoolsArena& getOrCreateArena_StorageImages(const VulkanContext& ctx,
-                                                       VkDescriptorSetLayout dsl,
-                                                       uint32_t numBindings)
+  DescriptorPoolsArena<StorageImagesKey>& getOrCreateArena_StorageImages(const VulkanContext& ctx,
+                                                                         VkDescriptorSetLayout dsl,
+                                                                         uint32_t numBindings)
   // NOLINTEND(readability-identifier-naming)
   {
     auto it = arenaStorageImages.find(dsl);
     if (it != arenaStorageImages.end()) {
       return *it->second;
     }
-    arenaStorageImages[dsl] = std::make_unique<DescriptorPoolsArena>(
+    arenaStorageImages[dsl] = std::make_unique<DescriptorPoolsArena<StorageImagesKey>>(
         ctx, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, dsl, numBindings, "arenaStorageImages_");
     return *arenaStorageImages[dsl].get();
   }
   // NOLINTBEGIN(readability-identifier-naming)
-  DescriptorPoolsArena& getOrCreateArena_Buffers(const VulkanContext& ctx,
-                                                 VkDescriptorSetLayout dsl,
-                                                 uint32_t numBindings)
+  DescriptorPoolsArena<BuffersKey>& getOrCreateArena_Buffers(const VulkanContext& ctx,
+                                                             VkDescriptorSetLayout dsl,
+                                                             uint32_t numBindings,
+                                                             bool useDynamic)
   // NOLINTEND(readability-identifier-naming)
   {
     auto it = arenaBuffers.find(dsl);
     if (it != arenaBuffers.end()) {
       return *it->second;
     }
-    arenaBuffers[dsl] = std::make_unique<DescriptorPoolsArena>(ctx,
-                                                               VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                                                               VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                                               dsl,
-                                                               numBindings,
-                                                               "arenaBuffers_");
+    arenaBuffers[dsl] = std::make_unique<DescriptorPoolsArena<BuffersKey>>(
+        ctx,
+        uboType,
+        ssboType,
+        dsl,
+        numBindings,
+        "arenaBuffers_");
     return *arenaBuffers[dsl].get();
   }
 };
