@@ -415,8 +415,8 @@ VkPipeline RenderPipelineState::getVkPipeline(
                                                     ? IGL_ARRAY_NUM_ELEMENTS(dsls)
                                                     : IGL_ARRAY_NUM_ELEMENTS(dsls) - 1u),
         .pSetLayouts = dsls,
-        .pushConstantRangeCount = info.hasPushConstants ? 1u : 0u,
-        .pPushConstantRanges = info.hasPushConstants ? &pushConstantRange : nullptr,
+        .pushConstantRangeCount = 1u,
+        .pPushConstantRanges = &pushConstantRange,
     };
 
     VkDevice device = ctx.getVkDevice();
