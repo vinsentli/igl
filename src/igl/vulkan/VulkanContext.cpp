@@ -2234,18 +2234,8 @@ void VulkanContext::updateBindingsStorageImages(
     const util::SpvModuleInfo& info) const {
   IGL_PROFILER_FUNCTION();
 
-  DescriptorPoolsArena& arena = pimpl_->getOrCreateArena_StorageImages(
+  auto& arena = pimpl_->getOrCreateArena_StorageImages(
       *this, dsl.getVkDescriptorSetLayout(), dsl.numBindings);
-
-  VkDescriptorSet dset = arena.getNextDescriptorSet(*immediate_, nextSubmitHandle);
-
-  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  VkDescriptorImageInfo infoStorageImages[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
-  uint32_t numStorageImages = 0;
-
-  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  VkWriteDescriptorSet writes[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
-  uint32_t numWrites = 0;
 
   // make sure the guard value is always there
   IGL_DEBUG_ASSERT(!textures_.objects_.empty());
@@ -2253,31 +2243,51 @@ void VulkanContext::updateBindingsStorageImages(
   // use the dummy texture to avoid sparse array
   VkImageView dummyImageView = textures_.objects_[0].obj_->imageView_.getVkImageView();
 
+  StorageImagesKey key{};
   for (const util::ImageDescription& d : info.images) {
     IGL_DEBUG_ASSERT(d.descriptorSet == kBindPoint_StorageImages);
     const uint32_t loc = d.bindingLocation;
     IGL_DEBUG_ASSERT(loc < IGL_TEXTURE_SAMPLERS_MAX);
     VkImageView imageView = data.images[loc];
-    writes[numWrites++] = ivkGetWriteDescriptorSetImageInfo(
-        dset, loc, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, &infoStorageImages[numStorageImages]);
-    infoStorageImages[numStorageImages++] = VkDescriptorImageInfo{
-        .sampler = VK_NULL_HANDLE,
-        .imageView = imageView ? imageView : dummyImageView,
-        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-    };
+    key.views[loc] = imageView ? imageView : dummyImageView;
   }
 
-  if (numWrites) {
+  auto [dset, isFresh] = arena.acquireDescriptorSet(*immediate_, nextSubmitHandle, key);
+
+  if (isFresh) {
+    // NOLINTNEXTLINE(modernize-avoid-c-arrays)
+    VkDescriptorImageInfo infoStorageImages[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
+    uint32_t numStorageImages = 0;
+
+    // NOLINTNEXTLINE(modernize-avoid-c-arrays)
+    VkWriteDescriptorSet writes[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
+    uint32_t numWrites = 0;
+
+    for (const util::ImageDescription& d : info.images) {
+      const uint32_t loc = d.bindingLocation;
+      writes[numWrites++] = ivkGetWriteDescriptorSetImageInfo(
+          dset, loc, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, &infoStorageImages[numStorageImages]);
+      infoStorageImages[numStorageImages++] = VkDescriptorImageInfo{
+          .sampler = VK_NULL_HANDLE,
+          .imageView = key.views[loc],
+          .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+      };
+    }
+
+    if (!numWrites) {
+      return;
+    }
+
     IGL_PROFILER_ZONE("vkUpdateDescriptorSets()", IGL_PROFILER_COLOR_UPDATE);
     vf_.vkUpdateDescriptorSets(vkDevice_, numWrites, writes, 0, nullptr);
     IGL_PROFILER_ZONE_END();
+  }
 
 #if IGL_VULKAN_PRINT_COMMANDS
-    IGL_LOG_INFO("%p vkCmdBindDescriptorSets(%u) - storage images\n", cmdBuf, bindPoint);
+  IGL_LOG_INFO("%p vkCmdBindDescriptorSets(%u) - storage images\n", cmdBuf, bindPoint);
 #endif // IGL_VULKAN_PRINT_COMMANDS
-    vf_.vkCmdBindDescriptorSets(
-        cmdBuf, bindPoint, layout, kBindPoint_StorageImages, 1, &dset, 0, nullptr);
-  }
+  vf_.vkCmdBindDescriptorSets(
+      cmdBuf, bindPoint, layout, kBindPoint_StorageImages, 1, &dset, 0, nullptr);
 }
 
 void VulkanContext::updateBindingsBuffers(VkCommandBuffer IGL_NONNULL cmdBuf,
