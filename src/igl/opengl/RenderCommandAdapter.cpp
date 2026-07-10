@@ -74,8 +74,10 @@ void RenderCommandAdapter::initialize(const RenderPassDesc& renderPass,
 }
 
 void RenderCommandAdapter::setViewport(const Viewport& viewport) {
-  getContext().viewport(
-      (GLint)viewport.x, (GLint)viewport.y, (GLint)viewport.width, (GLint)viewport.height);
+  getContext().viewport(static_cast<GLint>(viewport.x),
+                        static_cast<GLint>(viewport.y),
+                        static_cast<GLint>(viewport.width),
+                        static_cast<GLint>(viewport.height));
 }
 
 void RenderCommandAdapter::setScissorRect(const ScissorRect& rect) {
@@ -145,6 +147,9 @@ void RenderCommandAdapter::clearUniformBuffers() {
 void RenderCommandAdapter::setUniform(const UniformDesc& uniformDesc,
                                       const void* IGL_NONNULL data,
                                       Result* IGL_NULLABLE outResult) {
+  // `outResult` is forwarded to UniformAdapter::setUniform(), which null-checks it via
+  // Result::setResult()/setOk(); the dereference is guarded, so this is a false positive.
+  // NOLINTNEXTLINE(facebook-hte-NullableDereference)
   uniformAdapter_.setUniform(uniformDesc, data, outResult);
 }
 
@@ -153,15 +158,19 @@ void RenderCommandAdapter::setUniformBuffer(Buffer* IGL_NULLABLE buffer,
                                             size_t size,
                                             uint32_t index,
                                             Result* IGL_NULLABLE outResult) {
+  // `buffer` and `outResult` are forwarded to UniformAdapter::setUniformBuffer(), which guards
+  // both (`if (... && buffer)` and Result::setResult()/setOk()); these are false positives.
+  // NOLINTNEXTLINE(facebook-hte-NullableDereference)
   uniformAdapter_.setUniformBuffer(buffer, offset, size, index, outResult);
 }
 
-void RenderCommandAdapter::setBuffer(Buffer* buffer, size_t offset, uint32_t index) {
+void RenderCommandAdapter::setStorageBuffer(Buffer* buffer, size_t offset, uint32_t index) {
   IGL_DEBUG_ASSERT(index < IGL_BUFFER_BINDINGS_MAX,
                    "Buffer index is beyond max, may want to increase limit");
-
-  storageBuffers_[index] = {.resource = buffer, .offset = offset};
-  SET_DIRTY(storageBuffersDirty_, index);
+  if (index < IGL_BUFFER_BINDINGS_MAX) {
+    storageBuffers_[index] = {.resource = buffer, .offset = offset};
+    SET_DIRTY(storageBuffersDirty_, index);
+  }
 }
 
 void RenderCommandAdapter::clearVertexTexture() {
@@ -408,6 +417,15 @@ void RenderCommandAdapter::endEncoding() {
   dirtyStateBits_ = EnumToValue(StateMask::NONE);
 }
 
+/**
+ * @brief Binds all dirty OpenGL state before issuing a draw call.
+ *
+ * Prepares the rendering pipeline by flushing pending state changes:
+ * dirty vertex buffers and their attributes, the render pipeline
+ * state, depth/stencil state with stencil reference values, queued
+ * uniforms, and dirty vertex/fragment texture-sampler pairs. Also
+ * validates shader stages when shader validation is enabled.
+ */
 void RenderCommandAdapter::willDraw() {
   IGL_PROFILER_ZONE_GPU_OGL("willDraw");
   Result ret;

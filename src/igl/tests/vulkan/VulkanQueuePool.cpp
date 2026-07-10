@@ -12,11 +12,12 @@
 #include <igl/Macros.h>
 
 namespace igl::vulkan {
-IGL_MAYBE_UNUSED static std::ostream& operator<<(std::ostream& os,
-                                                 const VulkanQueueDescriptor& queue) {
+namespace {
+IGL_MAYBE_UNUSED std::ostream& operator<<(std::ostream& os, const VulkanQueueDescriptor& queue) {
   return os << "VulkanQueueDescriptor" << "\n\tQueue Index        : " << queue.queueIndex
             << "\n\tQueue Family Index : " << queue.familyIndex;
 }
+} // namespace
 } // namespace igl::vulkan
 
 namespace igl::tests {
@@ -222,6 +223,66 @@ TEST(VulkanQueuePoolTest, ReturnSingleQueueCreationInfoForSameQueueFamily) {
   ASSERT_EQ(qcis.size(), 1);
   EXPECT_EQ(qcis[0].queueFamilyIndex, graphicsQueueDescriptor1.familyIndex);
   EXPECT_EQ(qcis[0].queueCount, 2);
+}
+
+TEST(VulkanQueueDescriptorTest, DefaultConstructedIsInvalid) {
+  const VulkanQueueDescriptor desc;
+  EXPECT_FALSE(desc.isValid());
+  EXPECT_EQ(desc.queueIndex, VulkanQueueDescriptor::kInvalid);
+  EXPECT_EQ(desc.familyIndex, VulkanQueueDescriptor::kInvalid);
+  EXPECT_EQ(desc.queueFlags, 0u);
+}
+
+TEST(VulkanQueueDescriptorTest, LessThanOrdering) {
+  const VulkanQueueDescriptor a{
+      .queueFlags = VK_QUEUE_GRAPHICS_BIT, .queueIndex = 0, .familyIndex = 1};
+  const VulkanQueueDescriptor b{
+      .queueFlags = VK_QUEUE_COMPUTE_BIT, .queueIndex = 0, .familyIndex = 2};
+  const VulkanQueueDescriptor c{
+      .queueFlags = VK_QUEUE_GRAPHICS_BIT, .queueIndex = 1, .familyIndex = 1};
+
+  EXPECT_TRUE(a < b);
+  EXPECT_FALSE(b < a);
+  EXPECT_TRUE(a < c);
+  EXPECT_FALSE(c < a);
+  EXPECT_FALSE(a < a);
+}
+
+TEST(VulkanQueueDescriptorTest, EqualityIgnoresQueueFlags) {
+  // operator== considers two descriptors equal when familyIndex and queueIndex
+  // match, regardless of queueFlags (see the uniqueness comment on the struct).
+  const VulkanQueueDescriptor graphics{
+      .queueFlags = VK_QUEUE_GRAPHICS_BIT, .queueIndex = 0, .familyIndex = 1};
+  const VulkanQueueDescriptor compute{
+      .queueFlags = VK_QUEUE_COMPUTE_BIT, .queueIndex = 0, .familyIndex = 1};
+
+  EXPECT_TRUE(graphics == compute);
+
+  // Differing queueIndex makes the descriptors unequal even with identical flags.
+  const VulkanQueueDescriptor graphicsOtherIndex{
+      .queueFlags = VK_QUEUE_GRAPHICS_BIT, .queueIndex = 1, .familyIndex = 1};
+  EXPECT_FALSE(graphics == graphicsOtherIndex);
+}
+
+TEST(VulkanQueueDescriptorTest, OrderingIgnoresQueueFlags) {
+  // Descriptors sharing familyIndex and queueIndex are equivalent under
+  // operator<, so a std::set treats them as the same element regardless of flags.
+  const VulkanQueueDescriptor graphics{
+      .queueFlags = VK_QUEUE_GRAPHICS_BIT, .queueIndex = 0, .familyIndex = 1};
+  const VulkanQueueDescriptor compute{
+      .queueFlags = VK_QUEUE_COMPUTE_BIT, .queueIndex = 0, .familyIndex = 1};
+
+  EXPECT_FALSE(graphics < compute);
+  EXPECT_FALSE(compute < graphics);
+}
+
+TEST(VulkanQueuePoolTest, FindQueueDescriptorReturnsInvalidWhenNoMatch) {
+  const VulkanQueueDescriptor graphicsOnly{
+      .queueFlags = VK_QUEUE_GRAPHICS_BIT, .queueIndex = 0, .familyIndex = 1};
+  const VulkanQueuePool queuePool({graphicsOnly});
+
+  const auto result = queuePool.findQueueDescriptor(VK_QUEUE_COMPUTE_BIT);
+  EXPECT_FALSE(result.isValid());
 }
 
 TEST(VulkanQueuePoolTest, ReturnMultipleQueueCreationInfosForDifferentQueueFamilies) {

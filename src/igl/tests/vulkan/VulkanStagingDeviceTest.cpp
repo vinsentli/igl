@@ -11,6 +11,7 @@
 
 #include "../util/TestDevice.h"
 
+#include <array>
 #include <cstring>
 #include <vector>
 #include <igl/Buffer.h>
@@ -220,6 +221,130 @@ TEST_F(VulkanStagingDeviceTest, MaxStagingBufferSizePositive) {
   ASSERT_NE(ctx.stagingDevice_, nullptr);
 
   EXPECT_GT(ctx.stagingDevice_->getMaxStagingBufferSize(), 0u);
+}
+
+TEST_F(VulkanStagingDeviceTest, FreeStagingBufferSizeInvariant) {
+  auto& ctx = getVulkanContext();
+  ASSERT_NE(ctx.stagingDevice_, nullptr);
+
+  const VkDeviceSize freeSize = ctx.stagingDevice_->getFreeStagingBufferSize();
+  const VkDeviceSize maxSize = ctx.stagingDevice_->getMaxStagingBufferSize();
+  EXPECT_LE(freeSize, maxSize);
+}
+
+TEST_F(VulkanStagingDeviceTest, MergeRegionsRecoversFreeSpace) {
+  auto& ctx = getVulkanContext();
+  ASSERT_NE(ctx.stagingDevice_, nullptr);
+
+  // Use a payload > 64KB to bypass the `vkCmdUpdateBuffer()` fast path in
+  // `bufferSubData()` and force the upload through the staging device, so
+  // `mergeRegionsAndFreeBuffers()` has actual regions to process.
+  constexpr size_t kPayloadSize = 128 * 1024;
+
+  Result ret;
+  const BufferDesc bufferDesc{
+      .type = BufferDesc::BufferTypeBits::Storage,
+      .length = kPayloadSize,
+      .storage = ResourceStorage::Private,
+  };
+  auto buffer = iglDev_->createBuffer(bufferDesc, &ret);
+  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+  ASSERT_NE(buffer, nullptr);
+
+  std::vector<uint8_t> data(kPayloadSize, 0xAB);
+  ret = buffer->upload(data.data(), BufferRange(kPayloadSize, 0));
+  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+
+  // Drain GPU work, then merge: must run cleanly and leave the device in a
+  // self-consistent state where free space does not exceed the configured
+  // max staging pool size.
+  ctx.waitDeferredTasks();
+  ctx.stagingDevice_->mergeRegionsAndFreeBuffers();
+
+  EXPECT_LE(ctx.stagingDevice_->getFreeStagingBufferSize(),
+            ctx.stagingDevice_->getMaxStagingBufferSize());
+
+  // Device must remain usable for further uploads after merge.
+  std::vector<uint8_t> data2(kPayloadSize, 0xCD);
+  ret = buffer->upload(data2.data(), BufferRange(kPayloadSize, 0));
+  EXPECT_TRUE(ret.isOk()) << ret.message.c_str();
+}
+
+TEST_F(VulkanStagingDeviceTest, MultipleSequentialUploads) {
+  Result ret;
+
+  const BufferDesc bufferDesc{
+      .type = BufferDesc::BufferTypeBits::Storage,
+      .length = 512,
+      .storage = ResourceStorage::Private,
+  };
+  auto buffer = iglDev_->createBuffer(bufferDesc, &ret);
+  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+  ASSERT_NE(buffer, nullptr);
+
+  for (uint8_t round = 0; round < 3; ++round) {
+    std::vector<uint8_t> srcData(512, round * 50);
+    ret = buffer->upload(srcData.data(), BufferRange(512, 0));
+    ASSERT_TRUE(ret.isOk()) << "Upload failed on round " << static_cast<int>(round);
+
+    const auto* downloaded = static_cast<uint8_t*>(buffer->map(BufferRange(512, 0), &ret));
+    ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+
+    for (size_t i = 0; i < 512; ++i) {
+      EXPECT_EQ(downloaded[i], round * 50)
+          << "Mismatch on round " << static_cast<int>(round) << " at index " << i;
+    }
+    buffer->unmap();
+  }
+}
+
+TEST_F(VulkanStagingDeviceTest, ImageDataUploadWithMipLevel) {
+  Result ret;
+
+  const uint32_t width = 8;
+  const uint32_t height = 8;
+  const uint32_t numMipLevels = 4;
+
+  TextureDesc texDesc = TextureDesc::new2D(
+      TextureFormat::RGBA_UNorm8, width, height, TextureDesc::TextureUsageBits::Sampled);
+  texDesc.numMipLevels = numMipLevels;
+  auto texture = iglDev_->createTexture(texDesc, &ret);
+  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+  ASSERT_NE(texture, nullptr);
+
+  for (uint32_t mip = 0; mip < numMipLevels; ++mip) {
+    const uint32_t mipWidth = std::max(1u, width >> mip);
+    const uint32_t mipHeight = std::max(1u, height >> mip);
+    const size_t dataSize = mipWidth * mipHeight * 4;
+    const std::vector<uint8_t> pixelData(dataSize, static_cast<uint8_t>(mip * 60));
+
+    ret = texture->upload(texture->getFullRange(mip), pixelData.data());
+    EXPECT_TRUE(ret.isOk()) << "Upload failed for mip level " << mip << ": " << ret.message.c_str();
+  }
+}
+
+TEST_F(VulkanStagingDeviceTest, BufferSubDataZeroOffset) {
+  Result ret;
+
+  const BufferDesc bufferDesc{
+      .type = BufferDesc::BufferTypeBits::Storage,
+      .length = 128,
+      .storage = ResourceStorage::Private,
+  };
+  auto buffer = iglDev_->createBuffer(bufferDesc, &ret);
+  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+
+  const std::vector<uint8_t> srcData(128, 0xFF);
+  ret = buffer->upload(srcData.data(), BufferRange(128, 0));
+  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+
+  const auto* downloaded = static_cast<uint8_t*>(buffer->map(BufferRange(128, 0), &ret));
+  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+
+  for (size_t i = 0; i < 128; ++i) {
+    EXPECT_EQ(downloaded[i], 0xFF);
+  }
+  buffer->unmap();
 }
 
 } // namespace igl::tests

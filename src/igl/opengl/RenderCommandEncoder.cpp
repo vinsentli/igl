@@ -394,8 +394,8 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
       IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
     } else if (bufferType == Buffer::Type::UniformBlock) {
       adapter_->setUniformBuffer(glBuffer, offset, bufferSize, index);
-    } else {
-      adapter_->setBuffer(glBuffer, offset, index);
+    } else if (glBuffer->getBufferType() & BufferDesc::BufferTypeBits::Storage) {
+      adapter_->setStorageBuffer(glBuffer, offset, index);
     }
   }
 }

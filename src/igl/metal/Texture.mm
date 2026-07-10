@@ -7,7 +7,7 @@
 
 #include <igl/metal/Texture.h>
 
-#include <vector>
+#include <utility>
 #include <igl/metal/CommandBuffer.h>
 #include <igl/metal/CommandQueue.h>
 
@@ -70,6 +70,7 @@ bool Texture::needsRepacking(const TextureRangeDesc& range, size_t bytesPerRow) 
   return bytesPerRow % getProperties().bytesPerBlock != 0;
 }
 
+/// Uploads pixel data to the Metal texture via replaceRegion for each mip level and slice.
 Result Texture::uploadInternal(TextureType type,
                                const TextureRangeDesc& range,
                                const void* IGL_NULLABLE data,
@@ -378,6 +379,18 @@ TextureType Texture::convertType(MTLTextureType value) {
   }
 }
 
+/**
+ * @brief Converts an IGL TextureFormat to a Metal MTLPixelFormat.
+ *
+ * Format availability is platform-dependent: ASTC, PVRTC,
+ * and ETC formats are unavailable on macOS; BC7 is only
+ * available on macOS/Mac Catalyst. All depth formats
+ * (Z_UNorm16/24/32) map to MTLPixelFormatDepth32Float.
+ *
+ * @param[in] value The IGL texture format to convert.
+ * @return The corresponding MTLPixelFormat, or
+ *         MTLPixelFormatInvalid if unsupported.
+ */
 MTLPixelFormat Texture::textureFormatToMTLPixelFormat(TextureFormat value) {
   switch (value) {
   case TextureFormat::Invalid:
@@ -805,6 +818,18 @@ MTLPixelFormat Texture::textureFormatToMTLPixelFormat(TextureFormat value) {
   }
 }
 
+/**
+ * @brief Converts a Metal pixel format to an IGL texture format.
+ *
+ * Performs the reverse mapping of textureFormatToMTLPixelFormat().
+ * Some mappings are platform-conditional (e.g., ASTC and PVRTC
+ * formats are only available on non-macOS, while BC7 formats
+ * are macOS-only).
+ *
+ * @param[in] value The Metal pixel format to convert.
+ * @return The corresponding TextureFormat, or
+ *         TextureFormat::Invalid if unsupported.
+ */
 TextureFormat Texture::mtlPixelFormatToTextureFormat(MTLPixelFormat value) {
 // Some fbsource targets don't allow enum default, this makes sure all of them compile
 #pragma clang diagnostic push

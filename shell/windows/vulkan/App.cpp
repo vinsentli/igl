@@ -105,8 +105,8 @@ std::shared_ptr<Platform> VulkanShell::createPlatform() noexcept {
 
   auto vulkanDevice = vulkan::HWDevice::create(std::move(ctx),
                                                devices[0],
-                                               (uint32_t)shellParams().viewportSize.x,
-                                               (uint32_t)shellParams().viewportSize.y);
+                                               static_cast<uint32_t>(shellParams().viewportSize.x),
+                                               static_cast<uint32_t>(shellParams().viewportSize.y));
 
   // Verify multiview support — if unsupported, report and run as usual
   if (shellParams().forceMultiview && !vulkanDevice->hasFeature(DeviceFeatures::Multiview)) {
@@ -129,8 +129,7 @@ void VulkanShell::initStereoPresent(IDevice& device) {
   }
 
   // Create command queue for stereo present pass
-  const CommandQueueDesc queueDesc{};
-  presentQueue_ = device.createCommandQueue(queueDesc, nullptr);
+  presentQueue_ = device.createCommandQueue({}, nullptr);
 
   // Create sampler
   const SamplerStateDesc samplerDesc = {

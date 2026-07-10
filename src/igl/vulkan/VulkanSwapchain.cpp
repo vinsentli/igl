@@ -126,6 +126,8 @@ namespace igl::vulkan {
 
 VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t height) :
   ctx_(ctx), graphicsQueue_(ctx.deviceQueues_.graphicsQueue), width_(width), height_(height) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+
   surfaceFormat_ = chooseSwapSurfaceFormat(ctx.deviceSurfaceFormats_,
                                            ctx.config_.requestedSwapChainTextureFormat,
                                            ctx.config_.swapChainColorSpace);
@@ -241,6 +243,8 @@ VkImageView VulkanSwapchain::getDepthVkImageView() const {
 }
 
 void VulkanSwapchain::lazyAllocateDepthBuffer() const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+
   IGL_DEBUG_ASSERT(!depthTexture_);
 
   const VkFormat depthFormat =

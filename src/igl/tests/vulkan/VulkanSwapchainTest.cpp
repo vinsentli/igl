@@ -14,7 +14,7 @@
 #include <memory>
 #include <igl/tests/util/device/vulkan/TestDevice.h> // IWYU pragma: export
 #include <igl/vulkan/VulkanContext.h>
-#include <igl/vulkan/VulkanSwapchain.h>
+#include <igl/vulkan/VulkanSwapchain.h> // IWYU pragma: keep
 
 namespace igl::tests {
 
@@ -75,6 +75,34 @@ TEST_F(VulkanSwapchainTest, CreateVulkanSwapchain) {
   ASSERT_GT(swapchain->getNumSwapchainImages(), 0);
 
   ASSERT_EQ(swapchain->getCurrentImageIndex(), 0);
+#endif
+}
+
+TEST_F(VulkanSwapchainTest, DepthTextureIsLazilyAllocated) {
+#if IGL_PLATFORM_WINDOWS || IGL_PLATFORM_ANDROID
+  GTEST_SKIP() << "Fix these tests on Windows and Android, no headless surface support there.";
+#else
+  auto swapchain = std::make_unique<igl::vulkan::VulkanSwapchain>(*context_, kWidth, kHeight);
+  ASSERT_NE(swapchain, nullptr);
+
+  const auto depthTexture = swapchain->getCurrentDepthTexture();
+  ASSERT_NE(depthTexture, nullptr);
+  EXPECT_NE(depthTexture->image.getVkImage(), VK_NULL_HANDLE);
+#endif
+}
+
+TEST_F(VulkanSwapchainTest, AcquireNextImage) {
+#if IGL_PLATFORM_WINDOWS || IGL_PLATFORM_ANDROID
+  GTEST_SKIP() << "Fix these tests on Windows and Android, no headless surface support there.";
+#else
+  auto swapchain = std::make_unique<igl::vulkan::VulkanSwapchain>(*context_, kWidth, kHeight);
+  ASSERT_NE(swapchain, nullptr);
+
+  const Result result = swapchain->acquireNextImage();
+  EXPECT_TRUE(result.isOk()) << result.message.c_str();
+
+  EXPECT_NE(swapchain->getCurrentVkImage(), VK_NULL_HANDLE);
+  EXPECT_NE(swapchain->getCurrentVkImageView(), VK_NULL_HANDLE);
 #endif
 }
 

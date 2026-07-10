@@ -13,7 +13,6 @@
 #include <array>
 #include <cassert>
 #include <cstdio>
-#include <string>
 
 #if IGL_PLATFORM_ANDROID
 #include <android/asset_manager.h>
@@ -202,9 +201,9 @@ bool XrApp::checkExtensions() {
 
 bool XrApp::createInstance() {
   XrApplicationInfo appInfo = {};
-  strcpy(appInfo.applicationName, kAppName);
+  snprintf(appInfo.applicationName, sizeof(appInfo.applicationName), "%s", kAppName);
   appInfo.applicationVersion = 0;
-  strcpy(appInfo.engineName, kEngineName);
+  snprintf(appInfo.engineName, sizeof(appInfo.engineName), "%s", kEngineName);
   appInfo.engineVersion = 0;
   appInfo.apiVersion = XR_MAKE_VERSION(1, 0, 34);
 
@@ -447,23 +446,8 @@ bool XrApp::initialize(const struct android_app* app, const InitParams& params) 
   enumerateReferenceSpaces();
   enumerateBlendModes();
   createSpaces();
-  if (passthroughSupported()) {
-    passthrough_ = std::make_unique<XrPassthrough>(instance_, session_);
-    if (!passthrough_->initialize()) {
-      return false;
-    }
-  }
-  if (handTrackingSupported()) {
-    hands_ = std::make_unique<XrHands>(instance_, session_, handTrackingMeshSupported());
-    if (!hands_->initialize()) {
-      return false;
-    }
-  }
-  if (refreshRateExtensionSupported()) {
-    refreshRate_ = std::make_unique<XrRefreshRate>(instance_, session_);
-    if (!refreshRate_->initialize(params.refreshRateParams)) {
-      return false;
-    }
+  if (!initializeOptionalFeatures(params)) {
+    return false;
   }
 
   createActions();
@@ -506,6 +490,28 @@ bool XrApp::initialize(const struct android_app* app, const InitParams& params) 
 
   initialized_ = true;
   return initialized_;
+}
+
+bool XrApp::initializeOptionalFeatures(const InitParams& params) {
+  if (passthroughSupported()) {
+    passthrough_ = std::make_unique<XrPassthrough>(instance_, session_);
+    if (!passthrough_->initialize()) {
+      return false;
+    }
+  }
+  if (handTrackingSupported()) {
+    hands_ = std::make_unique<XrHands>(instance_, session_, handTrackingMeshSupported());
+    if (!hands_->initialize()) {
+      return false;
+    }
+  }
+  if (refreshRateExtensionSupported()) {
+    refreshRate_ = std::make_unique<XrRefreshRate>(instance_, session_);
+    if (!refreshRate_->initialize(params.refreshRateParams)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
@@ -675,6 +681,12 @@ void XrApp::createActions() {
        .id = Button::Y,
        .type = XR_ACTION_TYPE_BOOLEAN_INPUT,
        .subactionCount = 1},
+      {.name = "right_grip",
+       .localizedName = "Right Grip",
+       .subactionPaths = &rightHandPath,
+       .id = Button::RightGrip,
+       .type = XR_ACTION_TYPE_FLOAT_INPUT,
+       .subactionCount = 1},
   };
 
   for (const auto& def : buttonDefs) {
@@ -694,6 +706,24 @@ void XrApp::createActions() {
     }
   }
 
+  // Right thumbstick (vector2f — separate from button actions)
+  {
+    XrActionCreateInfo actionInfo = {XR_TYPE_ACTION_CREATE_INFO};
+    actionInfo.actionType = XR_ACTION_TYPE_VECTOR2F_INPUT;
+    snprintf(actionInfo.actionName, sizeof(actionInfo.actionName), "%s", "right_thumbstick");
+    snprintf(actionInfo.localizedActionName,
+             sizeof(actionInfo.localizedActionName),
+             "%s",
+             "Right Thumbstick");
+    actionInfo.countSubactionPaths = 1;
+    actionInfo.subactionPaths = &rightHandPath;
+    res = xrCreateAction(actionSet_, &actionInfo, &rightThumbstickAction_);
+    if (res != XR_SUCCESS) {
+      IGL_LOG_ERROR("Failed to create right thumbstick action: %d\n", res);
+      return;
+    }
+  }
+
   // Binding paths for Oculus Touch controllers
   struct BindingDef {
     Button id;
@@ -707,15 +737,24 @@ void XrApp::createActions() {
       {.id = Button::B, .path = "/user/hand/right/input/b/click"},
       {.id = Button::X, .path = "/user/hand/left/input/x/click"},
       {.id = Button::Y, .path = "/user/hand/left/input/y/click"},
+      {.id = Button::RightGrip, .path = "/user/hand/right/input/squeeze/value"},
   };
 
   constexpr size_t kNumBindings = sizeof(bindingDefs) / sizeof(bindingDefs[0]);
-  XrActionSuggestedBinding bindings[kNumBindings];
+  constexpr size_t kTotalBindings = kNumBindings + 1; // +1 for right thumbstick
+  XrActionSuggestedBinding bindings[kTotalBindings];
   for (size_t i = 0; i < kNumBindings; ++i) {
     XrPath bindingPath = 0;
     xrStringToPath(instance_, bindingDefs[i].path, &bindingPath);
     bindings[i] = {.action = buttonActions_[static_cast<int>(bindingDefs[i].id)],
                    .binding = bindingPath};
+  }
+
+  // Right thumbstick binding
+  {
+    XrPath thumbstickPath = 0;
+    xrStringToPath(instance_, "/user/hand/right/input/thumbstick", &thumbstickPath);
+    bindings[kNumBindings] = {.action = rightThumbstickAction_, .binding = thumbstickPath};
   }
 
   XrPath profilePath = 0;
@@ -724,7 +763,7 @@ void XrApp::createActions() {
   XrInteractionProfileSuggestedBinding suggestedBindings = {
       .type = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
       .interactionProfile = profilePath,
-      .countSuggestedBindings = kNumBindings,
+      .countSuggestedBindings = kTotalBindings,
       .suggestedBindings = bindings,
   };
   res = xrSuggestInteractionProfileBindings(instance_, &suggestedBindings);
@@ -986,33 +1025,7 @@ void XrApp::update() {
         .activeActionSets = &activeActionSet,
     };
     if (xrSyncActions(session_, &syncInfo) == XR_SUCCESS) {
-      constexpr int numButtons = static_cast<int>(Button::Count);
-      for (int i = 0; i < numButtons; ++i) {
-        if (buttonActions_[i] == XR_NULL_HANDLE) {
-          continue;
-        }
-        auto buttonId = static_cast<Button>(i);
-        RayEvent rayEvent;
-        rayEvent.button = buttonId;
-        XrActionStateGetInfo getInfo = {
-            .type = XR_TYPE_ACTION_STATE_GET_INFO,
-            .action = buttonActions_[i],
-        };
-
-        if (buttonId == Button::LeftTrigger || buttonId == Button::RightTrigger) {
-          XrActionStateFloat state = {.type = XR_TYPE_ACTION_STATE_FLOAT};
-          if (xrGetActionStateFloat(session_, &getInfo, &state) == XR_SUCCESS && state.isActive) {
-            rayEvent.buttonPressed = state.currentState > 0.5f;
-            platform_->getInputDispatcher().queueEvent(rayEvent);
-          }
-        } else {
-          XrActionStateBoolean state = {.type = XR_TYPE_ACTION_STATE_BOOLEAN};
-          if (xrGetActionStateBoolean(session_, &getInfo, &state) == XR_SUCCESS && state.isActive) {
-            rayEvent.buttonPressed = (state.currentState != 0u);
-            platform_->getInputDispatcher().queueEvent(rayEvent);
-          }
-        }
-      }
+      pollActions();
     }
   }
 
@@ -1023,6 +1036,67 @@ void XrApp::update() {
   auto frameState = beginFrame();
   render();
   endFrame(frameState);
+}
+
+void XrApp::pollActions() {
+  constexpr int numButtons = static_cast<int>(Button::Count);
+  for (int i = 0; i < numButtons; ++i) {
+    if (buttonActions_[i] == XR_NULL_HANDLE) {
+      continue;
+    }
+    auto buttonId = static_cast<Button>(i);
+    RayEvent rayEvent;
+    rayEvent.button = buttonId;
+    XrActionStateGetInfo getInfo = {
+        .type = XR_TYPE_ACTION_STATE_GET_INFO,
+        .action = buttonActions_[i],
+    };
+
+    if (buttonId == Button::LeftTrigger || buttonId == Button::RightTrigger ||
+        buttonId == Button::RightGrip) {
+      XrActionStateFloat state = {.type = XR_TYPE_ACTION_STATE_FLOAT};
+      if (xrGetActionStateFloat(session_, &getInfo, &state) == XR_SUCCESS && state.isActive) {
+        rayEvent.buttonPressed = state.currentState > 0.5f;
+        platform_->getInputDispatcher().queueEvent(rayEvent);
+      }
+    } else {
+      XrActionStateBoolean state = {.type = XR_TYPE_ACTION_STATE_BOOLEAN};
+      if (xrGetActionStateBoolean(session_, &getInfo, &state) == XR_SUCCESS && state.isActive) {
+        rayEvent.buttonPressed = (state.currentState != 0u);
+        platform_->getInputDispatcher().queueEvent(rayEvent);
+      }
+    }
+  }
+
+  // Right thumbstick → virtual left/right buttons
+  if (rightThumbstickAction_ != XR_NULL_HANDLE) {
+    XrActionStateGetInfo getInfo = {
+        .type = XR_TYPE_ACTION_STATE_GET_INFO,
+        .action = rightThumbstickAction_,
+    };
+    XrActionStateVector2f state = {.type = XR_TYPE_ACTION_STATE_VECTOR2F};
+    if (xrGetActionStateVector2f(session_, &getInfo, &state) == XR_SUCCESS && state.isActive) {
+      RayEvent leftEvent;
+      leftEvent.button = Button::RightThumbstickLeft;
+      leftEvent.buttonPressed = state.currentState.x < -0.5f;
+      platform_->getInputDispatcher().queueEvent(leftEvent);
+
+      RayEvent rightEvent;
+      rightEvent.button = Button::RightThumbstickRight;
+      rightEvent.buttonPressed = state.currentState.x > 0.5f;
+      platform_->getInputDispatcher().queueEvent(rightEvent);
+
+      RayEvent upEvent;
+      upEvent.button = Button::RightThumbstickUp;
+      upEvent.buttonPressed = state.currentState.y > 0.5f;
+      platform_->getInputDispatcher().queueEvent(upEvent);
+
+      RayEvent downEvent;
+      downEvent.button = Button::RightThumbstickDown;
+      downEvent.buttonPressed = state.currentState.y < -0.5f;
+      platform_->getInputDispatcher().queueEvent(downEvent);
+    }
+  }
 }
 
 bool XrApp::passthroughSupported() const noexcept { // NOLINT(bugprone-exception-escape)

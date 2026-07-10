@@ -190,10 +190,16 @@ Result Texture::upload(const TextureRangeDesc& range, const void* data, size_t b
 
   IGL_D3D12_LOG_VERBOSE("Texture::upload() - Proceeding with upload\n");
 
-  // Calculate dimensions and data size
-  const uint32_t width = range.width > 0 ? range.width : dimensions_.width;
-  const uint32_t height = range.height > 0 ? range.height : dimensions_.height;
-  const uint32_t depth = range.depth > 0 ? range.depth : dimensions_.depth;
+  // Calculate dimensions and data size. The mip-dimension loops below assume
+  // width/height/depth are already at range.mipLevel (baseMip) resolution, so when
+  // falling back to dimensions_ (which are at mip 0) we must shift by range.mipLevel
+  // to keep that invariant regardless of how the caller specifies the range.
+  const uint32_t width = range.width > 0 ? range.width
+                                         : std::max(dimensions_.width >> range.mipLevel, 1u);
+  const uint32_t height = range.height > 0 ? range.height
+                                           : std::max(dimensions_.height >> range.mipLevel, 1u);
+  const uint32_t depth = range.depth > 0 ? range.depth
+                                         : std::max(dimensions_.depth >> range.mipLevel, 1u);
 
   const auto props = TextureFormatProperties::fromTextureFormat(format_);
   const bool isBC7 =
@@ -230,7 +236,11 @@ Result Texture::upload(const TextureRangeDesc& range, const void* data, size_t b
       baseMip,
       numMipsToUpload);
 
-  // Calculate total staging buffer size for ALL subresources
+  // Calculate total staging buffer size for ALL subresources.
+  // Each subresource's placed footprint offset must be aligned to
+  // D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT (512 bytes). GetCopyableFootprints uses BaseOffset
+  // directly as the layout offset, so we must pass an aligned value for each subresource.
+  constexpr UINT64 kPlacementAlignment = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT;
   UINT64 totalStagingSize = 0;
   std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> layouts;
   std::vector<UINT> numRowsArray;
@@ -244,10 +254,12 @@ Result Texture::upload(const TextureRangeDesc& range, const void* data, size_t b
       UINT numRows = 0;
       UINT64 rowSize = 0;
       UINT64 subresSize = 0;
+      const UINT64 alignedBaseOffset =
+          (totalStagingSize + kPlacementAlignment - 1) & ~(kPlacementAlignment - 1);
       device_->GetCopyableFootprints(&resourceDesc,
                                      subresource,
                                      1,
-                                     totalStagingSize,
+                                     alignedBaseOffset,
                                      &layout,
                                      &numRows,
                                      &rowSize,
@@ -255,7 +267,7 @@ Result Texture::upload(const TextureRangeDesc& range, const void* data, size_t b
       layouts.push_back(layout);
       numRowsArray.push_back(numRows);
       rowSizesArray.push_back(rowSize);
-      totalStagingSize += subresSize;
+      totalStagingSize = alignedBaseOffset + subresSize;
     }
   }
 
@@ -337,9 +349,10 @@ Result Texture::upload(const TextureRangeDesc& range, const void* data, size_t b
   size_t layoutIdx = 0;
 
   for (uint32_t mipOffset = 0; mipOffset < numMipsToUpload; ++mipOffset) {
-    const uint32_t mipWidth = std::max(width >> (baseMip + mipOffset), 1u);
-    const uint32_t mipHeight = std::max(height >> (baseMip + mipOffset), 1u);
-    const uint32_t mipDepth = std::max(depth >> (baseMip + mipOffset), 1u);
+    // range.width/height/depth are already at baseMip resolution, so only shift by mipOffset.
+    const uint32_t mipWidth = std::max(width >> mipOffset, 1u);
+    const uint32_t mipHeight = std::max(height >> mipOffset, 1u);
+    const uint32_t mipDepth = std::max(depth >> mipOffset, 1u);
 
     size_t mipBytesPerRow = 0;
     if (isBC7) {
@@ -423,9 +436,10 @@ Result Texture::upload(const TextureRangeDesc& range, const void* data, size_t b
   layoutIdx = 0;
   for (uint32_t mipOffset = 0; mipOffset < numMipsToUpload; ++mipOffset) {
     const uint32_t currentMip = baseMip + mipOffset;
-    const uint32_t mipWidth = std::max(width >> currentMip, 1u);
-    const uint32_t mipHeight = std::max(height >> currentMip, 1u);
-    const uint32_t mipDepth = std::max(depth >> currentMip, 1u);
+    // range.width/height/depth are already at baseMip resolution, so only shift by mipOffset.
+    const uint32_t mipWidth = std::max(width >> mipOffset, 1u);
+    const uint32_t mipHeight = std::max(height >> mipOffset, 1u);
+    const uint32_t mipDepth = std::max(depth >> mipOffset, 1u);
 
     for (uint32_t sliceOffset = 0; sliceOffset < numSlicesToUpload; ++sliceOffset) {
       const uint32_t currentSlice = baseSlice + sliceOffset;
@@ -483,7 +497,13 @@ Result Texture::upload(const TextureRangeDesc& range, const void* data, size_t b
     }
   }
 
-  cmdList->Close();
+  hr = cmdList->Close();
+  if (FAILED(hr)) {
+    if (iglDevice_) {
+      iglDevice_->returnUploadCommandAllocator(cmdAlloc, 0);
+    }
+    return Result(Result::Code::RuntimeError, "Failed to close command list for texture upload");
+  }
 
   // Execute once and wait once
   ID3D12CommandList* cmdLists[] = {cmdList.Get()};

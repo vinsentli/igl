@@ -104,6 +104,7 @@ using PFNIGLDISCARDFRAMEBUFFERPROC = void (*)(GLenum target,
                                               GLsizei numAttachments,
                                               const GLenum* attachments);
 using PFNIGLDISPATCHCOMPUTEPROC = void (*)(GLuint numGroupsX, GLuint numGroupsY, GLuint numGroupsZ);
+using PFNIGLDISPATCHCOMPUTEINDIRECTPROC = void (*)(GLintptr indirect);
 using PFNIGLDRAWBUFFERSPROC = void (*)(GLsizei, const GLenum*);
 using PFNIGLDRAWELEMENTSINDIRECTPROC = void (*)(GLenum mode, GLenum type, const GLvoid* indirect);
 using PFNIGLDRAWARRAYSINDIRECTPROC = void (*)(GLenum mode, const GLvoid* indirect);
@@ -260,10 +261,6 @@ using PFNIGLTEXSUBIMAGE3DPROC = void (*)(GLenum target,
                                          GLenum format,
                                          GLenum type,
                                          const GLvoid* data);
-using PFNIGLTEXSTORAGE1DPROC = void (*)(GLenum target,
-                                        GLsizei levels,
-                                        GLenum internalformat,
-                                        GLsizei width);
 using PFNIGLTEXSTORAGE2DPROC =
     void (*)(GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height);
 using PFNIGLTEXSTORAGE3DPROC = void (*)(GLenum target,
@@ -408,6 +405,7 @@ void iglMakeTextureHandleNonResidentARB(GLuint64 handle);
 /// MARK: - GL_ARB_compute_shader
 
 void iglDispatchCompute(GLuint numGroupsX, GLuint numGroupsY, GLuint numGroupsZ);
+void iglDispatchComputeIndirect(GLintptr indirect);
 
 ///--------------------------------------
 /// MARK: - GL_ARB_draw_indirect
@@ -536,7 +534,6 @@ void iglGetSynciv(GLsync sync, GLenum pname, GLsizei bufSize, GLsizei* length, G
 ///--------------------------------------
 /// MARK: - GL_ARB_texture_storage
 
-void iglTexStorage1D(GLenum target, GLsizei levels, GLenum internalformat, GLsizei width);
 void iglTexStorage2D(GLenum target,
                      GLsizei levels,
                      GLenum internalformat,
@@ -689,7 +686,6 @@ void iglMemoryBarrierEXT(GLbitfield barriers);
 ///--------------------------------------
 /// MARK: - GL_EXT_texture_storage
 
-void iglTexStorage1DEXT(GLenum target, GLsizei levels, GLenum internalformat, GLsizei width);
 void iglTexStorage2DEXT(GLenum target,
                         GLsizei levels,
                         GLenum internalformat,

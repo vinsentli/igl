@@ -11,10 +11,8 @@
 #include <vector>
 #include <igl/VertexInputState.h>
 #include <igl/opengl/GLIncludes.h>
-#include <igl/opengl/IContext.h>
 
 namespace igl {
-class ICommandBuffer;
 namespace opengl {
 
 // This structure stores OGL-specific attribute info. Location is specifically

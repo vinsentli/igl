@@ -7,6 +7,7 @@
 
 #include <shell/shared/imageWriter/stb/ImageWriterSTB.h>
 
+#include <algorithm>
 #include <limits>
 #include <string>
 #include <shell/shared/imageLoader/ImageLoader.h>
@@ -18,6 +19,7 @@
 
 namespace igl::shell {
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void ImageWriterSTB::writeImage(const std::string& imageAbsolutePath,
                                 const ImageData& imageData,
                                 bool flipY) const noexcept {

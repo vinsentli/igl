@@ -180,6 +180,7 @@ struct Vertex {
 }
 } // namespace
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void HandsOpenXRSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
@@ -263,8 +264,7 @@ void HandsOpenXRSession::initialize() noexcept {
   shaderStages_ = getShaderStagesForBackend(device, shaderCross, stereoRendering);
 
   // Command queue: backed by different types of GPU HW queues
-  const CommandQueueDesc desc{};
-  commandQueue_ = device.createCommandQueue(desc, nullptr);
+  commandQueue_ = device.createCommandQueue({}, nullptr);
 
   renderPass_.colorAttachments.resize(1);
   renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
@@ -278,7 +278,13 @@ void HandsOpenXRSession::initialize() noexcept {
   renderPass_.depthAttachment.clearDepth = 1.0;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void HandsOpenXRSession::update(SurfaceTextures surfaceTextures) noexcept {
+  // Per IGL guidelines, surfaceTextures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!surfaceTextures.color) {
+    return;
+  }
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
     return;
@@ -303,14 +309,14 @@ void HandsOpenXRSession::update(SurfaceTextures surfaceTextures) noexcept {
 
   Result ret;
   if (framebuffer_[viewIndex] == nullptr) {
-    FramebufferDesc framebufferDesc;
-    framebufferDesc.colorAttachments[0].texture = surfaceTextures.color;
-    framebufferDesc.depthAttachment.texture = surfaceTextures.depth;
-
-    framebufferDesc.mode = surfaceTextures.color->getNumLayers() > 1 ? FramebufferMode::Stereo
-                                                                     : FramebufferMode::Mono;
-
-    framebuffer_[viewIndex] = getPlatform().getDevice().createFramebuffer(framebufferDesc, &ret);
+    framebuffer_[viewIndex] = getPlatform().getDevice().createFramebuffer(
+        FramebufferDesc{
+            .colorAttachments = {{.texture = surfaceTextures.color}},
+            .depthAttachment = {.texture = surfaceTextures.depth},
+            .mode = surfaceTextures.color->getNumLayers() > 1 ? FramebufferMode::Stereo
+                                                              : FramebufferMode::Mono,
+        },
+        &ret);
     IGL_DEBUG_ASSERT(ret.isOk());
     IGL_DEBUG_ASSERT(framebuffer_[viewIndex] != nullptr);
   } else {
@@ -342,15 +348,16 @@ void HandsOpenXRSession::update(SurfaceTextures surfaceTextures) noexcept {
   }
 
   if (depthStencilState_ == nullptr) {
-    DepthStencilStateDesc depthStencilDesc;
-    depthStencilDesc.isDepthWriteEnabled = true;
-    depthStencilDesc.compareFunction = CompareFunction::LessEqual;
+    const DepthStencilStateDesc depthStencilDesc{
+        .compareFunction = CompareFunction::LessEqual,
+        .isDepthWriteEnabled = true,
+    };
     depthStencilState_ =
         getPlatform().getDevice().createDepthStencilState(depthStencilDesc, nullptr);
   }
 
   // Command buffers (1-N per thread): create, submit and forget
-  auto buffer = commandQueue_->createCommandBuffer(CommandBufferDesc{}, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
   const std::shared_ptr<IRenderCommandEncoder> commands =
       buffer->createRenderCommandEncoder(renderPass_, framebuffer_[viewIndex]);
   commands->pushDebugGroupLabel("HandsOpenXRSession Commands", Color(0.0f, 1.0f, 0.0f));

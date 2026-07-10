@@ -7,6 +7,7 @@
 
 #include <igl/opengl/IContext.h>
 
+#include <algorithm>
 #include <cstring>
 #if IGL_DEBUG
 #include <mutex>
@@ -590,127 +591,57 @@ std::string GLenumToString(GLenum code) {
   }
 }
 
-std::string clearBitsToString(GLbitfield bits) {
-  bool first = true;
+// Helper: iterate over a table of {bit, name} pairs and build a "|"-separated string of the names
+// whose bits are set in `bits`.
+std::string bitsToString(GLbitfield bits,
+                         std::initializer_list<std::pair<GLbitfield, const char*>> table) {
   std::stringstream ss;
-  if ((bits & GL_COLOR_BUFFER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_COLOR_BUFFER_BIT";
-    first = false;
-  }
-  if ((bits & GL_DEPTH_BUFFER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_DEPTH_BUFFER_BIT";
-    first = false;
-  }
-  if ((bits & GL_STENCIL_BUFFER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_STENCIL_BUFFER_BIT";
-    first = false;
+  bool first = true;
+  for (const auto& entry : table) {
+    if ((bits & entry.first) != 0) {
+      ss << (first ? "" : " | ") << entry.second;
+      first = false;
+    }
   }
   return ss.str();
+}
+
+std::string clearBitsToString(GLbitfield bits) {
+  return bitsToString(bits,
+                      {{GL_COLOR_BUFFER_BIT, "GL_COLOR_BUFFER_BIT"},
+                       {GL_DEPTH_BUFFER_BIT, "GL_DEPTH_BUFFER_BIT"},
+                       {GL_STENCIL_BUFFER_BIT, "GL_STENCIL_BUFFER_BIT"}});
 }
 
 std::string mapBufferRangeBitsToString(GLbitfield bits) {
-  bool first = true;
-  std::stringstream ss;
-  if ((bits & GL_MAP_READ_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_MAP_READ_BIT";
-    first = false;
-  }
-  if ((bits & GL_MAP_WRITE_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_MAP_WRITE_BIT";
-    first = false;
-  }
-  if ((bits & GL_MAP_PERSISTENT_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_MAP_PERSISTENT_BIT";
-    first = false;
-  }
-  if ((bits & GL_MAP_COHERENT_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_MAP_COHERENT_BIT";
-    first = false;
-  }
-  if ((bits & GL_MAP_INVALIDATE_RANGE_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_MAP_INVALIDATE_RANGE_BIT";
-    first = false;
-  }
-  if ((bits & GL_MAP_INVALIDATE_BUFFER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_MAP_INVALIDATE_BUFFER_BIT";
-    first = false;
-  }
-  if ((bits & GL_MAP_FLUSH_EXPLICIT_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_MAP_FLUSH_EXPLICIT_BIT";
-    first = false;
-  }
-  if ((bits & GL_MAP_UNSYNCHRONIZED_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_MAP_UNSYNCHRONIZED_BIT";
-    first = false;
-  }
-  return ss.str();
+  return bitsToString(bits,
+                      {{GL_MAP_READ_BIT, "GL_MAP_READ_BIT"},
+                       {GL_MAP_WRITE_BIT, "GL_MAP_WRITE_BIT"},
+                       {GL_MAP_PERSISTENT_BIT, "GL_MAP_PERSISTENT_BIT"},
+                       {GL_MAP_COHERENT_BIT, "GL_MAP_COHERENT_BIT"},
+                       {GL_MAP_INVALIDATE_RANGE_BIT, "GL_MAP_INVALIDATE_RANGE_BIT"},
+                       {GL_MAP_INVALIDATE_BUFFER_BIT, "GL_MAP_INVALIDATE_BUFFER_BIT"},
+                       {GL_MAP_FLUSH_EXPLICIT_BIT, "GL_MAP_FLUSH_EXPLICIT_BIT"},
+                       {GL_MAP_UNSYNCHRONIZED_BIT, "GL_MAP_UNSYNCHRONIZED_BIT"}});
 }
 
 std::string memoryBarrierBitsToString(GLbitfield bits) {
-  bool first = true;
-  std::stringstream ss;
-  if ((bits & GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT";
-    first = false;
-  }
-  if ((bits & GL_ELEMENT_ARRAY_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_ELEMENT_ARRAY_BARRIER_BIT";
-    first = false;
-  }
-  if ((bits & GL_UNIFORM_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_UNIFORM_BARRIER_BIT";
-    first = false;
-  }
-  if ((bits & GL_TEXTURE_FETCH_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_TEXTURE_FETCH_BARRIER_BIT";
-    first = false;
-  }
-  if ((bits & GL_SHADER_IMAGE_ACCESS_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_SHADER_IMAGE_ACCESS_BARRIER_BIT";
-    first = false;
-  }
-  if ((bits & GL_COMMAND_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_COMMAND_BARRIER_BIT";
-    first = false;
-  }
-  if ((bits & GL_PIXEL_BUFFER_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_PIXEL_BUFFER_BARRIER_BIT";
-    first = false;
-  }
-  if ((bits & GL_TEXTURE_UPDATE_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_TEXTURE_UPDATE_BARRIER_BIT";
-    first = false;
-  }
-  if ((bits & GL_BUFFER_UPDATE_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_BUFFER_UPDATE_BARRIER_BIT";
-    first = false;
-  }
-  if ((bits & GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT";
-    first = false;
-  }
-  if ((bits & GL_FRAMEBUFFER_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_FRAMEBUFFER_BARRIER_BIT";
-    first = false;
-  }
-  if ((bits & GL_TRANSFORM_FEEDBACK_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_TRANSFORM_FEEDBACK_BARRIER_BIT";
-    first = false;
-  }
-  if ((bits & GL_ATOMIC_COUNTER_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_ATOMIC_COUNTER_BARRIER_BIT";
-    first = false;
-  }
-  if ((bits & GL_SHADER_STORAGE_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_SHADER_STORAGE_BARRIER_BIT";
-    first = false;
-  }
-  if ((bits & GL_QUERY_BUFFER_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " | ") << "GL_QUERY_BUFFER_BARRIER_BIT";
-    first = false;
-  }
-
-  return ss.str();
+  return bitsToString(bits,
+                      {{GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT, "GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT"},
+                       {GL_ELEMENT_ARRAY_BARRIER_BIT, "GL_ELEMENT_ARRAY_BARRIER_BIT"},
+                       {GL_UNIFORM_BARRIER_BIT, "GL_UNIFORM_BARRIER_BIT"},
+                       {GL_TEXTURE_FETCH_BARRIER_BIT, "GL_TEXTURE_FETCH_BARRIER_BIT"},
+                       {GL_SHADER_IMAGE_ACCESS_BARRIER_BIT, "GL_SHADER_IMAGE_ACCESS_BARRIER_BIT"},
+                       {GL_COMMAND_BARRIER_BIT, "GL_COMMAND_BARRIER_BIT"},
+                       {GL_PIXEL_BUFFER_BARRIER_BIT, "GL_PIXEL_BUFFER_BARRIER_BIT"},
+                       {GL_TEXTURE_UPDATE_BARRIER_BIT, "GL_TEXTURE_UPDATE_BARRIER_BIT"},
+                       {GL_BUFFER_UPDATE_BARRIER_BIT, "GL_BUFFER_UPDATE_BARRIER_BIT"},
+                       {GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT, "GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT"},
+                       {GL_FRAMEBUFFER_BARRIER_BIT, "GL_FRAMEBUFFER_BARRIER_BIT"},
+                       {GL_TRANSFORM_FEEDBACK_BARRIER_BIT, "GL_TRANSFORM_FEEDBACK_BARRIER_BIT"},
+                       {GL_ATOMIC_COUNTER_BARRIER_BIT, "GL_ATOMIC_COUNTER_BARRIER_BIT"},
+                       {GL_SHADER_STORAGE_BARRIER_BIT, "GL_SHADER_STORAGE_BARRIER_BIT"},
+                       {GL_QUERY_BUFFER_BARRIER_BIT, "GL_QUERY_BUFFER_BARRIER_BIT"}});
 }
 
 #define GL_ENUM_TO_STRING(code) GLenumToString(code).c_str()
@@ -1263,6 +1194,29 @@ std::string IContext::identifierLabel(GLuint identifier, GLuint name) const {
   return ss.str();
 }
 
+// Helper: append `text` to `ss`, prefixed by a space separator after the first entry.
+static void appendWithSep(std::stringstream& ss, bool& first, const std::string& text) {
+  if (!first) {
+    ss << " ";
+  }
+  ss << text;
+  first = false;
+}
+
+std::string IContext::boundPixelBufferObjects() const {
+  std::stringstream ss;
+  if (boundPixelUnpackBuffer_ != 0) {
+    ss << "unpack (buffer: " << boundPixelUnpackBuffer_ << ")";
+  }
+  if (boundPixelPackBuffer_ != 0) {
+    if (boundPixelUnpackBuffer_ != 0) {
+      ss << " ";
+    }
+    ss << "pack (buffer: " << boundPixelPackBuffer_ << ")";
+  }
+  return ss.str();
+}
+
 std::string IContext::affectedMemoryBarrierObjects(GLbitfield bits) const {
   constexpr const GLbitfield kProgramBits =
       GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL_ELEMENT_ARRAY_BARRIER_BIT | GL_UNIFORM_BARRIER_BIT |
@@ -1276,46 +1230,35 @@ std::string IContext::affectedMemoryBarrierObjects(GLbitfield bits) const {
   bool first = true;
   std::stringstream ss;
   if ((bits & kProgramBits) != 0) {
-    ss << (first ? "" : " ") << "(program: " << boundProgram_ << ")";
-    first = false;
+    std::stringstream prog;
+    prog << "(program: " << boundProgram_ << ")";
+    appendWithSep(ss, first, prog.str());
   }
   if ((bits & GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " ") << boundDrawBuffers();
-    first = false;
+    appendWithSep(ss, first, boundDrawBuffers());
   }
   if ((bits & GL_ELEMENT_ARRAY_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " ") << "element (buffer: " << boundElementArrayBuffer_ << ")";
-    first = false;
+    std::stringstream elem;
+    elem << "element (buffer: " << boundElementArrayBuffer_ << ")";
+    appendWithSep(ss, first, elem.str());
   }
   if ((bits & kTextureBits) != 0) {
-    ss << (first ? "" : " ");
-    if (lastCommandWasCompute_) {
-      ss << boundImageTextures();
-    } else {
-      ss << boundDrawTextures() << " " << boundFramebufferAttachments(GL_DRAW_FRAMEBUFFER) << " "
-         << boundFramebufferAttachments(GL_READ_FRAMEBUFFER);
-    }
-    first = false;
+    const std::string texStr =
+        lastCommandWasCompute_
+            ? boundImageTextures()
+            : (boundDrawTextures() + " " + boundFramebufferAttachments(GL_DRAW_FRAMEBUFFER) + " " +
+               boundFramebufferAttachments(GL_READ_FRAMEBUFFER));
+    appendWithSep(ss, first, texStr);
   }
   if ((bits & GL_PIXEL_BUFFER_BARRIER_BIT) != 0 &&
       (boundPixelPackBuffer_ != 0 || boundPixelUnpackBuffer_ != 0)) {
-    ss << (first ? "" : " ");
-    if (boundPixelUnpackBuffer_ != 0) {
-      ss << "unpack (buffer: " << boundPixelUnpackBuffer_ << ")";
-    }
-    if (boundPixelPackBuffer_ != 0) {
-      ss << (boundPixelUnpackBuffer_ == 0 ? "" : " ") << "pack (buffer: " << boundPixelPackBuffer_
-         << ")";
-    }
-    first = false;
+    appendWithSep(ss, first, boundPixelBufferObjects());
   }
   if ((bits & GL_UNIFORM_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " ") << boundBuffersByIndex(/* ssbos */ false, /* ubos */ true);
-    first = false;
+    appendWithSep(ss, first, boundBuffersByIndex(/* ssbos */ false, /* ubos */ true));
   }
   if ((bits & GL_SHADER_STORAGE_BARRIER_BIT) != 0) {
-    ss << (first ? "" : " ") << boundBuffersByIndex(/* ssbos */ true, /* ubos */ false);
-    first = false;
+    appendWithSep(ss, first, boundBuffersByIndex(/* ssbos */ true, /* ubos */ false));
   }
 
   return ss.str();
@@ -1482,7 +1425,7 @@ std::string IContext::boundBuffersByIndex(bool ssbos, bool ubos) const {
 namespace {
 // The map can be accessed from multiple threads during context creation/destruction.
 std::mutex& getMutex() {
-  static std::mutex mutex;
+  static std::mutex mutex; // NOLINT(facebook-static-object-destructor-check)
   return mutex;
 }
 } // namespace
@@ -1494,6 +1437,14 @@ std::unordered_map<void* IGL_NULLABLE, IContext*>& IContext::getExistingContexts
   return map;
 }
 
+// IContext is a thin forwarding layer over the GL/EGL proc table. The nullable-dereference
+// findings across the wrappers below are false positives: nullable pointer arguments
+// (data/value/buffers/objects/...) are forwarded verbatim to the driver, which permits null
+// for these calls per the GL contract, and are never dereferenced here; the GLCALL_PROC
+// proc-pointer dereference is guarded by a release-effective IGL_DEBUG_VERIFY; and the few
+// remaining hits are debug-only paths over non-null string literals. clang-tidy cannot model
+// any of these, so suppress the signal for the whole forwarding section.
+// NOLINTBEGIN(facebook-hte-NullableDereference)
 void IContext::registerContext(void* IGL_NULLABLE glContext, IContext* context) {
 #if IGL_DEBUG
   std::lock_guard<std::mutex> lock(getMutex());
@@ -1521,7 +1472,7 @@ void IContext::willDestroy(void* IGL_NULLABLE glContext) {
   getComputeAdapterPool().clear();
   // Unregister context
   if (glContext != nullptr) {
-    IContext::unregisterContext((void*)glContext);
+    IContext::unregisterContext(glContext);
   }
 }
 
@@ -2617,7 +2568,8 @@ void IContext::multiDrawArraysIndirect(GLenum mode,
          indirect,
          drawcount,
          stride);
-  IGL_DEBUG_ASSERT(indirect);
+  // `indirect` is a byte offset into the bound GL_DRAW_INDIRECT_BUFFER; offset 0
+  // (a null pointer) is valid, so do not assert it is non-null.
   IGLCALL(MultiDrawArraysIndirect)(mode, indirect, drawcount, stride);
   GLCHECK_ERRORS();
   APILOG_DEC_DRAW_COUNT();
@@ -2641,7 +2593,8 @@ void IContext::multiDrawElementsIndirect(GLenum mode,
          indirect,
          drawcount,
          stride);
-  IGL_DEBUG_ASSERT(indirect);
+  // `indirect` is a byte offset into the bound GL_DRAW_INDIRECT_BUFFER; offset 0
+  // (a null pointer) is valid, so do not assert it is non-null.
   IGLCALL(MultiDrawElementsIndirect)(mode, type, indirect, drawcount, stride);
   GLCHECK_ERRORS();
   APILOG_DEC_DRAW_COUNT();
@@ -2755,6 +2708,7 @@ void IContext::framebufferTexture2D(GLenum target,
   GLCHECK_ERRORS();
 }
 
+// NOLINTNEXTLINE(misc-no-recursion)
 void IContext::framebufferTexture2DMultisample(GLenum target,
                                                GLenum attachment,
                                                GLenum textarget,
@@ -3094,6 +3048,7 @@ GLenum IContext::getError() const {
   return glGetError();
 }
 
+// NOLINTNEXTLINE(misc-no-recursion)
 GLuint IContext::getDebugMessageLog(GLuint count,
                                     GLsizei bufSize,
                                     GLenum* sources,
@@ -3156,6 +3111,7 @@ void IContext::getFramebufferAttachmentParameteriv(GLenum target,
   GLCHECK_ERRORS();
 }
 
+// NOLINTNEXTLINE(misc-no-recursion)
 void IContext::getIntegerv(GLenum pname, GLint* params) const {
   GLCALL(GetIntegerv)(pname, params);
   // NOTE: Must log after call due to return value
@@ -4379,6 +4335,11 @@ void IContext::uniformMatrix4fv(GLint location,
                                 GLsizei count,
                                 GLboolean transpose,
                                 const GLfloat* value) {
+#if IGL_API_LOG
+  // Use a zero-filled fallback so we can log matrix elements without 16 null-checks.
+  constexpr GLfloat kZeroMatrix[16] = {};
+  const GLfloat* const v = (value != nullptr) ? value : kZeroMatrix;
+#endif
   APILOG(
       "glUniformMatrix4fv(%d, %u, %s, %p [[%f %f %f %f] [%f %f %f %f] [%f %f %f %f] [%f %f %f "
       "%f]]) (program: %u) (uniform: %s)\n",
@@ -4386,22 +4347,22 @@ void IContext::uniformMatrix4fv(GLint location,
       count,
       GL_BOOL_TO_STRING(transpose),
       value,
-      value == nullptr ? 0.f : value[0],
-      value == nullptr ? 0.f : value[1],
-      value == nullptr ? 0.f : value[2],
-      value == nullptr ? 0.f : value[3],
-      value == nullptr ? 0.f : value[4],
-      value == nullptr ? 0.f : value[5],
-      value == nullptr ? 0.f : value[6],
-      value == nullptr ? 0.f : value[7],
-      value == nullptr ? 0.f : value[8],
-      value == nullptr ? 0.f : value[9],
-      value == nullptr ? 0.f : value[10],
-      value == nullptr ? 0.f : value[11],
-      value == nullptr ? 0.f : value[12],
-      value == nullptr ? 0.f : value[13],
-      value == nullptr ? 0.f : value[14],
-      value == nullptr ? 0.f : value[15],
+      v[0],
+      v[1],
+      v[2],
+      v[3],
+      v[4],
+      v[5],
+      v[6],
+      v[7],
+      v[8],
+      v[9],
+      v[10],
+      v[11],
+      v[12],
+      v[13],
+      v[14],
+      v[15],
       boundProgram_,
       programUniformsByLocation_[boundProgram_][location].c_str());
   GLCALL(UniformMatrix4fv)(location, count, transpose, value);
@@ -4518,6 +4479,19 @@ void IContext::dispatchCompute(GLuint numGroupsX, GLuint numGroupsY, GLuint numG
   GLCHECK_ERRORS();
 }
 
+void IContext::dispatchComputeIndirect(GLintptr indirect) {
+#if IGL_API_LOG
+  lastCommandWasCompute_ = true;
+#endif
+  APILOG("glDispatchComputeIndirect(%zd) (program: %u) %s %s\n",
+         static_cast<ptrdiff_t>(indirect),
+         boundProgram_,
+         boundImageTextures().c_str(),
+         boundBuffersByIndex().c_str());
+  IGLCALL(DispatchComputeIndirect)(indirect);
+  GLCHECK_ERRORS();
+}
+
 void IContext::memoryBarrier(GLbitfield barriers) {
   if (memoryBarrierProc_ == nullptr) {
     if (deviceFeatureSet_.hasInternalRequirement(InternalRequirement::ShaderImageLoadStoreExtReq)) {
@@ -4590,6 +4564,7 @@ Result IContext::getLastError() const {
   return GL_ERROR_TO_RESULT(lastError_);
 }
 
+// NOLINTNEXTLINE(misc-no-recursion)
 GLenum IContext::checkForErrors(IGL_MAYBE_UNUSED const char* callerName,
                                 IGL_MAYBE_UNUSED size_t lineNum) const {
   lastError_ = getError();
@@ -4674,6 +4649,57 @@ void IContext::setUnbindPolicy(UnbindPolicy newValue) {
   unbindPolicy_ = newValue;
 }
 
+/**
+ * @brief Initializes the OpenGL context by detecting the GL
+ *        version, collecting extensions, and configuring the
+ *        device feature set.
+ *
+ * Called by platform-specific context subclasses after creating
+ * the native OpenGL context. Sets the context as current,
+ * queries GL_VERSION and GL_EXTENSIONS, initializes the device
+ * feature set, and enables seamless cube map if supported.
+ *
+ * @param[out] result Optional output for reporting errors such
+ *        as failure to set the current context or to determine
+ *        the GL version.
+ */
+GLVersion IContext::initializeGLVersion(Result* result) {
+  const char* version = reinterpret_cast<const char*>(getString(GL_VERSION));
+  if (version == nullptr) {
+    IGL_LOG_ERROR("Unable to get GL version string\n");
+    Result::setResult(result, Result::Code::RuntimeError, "Unable to get GL version string\n");
+    return DeviceFeatureSet::usesOpenGLES() ? GLVersion::v2_0_ES : GLVersion::v2_0;
+  }
+  const GLVersion glVersion = ::igl::opengl::getGLVersion(version);
+  if (glVersion == GLVersion::NotAvailable) {
+    IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
+    Result::setResult(result, Result::Code::RuntimeError, "Unable to get GL version\n");
+  }
+  return glVersion;
+}
+
+void IContext::loadExtensions(std::string& extensions,
+                              std::unordered_set<std::string>& supportedExtensions) {
+  if (!deviceFeatureSet_.hasInternalFeature(InternalFeatures::GetStringi)) {
+    const GLubyte* extensionStr = getString(GL_EXTENSIONS);
+    // If setCurrent() fails, then extensions may be nullptr.
+    if (extensionStr) {
+      extensions = std::string(reinterpret_cast<const char*>(extensionStr));
+    }
+    return;
+  }
+  GLint n = 0;
+  getIntegerv(GL_NUM_EXTENSIONS, &n);
+  if (IGL_DEBUG_VERIFY(n >= 0)) {
+    for (GLuint i = 0; i < static_cast<GLuint>(n); i++) {
+      const auto* ext = reinterpret_cast<const char*>(getStringi(GL_EXTENSIONS, i));
+      if (ext) {
+        supportedExtensions.insert(ext);
+      }
+    }
+  }
+}
+
 void IContext::initialize(Result* result) {
   setCurrent();
   if (!isCurrentContext()) {
@@ -4681,50 +4707,20 @@ void IContext::initialize(Result* result) {
     return;
   }
 
-  GLVersion glVersion = GLVersion::NotAvailable;
-
-  const char* version = (char*)getString(GL_VERSION);
-  if (version == nullptr) {
-    IGL_LOG_ERROR("Unable to get GL version string\n");
-    Result::setResult(result, Result::Code::RuntimeError, "Unable to get GL version string\n");
-    glVersion = DeviceFeatureSet::usesOpenGLES() ? GLVersion::v2_0_ES : GLVersion::v2_0;
-  } else {
-    glVersion = ::igl::opengl::getGLVersion(version);
-    if (glVersion == GLVersion::NotAvailable) {
-      IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
-      Result::setResult(result, Result::Code::RuntimeError, "Unable to get GL version\n");
-    }
-  }
-  const char* vendor = (char*)getString(GL_VENDOR);
-  const char* renderer = (char*)getString(GL_RENDERER);
-  deviceFeatureSet_.initializeVersion(glVersion, vendor, renderer);
+  const GLVersion glVersion = initializeGLVersion(result);
+  deviceFeatureSet_.initializeVersion(glVersion);
 
   std::string extensions;
   std::unordered_set<std::string> supportedExtensions;
-  if (!deviceFeatureSet_.hasInternalFeature(InternalFeatures::GetStringi)) {
-    const GLubyte* extensionStr = getString(GL_EXTENSIONS);
-
-    // If setCurrent() fails, then extensions may be nullptr.
-    if (extensionStr) {
-      extensions = std::string((char*)extensionStr);
-    }
-  } else {
-    GLint n = 0;
-    getIntegerv(GL_NUM_EXTENSIONS, &n);
-    if (IGL_DEBUG_VERIFY(n >= 0)) {
-      for (GLuint i = 0; i < static_cast<GLuint>(n); i++) {
-        const auto* ext = reinterpret_cast<const char*>(getStringi(GL_EXTENSIONS, i));
-        if (ext) {
-          supportedExtensions.insert(ext);
-        }
-      }
-    }
-  }
+  loadExtensions(extensions, supportedExtensions);
 
 #if IGL_LOGGING_ENABLED
+  const char* version = reinterpret_cast<const char*>(getString(GL_VERSION));
   IGL_LOG_INFO("GL Context Initialized: %p\n", this);
   IGL_LOG_INFO("GL Version: %s\n", version);
+  const char* vendor = reinterpret_cast<const char*>(getString(GL_VENDOR));
   IGL_LOG_INFO("GL Vendor: %s\n", (vendor != nullptr) ? vendor : "(null)");
+  const char* renderer = reinterpret_cast<const char*>(getString(GL_RENDERER));
   IGL_LOG_INFO("GL Renderer: %s\n", (renderer != nullptr) ? renderer : "(null)");
   if (!extensions.empty() || supportedExtensions.empty()) {
     IGL_LOG_INFO("GL Extensions: %s\n", extensions.c_str());

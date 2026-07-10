@@ -7,9 +7,8 @@
 
 #pragma once
 
-#include <memory>
-#include <igl/vulkan/Common.h>
-#include <igl/vulkan/VulkanHelpers.h>
+#include <utility>
+#include <igl/vulkan/VulkanFunctionTable.h>
 
 namespace igl::vulkan {
 

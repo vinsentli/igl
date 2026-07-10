@@ -13,14 +13,16 @@
 
 namespace igl::opengl {
 
+namespace {
+
 //
 // A utility function to convert an IGL attribute to an OGL attribute
 //
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
-static void toOGLAttribute(const VertexAttribute& attrib,
-                           GLint& numComponents,
-                           GLenum& componentType,
-                           GLboolean& normalized) {
+void toOGLAttribute(const VertexAttribute& attrib,
+                    GLint& numComponents,
+                    GLenum& componentType,
+                    GLboolean& normalized) {
   // NOLINTEND(bugprone-easily-swappable-parameters)
   switch (attrib.format) {
   case VertexAttributeFormat::Float1:
@@ -322,6 +324,8 @@ static void toOGLAttribute(const VertexAttribute& attrib,
     // GL attribute
   }
 }
+
+} // namespace
 
 Result VertexInputState::create(const VertexInputStateDesc& desc) {
   if (desc.numAttributes == 0) {

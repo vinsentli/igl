@@ -16,23 +16,27 @@
 
 #include <igl/vulkan/Texture.h>
 
-struct AHardwareBuffer;
-
 namespace igl::vulkan::android {
 
 typedef void AHardwareBufferHelper;
 
 // TextureBuffer encapsulates Vulkan textures
 class NativeHWTextureBuffer : public igl::android::INativeHWTextureBuffer, public Texture {
-  friend class igl::vulkan::PlatformDevice;
+  friend class PlatformDevice;
   using Super = Texture;
 
  public:
-  NativeHWTextureBuffer(igl::vulkan::Device& device, std::shared_ptr<AHardwareBufferFunctionTable> funcTable, TextureFormat format);
+  NativeHWTextureBuffer(Device& device, std::shared_ptr<AHardwareBufferFunctionTable> funcTable, TextureFormat format);
   ~NativeHWTextureBuffer() override;
 
   void* getMapMemoryAddress() const override;
   size_t getMapBytesPerRow() const override;
+  
+  // Returns the context-owned conversion attached to this texture's image view, or VK_NULL_HANDLE
+  // when none was created (RGB AHBs and defined-multi-plane AHB imports).
+  // Callers must not destroy the returned handle, but still own their VkSampler lifetime.
+  // The sampler must use the same conversion handle that created the image view.
+  [[nodiscard]] VkSamplerYcbcrConversion getVkSamplerYcbcrConversion() const noexcept;
 
  protected:
   // Texture overrides

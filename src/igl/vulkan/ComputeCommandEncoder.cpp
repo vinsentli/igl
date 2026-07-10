@@ -104,7 +104,7 @@ void ComputeCommandEncoder::processDependencies(const Dependencies& dependencies
         if (!tex) {
           break;
         }
-        igl::vulkan::transitionToGeneral(cmdBuffer_, tex);
+        transitionToGeneral(cmdBuffer_, tex);
       }
       deps = deps->next;
     }
@@ -120,14 +120,25 @@ void ComputeCommandEncoder::processDependencies(const Dependencies& dependencies
           break;
         }
         const auto* vkBuf = static_cast<Buffer*>(buf);
+        const VkBufferUsageFlags flags = vkBuf->getBufferUsageFlags();
+        VkPipelineStageFlags dstStageFlags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        // Indirect-dispatch arg buffers are read at the DRAW_INDIRECT stage,
+        // not at COMPUTE_SHADER. If a compute pass produced this buffer and
+        // a subsequent dispatchThreadGroupsIndirect() consumes it, the
+        // barrier must cover that stage too, otherwise the dispatch races
+        // against the producing write and reads stale (typically zero)
+        // group counts. Mirrors RenderCommandEncoder::processDependencies().
+        if (flags & VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT) {
+          dstStageFlags |= VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+        }
         ivkBufferBarrier(&ctx_.vf_,
                          cmdBuffer_,
                          vkBuf->getVkBuffer(),
-                         vkBuf->getBufferUsageFlags(),
+                         flags,
                          VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
                              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+                         dstStageFlags);
       }
       deps = deps->next;
     }
@@ -152,6 +163,34 @@ void ComputeCommandEncoder::dispatchThreadGroups(const Dimensions& threadgroupCo
   // threadgroupSize is controlled inside compute shaders
   ctx_.vf_.vkCmdDispatch(
       cmdBuffer_, threadgroupCount.width, threadgroupCount.height, threadgroupCount.depth);
+}
+
+void ComputeCommandEncoder::dispatchThreadGroupsIndirect(IBuffer& indirectBuffer,
+                                                         size_t indirectBufferOffset,
+                                                         const Dimensions& /*threadgroupSize*/,
+                                                         const Dependencies& dependencies) {
+  IGL_PROFILER_FUNCTION();
+
+  IGL_ENSURE_VULKAN_CONTEXT_THREAD(&ctx_);
+
+  if (!cps_) {
+    IGL_DEBUG_ABORT("Did you forget to call bindComputePipelineState()?");
+    return;
+  }
+
+  processDependencies(dependencies);
+
+  binder_.updateBindings(cps_->getVkPipelineLayout(), *cps_);
+
+  const auto* bufIndirect = static_cast<const igl::vulkan::Buffer*>(&indirectBuffer);
+  // Spec: bufIndirect must have been created with VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
+  // (i.e. BufferDesc::BufferTypeBits::Indirect) and the producer pass must already have
+  // released its writes via the encoder boundary.
+  IGL_DEBUG_ASSERT((bufIndirect->getBufferUsageFlags() & VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT) != 0,
+                   "indirectBuffer must be created with BufferTypeBits::Indirect");
+  IGL_DEBUG_ASSERT(indirectBufferOffset % 4 == 0,
+                   "indirectBufferOffset must be 4-byte aligned (Vulkan spec)");
+  ctx_.vf_.vkCmdDispatchIndirect(cmdBuffer_, bufIndirect->getVkBuffer(), indirectBufferOffset);
 }
 
 void ComputeCommandEncoder::pushDebugGroupLabel(const char* label, const igl::Color& color) const {
@@ -180,24 +219,48 @@ void ComputeCommandEncoder::bindTexture(uint32_t index, ITexture* texture) {
 
   IGL_DEBUG_ASSERT(texture);
 
-  const igl::vulkan::Texture* tex = static_cast<Texture*>(texture);
-  const igl::vulkan::VulkanTexture& vkTex = tex->getVulkanTexture();
-  const igl::vulkan::VulkanImage* vkImage = &vkTex.image;
+  const Texture* tex = static_cast<Texture*>(texture);
+  const VulkanTexture& vkTex = tex->getVulkanTexture();
+  const VulkanImage* vkImage = &vkTex.image;
 
   IGL_DEBUG_ASSERT(vkImage);
 
+  // bindTexture() writes a sampled descriptor (imageLayout =
+  // VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL in VulkanContext::checkAndUpdateDescriptorSets()).
+  // For Sampled+Storage textures, prefer the sampled transition so the actual layout matches the
+  // descriptor write; transitioning to GENERAL here would trip VUID-vkCmdDispatch-None-08114 and
+  // VUID-VkDescriptorImageInfo-imageLayout-00344. Storage-only textures should be bound via
+  // bindImageTexture() instead; we keep the GENERAL fallback to preserve the prior behavior.
   if (vkImage->isSampledImage()) {
-    igl::vulkan::transitionToShaderReadOnly(cmdBuffer_, texture);
+    transitionToShaderReadOnly(cmdBuffer_, texture);
     binder_.bindTexture(index, static_cast<Texture*>(texture));
   } else if (vkImage->isStorageImage()) {
-    igl::vulkan::transitionToGeneral(cmdBuffer_, texture);
+    transitionToGeneral(cmdBuffer_, texture);
     binder_.bindStorageImage(index, static_cast<Texture*>(texture));
   } else {
     IGL_DEBUG_ASSERT(false, "A texture should be Sampled or Storage");
   }
 
+  // TODO:vinsentli 2026.7.10
+#if 1 // 腾讯版本
   restoreLayout_.push_back(vkImage);
   restoreLayoutAspectFlags_.push_back(vkTex.imageView_.getVkImageAspectFlags());
+#else // IGL版本
+  const bool alreadyTracked = [this, vkImage]() {
+    for (uint32_t i = 0; i < numRestoreLayouts_; ++i) {
+      if (restoreLayout_[i] == vkImage) {
+        return true;
+      }
+    }
+    return false;
+  }();
+  if (!alreadyTracked) {
+    IGL_DEBUG_ASSERT(numRestoreLayouts_ < IGL_TEXTURE_SAMPLERS_MAX);
+    restoreLayout_[numRestoreLayouts_] = vkImage;
+    restoreLayoutAspectFlags_[numRestoreLayouts_] = vkTex.imageView_.getVkImageAspectFlags();
+    numRestoreLayouts_++;
+  }
+#endif
 }
 
 void ComputeCommandEncoder::bindImageTexture(uint32_t index,
@@ -219,11 +282,30 @@ void ComputeCommandEncoder::bindImageTexture(uint32_t index,
     return;
   }
 
-  igl::vulkan::transitionToGeneral(cmdBuffer_, texture);
+  transitionToGeneral(cmdBuffer_, texture);
 
+  // TODO:vinsentli 2026.7.10
+#if 1 // 腾讯版本
   restoreLayout_.push_back(vkImage);
   restoreLayoutAspectFlags_.push_back(
       tex ? tex->getVulkanTexture().imageView_.getVkImageAspectFlags() : VK_IMAGE_ASPECT_NONE);
+#else // IGL版本
+  const bool alreadyTracked = [this, vkImage]() {
+    for (uint32_t i = 0; i < numRestoreLayouts_; ++i) {
+      if (restoreLayout_[i] == vkImage) {
+        return true;
+      }
+    }
+    return false;
+  }();
+  if (!alreadyTracked) {
+    IGL_DEBUG_ASSERT(numRestoreLayouts_ < IGL_TEXTURE_SAMPLERS_MAX);
+    restoreLayout_[numRestoreLayouts_] = vkImage;
+    restoreLayoutAspectFlags_[numRestoreLayouts_] =
+        tex ? tex->getVulkanTexture().imageView_.getVkImageAspectFlags() : VK_IMAGE_ASPECT_NONE;
+    numRestoreLayouts_++;
+  }
+#endif
 
   binder_.bindStorageImage(index, tex);
 }

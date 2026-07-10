@@ -192,4 +192,104 @@ TEST_F(AssertTest, SoftError) {
   EXPECT_TRUE(sSoftError);
 }
 
+TEST_F(AssertTest, DebugAssertPassDoesNotAbort) {
+  sAbort = false;
+  IGL_DEBUG_ASSERT(true);
+  EXPECT_FALSE(sAbort);
+
+  IGL_DEBUG_ASSERT(true, "Should not fire");
+  EXPECT_FALSE(sAbort);
+
+  IGL_DEBUG_ASSERT(true, "Should not fire %d", 1);
+  EXPECT_FALSE(sAbort);
+}
+
+TEST_F(AssertTest, DebugVerifyReturnValues) {
+  sAbort = false;
+  EXPECT_TRUE(IGL_DEBUG_VERIFY(true));
+  EXPECT_FALSE(sAbort);
+
+  EXPECT_TRUE(IGL_DEBUG_VERIFY(true, "pass msg"));
+  EXPECT_FALSE(sAbort);
+
+  EXPECT_FALSE(IGL_DEBUG_VERIFY(false));
+  sAbort = false;
+
+  EXPECT_FALSE(IGL_DEBUG_VERIFY_NOT(false));
+  EXPECT_FALSE(sAbort);
+
+  EXPECT_FALSE(IGL_DEBUG_VERIFY_NOT(false, "pass msg"));
+  EXPECT_FALSE(sAbort);
+
+  EXPECT_TRUE(IGL_DEBUG_VERIFY_NOT(true));
+  sAbort = false;
+}
+
+TEST_F(AssertTest, SoftAssertPassDoesNotFire) {
+  sAbort = false;
+  sSoftError = false;
+  IGL_SOFT_ASSERT(true);
+  EXPECT_FALSE(sAbort);
+  EXPECT_FALSE(sSoftError);
+
+  IGL_SOFT_ASSERT(true, "Should not fire");
+  EXPECT_FALSE(sAbort);
+  EXPECT_FALSE(sSoftError);
+
+  EXPECT_TRUE(IGL_SOFT_VERIFY(true));
+  EXPECT_FALSE(sAbort);
+  EXPECT_FALSE(sSoftError);
+
+  EXPECT_FALSE(IGL_SOFT_VERIFY_NOT(false));
+  EXPECT_FALSE(sAbort);
+  EXPECT_FALSE(sSoftError);
+}
+
+TEST_F(AssertTest, DebugBreakEnabledRoundTrip) {
+  // SetUp() disables debug break, so the getter should reflect that initially.
+  EXPECT_FALSE(igl::isDebugBreakEnabled());
+
+  igl::setDebugBreakEnabled(true);
+  EXPECT_TRUE(igl::isDebugBreakEnabled());
+
+  igl::setDebugBreakEnabled(false);
+  EXPECT_FALSE(igl::isDebugBreakEnabled());
+}
+
+TEST_F(AssertTest, SoftErrorHandlerRoundTrip) {
+  // SetUp() installs a non-null soft error handler.
+  EXPECT_NE(iglGetSoftErrorHandler(), nullptr);
+
+  const IGLErrorHandlerFunc handler = [](const char* /*category*/,
+                                         const char* /*reason*/,
+                                         const char* /*file*/,
+                                         const char* /*func*/,
+                                         int /*line*/,
+                                         const char* /*format*/,
+                                         va_list /*ap*/) {};
+  iglSetSoftErrorHandler(handler);
+  EXPECT_EQ(iglGetSoftErrorHandler(), handler);
+
+  iglSetSoftErrorHandler(nullptr);
+  EXPECT_EQ(iglGetSoftErrorHandler(), nullptr);
+}
+
+TEST_F(AssertTest, DebugAbortListenerRoundTrip) {
+  // SetUp() installs a non-null debug abort listener.
+  EXPECT_NE(iglGetDebugAbortListener(), nullptr);
+
+  const IGLErrorHandlerFunc listener = [](const char* /*category*/,
+                                          const char* /*reason*/,
+                                          const char* /*file*/,
+                                          const char* /*func*/,
+                                          int /*line*/,
+                                          const char* /*format*/,
+                                          va_list /*ap*/) {};
+  iglSetDebugAbortListener(listener);
+  EXPECT_EQ(iglGetDebugAbortListener(), listener);
+
+  iglSetDebugAbortListener(nullptr);
+  EXPECT_EQ(iglGetDebugAbortListener(), nullptr);
+}
+
 } // namespace igl::tests

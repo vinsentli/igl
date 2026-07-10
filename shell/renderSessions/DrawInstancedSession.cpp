@@ -223,6 +223,11 @@ void DrawInstancedSession::initialize() noexcept {
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
 void DrawInstancedSession::update(SurfaceTextures surfaceTextures) noexcept {
+  // Per IGL guidelines, surfaceTextures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!surfaceTextures.color) {
+    return;
+  }
   const auto dimensions = surfaceTextures.color->getDimensions();
   framebuffer_ = getPlatform().getDevice().createFramebuffer(
       FramebufferDesc{.colorAttachments = {{.texture = surfaceTextures.color}}}, nullptr);
@@ -285,8 +290,8 @@ void DrawInstancedSession::update(SurfaceTextures surfaceTextures) noexcept {
     for (int y = -10; y < 10; y += 2) {
       for (int x = -10; x < 10; x += 2) {
         glm::vec2 translation;
-        translation.x = (float)x / 10.0f + offset;
-        translation.y = (float)y / 10.0f + offset;
+        translation.x = static_cast<float>(x) / 10.0f + offset;
+        translation.y = static_cast<float>(y) / 10.0f + offset;
         translations[index++] = translation;
       }
     }
@@ -306,15 +311,17 @@ void DrawInstancedSession::update(SurfaceTextures surfaceTextures) noexcept {
 
   const igl::Viewport viewport = {.x = 0.0f,
                                   .y = 0.0f,
-                                  .width = (float)dimensions.width,
-                                  .height = (float)dimensions.height,
+                                  .width = static_cast<float>(dimensions.width),
+                                  .height = static_cast<float>(dimensions.height),
                                   .minDepth = 0.0f,
                                   .maxDepth = +1.0f};
-  const igl::ScissorRect scissor = {
-      .x = 0, .y = 0, .width = (uint32_t)dimensions.width, .height = (uint32_t)dimensions.height};
+  const igl::ScissorRect scissor = {.x = 0,
+                                    .y = 0,
+                                    .width = static_cast<uint32_t>(dimensions.width),
+                                    .height = static_cast<uint32_t>(dimensions.height)};
 
   // This will clear the framebuffer
-  auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
+  const auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
 
   commands->bindRenderPipelineState(renderPipelineStateTriangle_);
   commands->bindViewport(viewport);

@@ -34,8 +34,8 @@ struct ComputePipelineDesc {
   /*
    * OpenGL only
    */
-  std::unordered_map<size_t, igl::NameHandle> imagesMap;
-  std::unordered_map<size_t, igl::NameHandle> buffersMap;
+  std::unordered_map<size_t, NameHandle> imagesMap;
+  std::unordered_map<size_t, NameHandle> buffersMap;
 
   /*
    * @brief The compute kernel the pipeline calls.
@@ -69,6 +69,7 @@ namespace std {
 template<>
 struct hash<igl::ComputePipelineDesc> {
   size_t operator()(const igl::ComputePipelineDesc& desc) const {
+    // @fb-only
     size_t hash = std::hash<uintptr_t>()(reinterpret_cast<uintptr_t>(desc.shaderStages.get()));
     hash ^= std::hash<std::string>()(desc.debugName);
     for (const auto& p : desc.buffersMap) {
@@ -79,6 +80,7 @@ struct hash<igl::ComputePipelineDesc> {
       hash ^= std::hash<size_t>()(p.first);
       hash ^= std::hash<std::string>()(p.second.toString());
     }
+    // @fb-only
     return hash;
   }
 };

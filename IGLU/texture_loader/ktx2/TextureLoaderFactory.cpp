@@ -37,6 +37,7 @@ uint32_t TextureLoaderFactory::minHeaderLength() const noexcept {
   return kHeaderLength;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 bool TextureLoaderFactory::canCreateInternal(DataReader headerReader,
                                              igl::Result* IGL_NULLABLE outResult) const noexcept {
   if (headerReader.data() == nullptr) {
@@ -85,6 +86,7 @@ igl::TextureRangeDesc TextureLoaderFactory::textureRange(DataReader reader) cons
   return range;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 bool TextureLoaderFactory::validate(DataReader reader,
                                     const igl::TextureRangeDesc& range,
                                     igl::Result* IGL_NULLABLE outResult) const noexcept {
@@ -104,6 +106,76 @@ bool TextureLoaderFactory::validate(DataReader reader,
       static_cast<uint64_t>(length)) {
     igl::Result::setResult(outResult, igl::Result::Code::InvalidOperation, "Length is too short.");
     return false;
+  }
+
+  // Bound the level index against the actual input length for ALL formats. The
+  // vkFormat != 0 block below does stricter, format-aware checks, but a vkFormat == 0
+  // (Basis/non-Vulkan) header skips that block entirely, leaving the level index
+  // unvalidated; ktxTexture_CreateFromMemory(LOAD_IMAGE_DATA) then eagerly malloc()s
+  // the header-declared data size in ktxTexture2_LoadImageData, so a header declaring a
+  // byteLength larger than the file drives an out-of-memory. A valid file always stores its level
+  // data within the input, so this only rejects malformed headers.
+  const uint64_t levelIndexEnd =
+      static_cast<uint64_t>(kHeaderLength) + static_cast<uint64_t>(range.numMipLevels) * 24u;
+  if (levelIndexEnd > static_cast<uint64_t>(length)) {
+    igl::Result::setResult(
+        outResult, igl::Result::Code::InvalidOperation, "Length is too short for the level index.");
+    return false;
+  }
+
+  // Upper bound on a single level's uncompressed size.
+  // Reject when a level's uncompressedByteLength exceeds what its dimensions can hold.
+  // The product is accumulated with an explicit overflow check: with attacker-controlled
+  // dimensions each near 2^32-1, a naive chained uint64_t multiply would wrap and could
+  // yield a bound large enough to let an over-large uncompressedByteLength through. Treat
+  // any overflow as absurd dimensions and reject.
+  constexpr uint64_t kMaxBytesPerTexel = 16u; // RGBA32F; >= any uncompressed format
+  // Maximum plausible expansion ratio for a supercompressed (ZSTD/ZLIB) level. Real texture
+  // data never approaches this; a decompression bomb exceeds it by orders of magnitude.
+  constexpr uint64_t kMaxSupercompressionRatio = 1024u;
+  uint64_t maxLevelBytes = kMaxBytesPerTexel;
+  for (const uint32_t dimension :
+       {range.width, range.height, range.depth, range.numLayers, std::max(range.numFaces, 1u)}) {
+    const uint64_t factor = static_cast<uint64_t>(dimension);
+    if (factor != 0u && maxLevelBytes > std::numeric_limits<uint64_t>::max() / factor) {
+      igl::Result::setResult(
+          outResult, igl::Result::Code::InvalidOperation, "Texture dimensions are too large.");
+      return false;
+    }
+    maxLevelBytes *= factor;
+  }
+
+  for (uint32_t mipLevel = 0; mipLevel < range.numMipLevels; ++mipLevel) {
+    const uint32_t levelOffset = kHeaderLength + mipLevel * 24u;
+    const uint64_t levelByteOffset = reader.readAt<uint64_t>(levelOffset);
+    const uint64_t levelByteLength = reader.readAt<uint64_t>(levelOffset + 8u);
+    const uint64_t levelUncompressedByteLength = reader.readAt<uint64_t>(levelOffset + 16u);
+    if (levelByteOffset > static_cast<uint64_t>(length) ||
+        levelByteLength > static_cast<uint64_t>(length) - levelByteOffset) {
+      igl::Result::setResult(
+          outResult, igl::Result::Code::InvalidOperation, "Level data exceeds the input length.");
+      return false;
+    }
+    if (levelUncompressedByteLength > maxLevelBytes) {
+      igl::Result::setResult(outResult,
+                             igl::Result::Code::InvalidOperation,
+                             "Uncompressed level data exceeds the texture dimensions.");
+      return false;
+    }
+    // For supercompressed levels, uncompressedByteLength sizes the inflate destination
+    // (ktxTexture2_LoadImageData allocates inflatedDataCapacity, then ktxTexture2_inflate*Int
+    // spins filling it). The dimension bound above is attacker-influenced: a header declaring
+    // absurd dimensions (e.g. depth in the millions) inflates maxLevelBytes enough to admit a
+    // multi-gigabyte uncompressedByteLength, turning a ~1KB compressed payload into a
+    // multi-second decompression bomb. Independently cap the expansion ratio against the
+    // compressed size (levelByteLength is already bounded by the input length above).
+    if (header->supercompressionScheme != 0u &&
+        levelUncompressedByteLength > levelByteLength * kMaxSupercompressionRatio) {
+      igl::Result::setResult(outResult,
+                             igl::Result::Code::InvalidOperation,
+                             "Supercompressed level expansion ratio is implausible.");
+      return false;
+    }
   }
 
   if (header->vkFormat != 0u) {

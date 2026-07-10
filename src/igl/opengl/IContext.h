@@ -40,6 +40,9 @@ class IContext {
   virtual void clearCurrentContext() const = 0;
   virtual bool isCurrentContext() const = 0;
   virtual bool isCurrentSharegroup() const = 0;
+  virtual std::string getCurrentContextDebugInfo() const {
+    return {};
+  }
   virtual void present(std::shared_ptr<ITexture> surface) const = 0;
 
   virtual std::unique_ptr<IContext> createShareContext(Result* IGL_NULLABLE outResult) = 0;
@@ -491,6 +494,7 @@ class IContext {
   void viewport(GLint x, GLint y, GLsizei width, GLsizei height);
 
   void dispatchCompute(GLuint numGroupsX, GLuint numGroupsY, GLuint numGroupsZ);
+  void dispatchComputeIndirect(GLintptr indirect);
   void memoryBarrier(GLbitfield barriers);
   GLuint64 getTextureHandle(GLuint texture);
   void makeTextureHandleResident(GLuint64 handle);
@@ -593,8 +597,8 @@ class IContext {
   void clearCacheState();
 
  public:
-  mutable Pool<BindGroupBufferTag, BindGroupBufferDesc> bindGroupBuffersPool;
-  mutable Pool<BindGroupTextureTag, BindGroupTextureDesc> bindGroupTexturesPool;
+  mutable ldr::Pool<BindGroupBufferTag, BindGroupBufferDesc> bindGroupBuffersPool;
+  mutable ldr::Pool<BindGroupTextureTag, BindGroupTextureDesc> bindGroupTexturesPool;
 
  protected:
   static std::unordered_map<void* IGL_NULLABLE, IContext*>& getExistingContexts();
@@ -604,6 +608,10 @@ class IContext {
   void willDestroy(void* IGL_NULLABLE glContext);
 
  private:
+  GLVersion initializeGLVersion(Result* IGL_NULLABLE result);
+  void loadExtensions(std::string& extensions,
+                      std::unordered_set<std::string>& supportedExtensions);
+
   bool alwaysCheckError_ = false; // TRUE to check error after each OGL call
   mutable GLenum lastError_ = GL_NO_ERROR;
   mutable unsigned int callCounter_ = 0;
@@ -709,6 +717,7 @@ class IContext {
   std::string identifierLabel(GLuint identifier, GLuint name) const;
 
   std::string affectedMemoryBarrierObjects(GLbitfield bits) const;
+  std::string boundPixelBufferObjects() const;
 #endif
 
   PFNIGLBINDIMAGETEXTUREPROC IGL_NULLABLE bindImageTexturerProc_ = nullptr;
@@ -742,7 +751,6 @@ class IContext {
   PFNIGLRENDERBUFFERSTORAGEMULTISAMPLEPROC IGL_NULLABLE renderbufferStorageMultisampleProc_ =
       nullptr;
   PFNIGLTEXIMAGE3DPROC IGL_NULLABLE texImage3DProc_ = nullptr;
-  PFNIGLTEXSTORAGE1DPROC IGL_NULLABLE texStorage1DProc_ = nullptr;
   PFNIGLTEXSTORAGE2DPROC IGL_NULLABLE texStorage2DProc_ = nullptr;
   PFNIGLTEXSTORAGE3DPROC IGL_NULLABLE texStorage3DProc_ = nullptr;
   PFNIGLTEXSUBIMAGE3DPROC IGL_NULLABLE texSubImage3DProc_ = nullptr;

@@ -321,12 +321,12 @@ TEST_F(TextureMTLTest, ToMTLTextureType) {
   }
 }
 
-static std::shared_ptr<ITexture> createCVPixelBufferTextureWithSize(
-    TextureFormat format,
-    const size_t width,
-    const size_t height,
-    const std::shared_ptr<IDevice>& device,
-    Result& outResult) {
+namespace {
+std::shared_ptr<ITexture> createCVPixelBufferTextureWithSize(TextureFormat format,
+                                                             const size_t width,
+                                                             const size_t height,
+                                                             const std::shared_ptr<IDevice>& device,
+                                                             Result& outResult) {
   const igl::BackendType backend = device->getBackendType();
   CVPixelBufferRef pixelBuffer = nullptr;
   NSDictionary* bufferAttributes = @{
@@ -362,6 +362,7 @@ static std::shared_ptr<ITexture> createCVPixelBufferTextureWithSize(
   Result::setOk(&outResult);
   return texture;
 }
+} // namespace
 
 TEST_F(TextureFormatMTLTest, createTextureFromNativePixelBufferSuccess) {
   Result result;
@@ -529,6 +530,37 @@ TEST_F(TextureMTLTest, ConvertTextureFormats) {
     ASSERT_EQ(true,
               igl::metal::Texture::textureFormatToMTLPixelFormat(format) == MTLPixelFormatInvalid);
   }
+}
+
+// Test conversion from IGL TextureUsage bits to MTLTextureUsage
+TEST_F(TextureMTLTest, ToMTLTextureUsage) {
+  EXPECT_EQ(igl::metal::Texture::toMTLTextureUsage(0), MTLTextureUsageUnknown);
+  EXPECT_EQ(igl::metal::Texture::toMTLTextureUsage(TextureDesc::TextureUsageBits::Sampled),
+            MTLTextureUsageShaderRead);
+  EXPECT_EQ(igl::metal::Texture::toMTLTextureUsage(TextureDesc::TextureUsageBits::Storage),
+            MTLTextureUsageShaderWrite);
+  EXPECT_EQ(igl::metal::Texture::toMTLTextureUsage(TextureDesc::TextureUsageBits::Attachment),
+            MTLTextureUsageRenderTarget);
+  EXPECT_EQ(igl::metal::Texture::toMTLTextureUsage(TextureDesc::TextureUsageBits::Sampled |
+                                                   TextureDesc::TextureUsageBits::Storage |
+                                                   TextureDesc::TextureUsageBits::Attachment),
+            MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite | MTLTextureUsageRenderTarget);
+}
+
+// Test conversion from MTLTextureUsage to IGL TextureUsage bits
+TEST_F(TextureMTLTest, ToTextureUsage) {
+  EXPECT_EQ(igl::metal::Texture::toTextureUsage(MTLTextureUsageUnknown), 0);
+  EXPECT_EQ(igl::metal::Texture::toTextureUsage(MTLTextureUsageShaderRead),
+            TextureDesc::TextureUsageBits::Sampled);
+  EXPECT_EQ(igl::metal::Texture::toTextureUsage(MTLTextureUsageShaderWrite),
+            TextureDesc::TextureUsageBits::Storage);
+  EXPECT_EQ(igl::metal::Texture::toTextureUsage(MTLTextureUsageRenderTarget),
+            TextureDesc::TextureUsageBits::Attachment);
+  EXPECT_EQ(
+      igl::metal::Texture::toTextureUsage(MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite |
+                                          MTLTextureUsageRenderTarget),
+      TextureDesc::TextureUsageBits::Sampled | TextureDesc::TextureUsageBits::Storage |
+          TextureDesc::TextureUsageBits::Attachment);
 }
 
 } // namespace igl::tests

@@ -198,6 +198,7 @@ VkBlendOp blendOpToVkBlendOp(igl::BlendOp value) {
 
 VkBool32 checkDualSrcBlendFactor(igl::BlendFactor value, VkBool32 dualSrcBlendSupported) {
   if (!dualSrcBlendSupported) {
+    // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
     switch (value) {
     case igl::BlendFactor::Src1Color:
     case igl::BlendFactor::OneMinusSrc1Color:
@@ -339,28 +340,29 @@ RenderPipelineState::RenderPipelineState(const igl::vulkan::Device& device,
   }
 }
 
-RenderPipelineState::~RenderPipelineState() {
-  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
-
-  const VulkanContext& ctx = device_.getVulkanContext();
+void RenderPipelineState::deferDestroyPipelinesAndLayout(const VulkanContext& ctx) const {
   VkDevice device = ctx.getVkDevice();
-
   for (const auto& p : pipelines_) {
     if (p.second != VK_NULL_HANDLE) {
-      device_.getVulkanContext().deferredTask(
-          std::packaged_task<void()>([vf = &ctx.vf_, device, pipeline = p.second]() {
-            vf->vkDestroyPipeline(device, pipeline, nullptr);
-          }));
+      ctx.deferredTask(std::packaged_task<void()>([vf = &ctx.vf_, device, pipeline = p.second]() {
+        vf->vkDestroyPipeline(device, pipeline, nullptr);
+      }));
     }
   }
   if (pipelineLayout) {
-    ctx.deferredTask(std::packaged_task<void()>(
-        [vf = &ctx.vf_, device = ctx.getVkDevice(), layout = pipelineLayout]() {
-          vf->vkDestroyPipelineLayout(device, layout, nullptr);
-        }));
+    ctx.deferredTask(std::packaged_task<void()>([vf = &ctx.vf_, device, layout = pipelineLayout]() {
+      vf->vkDestroyPipelineLayout(device, layout, nullptr);
+    }));
   }
 }
 
+RenderPipelineState::~RenderPipelineState() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
+
+  deferDestroyPipelinesAndLayout(device_.getVulkanContext());
+}
+
+// NOLINTNEXTLINE(facebook-hte-NullableReturn)
 VkPipeline RenderPipelineState::getVkPipeline(
     const RenderPipelineDynamicState& dynamicState) const {
   const VulkanContext& ctx = device_.getVulkanContext();
@@ -371,21 +373,7 @@ VkPipeline RenderPipelineState::getVkPipeline(
     // existing textures increases
     if (lastBindlessVkDescriptorSetLayout != ctx.getBindlessVkDescriptorSetLayout()) {
       // there's a new descriptor set layout - drop the previous Vulkan pipeline
-      VkDevice device = ctx.getVkDevice();
-      for (const auto& p : pipelines_) {
-        if (p.second != VK_NULL_HANDLE) {
-          ctx.deferredTask(
-              std::packaged_task<void()>([vf = &ctx.vf_, device, pipeline = p.second]() {
-                vf->vkDestroyPipeline(device, pipeline, nullptr);
-              }));
-        }
-      }
-      if (pipelineLayout) {
-        ctx.deferredTask(std::packaged_task<void()>(
-            [vf = &ctx.vf_, device = ctx.getVkDevice(), layout = pipelineLayout]() {
-              vf->vkDestroyPipelineLayout(device, layout, nullptr);
-            }));
-      }
+      deferDestroyPipelinesAndLayout(ctx);
       pipelines_.clear();
       pipelineLayout = VK_NULL_HANDLE;
       lastBindlessVkDescriptorSetLayout = ctx.getBindlessVkDescriptorSetLayout();

@@ -30,6 +30,7 @@
 
 namespace {
 uint32_t customArc4random() {
+  // NOLINTNEXTLINE(cert-msc50-cpp)
   return static_cast<uint32_t>(rand()) * (0xffffffff / RAND_MAX);
 }
 } // namespace
@@ -282,7 +283,7 @@ bool isDeviceCompatible(IDevice& device) noexcept {
 
 int setCurrentThreadAffinityMask(int mask) {
 #if IGL_PLATFORM_ANDROID
-  int err, syscallres;
+  int err = 0, syscallres = 0;
   const pid_t pid = gettid();
   syscallres = syscall(__NR_sched_setaffinity, pid, sizeof(mask), &mask);
   if (syscallres) {
@@ -314,6 +315,7 @@ double calcPi(int numberOfDivisions, int core) {
 }
 } // namespace
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void GPUStressSession::thrashCPU() noexcept {
   static std::vector<std::future<double>> futures;
   static unsigned int threadSpawnId = 0;
@@ -399,6 +401,7 @@ void GPUStressSession::allocateMemory() {
   }
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void GPUStressSession::thrashMemory() noexcept {
   if (!thrashMemory_) {
     return;
@@ -449,10 +452,12 @@ void GPUStressSession::getOffset(int counter, float& x, float& y, float& z) {
     return;
   }
   const float grid = std::ceil(std::pow(cubeCount_, 1.0f / 3.0f));
-  const int igrid = (int)grid;
+  const int igrid = static_cast<int>(grid);
   // const float fgrid = static_cast<float>(igrid);
   x = static_cast<float>((counter % igrid) - grid / 2);
+  // NOLINTNEXTLINE(bugprone-integer-division)
   z = (static_cast<float>(counter / (igrid * igrid)) - grid / 2.f);
+  // NOLINTNEXTLINE(bugprone-integer-division)
   y = (static_cast<float>((counter % (igrid * igrid)) / igrid) - grid / 2.f);
 }
 
@@ -469,7 +474,8 @@ glm::vec3 GPUStressSession::animateCube(int counter,
   static std::vector<AnimationInfo> animations;
   if (animations.size() < counter) {
     AnimationInfo info;
-    info.velocity = glm::vec3(1.f * (counter % 2 ? 1.0 : -1.0), 1.f - (float)(counter % 3), 0.f);
+    info.velocity =
+        glm::vec3(1.f * (counter % 2 ? 1.0 : -1.0), 1.f - static_cast<float>(counter % 3), 0.f);
     info.lastPos = glm::vec3(x, y, 0);
     animations.push_back(info);
   }
@@ -478,7 +484,7 @@ glm::vec3 GPUStressSession::animateCube(int counter,
   if (dropFrameX_ && (frameCount % dropFrameX_) < dropFrameCount_) {
     velocityScale = 0.f;
   } else if (dropFrameX_ && (frameCount % dropFrameX_) == dropFrameCount_) {
-    velocityScale = 1.f + (float)dropFrameCount_;
+    velocityScale = 1.f + static_cast<float>(dropFrameCount_);
   }
   const glm::vec3 pos =
       animations[counter].lastPos + animations[counter].velocity * velocityScale * scale * .005f;
@@ -504,11 +510,13 @@ glm::vec3 GPUStressSession::animateCube(int counter,
 
 void GPUStressSession::createSamplerAndTextures(const igl::IDevice& device) {
   // Sampler & Texture
-  SamplerStateDesc samplerDesc;
-  samplerDesc.minFilter = samplerDesc.magFilter = SamplerMinMagFilter::Linear;
-  samplerDesc.addressModeU = SamplerAddressMode::MirrorRepeat;
-  samplerDesc.addressModeV = SamplerAddressMode::MirrorRepeat;
-  samplerDesc.addressModeW = SamplerAddressMode::MirrorRepeat;
+  const SamplerStateDesc samplerDesc{
+      .minFilter = SamplerMinMagFilter::Linear,
+      .magFilter = SamplerMinMagFilter::Linear,
+      .addressModeU = SamplerAddressMode::MirrorRepeat,
+      .addressModeV = SamplerAddressMode::MirrorRepeat,
+      .addressModeW = SamplerAddressMode::MirrorRepeat,
+  };
   samp0_ = device.createSamplerState(samplerDesc, nullptr);
   samp1_ = device.createSamplerState(samplerDesc, nullptr);
 
@@ -585,7 +593,7 @@ void GPUStressSession::createCubes() {
                           .length = sizeof(uint16_t) * indexData_.size()};
   ib0_ = device.createBuffer(ibDesc, nullptr);
 
-  VertexInputStateDesc inputDesc = {
+  const VertexInputStateDesc inputDesc = {
       .numAttributes = 3,
       .attributes =
           {
@@ -667,6 +675,7 @@ void GPUStressSession::processCustomParameter(const std::string& key, const std:
   }
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void GPUStressSession::initialize() noexcept {
   pipelineState_ = nullptr;
   vertexInput0_ = nullptr;
@@ -684,6 +693,7 @@ void GPUStressSession::initialize() noexcept {
   appParamsRef().sizeY = .5f;
   // Process custom parameters from ShellParams
   if (shellParams().benchmarkParams.has_value()) {
+    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
     const auto& benchmarkParams = shellParams().benchmarkParams.value();
     const auto& customParams = benchmarkParams.customParams;
     for (const auto& [key, value] : customParams) {
@@ -707,8 +717,7 @@ void GPUStressSession::initialize() noexcept {
   shaderStages_ = getShaderStagesForBackend(device);
 
   // Command queue: backed by different types of GPU HW queues
-  const CommandQueueDesc desc{};
-  commandQueue_ = device.createCommandQueue(desc, nullptr);
+  commandQueue_ = device.createCommandQueue({}, nullptr);
 
   tex0_->generateMipmap(*commandQueue_);
   tex1_->generateMipmap(*commandQueue_);
@@ -716,20 +725,27 @@ void GPUStressSession::initialize() noexcept {
   // Set up vertex uniform data
   vertexParameters_.scaleZ = 1.0f;
 
-  renderPass_.colorAttachments.resize(1);
-  renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
-  renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPass_.colorAttachments[0].clearColor = {0.0, 0.0, 0.0f, 0.0f};
-  renderPass_.depthAttachment.loadAction = LoadAction::Clear;
-  renderPass_.depthAttachment.clearDepth = 1.0;
+  renderPass_ = {
+      .colorAttachments = {{
+          .loadAction = LoadAction::Clear,
+          .storeAction = StoreAction::Store,
+          .clearColor = {0.0, 0.0, 0.0f, 0.0f},
+      }},
+      .depthAttachment =
+          {
+              .loadAction = LoadAction::Clear,
+              .clearDepth = 1.0,
+          },
+  };
 
   if (useMSAA_) {
     renderPass_.colorAttachments[0].storeAction = igl::StoreAction::MsaaResolve;
   }
 
-  DepthStencilStateDesc depthDesc;
-  depthDesc.isDepthWriteEnabled = true;
-  depthDesc.compareFunction = igl::CompareFunction::Less;
+  const DepthStencilStateDesc depthDesc{
+      .compareFunction = igl::CompareFunction::Less,
+      .isDepthWriteEnabled = true,
+  };
   depthStencilState_ = device.createDepthStencilState(depthDesc, nullptr);
 }
 
@@ -802,21 +818,26 @@ void GPUStressSession::initState(const igl::SurfaceTextures& surfaceTextures) {
 
       framebufferDesc.colorAttachments[0].resolveTexture = surfaceTextures.color;
 
-      const igl::TextureDesc depthDesc = {.width = dimensions.width,
-                                          .height = dimensions.height,
-                                          .depth = 1,
-                                          .numLayers = surfaceTextures.depth->getNumLayers(),
-                                          .numSamples = kMsaaSamples,
-                                          .usage = TextureDesc::TextureUsageBits::Attachment,
-                                          .numMipLevels = 1,
-                                          .type = surfaceTextures.depth->getNumLayers() > 1
-                                                      ? TextureType::TwoDArray
-                                                      : TextureType::TwoD,
-                                          .format = surfaceTextures.depth->getFormat(),
-                                          .storage = igl::ResourceStorage::Private};
+      // Per IGL guidelines, surfaceTextures.depth may be null on configurations
+      // without a depth buffer (e.g., 2D overlay sessions). Only build the MSAA
+      // depth attachment if the platform actually provided a depth surface.
+      if (surfaceTextures.depth) {
+        const igl::TextureDesc depthDesc = {.width = dimensions.width,
+                                            .height = dimensions.height,
+                                            .depth = 1,
+                                            .numLayers = surfaceTextures.depth->getNumLayers(),
+                                            .numSamples = kMsaaSamples,
+                                            .usage = TextureDesc::TextureUsageBits::Attachment,
+                                            .numMipLevels = 1,
+                                            .type = surfaceTextures.depth->getNumLayers() > 1
+                                                        ? TextureType::TwoDArray
+                                                        : TextureType::TwoD,
+                                            .format = surfaceTextures.depth->getFormat(),
+                                            .storage = igl::ResourceStorage::Private};
 
-      framebufferDesc.depthAttachment.texture =
-          getPlatform().getDevice().createTexture(depthDesc, nullptr);
+        framebufferDesc.depthAttachment.texture =
+            getPlatform().getDevice().createTexture(depthDesc, nullptr);
+      }
     }
 
     framebuffer_ = getPlatform().getDevice().createFramebuffer(framebufferDesc, &ret);
@@ -833,7 +854,7 @@ void GPUStressSession::initState(const igl::SurfaceTextures& surfaceTextures) {
 
   constexpr uint32_t textureUnit = 0;
   if (pipelineState_ == nullptr) {
-    RenderPipelineDesc graphicsDesc = {
+    const RenderPipelineDesc graphicsDesc = {
         .vertexInputState = vertexInput0_,
         .shaderStages = shaderStages_,
         .targetDesc =
@@ -853,8 +874,8 @@ void GPUStressSession::initState(const igl::SurfaceTextures& surfaceTextures) {
         .cullMode = igl::CullMode::Back,
         .frontFaceWinding = igl::WindingMode::Clockwise,
         .fragmentUnitSamplerMap = {{textureUnit, IGL_NAMEHANDLE("inputImage")}},
+        .sampleCount = useMSAA_ ? kMsaaSamples : 1u,
     };
-    graphicsDesc.sampleCount = useMSAA_ ? kMsaaSamples : 1;
 
     pipelineState_ = getPlatform().getDevice().createRenderPipeline(graphicsDesc, nullptr);
   }
@@ -958,7 +979,13 @@ void GPUStressSession::drawCubes(const igl::SurfaceTextures& surfaceTextures,
   }
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void GPUStressSession::update(SurfaceTextures surfaceTextures) noexcept {
+  // Per IGL guidelines, surfaceTextures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!surfaceTextures.color) {
+    return;
+  }
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
     return;
@@ -978,13 +1005,14 @@ void GPUStressSession::update(SurfaceTextures surfaceTextures) noexcept {
   initState(surfaceTextures);
 
   // Command buffers (1-N per thread): create, submit and forget
-  auto buffer = commandQueue_->createCommandBuffer(CommandBufferDesc{}, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
   const std::shared_ptr<IRenderCommandEncoder> commands =
       buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
 
-  FramebufferDesc framebufferDesc;
-  framebufferDesc.colorAttachments[0].texture = framebuffer_->getColorAttachment(0);
-  framebufferDesc.depthAttachment.texture = framebuffer_->getDepthAttachment();
+  const FramebufferDesc framebufferDesc{
+      .colorAttachments = {{.texture = framebuffer_->getColorAttachment(0)}},
+      .depthAttachment = {.texture = framebuffer_->getDepthAttachment()},
+  };
 
   // setup UI
   const ImGuiViewport* v = ImGui::GetMainViewport();

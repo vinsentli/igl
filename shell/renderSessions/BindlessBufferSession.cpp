@@ -284,7 +284,7 @@ void BindlessBufferSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(shaderStages_ != nullptr);
 
   // Command queue
-  commandQueue_ = device.createCommandQueue(CommandQueueDesc{}, nullptr);
+  commandQueue_ = device.createCommandQueue({}, nullptr);
   IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
 
   renderPass_ = {
@@ -305,6 +305,11 @@ void BindlessBufferSession::initialize() noexcept {
 }
 
 void BindlessBufferSession::update(SurfaceTextures textures) noexcept {
+  // Per IGL guidelines, textures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!textures.color) {
+    return;
+  }
   Result ret;
 
   // Create or update framebuffer.
@@ -348,7 +353,7 @@ void BindlessBufferSession::update(SurfaceTextures textures) noexcept {
   }
 
   // Create command buffer.
-  auto buffer = commandQueue_->createCommandBuffer(CommandBufferDesc{}, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
   IGL_DEBUG_ASSERT(buffer != nullptr);
   auto drawableSurface = framebuffer_->getColorAttachment(0);
 

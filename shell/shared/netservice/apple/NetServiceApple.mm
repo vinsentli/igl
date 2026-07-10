@@ -9,6 +9,9 @@
 
 #include <shell/shared/netservice/apple/NetServiceApple.h>
 
+#import <Foundation/NSKeyValueCoding.h>
+#import <Foundation/NSNetServices.h>
+#import <Foundation/NSString.h>
 #include <igl/Assert.h>
 
 // ----------------------------------------------------------------------------
@@ -165,7 +168,8 @@ std::shared_ptr<OutputStream> NetServiceApple::getOutputStream() const noexcept 
 }
 
 std::string NetServiceApple::getName() const noexcept { // NOLINT(bugprone-exception-escape)
-  return {[[netService_ name] UTF8String]};
+  const char* name = [[netService_ name] UTF8String];
+  return name != nullptr ? std::string{name} : std::string{};
 }
 
 } // namespace igl::shell::netservice

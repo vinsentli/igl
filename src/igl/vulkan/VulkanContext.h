@@ -10,6 +10,7 @@
 #include <atomic>
 #include <deque>
 #include <future>
+#include <ldrutils/lutils/Pool.h>
 #include <memory>
 #include <unordered_map>
 #include <igl/CommandEncoder.h>
@@ -199,6 +200,11 @@ class VulkanContext final {
     return vkPhysicalDeviceProperties2_.properties;
   }
 
+  // Driver metadata used for vendor and driver-generation workaround gates.
+  const VkPhysicalDeviceDriverPropertiesKHR& getVkPhysicalDeviceDriverProperties() const {
+    return vkPhysicalDeviceDriverProperties_;
+  }
+
   const VkPhysicalDeviceMeshShaderPropertiesEXT& getvkPhysicalDeviceMeshShaderPropertiesEXT()
       const {
     return vkPhysicalDeviceMeshShaderPropertiesEXT_;
@@ -245,7 +251,16 @@ class VulkanContext final {
 
   VkSamplerYcbcrConversionInfo getOrCreateYcbcrConversionInfo(VkFormat format) const;
 
-  void freeResourcesForDescriptorSetLayout(VkDescriptorSetLayout IGL_NULLABLE dsl) const;
+#if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
+  // Get or create a context-owned conversion for external-format AHB imports.
+  // The cache key includes externalFormat and every conversion-affecting field.
+  // `info.format` must be VK_FORMAT_UNDEFINED and `info.pNext` must contain a non-zero
+  // VkExternalFormatANDROID. Callers must serialize access and must not destroy the handle.
+  VkSamplerYcbcrConversion getOrCreateExternalYcbcrConversion(
+      const VkSamplerYcbcrConversionCreateInfo& info) const;
+#endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
+
+  void freeResourcesForDescriptorSetLayout(VkDescriptorSetLayout dsl) const;
 
   // Returns a cached VkDescriptorSetLayout handle if an identical one has already been created
   // (identical bindings/flags/immutable samplers), otherwise creates a new one and caches it.
@@ -363,13 +378,27 @@ private:
 
   mutable std::unordered_map<VkFormat, VkSamplerYcbcrConversionInfo> ycbcrConversionInfos_;
 
+  // Context-owned cache for Android AHB external-format YCbCr conversions.
+  struct ExternalYcbcrConversionEntry {
+    uint64_t externalFormat = 0;
+    VkSamplerYcbcrModelConversion ycbcrModel = VK_SAMPLER_YCBCR_MODEL_CONVERSION_RGB_IDENTITY;
+    VkSamplerYcbcrRange ycbcrRange = VK_SAMPLER_YCBCR_RANGE_ITU_FULL;
+    VkChromaLocation xChromaOffset = VK_CHROMA_LOCATION_COSITED_EVEN;
+    VkChromaLocation yChromaOffset = VK_CHROMA_LOCATION_COSITED_EVEN;
+    VkComponentMapping components{}; // raw-plane swizzle from samplerYcbcrConversionComponents
+    VkFilter chromaFilter = VK_FILTER_LINEAR;
+    VkBool32 forceExplicitReconstruction = VK_FALSE;
+    VkSamplerYcbcrConversion conversion = VK_NULL_HANDLE;
+  };
+  mutable std::vector<ExternalYcbcrConversionEntry> externalYcbcrConversions_;
+
   // 1. Textures can be safely deleted once they are not in use by GPU, hence our Vulkan context
   // owns all allocated textures (images+image views). The IGL interface vulkan::Texture does not
   // delete the underlying VulkanTexture but instead informs the context that it should be
   // deallocated. The context deallocates textures in a deferred way when it is safe to do so.
   // 2. Descriptor sets can be updated when they are not in use.
-  mutable Pool<TextureTag, std::shared_ptr<VulkanTexture>> textures_;
-  mutable Pool<SamplerTag, VulkanSampler> samplers_;
+  mutable ldr::Pool<TextureTag, std::shared_ptr<VulkanTexture>> textures_;
+  mutable ldr::Pool<SamplerTag, VulkanSampler> samplers_;
   // a texture/sampler was created since the last descriptor set update
   mutable bool awaitingCreation_ = false;
 

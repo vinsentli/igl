@@ -226,7 +226,7 @@ Result Buffer::upload(const void* data, const BufferRange& range) {
       currentVulkanBuffer()->bufferSubData(range.offset, range.size, data);
     } else {
       // update local data copy
-      checked_memcpy(localData_.get() + range.offset, range.size, (void*)data, range.size);
+      checked_memcpy(localData_.get() + range.offset, range.size, data, range.size);
       // use staging to upload data to device-local buffers
       ctx.stagingDevice_->bufferSubData(*currentVulkanBuffer(),
                                         currentUpdateRange.offset,
@@ -259,7 +259,9 @@ VkBufferUsageFlags Buffer::getBufferUsageFlags() const {
   return currentVulkanBuffer()->getBufferUsageFlags();
 }
 
-void* Buffer::map(const BufferRange& range, Result* outResult) {
+void* FOLLY_NULLABLE Buffer::map(const BufferRange& range, Result* outResult) {
+  IGL_PROFILER_FUNCTION();
+
   IGL_DEBUG_ASSERT(!isRingBuffer_, "Buffer::map() operation not supported for ring buffer");
 
   // Sanity check
@@ -294,6 +296,8 @@ void* Buffer::map(const BufferRange& range, Result* outResult) {
 }
 
 void Buffer::unmap() {
+  IGL_PROFILER_FUNCTION();
+
   IGL_DEBUG_ASSERT(!isRingBuffer_, "Buffer::unmap() operation not supported for ring buffer");
   IGL_DEBUG_ASSERT(mappedRange_.size, "Called Buffer::unmap() without Buffer::map()");
 

@@ -91,6 +91,87 @@ TEST_F(VulkanImageViewTest, CreateImageViewWithCreateInfo) {
   EXPECT_EQ(imageView.getVkImageAspectFlags(), VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
+TEST_F(VulkanImageViewTest, DefaultConstructedIsInvalid) {
+  const vulkan::VulkanImageView imageView;
+
+  EXPECT_FALSE(imageView.valid());
+  EXPECT_EQ(imageView.getVkImageView(), VK_NULL_HANDLE);
+  EXPECT_EQ(imageView.getVkImageAspectFlags(), 0u);
+}
+
+TEST_F(VulkanImageViewTest, MoveConstruction) {
+  vulkan::VulkanImage image(*context_,
+                            VkExtent3D{.width = kWidth, .height = kHeight, .depth = 1},
+                            VK_IMAGE_TYPE_2D,
+                            kFormat,
+                            1, /* mipLevels */
+                            1, /* arrayLayers */
+                            VK_IMAGE_TILING_OPTIMAL,
+                            VK_IMAGE_USAGE_SAMPLED_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, /* memFlags */
+                            0, /* createFlags */
+                            VK_SAMPLE_COUNT_1_BIT,
+                            "Test Image");
+  ASSERT_TRUE(image.valid());
+
+  vulkan::VulkanImageViewCreateInfo ci;
+  ci.image = image.getVkImage();
+  ci.format = kFormat;
+
+  vulkan::VulkanImageView source(*context_, ci, "Source ImageView");
+  ASSERT_TRUE(source.valid());
+  const VkImageView sourceHandle = source.getVkImageView();
+
+  vulkan::VulkanImageView dest(std::move(source));
+
+  EXPECT_TRUE(dest.valid());
+  EXPECT_EQ(dest.getVkImageView(), sourceHandle);
+  EXPECT_EQ(dest.getVkImageAspectFlags(), VK_IMAGE_ASPECT_COLOR_BIT);
+
+  // NOLINTNEXTLINE(bugprone-use-after-move)
+  EXPECT_FALSE(source.valid());
+  // NOLINTNEXTLINE(bugprone-use-after-move)
+  EXPECT_EQ(source.getVkImageView(), VK_NULL_HANDLE);
+}
+
+TEST_F(VulkanImageViewTest, MoveAssignment) {
+  vulkan::VulkanImage image(*context_,
+                            VkExtent3D{.width = kWidth, .height = kHeight, .depth = 1},
+                            VK_IMAGE_TYPE_2D,
+                            kFormat,
+                            1, /* mipLevels */
+                            1, /* arrayLayers */
+                            VK_IMAGE_TILING_OPTIMAL,
+                            VK_IMAGE_USAGE_SAMPLED_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, /* memFlags */
+                            0, /* createFlags */
+                            VK_SAMPLE_COUNT_1_BIT,
+                            "Test Image");
+  ASSERT_TRUE(image.valid());
+
+  vulkan::VulkanImageViewCreateInfo ci;
+  ci.image = image.getVkImage();
+  ci.format = kFormat;
+
+  vulkan::VulkanImageView source(*context_, ci, "Source ImageView");
+  ASSERT_TRUE(source.valid());
+  const VkImageView sourceHandle = source.getVkImageView();
+
+  vulkan::VulkanImageView dest;
+  ASSERT_FALSE(dest.valid());
+
+  dest = std::move(source);
+
+  EXPECT_TRUE(dest.valid());
+  EXPECT_EQ(dest.getVkImageView(), sourceHandle);
+  EXPECT_EQ(dest.getVkImageAspectFlags(), VK_IMAGE_ASPECT_COLOR_BIT);
+
+  // NOLINTNEXTLINE(bugprone-use-after-move)
+  EXPECT_FALSE(source.valid());
+  // NOLINTNEXTLINE(bugprone-use-after-move)
+  EXPECT_EQ(source.getVkImageView(), VK_NULL_HANDLE);
+}
+
 TEST_F(VulkanImageViewTest, CreateImageViewWithVkCreateInfo) {
   vulkan::VulkanImage image(*context_,
                             VkExtent3D{.width = kWidth, .height = kHeight, .depth = 1},
@@ -136,6 +217,125 @@ TEST_F(VulkanImageViewTest, CreateImageViewWithVkCreateInfo) {
   EXPECT_NE(imageView.getVkImageView(), VK_NULL_HANDLE);
   EXPECT_EQ(imageView.getVkImageAspectFlags(), VK_IMAGE_ASPECT_COLOR_BIT);
 }
+
+TEST_F(VulkanImageViewTest, DepthImageViewHasDepthAspect) {
+  vulkan::VulkanImage image(*context_,
+                            VkExtent3D{.width = kWidth, .height = kHeight, .depth = 1},
+                            VK_IMAGE_TYPE_2D,
+                            VK_FORMAT_D32_SFLOAT,
+                            1, /* mipLevels */
+                            1, /* arrayLayers */
+                            VK_IMAGE_TILING_OPTIMAL,
+                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, /* memFlags */
+                            0, /* createFlags */
+                            VK_SAMPLE_COUNT_1_BIT,
+                            "Test Depth Image");
+  ASSERT_TRUE(image.valid());
+
+  vulkan::VulkanImageViewCreateInfo ci;
+  ci.image = image.getVkImage();
+  ci.format = VK_FORMAT_D32_SFLOAT;
+  ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+  vulkan::VulkanImageView imageView(*context_, ci, "Test Depth ImageView");
+
+  EXPECT_TRUE(imageView.valid());
+  EXPECT_NE(imageView.getVkImageView(), VK_NULL_HANDLE);
+  EXPECT_EQ(imageView.getVkImageAspectFlags(), VK_IMAGE_ASPECT_DEPTH_BIT);
+}
+
+TEST_F(VulkanImageViewTest, MultiMipLevelSubresource) {
+  const uint32_t kMipLevels = 4;
+  vulkan::VulkanImage image(*context_,
+                            VkExtent3D{.width = kWidth, .height = kHeight, .depth = 1},
+                            VK_IMAGE_TYPE_2D,
+                            kFormat,
+                            kMipLevels, /* mipLevels */
+                            1, /* arrayLayers */
+                            VK_IMAGE_TILING_OPTIMAL,
+                            VK_IMAGE_USAGE_SAMPLED_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, /* memFlags */
+                            0, /* createFlags */
+                            VK_SAMPLE_COUNT_1_BIT,
+                            "Test Multi-Mip Image");
+  ASSERT_TRUE(image.valid());
+
+  vulkan::VulkanImageViewCreateInfo ci;
+  ci.image = image.getVkImage();
+  ci.format = kFormat;
+  ci.subresourceRange.baseMipLevel = 1;
+  ci.subresourceRange.levelCount = 2;
+
+  vulkan::VulkanImageView imageView(*context_, ci, "Test Mip Range View");
+
+  EXPECT_TRUE(imageView.valid());
+  EXPECT_NE(imageView.getVkImageView(), VK_NULL_HANDLE);
+  EXPECT_EQ(imageView.getVkImageAspectFlags(), VK_IMAGE_ASPECT_COLOR_BIT);
+}
+
+TEST_F(VulkanImageViewTest, CreateDepthImageView) {
+  vulkan::VulkanImage image(*context_,
+                            VkExtent3D{.width = kWidth, .height = kHeight, .depth = 1},
+                            VK_IMAGE_TYPE_2D,
+                            VK_FORMAT_D32_SFLOAT,
+                            1, /* mipLevels */
+                            1, /* arrayLayers */
+                            VK_IMAGE_TILING_OPTIMAL,
+                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, /* memFlags */
+                            0, /* createFlags */
+                            VK_SAMPLE_COUNT_1_BIT,
+                            "Depth Image");
+  ASSERT_TRUE(image.valid());
+
+  vulkan::VulkanImageViewCreateInfo ci;
+  ci.image = image.getVkImage();
+  ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  ci.format = VK_FORMAT_D32_SFLOAT;
+  ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+  ci.subresourceRange.levelCount = 1;
+  ci.subresourceRange.layerCount = 1;
+
+  vulkan::VulkanImageView imageView(*context_, ci, "Depth ImageView");
+
+  EXPECT_TRUE(imageView.valid());
+  EXPECT_NE(imageView.getVkImageView(), VK_NULL_HANDLE);
+  EXPECT_EQ(imageView.getVkImageAspectFlags(), VK_IMAGE_ASPECT_DEPTH_BIT);
+}
+
+TEST_F(VulkanImageViewTest, CreateImageViewWithMultipleMipLevels) {
+  constexpr uint32_t kMipLevels = 4;
+  vulkan::VulkanImage image(*context_,
+                            VkExtent3D{.width = kWidth, .height = kHeight, .depth = 1},
+                            VK_IMAGE_TYPE_2D,
+                            kFormat,
+                            kMipLevels, /* mipLevels */
+                            1, /* arrayLayers */
+                            VK_IMAGE_TILING_OPTIMAL,
+                            VK_IMAGE_USAGE_SAMPLED_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, /* memFlags */
+                            0, /* createFlags */
+                            VK_SAMPLE_COUNT_1_BIT,
+                            "Mipmapped Image");
+  ASSERT_TRUE(image.valid());
+
+  vulkan::VulkanImageViewCreateInfo ci;
+  ci.image = image.getVkImage();
+  ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  ci.format = kFormat;
+  ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  ci.subresourceRange.baseMipLevel = 0;
+  ci.subresourceRange.levelCount = kMipLevels;
+  ci.subresourceRange.layerCount = 1;
+
+  vulkan::VulkanImageView imageView(*context_, ci, "Mipmapped ImageView");
+
+  EXPECT_TRUE(imageView.valid());
+  EXPECT_NE(imageView.getVkImageView(), VK_NULL_HANDLE);
+  EXPECT_EQ(imageView.getVkImageAspectFlags(), VK_IMAGE_ASPECT_COLOR_BIT);
+}
+
 } // namespace igl::tests
 
 #endif // IGL_PLATFORM_WINDOWS || IGL_PLATFORM_ANDROID || IGL_PLATFORM_LINUX

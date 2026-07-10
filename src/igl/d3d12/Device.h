@@ -8,6 +8,7 @@
 #pragma once
 
 #include <atomic>
+#include <ldrutils/lutils/Pool.h>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -208,7 +209,7 @@ class Device final : public IDevice, public IFenceProvider {
   [[nodiscard]] Result checkDeviceRemoval() const;
 
   // Query if device has been lost.
-  [[nodiscard]] bool isDeviceLost() const {
+  [[nodiscard]] bool isDeviceLost() const noexcept override {
     return deviceLost_;
   }
 
@@ -227,6 +228,8 @@ class Device final : public IDevice, public IFenceProvider {
                                 Result* IGL_NULLABLE outResult) const;
   bool validateBufferAlignment(size_t bufferSize, bool isUniform) const;
 
+  void precompileMipmapShaders(ID3D12Device* IGL_NONNULL device);
+
   // Alignment constants.
   static constexpr size_t MSAA_ALIGNMENT = 65536; // 64KB for MSAA textures
   static constexpr size_t BUFFER_ALIGNMENT = 256; // 256 bytes for constant buffers
@@ -239,8 +242,8 @@ class Device final : public IDevice, public IFenceProvider {
   D3D12Telemetry telemetry_;
 
   // Bind group pools
-  Pool<BindGroupTextureTag, BindGroupTextureDesc> bindGroupTexturesPool_;
-  Pool<BindGroupBufferTag, BindGroupBufferDesc> bindGroupBuffersPool_;
+  ldr::Pool<BindGroupTextureTag, BindGroupTextureDesc> bindGroupTexturesPool_;
+  ldr::Pool<BindGroupBufferTag, BindGroupBufferDesc> bindGroupBuffersPool_;
 
   // Upload tracking state (non-mutable, mutated only from non-const paths).
   // Modified by createBufferImpl, Buffer::upload, Texture::upload via non-const Device references

@@ -247,11 +247,11 @@ void MultiDrawIndexedIndirectSession::initialize() noexcept {
     indirectCommands[2].baseVertex = 0;
     indirectCommands[2].reservedMustBeZero = 0;
 
-    BufferDesc indirectBufDesc;
-    indirectBufDesc.type =
-        BufferDesc::BufferTypeBits::Storage | BufferDesc::BufferTypeBits::Indirect;
-    indirectBufDesc.data = indirectCommands;
-    indirectBufDesc.length = sizeof(indirectCommands);
+    const BufferDesc indirectBufDesc{
+        .type = BufferDesc::BufferTypeBits::Storage | BufferDesc::BufferTypeBits::Indirect,
+        .data = indirectCommands,
+        .length = sizeof(indirectCommands),
+    };
     indirectBuffer_ = device.createBuffer(indirectBufDesc, nullptr);
     IGL_DEBUG_ASSERT(indirectBuffer_ != nullptr);
   }
@@ -284,7 +284,7 @@ void MultiDrawIndexedIndirectSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(shaderStages_ != nullptr);
 
   // Command queue
-  commandQueue_ = device.createCommandQueue(CommandQueueDesc{}, nullptr);
+  commandQueue_ = device.createCommandQueue({}, nullptr);
   IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
 
   // Render pass
@@ -306,6 +306,11 @@ void MultiDrawIndexedIndirectSession::initialize() noexcept {
 }
 
 void MultiDrawIndexedIndirectSession::update(SurfaceTextures textures) noexcept {
+  // Per IGL guidelines, textures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!textures.color) {
+    return;
+  }
   Result ret;
 
   // Create/update framebuffer
@@ -349,7 +354,7 @@ void MultiDrawIndexedIndirectSession::update(SurfaceTextures textures) noexcept 
   }
 
   // Command buffer
-  auto buffer = commandQueue_->createCommandBuffer(CommandBufferDesc{}, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
   IGL_DEBUG_ASSERT(buffer != nullptr);
   auto drawableSurface = framebuffer_->getColorAttachment(0);
 

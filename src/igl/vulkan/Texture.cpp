@@ -20,6 +20,8 @@
 namespace igl::vulkan {
 
 Texture::Texture(Device& device, TextureFormat format) : ITexture(format), device_(device) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+
   IGL_DEBUG_ASSERT(format != TextureFormat::Invalid);
 }
 
@@ -136,6 +138,7 @@ Result Texture::create(const TextureDesc& desc) {
   VkImageViewType imageViewType = VK_IMAGE_VIEW_TYPE_MAX_ENUM;
   VkImageType imageType = VK_IMAGE_TYPE_2D;
   VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (desc_.type) {
   case TextureType::TwoD:
     imageViewType = VK_IMAGE_VIEW_TYPE_2D;
@@ -192,7 +195,7 @@ Result Texture::create(const TextureDesc& desc) {
         &result,
         debugNameImage.c_str());
     if (!IGL_DEBUG_VERIFY(result.isOk())) {
-      return result;
+      return result; // NOLINT(clang-diagnostic-nrvo)
     }
   } else if (desc_.exportability == TextureDesc::TextureExportability::Exportable) {
 #if IGL_PLATFORM_WINDOWS || IGL_PLATFORM_LINUX || IGL_PLATFORM_ANDROID
@@ -329,6 +332,7 @@ Result Texture::createView(const Texture& baseTexture, const TextureViewDesc& de
   };
 
   auto textureTypeToVkImageViewType = [](TextureType type) -> VkImageViewType {
+    // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
     switch (type) {
     case TextureType::TwoD:
       return VK_IMAGE_VIEW_TYPE_2D;
@@ -396,6 +400,7 @@ Result Texture::uploadInternal(TextureType /*type*/,
   const VulkanContext& ctx = device_.getVulkanContext();
 
   const VkImageAspectFlags imageAspectFlags = texture_->imageView_.getVkImageAspectFlags();
+  // NOLINTNEXTLINE(clang-diagnostic-shorten-64-to-32)
   ctx.stagingDevice_->imageData(
       vulkanImage, desc_.type, range, getProperties(), bytesPerRow, imageAspectFlags, data);
 
@@ -463,12 +468,17 @@ uint32_t Texture::getNumMipLevels() const {
   return desc_.numMipLevels;
 }
 
+// The texture_ and immediate_ dereferences below are guarded by release-effective
+// IGL_DEBUG_VERIFY early-returns; clang-tidy cannot model the macro, so the
+// nullable-dereference findings in these two overloads are false positives.
+// NOLINTBEGIN(facebook-hte-NullableDereference)
 void Texture::generateMipmap(ICommandQueue& /* unused */,
                              const TextureRangeDesc* IGL_NULLABLE range) const {
-  IGL_DEBUG_ASSERT(texture_);
-
-  if (texture_ && desc_.numMipLevels > 1) {
+  if (IGL_DEBUG_VERIFY(texture_) && desc_.numMipLevels > 1) {
     const auto& ctx = device_.getVulkanContext();
+    if (!IGL_DEBUG_VERIFY(ctx.immediate_)) {
+      return;
+    }
     const auto& wrapper = ctx.immediate_->acquire();
     texture_->image.generateMipmap(wrapper.cmdBuf, range ? *range : desc_.asRange());
     ctx.immediate_->submit(wrapper);
@@ -476,12 +486,15 @@ void Texture::generateMipmap(ICommandQueue& /* unused */,
 }
 
 void Texture::generateMipmap(ICommandBuffer& cmdBuffer, const TextureRangeDesc* range) const {
-  IGL_DEBUG_ASSERT(texture_);
+  if (!IGL_DEBUG_VERIFY(texture_)) {
+    return;
+  }
 
   auto& vkCmdBuffer = static_cast<CommandBuffer&>(cmdBuffer);
   texture_->image.generateMipmap(vkCmdBuffer.getVkCommandBuffer(),
                                  range ? *range : desc_.asRange());
 }
+// NOLINTEND(facebook-hte-NullableDereference)
 
 bool Texture::isRequiredGenerateMipmap() const {
   if (mipmapsAreAvailableAndUploaded_) {

@@ -281,8 +281,8 @@ void main() {
     if (glVersion > igl::opengl::GLVersion::v2_1) {
       const std::string codeVS1 =
           stringReplaceAll(getVulkanVertexShaderSource(), "gl_VertexIndex", "gl_VertexID");
-      auto codeVS2 = "#version 460\n" + codeVS1;
-      auto codeFS = "#version 460\n" + std::string(getVulkanFragmentShaderSource());
+      const std::string codeVS2 = std::string("#version 460\n") + codeVS1;
+      const std::string codeFS = std::string("#version 460\n") + getVulkanFragmentShaderSource();
 
       return igl::ShaderStagesCreator::fromModuleStringInput(
           device, codeVS2.c_str(), "main", "", codeFS.c_str(), "main", "", nullptr);
@@ -328,6 +328,7 @@ TinyMeshBindGroupSession::TinyMeshBindGroupSession(std::shared_ptr<Platform> pla
                                                          getPlatform().getInputDispatcher());
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void TinyMeshBindGroupSession::initialize() noexcept {
   device_ = &getPlatform().getDevice();
 
@@ -365,32 +366,34 @@ void TinyMeshBindGroupSession::initialize() noexcept {
   }
 
   {
-    VertexInputStateDesc desc;
-    desc.numAttributes = 3;
-    desc.attributes[0].format = VertexAttributeFormat::Float3;
-    desc.attributes[0].offset = offsetof(VertexPosUvw, position);
-    desc.attributes[0].name = "pos";
-    desc.attributes[0].bufferIndex = 0;
-    desc.attributes[0].location = 0;
-    desc.attributes[1].format = VertexAttributeFormat::Float3;
-    desc.attributes[1].offset = offsetof(VertexPosUvw, color);
-    desc.attributes[1].name = "col";
-    desc.attributes[1].bufferIndex = 0;
-    desc.attributes[1].location = 1;
-    desc.attributes[2].format = VertexAttributeFormat::Float2;
-    desc.attributes[2].offset = offsetof(VertexPosUvw, uv);
-    desc.attributes[2].name = "st";
-    desc.attributes[2].bufferIndex = 0;
-    desc.attributes[2].location = 2;
-    desc.numInputBindings = 1;
-    desc.inputBindings[0].stride = sizeof(VertexPosUvw);
+    const VertexInputStateDesc desc = {
+        .numAttributes = 3,
+        .attributes = {{.bufferIndex = 0,
+                        .format = VertexAttributeFormat::Float3,
+                        .offset = offsetof(VertexPosUvw, position),
+                        .name = "pos",
+                        .location = 0},
+                       {.bufferIndex = 0,
+                        .format = VertexAttributeFormat::Float3,
+                        .offset = offsetof(VertexPosUvw, color),
+                        .name = "col",
+                        .location = 1},
+                       {.bufferIndex = 0,
+                        .format = VertexAttributeFormat::Float2,
+                        .offset = offsetof(VertexPosUvw, uv),
+                        .name = "st",
+                        .location = 2}},
+        .numInputBindings = 1,
+        .inputBindings = {{.stride = sizeof(VertexPosUvw)}},
+    };
     vertexInput0_ = device_->createVertexInputState(desc, nullptr);
   }
 
   {
-    DepthStencilStateDesc desc;
-    desc.isDepthWriteEnabled = true;
-    desc.compareFunction = igl::CompareFunction::Less;
+    const DepthStencilStateDesc desc{
+        .compareFunction = igl::CompareFunction::Less,
+        .isDepthWriteEnabled = true,
+    };
     depthStencilState_ = device_->createDepthStencilState(desc, nullptr);
   }
 
@@ -421,29 +424,28 @@ void TinyMeshBindGroupSession::createRenderPipeline() {
 
   IGL_DEBUG_ASSERT(framebuffer_);
 
-  RenderPipelineDesc desc;
-
-  desc.targetDesc.colorAttachments.resize(1);
-  desc.targetDesc.colorAttachments[0].textureFormat =
-      framebuffer_->getColorAttachment(0)->getProperties().format;
-
-  if (framebuffer_->getDepthAttachment()) {
-    desc.targetDesc.depthAttachmentFormat =
-        framebuffer_->getDepthAttachment()->getProperties().format;
-  }
-
-  desc.vertexInputState = vertexInput0_;
-  desc.shaderStages = getShaderStagesForBackend(*device_);
-
+  const igl::TextureFormat depthFormat =
+      framebuffer_->getDepthAttachment()
+          ? framebuffer_->getDepthAttachment()->getProperties().format
+          : igl::TextureFormat::Invalid;
+  const RenderPipelineDesc desc{
+      .vertexInputState = vertexInput0_,
+      .shaderStages = getShaderStagesForBackend(*device_),
+      .targetDesc =
+          {
+              .colorAttachments = {{
+                  .textureFormat = framebuffer_->getColorAttachment(0)->getProperties().format,
+              }},
+              .depthAttachmentFormat = depthFormat,
+          },
 #if !TINY_TEST_USE_DEPTH_BUFFER
-  desc.cullMode = igl::CullMode::Back;
+      .cullMode = igl::CullMode::Back,
 #endif // TINY_TEST_USE_DEPTH_BUFFER
-
-  desc.frontFaceWinding = igl::WindingMode::Clockwise;
-  desc.isDynamicBufferMask = kDynamicBufferMask;
-  desc.debugName = igl::genNameHandle("Pipeline: mesh");
-  desc.fragmentUnitSamplerMap[0] = IGL_NAMEHANDLE("uTex0");
-  desc.fragmentUnitSamplerMap[1] = IGL_NAMEHANDLE("uTex1");
+      .frontFaceWinding = igl::WindingMode::Clockwise,
+      .fragmentUnitSamplerMap = {{0, IGL_NAMEHANDLE("uTex0")}, {1, IGL_NAMEHANDLE("uTex1")}},
+      .isDynamicBufferMask = kDynamicBufferMask,
+      .debugName = igl::genNameHandle("Pipeline: mesh"),
+  };
   renderPipelineStateMesh_ = device_->createRenderPipeline(desc, nullptr);
 
   {
@@ -494,10 +496,14 @@ void TinyMeshBindGroupSession::createRenderPipeline() {
     stbi_image_free(pixels);
   }
   {
-    SamplerStateDesc samplerDesc = igl::SamplerStateDesc::newLinear();
-    samplerDesc.addressModeU = igl::SamplerAddressMode::Repeat;
-    samplerDesc.addressModeV = igl::SamplerAddressMode::Repeat;
-    samplerDesc.debugName = "Sampler: linear";
+    const SamplerStateDesc samplerDesc = {
+        .minFilter = igl::SamplerMinMagFilter::Linear,
+        .magFilter = igl::SamplerMinMagFilter::Linear,
+        .mipFilter = igl::SamplerMipFilter::Disabled,
+        .addressModeU = igl::SamplerAddressMode::Repeat,
+        .addressModeV = igl::SamplerAddressMode::Repeat,
+        .debugName = "Sampler: linear",
+    };
     sampler_ = device_->createSamplerState(samplerDesc, nullptr);
   }
 
@@ -545,7 +551,14 @@ std::shared_ptr<ITexture> TinyMeshBindGroupSession::getVulkanNativeDepth() {
   return nullptr;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void TinyMeshBindGroupSession::update(SurfaceTextures surfaceTextures) noexcept {
+  // Per IGL guidelines, surfaceTextures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!surfaceTextures.color) {
+    return;
+  }
+
   width = surfaceTextures.color->getSize().width;
   height = surfaceTextures.color->getSize().height;
 
@@ -570,7 +583,7 @@ void TinyMeshBindGroupSession::update(SurfaceTextures surfaceTextures) noexcept 
 
   // from igl/shell/renderSessions/Textured3DCubeSession.cpp
   const float fov = float(45.0f * (M_PI / 180.0f));
-  const float aspectRatio = (float)width / (float)height;
+  const float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
   perFrame.proj = glm::perspectiveLH(fov, aspectRatio, 0.1f, 500.0f);
   // place a "camera" behind the cubes, the distance depends on the total number of cubes
   perFrame.view =
@@ -579,8 +592,8 @@ void TinyMeshBindGroupSession::update(SurfaceTextures surfaceTextures) noexcept 
 
   // rotate cubes around random axes
   for (uint32_t i = 0; i != kNumCubes; i++) {
-    const float direction = powf(-1, (float)(i + 1));
-    const uint32_t cubesInLine = (uint32_t)sqrt(kNumCubes);
+    const float direction = powf(-1, static_cast<float>(i + 1));
+    const uint32_t cubesInLine = static_cast<uint32_t>(sqrt(kNumCubes));
     const vec3 offset =
         vec3(-1.5f * sqrt(kNumCubes) + 4.0f * static_cast<float>(i % cubesInLine),
              -1.5f * sqrt(kNumCubes) + 4.0f * std::floor(static_cast<float>(i) / cubesInLine),
@@ -596,15 +609,17 @@ void TinyMeshBindGroupSession::update(SurfaceTextures surfaceTextures) noexcept 
 
   const igl::Viewport viewport = {.x = 0.0f,
                                   .y = 0.0f,
-                                  .width = (float)width,
-                                  .height = (float)height,
+                                  .width = static_cast<float>(width),
+                                  .height = static_cast<float>(height),
                                   .minDepth = 0.0f,
                                   .maxDepth = +1.0f};
-  const igl::ScissorRect scissor = {
-      .x = 0, .y = 0, .width = (uint32_t)width, .height = (uint32_t)height};
+  const igl::ScissorRect scissor = {.x = 0,
+                                    .y = 0,
+                                    .width = static_cast<uint32_t>(width),
+                                    .height = static_cast<uint32_t>(height)};
 
   // This will clear the framebuffer
-  auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
+  const auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
 
   commands->bindRenderPipelineState(renderPipelineStateMesh_);
   commands->bindViewport(viewport);

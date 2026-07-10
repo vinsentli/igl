@@ -38,6 +38,7 @@ IGLLogHandlerFunc* getHandle() {
 } // namespace
 
 IGL_API int IGLLog(IGLLogLevel logLevel, const char* IGL_RESTRICT format, ...) {
+  // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
   va_list ap;
   va_start(ap, format);
   const int result = IGLLogV(logLevel, format, ap);
@@ -46,9 +47,12 @@ IGL_API int IGLLog(IGLLogLevel logLevel, const char* IGL_RESTRICT format, ...) {
 }
 
 IGL_API int IGLLogOnce(IGLLogLevel logLevel, const char* IGL_RESTRICT format, ...) {
+  // NOLINTNEXTLINE(facebook-static-object-destructor-check)
   static std::mutex sLoggedMessagesMutex;
+  // NOLINTNEXTLINE(facebook-static-object-destructor-check)
   static std::unordered_set<std::string> sLoggedMessages;
 
+  // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
   va_list ap, apCopy;
   va_start(ap, format);
   va_copy(apCopy, ap); // make a copy for later passing to IGLLogV()

@@ -214,7 +214,7 @@ void CopyOperationsSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(shaderStages_ != nullptr);
 
   // Command queue
-  commandQueue_ = device.createCommandQueue(CommandQueueDesc{}, nullptr);
+  commandQueue_ = device.createCommandQueue({}, nullptr);
   IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
 
   renderPass_ = {
@@ -236,6 +236,11 @@ void CopyOperationsSession::initialize() noexcept {
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
 void CopyOperationsSession::update(SurfaceTextures textures) noexcept {
+  // Per IGL guidelines, textures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!textures.color) {
+    return;
+  }
   Result ret;
 
   // Create or update framebuffer
@@ -279,7 +284,7 @@ void CopyOperationsSession::update(SurfaceTextures textures) noexcept {
   }
 
   // Create command buffer
-  auto buffer = commandQueue_->createCommandBuffer(CommandBufferDesc{}, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
   IGL_DEBUG_ASSERT(buffer != nullptr);
 
   // Step 1: Buffer-to-buffer copy (once)

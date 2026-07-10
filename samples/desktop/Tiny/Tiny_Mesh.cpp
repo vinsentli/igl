@@ -211,20 +211,20 @@ GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationL
 
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-  GLFWwindow* window = isHeadless ? nullptr
-                                  : glfwCreateWindow(1280, 1024, "Vulkan Mesh", nullptr, nullptr);
+  GLFWwindow* newWindow =
+      isHeadless ? nullptr : glfwCreateWindow(1280, 1024, "Vulkan Mesh", nullptr, nullptr);
 
-  if (!isHeadless && !window) {
+  if (!isHeadless && !newWindow) {
     glfwTerminate();
     return nullptr;
   }
 
-  if (window) {
+  if (newWindow) {
     glfwSetErrorCallback([](int error, const char* description) {
       printf("GLFW Error (%i): %s\n", error, description);
     });
 
-    glfwSetKeyCallback(window, [](GLFWwindow* window, int key, int, int action, int) {
+    glfwSetKeyCallback(newWindow, [](GLFWwindow* window, int key, int, int action, int) {
       if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
       }
@@ -237,7 +237,7 @@ GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationL
     });
 
     // @lint-ignore CLANGTIDY
-    glfwSetWindowSizeCallback(window, [](GLFWwindow* /*window*/, int width, int height) {
+    glfwSetWindowSizeCallback(newWindow, [](GLFWwindow* /*window*/, int width, int height) {
       printf("Window resized! width=%d, height=%d\n", width, height);
       width_ = width;
       height_ = height;
@@ -249,10 +249,10 @@ GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationL
     });
 
 #if IGL_WITH_IGLU
-    glfwSetCursorPosCallback(window, [](auto* window, double x, double y) {
+    glfwSetCursorPosCallback(newWindow, [](auto* window, double x, double y) {
       inputDispatcher_.queueEvent(igl::shell::MouseMotionEvent(x, y, 0, 0));
     });
-    glfwSetMouseButtonCallback(window, [](auto* window, int button, int action, int mods) {
+    glfwSetMouseButtonCallback(newWindow, [](auto* window, int button, int action, int mods) {
       double xpos = 0.0, ypos = 0.0;
       glfwGetCursorPos(window, &xpos, &ypos);
       using igl::shell::MouseButton;
@@ -260,12 +260,12 @@ GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationL
           (button == GLFW_MOUSE_BUTTON_LEFT)
               ? MouseButton::Left
               : (button == GLFW_MOUSE_BUTTON_RIGHT ? MouseButton::Right : MouseButton::Middle);
-      inputDispatcher_.queueEvent(
-          igl::shell::MouseButtonEvent(iglButton, action == GLFW_PRESS, (float)xpos, (float)ypos));
+      inputDispatcher_.queueEvent(igl::shell::MouseButtonEvent(
+          iglButton, action == GLFW_PRESS, static_cast<float>(xpos), static_cast<float>(ypos)));
     });
 #endif // IGL_WITH_IGLU
 
-    glfwGetWindowSize(window, &width_, &height_);
+    glfwGetWindowSize(newWindow, &width_, &height_);
   }
 
   // create a device
@@ -276,17 +276,18 @@ GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationL
         .headless = isHeadless,
     };
 #ifdef _WIN32
-    auto ctx =
-        vulkan::HWDevice::createContext(cfg, window ? (void*)glfwGetWin32Window(window) : nullptr);
+    auto ctx = vulkan::HWDevice::createContext(
+        cfg, newWindow ? (void*)glfwGetWin32Window(newWindow) : nullptr);
 #elif IGL_PLATFORM_APPLE
-    auto ctx =
-        vulkan::HWDevice::createContext(cfg, window ? (void*)glfwGetCocoaWindow(window) : nullptr);
+    auto ctx = vulkan::HWDevice::createContext(
+        cfg, newWindow ? (void*)glfwGetCocoaWindow(newWindow) : nullptr);
 #elif defined(_XLESS_GLFW_)
     auto ctx = vulkan::HWDevice::createContext(cfg, nullptr, nullptr);
 #elif IGL_PLATFORM_LINUX
-    auto ctx = vulkan::HWDevice::createContext(cfg,
-                                               window ? (void*)glfwGetX11Window(window) : nullptr,
-                                               window ? (void*)glfwGetX11Display() : nullptr);
+    auto ctx =
+        vulkan::HWDevice::createContext(cfg,
+                                        newWindow ? (void*)glfwGetX11Window(newWindow) : nullptr,
+                                        newWindow ? (void*)glfwGetX11Display() : nullptr);
 #else
 #error Unsupported OS
 #endif
@@ -302,8 +303,8 @@ GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationL
       devices = vulkan::HWDevice::queryDevices(
           *ctx, HWDeviceQueryDesc(HWDeviceType::SoftwareGpu), nullptr);
     }
-    device =
-        vulkan::HWDevice::create(std::move(ctx), devices[0], (uint32_t)width_, (uint32_t)height_);
+    device = vulkan::HWDevice::create(
+        std::move(ctx), devices[0], static_cast<uint32_t>(width_), static_cast<uint32_t>(height_));
     IGL_DEBUG_ASSERT(device);
   }
 
@@ -351,29 +352,31 @@ GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationL
   }
 
   {
-    VertexInputStateDesc desc;
-    desc.numAttributes = 3;
-    desc.attributes[0].format = VertexAttributeFormat::Float3;
-    desc.attributes[0].offset = offsetof(VertexPosUvw, position);
-    desc.attributes[0].bufferIndex = 0;
-    desc.attributes[0].location = 0;
-    desc.attributes[1].format = VertexAttributeFormat::Float3;
-    desc.attributes[1].offset = offsetof(VertexPosUvw, color);
-    desc.attributes[1].bufferIndex = 0;
-    desc.attributes[1].location = 1;
-    desc.attributes[2].format = VertexAttributeFormat::Float2;
-    desc.attributes[2].offset = offsetof(VertexPosUvw, uv);
-    desc.attributes[2].bufferIndex = 0;
-    desc.attributes[2].location = 2;
-    desc.numInputBindings = 1;
-    desc.inputBindings[0].stride = sizeof(VertexPosUvw);
+    const VertexInputStateDesc desc = {
+        .numAttributes = 3,
+        .attributes = {{.bufferIndex = 0,
+                        .format = VertexAttributeFormat::Float3,
+                        .offset = offsetof(VertexPosUvw, position),
+                        .location = 0},
+                       {.bufferIndex = 0,
+                        .format = VertexAttributeFormat::Float3,
+                        .offset = offsetof(VertexPosUvw, color),
+                        .location = 1},
+                       {.bufferIndex = 0,
+                        .format = VertexAttributeFormat::Float2,
+                        .offset = offsetof(VertexPosUvw, uv),
+                        .location = 2}},
+        .numInputBindings = 1,
+        .inputBindings = {{.stride = sizeof(VertexPosUvw)}},
+    };
     vertexInput0_ = device->createVertexInputState(desc, nullptr);
   }
 
   {
-    DepthStencilStateDesc desc;
-    desc.isDepthWriteEnabled = true;
-    desc.compareFunction = igl::CompareFunction::Less;
+    const DepthStencilStateDesc desc{
+        .compareFunction = igl::CompareFunction::Less,
+        .isDepthWriteEnabled = true,
+    };
     depthStencilState_ = device->createDepthStencilState(desc, nullptr);
   }
 
@@ -461,7 +464,7 @@ GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationL
     axi = glm::sphericalRand(1.0f);
   }
 
-  return window;
+  return newWindow;
 }
 
 void createRenderPipeline() {
@@ -556,7 +559,7 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
 
   // from igl/shell/renderSessions/Textured3DCubeSession.cpp
   const float fov = float(45.0f * (M_PI / 180.0f));
-  const float aspectRatio = (float)width_ / (float)height_;
+  const float aspectRatio = static_cast<float>(width_) / static_cast<float>(height_);
   perFrame.proj = glm::perspectiveLH(fov, aspectRatio, 0.1f, 500.0f);
   // place a "camera" behind the cubes, the distance depends on the total number of cubes
   perFrame.view =
@@ -565,13 +568,14 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
 
   // rotate cubes around random axes
   for (uint32_t i = 0; i != kNumCubes; i++) {
-    const float direction = powf(-1, (float)(i + 1));
-    const uint32_t cubesInLine = (uint32_t)sqrt(kNumCubes);
+    const float direction = powf(-1, static_cast<float>(i + 1));
+    const uint32_t cubesInLine = static_cast<uint32_t>(sqrt(kNumCubes));
     const vec3 offset = vec3(-1.5f * sqrt(kNumCubes) + 4.0f * (i % cubesInLine),
                              -1.5f * sqrt(kNumCubes) + 4.0f * (i / cubesInLine),
                              0);
-    perObject[i].model =
-        glm::rotate(glm::translate(mat4(1.0f), offset), direction * (float)glfwGetTime(), axis_[i]);
+    perObject[i].model = glm::rotate(glm::translate(mat4(1.0f), offset),
+                                     direction * static_cast<float>(glfwGetTime()),
+                                     axis_[i]);
   }
 
   ubPerObject[frameIndex]->upload(&perObject, igl::BufferRange(sizeof(perObject)));
@@ -582,15 +586,17 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
 
   const igl::Viewport viewport = {.x = 0.0f,
                                   .y = 0.0f,
-                                  .width = (float)width_,
-                                  .height = (float)height_,
+                                  .width = static_cast<float>(width_),
+                                  .height = static_cast<float>(height_),
                                   .minDepth = 0.0f,
                                   .maxDepth = +1.0f};
-  const igl::ScissorRect scissor = {
-      .x = 0, .y = 0, .width = (uint32_t)width_, .height = (uint32_t)height_};
+  const igl::ScissorRect scissor = {.x = 0,
+                                    .y = 0,
+                                    .width = static_cast<uint32_t>(width_),
+                                    .height = static_cast<uint32_t>(height_)};
 
   // This will clear the framebuffer
-  auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer);
+  const auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer);
 
   commands->bindRenderPipelineState(renderPipelineState_Mesh_);
   commands->bindViewport(viewport);
@@ -622,7 +628,7 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
 
   auto submitHandle = commandQueue_->submit(*buffer);
 
-  if (auto* pd = device->getPlatformDevice<igl::vulkan::PlatformDevice>(); saveScreenshot_) {
+  if (auto* pd = device->getPlatformDevice<igl::vulkan::PlatformDevice>(); pd && saveScreenshot_) {
     saveScreenshot_ = false;
 #if TINY_TEST_USE_ASYNC_SCREENSHOTS
     pd->deferredTask(std::packaged_task<void()>([]() {
@@ -709,7 +715,12 @@ int main(int argc, char* argv[]) {
       const char* fileName = "TinyMesh.png";
       IGLLog(IGLLogInfo, "Writing screenshot to: '%s'\n", fileName);
       stbi_flip_vertically_on_write(1);
-      stbi_write_png(fileName, (int)dim.width, (int)dim.height, 3, pixelsRGB.data(), 0);
+      stbi_write_png(fileName,
+                     static_cast<int>(dim.width),
+                     static_cast<int>(dim.height),
+                     3,
+                     pixelsRGB.data(),
+                     0);
       break;
     }
   }
@@ -732,6 +743,9 @@ int main(int argc, char* argv[]) {
   framebuffer = nullptr;
   device.reset(nullptr);
 
+  // glfwDestroyWindow() is documented to do nothing when passed NULL, so a nullable `window` here
+  // is safe; this is a false positive.
+  // NOLINTNEXTLINE(facebook-hte-NullableDereference)
   glfwDestroyWindow(window);
   glfwTerminate();
 

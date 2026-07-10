@@ -79,7 +79,7 @@ struct FunctionConstantValues {
   };
 
   /**
-   * @brief Set the contant value of function in shader.
+   * @brief Set the constant value of function in shader.
    * Metal:MTLFunctionConstantValues.
    * Vulkan:SpecializationInfo.
    * @param index  constant_id
@@ -87,7 +87,7 @@ struct FunctionConstantValues {
    */
   FunctionConstantValues& setConstantValue(uint8_t index,
                                            ConstantValueType type,
-                                           void* IGL_NONNULL value);
+                                           const void* IGL_NONNULL value);
 
   /// @brief Logical equality: compares per-binding type + raw constant bytes. `data_` may
   /// contain orphan "gap" bytes from prior overwrites; those are correctly ignored here.

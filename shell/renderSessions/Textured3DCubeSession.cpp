@@ -233,7 +233,8 @@ void Textured3DCubeSession::createSamplerAndTextures(const igl::IDevice& device)
   const uint32_t height = 256;
   const uint32_t depth = 256;
   const uint32_t bytesPerPixel = 4;
-  auto textureData = std::vector<uint8_t>((size_t)width * height * depth * bytesPerPixel);
+  auto textureData =
+      std::vector<uint8_t>(static_cast<size_t>(width) * height * depth * bytesPerPixel);
   for (uint32_t k = 0; k < depth; ++k) {
     for (uint32_t j = 0; j < height; ++j) {
       for (uint32_t i = 0; i < width; ++i) {
@@ -372,6 +373,11 @@ void Textured3DCubeSession::setVertexParams(float aspectRatio) {
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
 void Textured3DCubeSession::update(SurfaceTextures surfaceTextures) noexcept {
+  // Per IGL guidelines, surfaceTextures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!surfaceTextures.color) {
+    return;
+  }
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
     return;

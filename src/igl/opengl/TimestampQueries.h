@@ -9,7 +9,6 @@
 
 #include <vector>
 #include <igl/TimestampQueries.h>
-#include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/IContext.h>
 #include <igl/opengl/WithContext.h>
 
@@ -32,6 +31,11 @@ class TimestampQueries : public ITimestampQueries, public WithContext {
   [[nodiscard]] bool readAndClearDisjoint() override;
 
   [[nodiscard]] bool isValid() const override;
+
+  /// True: the Mali OpenGL driver internally references FBOs active during a GL_TIME_ELAPSED query,
+  /// so callers must retain them until results are consumed to avoid a use-after-free (SEV
+  /// S638750).
+  [[nodiscard]] bool requiresFramebufferRetention() const override;
 
   /// Start a GL_TIME_ELAPSED query for the given timing slot.
   /// Must be paired with endElapsedQuery(). Cannot be nested.

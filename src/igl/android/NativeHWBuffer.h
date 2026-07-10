@@ -10,7 +10,10 @@
 // @fb-only
 // @fb-only
 
-#include <igl/Core.h>
+#include <cstddef>
+#include <cstdint>
+#include <igl/Config.h>
+#include <igl/IGLFolly.h>
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
@@ -38,7 +41,7 @@ class INativeHWTextureBuffer {
     ~LockGuard();
 
     LockGuard(const LockGuard&) = delete;
-    LockGuard(LockGuard&& g);
+    LockGuard(LockGuard&& g) noexcept;
 
    private:
     friend class INativeHWTextureBuffer;

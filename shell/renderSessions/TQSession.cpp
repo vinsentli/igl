@@ -339,7 +339,7 @@ void TQSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(shaderStages_ != nullptr);
 
   // Command queue
-  commandQueue_ = device.createCommandQueue(CommandQueueDesc{}, nullptr);
+  commandQueue_ = device.createCommandQueue({}, nullptr);
   IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
 
   // Generate mipmaps for texture for D3D12
@@ -372,6 +372,11 @@ void TQSession::initialize() noexcept {
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
 void TQSession::update(SurfaceTextures surfaceTextures) noexcept {
+  // Per IGL guidelines, surfaceTextures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!surfaceTextures.color) {
+    return;
+  }
   Result ret;
   if (framebuffer_ == nullptr) {
     FramebufferDesc framebufferDesc{
@@ -421,7 +426,7 @@ void TQSession::update(SurfaceTextures surfaceTextures) noexcept {
   }
 
   // Command Buffers
-  const auto buffer = commandQueue_->createCommandBuffer(CommandBufferDesc{}, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
   IGL_DEBUG_ASSERT(buffer != nullptr);
   const auto drawableSurface = framebuffer_->getColorAttachment(0);
 

@@ -8,7 +8,6 @@
 #pragma once
 
 #include <igl/SamplerState.h>
-#include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/IContext.h>
 
 namespace igl::opengl {
@@ -46,6 +45,10 @@ class SamplerState final : public WithContext, public ISamplerState {
   GLint depthCompareFunction_;
   bool depthCompareEnabled_;
   bool isYUV_;
+
+  void applyMinFilter(GLint target, bool isDepthOrDepthStencil) const;
+  void applyMagFilter(GLint target, bool isDepthOrDepthStencil) const;
+  [[nodiscard]] GLint resolveWrapMode(GLint wrap) const;
 };
 
 } // namespace igl::opengl

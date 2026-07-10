@@ -128,7 +128,7 @@ TEST_F(GetVulkanResultString, VulkanHelpersTest) {
 class GetWriteDescriptorSetImageInfoTest
   : public ::testing::TestWithParam<std::tuple<uint32_t, VkDescriptorType, uint32_t>> {};
 
-TEST_P(GetWriteDescriptorSetImageInfoTest, GetWriteDescriptorSet_ImageInfo) {
+TEST_P(GetWriteDescriptorSetImageInfoTest, GetWriteDescriptorSetImageInfo) {
   constexpr VkDescriptorSet descSet = VK_NULL_HANDLE;
   const uint32_t dstBinding = std::get<0>(GetParam());
   const VkDescriptorType descType = std::get<1>(GetParam());
@@ -175,7 +175,7 @@ INSTANTIATE_TEST_SUITE_P(
 class GetWriteDescriptorSetBufferInfoTest
   : public ::testing::TestWithParam<std::tuple<uint32_t, VkDescriptorType, uint32_t>> {};
 
-TEST_P(GetWriteDescriptorSetBufferInfoTest, GetWriteDescriptorSet_BufferInfo) {
+TEST_P(GetWriteDescriptorSetBufferInfoTest, GetWriteDescriptorSetBufferInfo) {
   constexpr VkDescriptorSet descSet = VK_NULL_HANDLE;
   const uint32_t dstBinding = std::get<0>(GetParam());
   const VkDescriptorType descType = std::get<1>(GetParam());
@@ -278,5 +278,169 @@ INSTANTIATE_TEST_SUITE_P(
                                std::to_string(std::get<3>(info.param));
       return name;
     });
+
+// ivkIsHostVisibleSingleHeapMemory *******************************
+class IsHostVisibleSingleHeapMemoryTest : public ::testing::Test {};
+
+TEST_F(IsHostVisibleSingleHeapMemoryTest, MultipleHeapsReturnsFalse) {
+  VkPhysicalDeviceMemoryProperties memProps = {};
+  memProps.memoryHeapCount = 2;
+  memProps.memoryTypeCount = 1;
+  memProps.memoryTypes[0].propertyFlags =
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+  EXPECT_FALSE(ivkIsHostVisibleSingleHeapMemory(&memProps));
+}
+
+TEST_F(IsHostVisibleSingleHeapMemoryTest, SingleHeapHostVisibleDeviceLocalReturnsTrue) {
+  VkPhysicalDeviceMemoryProperties memProps = {};
+  memProps.memoryHeapCount = 1;
+  memProps.memoryTypeCount = 1;
+  memProps.memoryTypes[0].propertyFlags =
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+  EXPECT_TRUE(ivkIsHostVisibleSingleHeapMemory(&memProps));
+}
+
+TEST_F(IsHostVisibleSingleHeapMemoryTest, SingleHeapNoDeviceLocalReturnsFalse) {
+  VkPhysicalDeviceMemoryProperties memProps = {};
+  memProps.memoryHeapCount = 1;
+  memProps.memoryTypeCount = 1;
+  memProps.memoryTypes[0].propertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+  EXPECT_FALSE(ivkIsHostVisibleSingleHeapMemory(&memProps));
+}
+
+// ivkFindMemoryType *******************************
+class FindMemoryTypeTest : public ::testing::Test {};
+
+TEST_F(FindMemoryTypeTest, FindsFirstMatchingType) {
+  VkPhysicalDeviceMemoryProperties memProps = {};
+  memProps.memoryTypeCount = 2;
+  memProps.memoryTypes[0].propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+  memProps.memoryTypes[1].propertyFlags =
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+  const uint32_t result = ivkFindMemoryType(&memProps, 0b11, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+  EXPECT_EQ(result, 1u);
+}
+
+TEST_F(FindMemoryTypeTest, RespectsMemoryTypeBitsMask) {
+  VkPhysicalDeviceMemoryProperties memProps = {};
+  memProps.memoryTypeCount = 3;
+  memProps.memoryTypes[0].propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+  memProps.memoryTypes[1].propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+  memProps.memoryTypes[2].propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+  const uint32_t result = ivkFindMemoryType(&memProps, 0b100, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  EXPECT_EQ(result, 2u);
+}
+
+TEST_F(FindMemoryTypeTest, MatchesExactPropertyFlags) {
+  VkPhysicalDeviceMemoryProperties memProps = {};
+  memProps.memoryTypeCount = 2;
+  memProps.memoryTypes[0].propertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+  memProps.memoryTypes[1].propertyFlags =
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+  const uint32_t result = ivkFindMemoryType(
+      &memProps, 0b11, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+  EXPECT_EQ(result, 1u);
+}
+
+// ivkAddNext *******************************
+class AddNextTest : public ::testing::Test {};
+
+TEST_F(AddNextTest, AppendToEmptyChain) {
+  VkBaseOutStructure node = {.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO, .pNext = nullptr};
+  VkBaseOutStructure next = {.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, .pNext = nullptr};
+
+  ivkAddNext(&node, &next);
+
+  EXPECT_EQ(node.pNext, &next);
+  EXPECT_EQ(next.pNext, nullptr);
+}
+
+TEST_F(AddNextTest, AppendToExistingChain) {
+  VkBaseOutStructure second = {.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, .pNext = nullptr};
+  VkBaseOutStructure first = {.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO, .pNext = &second};
+  VkBaseOutStructure appended = {.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, .pNext = nullptr};
+
+  ivkAddNext(&first, &appended);
+
+  EXPECT_EQ(first.pNext, &second);
+  EXPECT_EQ(second.pNext, &appended);
+  EXPECT_EQ(appended.pNext, nullptr);
+}
+
+TEST_F(AddNextTest, NullArgumentsAreNoop) {
+  VkBaseOutStructure node = {.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO, .pNext = nullptr};
+
+  ivkAddNext(nullptr, &node);
+  EXPECT_EQ(node.pNext, nullptr);
+
+  ivkAddNext(&node, nullptr);
+  EXPECT_EQ(node.pNext, nullptr);
+}
+
+// ivkUpdateGlslangResource *******************************
+class UpdateGlslangResourceTest : public ::testing::Test {};
+
+TEST_F(UpdateGlslangResourceTest, CopiesDeviceLimits) {
+  VkPhysicalDeviceProperties props = {};
+  props.limits.maxVertexInputAttributes = 16;
+  props.limits.maxClipDistances = 8;
+  props.limits.maxComputeWorkGroupCount[0] = 65535;
+  props.limits.maxComputeWorkGroupCount[1] = 65534;
+  props.limits.maxComputeWorkGroupCount[2] = 65533;
+  props.limits.maxComputeWorkGroupSize[0] = 1024;
+  props.limits.maxViewports = 16;
+  props.limits.maxCullDistances = 8;
+
+  glslang_resource_t res = {};
+  ivkUpdateGlslangResource(&res, &props, nullptr);
+
+  EXPECT_EQ(res.max_vertex_attribs, 16);
+  EXPECT_EQ(res.max_clip_distances, 8);
+  EXPECT_EQ(res.max_compute_work_group_count_x, 65535);
+  EXPECT_EQ(res.max_compute_work_group_count_y, 65534);
+  EXPECT_EQ(res.max_compute_work_group_count_z, 65533);
+  EXPECT_EQ(res.max_compute_work_group_size_x, 1024);
+  EXPECT_EQ(res.max_viewports, 16);
+  EXPECT_EQ(res.max_cull_distances, 8);
+  // Mesh shader fields stay zero-initialized when no mesh shader props are passed.
+  EXPECT_EQ(res.max_mesh_output_vertices_ext, 0);
+  EXPECT_EQ(res.max_task_work_group_size_x_ext, 0);
+}
+
+TEST_F(UpdateGlslangResourceTest, CopiesMeshShaderProps) {
+  VkPhysicalDeviceProperties props = {};
+  VkPhysicalDeviceMeshShaderPropertiesEXT meshProps = {};
+  meshProps.maxMeshOutputVertices = 256;
+  meshProps.maxMeshOutputPrimitives = 512;
+  meshProps.maxMeshWorkGroupSize[0] = 128;
+  meshProps.maxTaskWorkGroupSize[0] = 64;
+  meshProps.maxMeshMultiviewViewCount = 4;
+
+  glslang_resource_t res = {};
+  ivkUpdateGlslangResource(&res, &props, &meshProps);
+
+  EXPECT_EQ(res.max_mesh_output_vertices_ext, 256);
+  EXPECT_EQ(res.max_mesh_output_primitives_ext, 512);
+  EXPECT_EQ(res.max_mesh_work_group_size_x_ext, 128);
+  EXPECT_EQ(res.max_task_work_group_size_x_ext, 64);
+  EXPECT_EQ(res.max_mesh_view_count_ext, 4);
+}
+
+TEST_F(UpdateGlslangResourceTest, NullArgumentsAreNoop) {
+  VkPhysicalDeviceProperties props = {};
+  props.limits.maxVertexInputAttributes = 16;
+
+  // Null resource: must not dereference, must not crash.
+  ivkUpdateGlslangResource(nullptr, &props, nullptr);
+
+  // Null properties: resource is left untouched.
+  glslang_resource_t res = {};
+  res.max_vertex_attribs = 7;
+  ivkUpdateGlslangResource(&res, nullptr, nullptr);
+  EXPECT_EQ(res.max_vertex_attribs, 7);
+}
 
 } // namespace igl::tests

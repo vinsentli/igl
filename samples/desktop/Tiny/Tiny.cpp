@@ -135,7 +135,7 @@ static RenderPassDesc renderPass;
 static std::shared_ptr<IFramebuffer> framebuffer;
 static std::shared_ptr<IRenderPipelineState> renderPipelineStateTriangle;
 
-static GLFWwindow* initIGL(bool isHeadless, bool enableVulkanValidationLayers) {
+static GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationLayers) {
   if (!glfwInit()) {
     printf("glfwInit() failed");
     return nullptr;
@@ -238,8 +238,8 @@ static GLFWwindow* initIGL(bool isHeadless, bool enableVulkanValidationLayers) {
           *ctx, HWDeviceQueryDesc(HWDeviceType::SoftwareGpu), nullptr);
     }
 
-    device =
-        vulkan::HWDevice::create(std::move(ctx), devices[0], (uint32_t)width, (uint32_t)height);
+    device = vulkan::HWDevice::create(
+        std::move(ctx), devices[0], static_cast<uint32_t>(width), static_cast<uint32_t>(height));
 #endif
     IGL_DEBUG_ASSERT(device);
   }
@@ -249,7 +249,7 @@ static GLFWwindow* initIGL(bool isHeadless, bool enableVulkanValidationLayers) {
   renderPass.colorAttachments.resize(kNumColorAttachments);
 
   // first color attachment
-  for (auto i = 0; i < kNumColorAttachments; ++i) {
+  for (uint32_t i = 0; i < kNumColorAttachments; ++i) {
     // Generate sparse color attachments by skipping alternate slots
     if (i & 0x1) {
       continue;
@@ -276,8 +276,8 @@ static void createRenderPipeline() {
 
   desc.targetDesc.colorAttachments.resize(kNumColorAttachments);
 
-  for (auto i = 0; i < kNumColorAttachments; ++i) {
-    // @fb-only
+  for (uint32_t i = 0; i < kNumColorAttachments; ++i) {
+    // color attachment can be sparse
     if (framebuffer->getColorAttachment(i)) {
       desc.targetDesc.colorAttachments[i].textureFormat =
           framebuffer->getColorAttachment(i)->getFormat();
@@ -324,7 +324,7 @@ static void createFramebuffer(const std::shared_ptr<ITexture>& nativeDrawable) {
   FramebufferDesc framebufferDesc;
   framebufferDesc.colorAttachments[0].texture = nativeDrawable;
 
-  for (auto i = 1; i < kNumColorAttachments; ++i) {
+  for (uint32_t i = 1; i < kNumColorAttachments; ++i) {
     // Generate sparse color attachments by skipping alternate slots
     if (i & 0x1) {
       continue;
@@ -355,20 +355,21 @@ static void render(const std::shared_ptr<ITexture>& nativeDrawable) {
   }
 
   // Command buffers (1-N per thread): create, submit and forget
-  const CommandBufferDesc cbDesc;
-  const std::shared_ptr<ICommandBuffer> buffer = commandQueue->createCommandBuffer(cbDesc, nullptr);
+  const std::shared_ptr<ICommandBuffer> buffer = commandQueue->createCommandBuffer({}, nullptr);
 
   const igl::Viewport viewport = {.x = 0.0f,
                                   .y = 0.0f,
-                                  .width = (float)width,
-                                  .height = (float)height,
+                                  .width = static_cast<float>(width),
+                                  .height = static_cast<float>(height),
                                   .minDepth = 0.0f,
                                   .maxDepth = +1.0f};
-  const igl::ScissorRect scissor = {
-      .x = 0, .y = 0, .width = (uint32_t)width, .height = (uint32_t)height};
+  const igl::ScissorRect scissor = {.x = 0,
+                                    .y = 0,
+                                    .width = static_cast<uint32_t>(width),
+                                    .height = static_cast<uint32_t>(height)};
 
   // This will clear the framebuffer
-  auto commands = buffer->createRenderCommandEncoder(renderPass, framebuffer);
+  const auto commands = buffer->createRenderCommandEncoder(renderPass, framebuffer);
 
   commands->bindRenderPipelineState(renderPipelineStateTriangle);
   commands->bindViewport(viewport);
@@ -431,7 +432,12 @@ int main(int argc, char* argv[]) {
       const char* fileName = "Tiny.png";
       IGLLog(IGLLogInfo, "Writing screenshot to: '%s'\n", fileName);
       stbi_flip_vertically_on_write(1);
-      stbi_write_png(fileName, (int)dim.width, (int)dim.height, 3, pixelsRGB.data(), 0);
+      stbi_write_png(fileName,
+                     static_cast<int>(dim.width),
+                     static_cast<int>(dim.height),
+                     3,
+                     pixelsRGB.data(),
+                     0);
       break;
     }
   }
@@ -441,6 +447,9 @@ int main(int argc, char* argv[]) {
   framebuffer = nullptr;
   device.reset(nullptr);
 
+  // glfwDestroyWindow() is documented to do nothing when passed NULL, so a nullable `window` here
+  // is safe; this is a false positive.
+  // NOLINTNEXTLINE(facebook-hte-NullableDereference)
   glfwDestroyWindow(window);
   glfwTerminate();
 

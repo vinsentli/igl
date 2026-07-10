@@ -13,6 +13,7 @@
 #include <igl/CommandBuffer.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/VulkanContext.h>
+#include <igl/vulkan/VulkanRenderPassBuilder.h>
 
 #if IGL_PLATFORM_WINDOWS || IGL_PLATFORM_ANDROID || IGL_PLATFORM_MACOSX || IGL_PLATFORM_LINUX
 
@@ -108,6 +109,42 @@ TEST_F(VulkanContextExtendedTest, PhysicalDeviceProperties) {
 TEST_F(VulkanContextExtendedTest, CurrentSyncIndex) {
   auto& ctx = getVulkanContext();
   EXPECT_LT(ctx.currentSyncIndex(), ctx.config_.maxResourceCount);
+}
+
+TEST_F(VulkanContextExtendedTest, FeaturesAccessor) {
+  auto& ctx = getVulkanContext();
+  const auto& features = ctx.features();
+
+  EXPECT_EQ(features.vkPhysicalDeviceFeatures2.sType, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
+}
+
+TEST_F(VulkanContextExtendedTest, HasSwapchainWithoutInit) {
+  auto& ctx = getVulkanContext();
+  EXPECT_FALSE(ctx.hasSwapchain());
+}
+
+TEST_F(VulkanContextExtendedTest, GetFrameNumber) {
+  auto& ctx = getVulkanContext();
+  EXPECT_EQ(ctx.getFrameNumber(), 0u);
+}
+
+TEST_F(VulkanContextExtendedTest, FindRenderPassCached) {
+  auto& ctx = getVulkanContext();
+
+  igl::vulkan::VulkanRenderPassBuilder builder;
+  builder.addColor(
+      VK_FORMAT_R8G8B8A8_UNORM, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
+
+  const auto rp1 = ctx.findRenderPass(builder);
+  EXPECT_NE(rp1.pass, VK_NULL_HANDLE);
+
+  const auto rp2 = ctx.findRenderPass(builder);
+  EXPECT_EQ(rp1.pass, rp2.pass);
+}
+
+TEST_F(VulkanContextExtendedTest, ConfigDefaults) {
+  const auto& ctx = getVulkanContext();
+  EXPECT_GT(ctx.config_.maxResourceCount, 0u);
 }
 
 } // namespace igl::tests

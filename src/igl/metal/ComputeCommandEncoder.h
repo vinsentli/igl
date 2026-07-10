@@ -9,12 +9,14 @@
 
 #include <Metal/Metal.h>
 #include <igl/ComputeCommandEncoder.h>
+#include <igl/ComputePass.h>
 
 namespace igl::metal {
 
 class ComputeCommandEncoder final : public IComputeCommandEncoder {
  public:
   explicit ComputeCommandEncoder(id<MTLCommandBuffer> buffer);
+  ComputeCommandEncoder(id<MTLCommandBuffer> buffer, const ComputePassDesc& computePass);
   ~ComputeCommandEncoder() override = default;
 
   void endEncoding() override;
@@ -27,6 +29,10 @@ class ComputeCommandEncoder final : public IComputeCommandEncoder {
   void dispatchThreadGroups(const Dimensions& threadgroupCount,
                             const Dimensions& threadgroupSize,
                             const Dependencies& dependencies) override;
+  void dispatchThreadGroupsIndirect(IBuffer& indirectBuffer,
+                                    size_t indirectBufferOffset,
+                                    const Dimensions& threadgroupSize,
+                                    const Dependencies& dependencies) override;
   void pushDebugGroupLabel(const char* label, const igl::Color& color) const override;
   void insertDebugEventLabel(const char* label, const igl::Color& color) const override;
   void popDebugGroupLabel() const override;

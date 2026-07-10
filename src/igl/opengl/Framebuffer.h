@@ -9,7 +9,6 @@
 
 #include <igl/Framebuffer.h>
 #include <igl/RenderPass.h>
-#include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/IContext.h>
 #include <igl/opengl/Texture.h>
 
@@ -154,6 +153,8 @@ class CustomFramebuffer final : public Framebuffer {
   bool isCustomFrameBuffer() const override { return true; }
   void prepareResource(const std::string& debugName, Result* outResult);
   void updateDrawableInternal(SurfaceTextures surfaceTextures, bool updateDepthStencil);
+  void applyClearMask(int targetCount) const;
+  void setupResolveFramebuffer(Result* outResult);
 
   bool initialized_ = false;
 

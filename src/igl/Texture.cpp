@@ -9,7 +9,6 @@
 
 #include <cstddef>
 #include <limits>
-#include <utility>
 #include <igl/IGLSafeC.h>
 
 size_t std::hash<igl::TextureFormat>::operator()(const igl::TextureFormat& key) const {
@@ -173,6 +172,7 @@ TextureRangeDesc TextureRangeDesc::withNumFaces(uint32_t newNumFaces) const noex
   return newRange;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 Result TextureRangeDesc::validate() const noexcept {
   if (IGL_DEBUG_VERIFY_NOT(width == 0 || height == 0 || depth == 0 || numLayers == 0 ||
                            numMipLevels == 0 || numFaces == 0)) {
@@ -235,18 +235,18 @@ bool TextureRangeDesc::operator!=(const TextureRangeDesc& rhs) const noexcept {
 
 #define PROPERTIES(fmt, cpp, bpb, bw, bh, bd, mbx, mby, mbz, flgs, planes) \
   case TextureFormat::fmt:                                                 \
-    return TextureFormatProperties{IGL_TO_STRING(fmt),                     \
-                                   TextureFormat::fmt,                     \
-                                   cpp,                                    \
-                                   bpb,                                    \
-                                   bw,                                     \
-                                   bh,                                     \
-                                   bd,                                     \
-                                   mbx,                                    \
-                                   mby,                                    \
-                                   mbz,                                    \
-                                   planes,                                 \
-                                   flgs};
+    return TextureFormatProperties{.name = IGL_TO_STRING(fmt),             \
+                                   .format = TextureFormat::fmt,           \
+                                   .componentsPerPixel = cpp,              \
+                                   .bytesPerBlock = bpb,                   \
+                                   .blockWidth = bw,                       \
+                                   .blockHeight = bh,                      \
+                                   .blockDepth = bd,                       \
+                                   .minBlocksX = mbx,                      \
+                                   .minBlocksY = mby,                      \
+                                   .minBlocksZ = mbz,                      \
+                                   .numPlanes = planes,                    \
+                                   .flags = flgs};
 
 #define INVALID(fmt) PROPERTIES(fmt, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0)
 #define COLOR(fmt, cpp, bpb, flgs) PROPERTIES(fmt, cpp, bpb, 1, 1, 1, 1, 1, 1, flgs, 1)
@@ -260,6 +260,16 @@ bool TextureRangeDesc::operator!=(const TextureRangeDesc& rhs) const noexcept {
 #define MULTIPLANAR(fmt, cpp, bpb, planes) \
   PROPERTIES(fmt, cpp, 0, 1, 1, 1, 1, 1, 1, Flags::Compressed, planes)
 
+/**
+ * @brief Returns the properties for a given texture format.
+ *
+ * Maps each TextureFormat enum value to a TextureFormatProperties
+ * struct containing format metadata such as block dimensions,
+ * bytes per block, components per pixel, and format flags.
+ *
+ * @param[in] format The texture format to look up.
+ * @return A populated TextureFormatProperties for the format.
+ */
 TextureFormatProperties TextureFormatProperties::fromTextureFormat(TextureFormat format) {
   switch (format) {
     // NOLINTBEGIN(readability-identifier-naming)
@@ -385,6 +395,7 @@ TextureFormatProperties TextureFormatProperties::fromTextureFormat(TextureFormat
   IGL_UNREACHABLE_RETURN(TextureFormatProperties{})
 }
 
+// NOLINTNEXTLINE(misc-no-recursion)
 uint32_t TextureFormatProperties::getRows(TextureRangeDesc range) const noexcept {
   if (range.numMipLevels == 1) {
     const uint32_t texHeight = std::max(range.height, 1u);
@@ -582,6 +593,7 @@ size_t ITexture::getEstimatedSizeInBytes() const {
   return properties_.getBytesPerRange(range);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 Result ITexture::validateRange(const igl::TextureRangeDesc& range) const noexcept {
   auto result = range.validate();
   if (!result.isOk()) {
@@ -683,6 +695,8 @@ void ITexture::repackData(const TextureFormatProperties& properties,
                                                                     : originalDataBytesPerRow;
     const auto repackedDataIncrement = repackedBytesPerRow == 0 ? rangeBytesPerRow
                                                                 : repackedBytesPerRow;
+    const uint32_t numRows =
+        properties.getRows(TextureRangeDesc::new2D(0, 0, mipRange.width, mipRange.height));
     const auto totalNumLayers = mipRange.numLayers * mipRange.numFaces * mipRange.depth;
     for (size_t layer = 0; layer < totalNumLayers; ++layer) {
       uint8_t* repackedDataPtr = repackedData;
@@ -690,9 +704,9 @@ void ITexture::repackData(const TextureFormatProperties& properties,
                                                     : repackedDataIncrement;
       // Start at the end
       if (flipVertical) {
-        repackedDataPtr += repackedDataIncrement * (mipRange.height - 1);
+        repackedDataPtr += repackedDataIncrement * (numRows - 1);
       }
-      for (size_t y = 0; y < mipRange.height; ++y) {
+      for (uint32_t y = 0; y < numRows; ++y) {
         checked_memcpy_robust(repackedDataPtr,
                               repackedDataIncrement,
                               originalData,
@@ -701,7 +715,7 @@ void ITexture::repackData(const TextureFormatProperties& properties,
         repackedDataPtr += increment;
         originalData += originalDataIncrement;
       }
-      repackedData += repackedDataIncrement * mipRange.height;
+      repackedData += repackedDataIncrement * numRows;
     }
   }
 }

@@ -196,6 +196,7 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
 }
 } // namespace
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void MeshShaderTriangleSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
 
@@ -207,10 +208,11 @@ void MeshShaderTriangleSession::initialize() noexcept {
   shaderStages_ = getShaderStagesForBackend(device);
   IGL_DEBUG_ASSERT(shaderStages_ != nullptr);
 
-  BufferDesc uboDesc;
-  uboDesc.type = igl::BufferDesc::BufferTypeBits::Uniform;
-  uboDesc.storage = igl::ResourceStorage::Shared;
-  uboDesc.length = sizeof(glm::mat4);
+  const BufferDesc uboDesc{
+      .type = igl::BufferDesc::BufferTypeBits::Uniform,
+      .length = sizeof(glm::mat4),
+      .storage = igl::ResourceStorage::Shared,
+  };
   ubo_ = device.createBuffer(uboDesc, nullptr);
   IGL_DEBUG_ASSERT(ubo_ != nullptr);
 
@@ -229,7 +231,13 @@ void MeshShaderTriangleSession::initialize() noexcept {
   };
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void MeshShaderTriangleSession::update(SurfaceTextures surfaceTextures) noexcept {
+  // Per IGL guidelines, surfaceTextures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!surfaceTextures.color) {
+    return;
+  }
   Result ret;
   if (!framebuffer_) {
     const FramebufferDesc framebufferDesc = {
@@ -269,13 +277,13 @@ void MeshShaderTriangleSession::update(SurfaceTextures surfaceTextures) noexcept
   }
 
   // Command Buffers
-  auto buffer = commandQueue_->createCommandBuffer({}, &ret);
+  const auto buffer = commandQueue_->createCommandBuffer({}, &ret);
   IGL_DEBUG_ASSERT(ret.isOk());
   IGL_DEBUG_ASSERT(buffer != nullptr);
   auto drawableSurface = framebuffer_->getColorAttachment(0);
 
   frameNum_ = (++frameNum_) % 360;
-  const float angle = (float)frameNum_ * M_PI / 180.0f;
+  const float angle = static_cast<float>(frameNum_) * M_PI / 180.0f;
   const glm::mat4 matrix = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 0.0f, 1.0f));
   ubo_->upload(&matrix, {sizeof(matrix)});
 

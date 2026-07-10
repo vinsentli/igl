@@ -20,25 +20,21 @@ static const std::pair<const char*, int> kSAttrUv("a_uv", 1);
 namespace Quad {
 
 igl::VertexInputStateDesc inputStateDesc() {
-  igl::VertexInputStateDesc inputDesc;
-  inputDesc.numAttributes = 2;
-  inputDesc.attributes[0] =
-      {
-          .bufferIndex = 0,
-          .format = igl::VertexAttributeFormat::Float3,
-          .offset = offsetof(VertexPosUv, position),
-          .name = kSAttrPosition.first,
-          .location = kSAttrPosition.second,
-      },
-  inputDesc.attributes[1] = {
-      .bufferIndex = 0,
-      .format = igl::VertexAttributeFormat::Float2,
-      .offset = offsetof(VertexPosUv, uv),
-      .name = kSAttrUv.first,
-      .location = kSAttrUv.second,
+  const igl::VertexInputStateDesc inputDesc = {
+      .numAttributes = 2,
+      .attributes = {{.bufferIndex = 0,
+                      .format = igl::VertexAttributeFormat::Float3,
+                      .offset = offsetof(VertexPosUv, position),
+                      .name = kSAttrPosition.first,
+                      .location = kSAttrPosition.second},
+                     {.bufferIndex = 0,
+                      .format = igl::VertexAttributeFormat::Float2,
+                      .offset = offsetof(VertexPosUv, uv),
+                      .name = kSAttrUv.first,
+                      .location = kSAttrUv.second}},
+      .numInputBindings = 1,
+      .inputBindings = {{.stride = sizeof(VertexPosUv)}},
   };
-  inputDesc.numInputBindings = 1;
-  inputDesc.inputBindings[0].stride = sizeof(VertexPosUv);
   return inputDesc;
 }
 
@@ -69,16 +65,28 @@ std::shared_ptr<VertexData> create(igl::IDevice& device,
                                .length = sizeof(uint16_t) * indexData.size()};
 
   const igl::VertexInputStateDesc inputDesc = inputStateDesc();
+  // Per IGL Error Handling rule #24, every resource creation call must pass a
+  // Result* and check it; passing nullptr silently swallows errors.
+  igl::Result result;
   const std::shared_ptr<igl::IVertexInputState> vertexInput =
-      device.createVertexInputState(inputDesc, nullptr);
+      device.createVertexInputState(inputDesc, &result);
+  IGL_DEBUG_ASSERT(result.isOk(), "createVertexInputState() failed: %s", result.message.c_str());
+  IGL_DEBUG_ASSERT(vertexInput != nullptr);
 
   PrimitiveDesc primitiveDesc;
   primitiveDesc.numEntries = sizeof(indexData) / sizeof(indexData[0]);
 
+  auto vb = device.createBuffer(vbDesc, &result);
+  IGL_DEBUG_ASSERT(result.isOk(), "createBuffer(vertex) failed: %s", result.message.c_str());
+  IGL_DEBUG_ASSERT(vb != nullptr);
+  auto ib = device.createBuffer(ibDesc, &result);
+  IGL_DEBUG_ASSERT(result.isOk(), "createBuffer(index) failed: %s", result.message.c_str());
+  IGL_DEBUG_ASSERT(ib != nullptr);
+
   std::shared_ptr<VertexData> vertData =
       std::make_shared<VertexData>(vertexInput,
-                                   device.createBuffer(vbDesc, nullptr),
-                                   device.createBuffer(ibDesc, nullptr),
+                                   std::move(vb),
+                                   std::move(ib),
                                    igl::IndexFormat::UInt16,
                                    primitiveDesc,
                                    igl::PrimitiveType::TriangleStrip);

@@ -48,6 +48,75 @@ TEST_F(VulkanFeaturesTest, CopyNotPerformed) {
   EXPECT_TRUE(configDst.enableDescriptorIndexing);
 }
 
+// Copy with Same Config **************************************************************
+TEST_F(VulkanFeaturesTest, CopyPerformed) {
+  const igl::vulkan::VulkanContextConfig config;
+
+  igl::vulkan::VulkanFeatures featuresSrc(config);
+  featuresSrc.vkPhysicalDeviceFeatures2.features.dualSrcBlend = VK_FALSE;
+  featuresSrc.featuresMultiview.multiview = VK_FALSE;
+  featuresSrc.featuresSynchronization2.synchronization2 = VK_FALSE;
+
+  igl::vulkan::VulkanFeatures featuresDst(config);
+  EXPECT_TRUE(featuresDst.vkPhysicalDeviceFeatures2.features.dualSrcBlend);
+  EXPECT_TRUE(featuresDst.featuresMultiview.multiview);
+  EXPECT_TRUE(featuresDst.featuresSynchronization2.synchronization2);
+
+  featuresDst = featuresSrc;
+
+  EXPECT_FALSE(featuresDst.vkPhysicalDeviceFeatures2.features.dualSrcBlend);
+  EXPECT_FALSE(featuresDst.featuresMultiview.multiview);
+  EXPECT_FALSE(featuresDst.featuresSynchronization2.synchronization2);
+}
+
+// Self-Assignment ******************************************************************
+TEST_F(VulkanFeaturesTest, SelfAssignment) {
+  const igl::vulkan::VulkanContextConfig config;
+
+  igl::vulkan::VulkanFeatures features(config);
+  const VkBool32 originalDualSrcBlend = features.vkPhysicalDeviceFeatures2.features.dualSrcBlend;
+
+  igl::vulkan::VulkanFeatures& ref = features;
+  features = ref;
+
+  EXPECT_EQ(features.vkPhysicalDeviceFeatures2.features.dualSrcBlend, originalDualSrcBlend);
+}
+
+// Check Selected Features ****************************************************
+TEST_F(VulkanFeaturesTest, CheckSelectedFeatures_AllPresent) {
+  const igl::vulkan::VulkanContextConfig config;
+
+  const igl::vulkan::VulkanFeatures requested(config);
+  const igl::vulkan::VulkanFeatures available(config);
+
+  const igl::Result result = requested.checkSelectedFeatures(available);
+  EXPECT_TRUE(result.isOk());
+}
+
+// Extension Bool Defaults ****************************************************
+TEST_F(VulkanFeaturesTest, ExtensionBoolsDefaultToFalse) {
+  const igl::vulkan::VulkanContextConfig config;
+  const igl::vulkan::VulkanFeatures features(config);
+
+  EXPECT_FALSE(features.has_VK_EXT_descriptor_buffer);
+  EXPECT_FALSE(features.has_VK_EXT_descriptor_indexing);
+  EXPECT_FALSE(features.has_VK_EXT_fragment_density_map);
+  EXPECT_FALSE(features.has_VK_EXT_headless_surface);
+  EXPECT_FALSE(features.has_VK_EXT_index_type_uint8);
+  EXPECT_FALSE(features.has_VK_EXT_mesh_shader);
+  EXPECT_FALSE(features.has_VK_EXT_queue_family_foreign);
+  EXPECT_FALSE(features.has_VK_KHR_8bit_storage);
+  EXPECT_FALSE(features.has_VK_KHR_buffer_device_address);
+  EXPECT_FALSE(features.has_VK_KHR_get_surface_capabilities2);
+  EXPECT_FALSE(features.has_VK_KHR_portability_enumeration);
+  EXPECT_FALSE(features.has_VK_KHR_shader_non_semantic_info);
+  EXPECT_FALSE(features.has_VK_KHR_synchronization2);
+  EXPECT_FALSE(features.has_VK_KHR_timeline_semaphore);
+  EXPECT_FALSE(features.has_VK_KHR_uniform_buffer_standard_layout);
+  EXPECT_FALSE(features.has_VK_KHR_vulkan_memory_model);
+  EXPECT_FALSE(features.has_VK_QCOM_multiview_per_view_viewports);
+}
+
 // Enable Default Features ****************************************************
 TEST_F(VulkanFeaturesTest, EnableDefaultFeatures) {
   const igl::vulkan::VulkanContextConfig config;
@@ -62,7 +131,7 @@ TEST_F(VulkanFeaturesTest, EnableDefaultFeatures) {
   EXPECT_TRUE(features.vkPhysicalDeviceFeatures2.features.multiDrawIndirect);
   EXPECT_TRUE(features.vkPhysicalDeviceFeatures2.features.drawIndirectFirstInstance);
   EXPECT_TRUE(features.vkPhysicalDeviceFeatures2.features.depthBiasClamp);
-#ifdef IGL_PLATFORM_ANDROID
+#if IGL_PLATFORM_ANDROID
   // fillModeNonSolid is not well supported on Android, only enable by default when it's not Android
   EXPECT_FALSE(features.vkPhysicalDeviceFeatures2.features.fillModeNonSolid);
 #else
@@ -88,6 +157,176 @@ TEST_F(VulkanFeaturesTest, EnableDefaultFeatures) {
     EXPECT_TRUE(features.featuresSamplerYcbcrConversion.samplerYcbcrConversion);
     EXPECT_TRUE(features.featuresShaderDrawParameters.shaderDrawParameters);
   }
+}
+
+TEST_F(VulkanFeaturesTest, CheckSelectedFeatures_MissingCoreFeature) {
+  igl::setDebugBreakEnabled(false);
+
+  const igl::vulkan::VulkanContextConfig config;
+
+  const igl::vulkan::VulkanFeatures requested(config);
+  igl::vulkan::VulkanFeatures available(config);
+  available.vkPhysicalDeviceFeatures2.features.dualSrcBlend = VK_FALSE;
+
+  const igl::Result result = requested.checkSelectedFeatures(available);
+#if IGL_PLATFORM_APPLE
+  EXPECT_TRUE(result.isOk());
+#else
+  EXPECT_FALSE(result.isOk());
+#endif
+}
+
+TEST_F(VulkanFeaturesTest, CheckSelectedFeatures_MissingMultiview) {
+  igl::setDebugBreakEnabled(false);
+
+  const igl::vulkan::VulkanContextConfig config;
+
+  const igl::vulkan::VulkanFeatures requested(config);
+  igl::vulkan::VulkanFeatures available(config);
+  available.featuresMultiview.multiview = VK_FALSE;
+
+  const igl::Result result = requested.checkSelectedFeatures(available);
+#if IGL_PLATFORM_APPLE
+  EXPECT_TRUE(result.isOk());
+#else
+  EXPECT_FALSE(result.isOk());
+#endif
+}
+
+TEST_F(VulkanFeaturesTest, ConfigDisablesDualSrcBlend) {
+  igl::vulkan::VulkanContextConfig config;
+  config.enableDualSrcBlend = false;
+
+  const igl::vulkan::VulkanFeatures features(config);
+
+  EXPECT_FALSE(features.vkPhysicalDeviceFeatures2.features.dualSrcBlend);
+}
+
+TEST_F(VulkanFeaturesTest, ConfigDisablesShaderInt16) {
+  igl::vulkan::VulkanContextConfig config;
+  config.enableShaderInt16 = false;
+
+  const igl::vulkan::VulkanFeatures features(config);
+
+  EXPECT_FALSE(features.vkPhysicalDeviceFeatures2.features.shaderInt16);
+}
+
+TEST_F(VulkanFeaturesTest, CheckSelectedFeatures_DescriptorIndexingEnabled_AllPresent) {
+  igl::vulkan::VulkanContextConfig config;
+  config.enableDescriptorIndexing = true;
+
+  const igl::vulkan::VulkanFeatures requested(config);
+  const igl::vulkan::VulkanFeatures available(config);
+
+  const igl::Result result = requested.checkSelectedFeatures(available);
+  EXPECT_TRUE(result.isOk());
+}
+
+TEST_F(VulkanFeaturesTest, ConfigDisablesShaderDrawParameters) {
+  igl::vulkan::VulkanContextConfig config;
+  config.enableShaderDrawParameters = false;
+
+  const igl::vulkan::VulkanFeatures features(config);
+
+  EXPECT_FALSE(features.featuresShaderDrawParameters.shaderDrawParameters);
+}
+
+TEST_F(VulkanFeaturesTest, ConfigDisables16BitStorageAccess) {
+  igl::vulkan::VulkanContextConfig config;
+  config.enableStorageBuffer16BitAccess = false;
+
+  const igl::vulkan::VulkanFeatures features(config);
+
+  EXPECT_FALSE(features.features16BitStorage.storageBuffer16BitAccess);
+}
+
+TEST_F(VulkanFeaturesTest, CheckSelectedFeatures_MissingShaderDrawParameters) {
+  igl::setDebugBreakEnabled(false);
+
+  const igl::vulkan::VulkanContextConfig config;
+
+  const igl::vulkan::VulkanFeatures requested(config);
+  igl::vulkan::VulkanFeatures available(config);
+  available.featuresShaderDrawParameters.shaderDrawParameters = VK_FALSE;
+
+  const igl::Result result = requested.checkSelectedFeatures(available);
+#if IGL_PLATFORM_APPLE
+  EXPECT_TRUE(result.isOk());
+#else
+  EXPECT_FALSE(result.isOk());
+#endif
+}
+
+// allAvailableExtensions initial state ********************************************
+TEST_F(VulkanFeaturesTest, AllAvailableExtensionsInitiallyEmpty) {
+  const igl::vulkan::VulkanContextConfig config;
+  const igl::vulkan::VulkanFeatures features(config);
+
+  EXPECT_TRUE(features.allAvailableExtensions(igl::vulkan::VulkanFeatures::ExtensionType::Instance)
+                  .empty());
+  EXPECT_TRUE(
+      features.allAvailableExtensions(igl::vulkan::VulkanFeatures::ExtensionType::Device).empty());
+}
+
+// available initial state **********************************************************
+TEST_F(VulkanFeaturesTest, AvailableReturnsFalseWhenNoExtensionsEnumerated) {
+  const igl::vulkan::VulkanContextConfig config;
+  const igl::vulkan::VulkanFeatures features(config);
+
+  EXPECT_FALSE(
+      features.available("VK_KHR_swapchain", igl::vulkan::VulkanFeatures::ExtensionType::Device));
+  EXPECT_FALSE(features.available(VK_KHR_SURFACE_EXTENSION_NAME,
+                                  igl::vulkan::VulkanFeatures::ExtensionType::Instance));
+}
+
+// enableCommonInstanceExtensions without available extensions *********************
+TEST_F(VulkanFeaturesTest, EnableCommonInstanceExtensionsNoAvailableExtensions) {
+  const igl::vulkan::VulkanContextConfig config;
+  igl::vulkan::VulkanFeatures features(config);
+
+  // Without enumerate(), extensions_ is empty, so enable() is a no-op for all ext.
+  features.enableCommonInstanceExtensions(config);
+
+  EXPECT_FALSE(features.has_VK_KHR_portability_enumeration);
+  EXPECT_FALSE(features.has_VK_KHR_get_surface_capabilities2);
+  EXPECT_FALSE(features.has_VK_EXT_headless_surface);
+}
+
+// enableCommonDeviceExtensions without available extensions / descriptor buffer always off
+TEST_F(VulkanFeaturesTest, EnableCommonDeviceExtensionsNoAvailableExtensions) {
+  const igl::vulkan::VulkanContextConfig config;
+  igl::vulkan::VulkanFeatures features(config);
+
+  features.enableCommonDeviceExtensions(config);
+
+  EXPECT_FALSE(features.has_VK_EXT_index_type_uint8);
+  EXPECT_FALSE(features.has_VK_KHR_timeline_semaphore);
+  EXPECT_FALSE(features.has_VK_KHR_synchronization2);
+  EXPECT_FALSE(features.has_VK_KHR_8bit_storage);
+  EXPECT_FALSE(features.has_VK_KHR_buffer_device_address);
+  // Descriptor buffer is intentionally always disabled (hardcoded false in
+  // enableCommonDeviceExtensions).
+  EXPECT_FALSE(features.has_VK_EXT_descriptor_buffer);
+}
+
+// checkSelectedFeatures negative case with descriptor indexing enabled ***********
+TEST_F(VulkanFeaturesTest, CheckSelectedFeaturesDescriptorIndexingEnabledMissingFeature) {
+  igl::setDebugBreakEnabled(false);
+
+  igl::vulkan::VulkanContextConfig config;
+  config.enableDescriptorIndexing = true;
+
+  const igl::vulkan::VulkanFeatures requested(config);
+  igl::vulkan::VulkanFeatures available(config);
+  // Remove one of the required descriptor-indexing features from "available"
+  available.featuresDescriptorIndexing.shaderSampledImageArrayNonUniformIndexing = VK_FALSE;
+
+  const igl::Result result = requested.checkSelectedFeatures(available);
+#if IGL_PLATFORM_APPLE
+  EXPECT_TRUE(result.isOk());
+#else
+  EXPECT_FALSE(result.isOk());
+#endif
 }
 
 } // namespace igl::tests

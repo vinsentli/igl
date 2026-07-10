@@ -128,7 +128,7 @@ VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
               .multiDrawIndirect = VK_TRUE,
               .drawIndirectFirstInstance = VK_TRUE,
               .depthBiasClamp = VK_TRUE,
-#ifdef IGL_PLATFORM_ANDROID
+#if IGL_PLATFORM_ANDROID
               .fillModeNonSolid = VK_FALSE, // not well supported on Android
 #else
               .fillModeNonSolid = VK_TRUE,
@@ -254,6 +254,8 @@ VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
       .descriptorBuffer = VK_TRUE,
   }),
   config(config) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+
   extensions_.resize(kNumberOfExtensionTypes);
   enabledExtensions_.resize(kNumberOfExtensionTypes);
 

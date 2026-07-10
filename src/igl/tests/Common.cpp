@@ -9,6 +9,7 @@
 
 #include <igl/Common.h>
 
+#include <ldrutils/lutils/Pool.h>
 #include <igl/CommandEncoder.h>
 
 namespace igl::tests {
@@ -19,6 +20,8 @@ TEST(CommonTest, BackendTypeToStringTest) {
   ASSERT_EQ(BackendTypeToString(BackendType::Metal), "Metal");
   ASSERT_EQ(BackendTypeToString(BackendType::Vulkan), "Vulkan");
   // @fb-only
+  ASSERT_EQ(BackendTypeToString(BackendType::D3D12), "D3D12");
+  ASSERT_EQ(BackendTypeToString(BackendType::Custom), "Custom");
 }
 
 TEST(CommonTest, ResultTest) {
@@ -48,6 +51,33 @@ TEST(CommonTest, RectTest) {
   ASSERT_FALSE(testRect2.isNull());
 }
 
+TEST(CommonTest, ScissorRectIsNullSemantics) {
+  // isNull() is true only when BOTH width and height are zero; a non-zero extent
+  // in either dimension makes the rect non-null (guards against an accidental
+  // || instead of &&).
+  EXPECT_FALSE((ScissorRect{.width = 1, .height = 0}).isNull());
+  EXPECT_FALSE((ScissorRect{.width = 0, .height = 1}).isNull());
+
+  // x/y are not part of the emptiness test: a zero-extent rect is null
+  // regardless of its origin.
+  EXPECT_TRUE((ScissorRect{.x = 10, .y = 20, .width = 0, .height = 0}).isNull());
+}
+
+TEST(CommonTest, ScissorRectIsNullIgnoresOrigin) {
+  // isNull() depends only on width/height, never on x/y — a zero-sized rect at a
+  // non-zero origin is still considered null.
+  const ScissorRect rect{.x = 10, .y = 20, .width = 0, .height = 0};
+  EXPECT_TRUE(rect.isNull());
+}
+
+TEST(CommonTest, ScissorRectIsNullRequiresBothDimensionsZero) {
+  // A rect with either dimension non-zero is not null.
+  const ScissorRect wideOnly{.x = 0, .y = 0, .width = 5, .height = 0};
+  EXPECT_FALSE(wideOnly.isNull());
+  const ScissorRect tallOnly{.x = 0, .y = 0, .width = 0, .height = 5};
+  EXPECT_FALSE(tallOnly.isNull());
+}
+
 TEST(CommonTest, SizeTest) {
   Size size;
   ASSERT_EQ(size.height, 0.0f);
@@ -60,6 +90,22 @@ TEST(CommonTest, SizeTest) {
   ASSERT_TRUE(size2 == size2);
   ASSERT_FALSE(size == size2);
   ASSERT_FALSE(size2 != size2);
+}
+
+TEST(CommonTest, SizeInequalityPerField) {
+  // operator== must compare both fields; mutating each one in isolation should
+  // make the sizes compare non-equal.
+  const Size base(4.0f, 8.0f);
+  {
+    const Size other(5.0f, 8.0f);
+    EXPECT_TRUE(base != other);
+    EXPECT_FALSE(base == other);
+  }
+  {
+    const Size other(4.0f, 9.0f);
+    EXPECT_TRUE(base != other);
+    EXPECT_FALSE(base == other);
+  }
 }
 
 TEST(CommonTest, DimensionTest) {
@@ -78,11 +124,100 @@ TEST(CommonTest, DimensionTest) {
   ASSERT_FALSE(dimension2 != dimension2);
 }
 
+TEST(CommonTest, DimensionInequalityPerField) {
+  // operator== must compare width, height and depth; mutating each one in
+  // isolation should make the dimensions compare non-equal.
+  const Dimensions base(2, 3, 4);
+  {
+    Dimensions other = base;
+    other.width = 20;
+    EXPECT_TRUE(base != other);
+    EXPECT_FALSE(base == other);
+  }
+  {
+    Dimensions other = base;
+    other.height = 30;
+    EXPECT_TRUE(base != other);
+    EXPECT_FALSE(base == other);
+  }
+  {
+    Dimensions other = base;
+    other.depth = 40;
+    EXPECT_TRUE(base != other);
+    EXPECT_FALSE(base == other);
+  }
+}
+
 TEST(CommonTest, ViewportTest) {
   Viewport viewport;
   ASSERT_TRUE(viewport != kInvalidViewport);
   Viewport viewport2;
   ASSERT_TRUE(viewport == viewport2);
+}
+
+TEST(CommonTest, ViewportDefaultValues) {
+  // The default viewport covers a unit region: width/height default to 1.0f (not
+  // 0.0f) so a freshly constructed Viewport is immediately usable.
+  const Viewport viewport;
+  EXPECT_FLOAT_EQ(viewport.x, 0.0f);
+  EXPECT_FLOAT_EQ(viewport.y, 0.0f);
+  EXPECT_FLOAT_EQ(viewport.width, 1.0f);
+  EXPECT_FLOAT_EQ(viewport.height, 1.0f);
+  EXPECT_FLOAT_EQ(viewport.minDepth, 0.0f);
+  EXPECT_FLOAT_EQ(viewport.maxDepth, 1.0f);
+}
+
+TEST(CommonTest, InvalidViewportValues) {
+  // kInvalidViewport is the sentinel used by `!= kInvalidViewport` checks; every
+  // field must be -1.0f so it can never be confused with a valid viewport.
+  EXPECT_FLOAT_EQ(kInvalidViewport.x, -1.0f);
+  EXPECT_FLOAT_EQ(kInvalidViewport.y, -1.0f);
+  EXPECT_FLOAT_EQ(kInvalidViewport.width, -1.0f);
+  EXPECT_FLOAT_EQ(kInvalidViewport.height, -1.0f);
+  EXPECT_FLOAT_EQ(kInvalidViewport.minDepth, -1.0f);
+  EXPECT_FLOAT_EQ(kInvalidViewport.maxDepth, -1.0f);
+}
+
+TEST(CommonTest, ViewportInequalityPerField) {
+  // operator== must compare every field; mutating each one in isolation should
+  // make the viewports compare non-equal.
+  const Viewport base;
+  {
+    Viewport other = base;
+    other.x = 5.0f;
+    EXPECT_TRUE(base != other);
+    EXPECT_FALSE(base == other);
+  }
+  {
+    Viewport other = base;
+    other.y = 5.0f;
+    EXPECT_TRUE(base != other);
+    EXPECT_FALSE(base == other);
+  }
+  {
+    Viewport other = base;
+    other.width = 5.0f;
+    EXPECT_TRUE(base != other);
+    EXPECT_FALSE(base == other);
+  }
+  {
+    Viewport other = base;
+    other.height = 5.0f;
+    EXPECT_TRUE(base != other);
+    EXPECT_FALSE(base == other);
+  }
+  {
+    Viewport other = base;
+    other.minDepth = 0.5f;
+    EXPECT_TRUE(base != other);
+    EXPECT_FALSE(base == other);
+  }
+  {
+    Viewport other = base;
+    other.maxDepth = 0.5f;
+    EXPECT_TRUE(base != other);
+    EXPECT_FALSE(base == other);
+  }
 }
 
 TEST(CommonTest, EnumToValueTest) {
@@ -96,6 +231,19 @@ TEST(CommonTest, ScopeGuardTest) {
     auto scopeGuard = ScopeGuardOnExit() + [&]() { ++testValue; };
   }
   ASSERT_EQ(testValue, 1);
+}
+
+TEST(CommonTest, ScopeExitMacro) {
+  int count = 0;
+  {
+    IGL_SCOPE_EXIT {
+      ++count;
+    };
+    IGL_SCOPE_EXIT {
+      ++count;
+    };
+  }
+  ASSERT_EQ(count, 2);
 }
 
 TEST(CommonTest, OptimizedMemCopyTest) {
@@ -121,6 +269,77 @@ TEST(CommonTest, OptimizedMemCopyTest) {
             *(reinterpret_cast<uint64_t*>(buffer2) + 3));
 }
 
+TEST(CommonTest, OptimizedMemCopySize12) {
+  // Exercises the dedicated 12-byte copy path (case 12 in optimizedMemcpy()), which performs an
+  // 8-byte store followed by a 4-byte store. The general OptimizedMemCopyTest covers 4/8/16/32 but
+  // not 12.
+  alignas(4) const uint8_t src[12] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+  alignas(4) uint8_t dst[12] = {0};
+
+  optimizedMemcpy(dst, src, sizeof(src));
+
+  for (size_t i = 0; i < sizeof(src); ++i) {
+    EXPECT_EQ(dst[i], src[i]);
+  }
+}
+
+TEST(CommonTest, OptimizedMemCopyMisalignedFallsBackToMemcpy) {
+  // When dst or src is not 4-byte aligned, optimizedMemcpy() must fall back to the generic memcpy()
+  // path instead of issuing aligned word stores. Offsetting by one byte guarantees misalignment of
+  // an otherwise 4-byte copy.
+  alignas(4) uint8_t srcStorage[8] = {0};
+  alignas(4) uint8_t dstStorage[8] = {0};
+
+  uint8_t* const src = srcStorage + 1;
+  uint8_t* const dst = dstStorage + 1;
+  for (uint8_t i = 0; i < 4; ++i) {
+    src[i] = static_cast<uint8_t>(i + 1);
+  }
+
+  optimizedMemcpy(dst, src, 4);
+
+  for (size_t i = 0; i < 4; ++i) {
+    EXPECT_EQ(dst[i], src[i]);
+  }
+}
+
+TEST(CommonTest, ResultSetOk) {
+  Result result(Result::Code::ArgumentInvalid, "some error");
+  ASSERT_FALSE(result.isOk());
+  ASSERT_FALSE(result.message.empty());
+
+  Result::setOk(&result);
+  ASSERT_TRUE(result.isOk());
+  ASSERT_TRUE(result.message.empty());
+}
+
+TEST(CommonTest, ResultSetOkNullSafe) {
+  Result::setOk(nullptr);
+}
+
+TEST(CommonTest, ResultSetResultNullSafe) {
+  Result::setResult(nullptr, Result::Code::RuntimeError, "should not crash");
+  const Result src(Result::Code::Unsupported, "src");
+  Result::setResult(nullptr, src);
+  Result::setResult(nullptr, Result(Result::Code::Unimplemented, "tmp"));
+}
+
+TEST(CommonTest, ResultErrorCodes) {
+  const Result r1(Result::Code::ArgumentNull, "null arg");
+  ASSERT_FALSE(r1.isOk());
+  ASSERT_EQ(r1.code, Result::Code::ArgumentNull);
+
+  const Result r2(Result::Code::ArgumentOutOfRange);
+  ASSERT_FALSE(r2.isOk());
+  ASSERT_EQ(r2.code, Result::Code::ArgumentOutOfRange);
+
+  const Result r3(Result::Code::Unsupported, "not supported");
+  ASSERT_EQ(r3.code, Result::Code::Unsupported);
+
+  const Result r4(Result::Code::DeviceLost, "gpu gone");
+  ASSERT_EQ(r4.code, Result::Code::DeviceLost);
+}
+
 TEST(CommonTest, HandleTest) {
   const Holder<BindGroupTextureHandle> bindGroupHandle;
   const Holder<BindGroupBufferHandle> bindGroupBufferHandle;
@@ -129,6 +348,109 @@ TEST(CommonTest, HandleTest) {
 }
 
 TEST(CommonTest, PoolTest) {
-  Pool<BindGroupBufferTag, BindGroupBufferDesc> bindGroupBuffersPool;
+  ldr::Pool<BindGroupBufferTag, BindGroupBufferDesc> bindGroupBuffersPool;
 }
+
+TEST(HolderTest, DefaultConstructedIsEmptyAndInvalid) {
+  const Holder<BindGroupTextureHandle> holder;
+  EXPECT_TRUE(holder.empty());
+  EXPECT_FALSE(holder.valid());
+}
+
+TEST(HolderTest, DefaultConstructedIndexAndGenAreZero) {
+  const Holder<TextureHandle> holder;
+  EXPECT_EQ(holder.index(), 0u);
+  EXPECT_EQ(holder.gen(), 0u);
+}
+
+TEST(HolderTest, MoveConstructionTransfersState) {
+  ldr::Pool<BindGroupBufferTag, BindGroupBufferDesc> pool;
+  const BindGroupBufferHandle handle = pool.create(BindGroupBufferDesc{});
+
+  Holder<BindGroupBufferHandle> original(nullptr, handle);
+  EXPECT_FALSE(original.empty());
+  EXPECT_TRUE(original.valid());
+
+  Holder<BindGroupBufferHandle> moved(std::move(original));
+  EXPECT_FALSE(moved.empty());
+  EXPECT_TRUE(moved.valid());
+  EXPECT_TRUE(original.empty()); // NOLINT(bugprone-use-after-move)
+}
+
+TEST(HolderTest, MoveAssignmentTransfersState) {
+  ldr::Pool<BindGroupBufferTag, BindGroupBufferDesc> pool;
+  const BindGroupBufferHandle handle = pool.create(BindGroupBufferDesc{});
+
+  Holder<BindGroupBufferHandle> a(nullptr, handle);
+  Holder<BindGroupBufferHandle> b;
+  EXPECT_FALSE(a.empty());
+  EXPECT_TRUE(b.empty());
+
+  b = std::move(a);
+  EXPECT_FALSE(b.empty());
+  EXPECT_TRUE(a.empty()); // NOLINT(bugprone-use-after-move)
+}
+
+TEST(HolderTest, AssignNullptrResetsHolder) {
+  ldr::Pool<BindGroupBufferTag, BindGroupBufferDesc> pool;
+  const BindGroupBufferHandle handle = pool.create(BindGroupBufferDesc{});
+
+  Holder<BindGroupBufferHandle> holder(nullptr, handle);
+  EXPECT_FALSE(holder.empty());
+
+  holder = nullptr;
+  EXPECT_TRUE(holder.empty());
+  EXPECT_FALSE(holder.valid());
+}
+
+TEST(HolderTest, ReleaseReturnsHandleAndEmptiesHolder) {
+  ldr::Pool<BindGroupBufferTag, BindGroupBufferDesc> pool;
+  const BindGroupBufferHandle handle = pool.create(BindGroupBufferDesc{});
+
+  Holder<BindGroupBufferHandle> holder(nullptr, handle);
+  EXPECT_FALSE(holder.empty());
+
+  const BindGroupBufferHandle released = holder.release();
+  EXPECT_FALSE(released.empty());
+  EXPECT_TRUE(holder.empty());
+}
+
+TEST(HolderTest, ResetEmptiesHolder) {
+  ldr::Pool<BindGroupBufferTag, BindGroupBufferDesc> pool;
+  const BindGroupBufferHandle handle = pool.create(BindGroupBufferDesc{});
+
+  Holder<BindGroupBufferHandle> holder(nullptr, handle);
+  EXPECT_FALSE(holder.empty());
+
+  holder.reset();
+  EXPECT_TRUE(holder.empty());
+  EXPECT_FALSE(holder.valid());
+}
+
+TEST(HolderTest, ConvertsToUnderlyingHandle) {
+  ldr::Pool<BindGroupBufferTag, BindGroupBufferDesc> pool;
+  const BindGroupBufferHandle handle = pool.create(BindGroupBufferDesc{});
+
+  const Holder<BindGroupBufferHandle> holder(nullptr, handle);
+
+  // The implicit conversion to the underlying handle type must yield a handle
+  // equal to the one the holder wraps (same index and gen), so a Holder can be
+  // passed wherever the raw handle is expected.
+  const BindGroupBufferHandle converted = holder;
+  EXPECT_EQ(converted, handle);
+  EXPECT_EQ(holder.index(), handle.index());
+  EXPECT_EQ(holder.gen(), handle.gen());
+}
+
+TEST(HolderTest, IndexAsVoidMatchesHandle) {
+  ldr::Pool<BindGroupBufferTag, BindGroupBufferDesc> pool;
+  const BindGroupBufferHandle handle = pool.create(BindGroupBufferDesc{});
+
+  const Holder<BindGroupBufferHandle> holder(nullptr, handle);
+
+  // indexAsVoid() encodes the integer index as an opaque void* (no real
+  // pointer dereference); it must match the wrapped handle's own encoding.
+  EXPECT_EQ(holder.indexAsVoid(), handle.indexAsVoid());
+}
+
 } // namespace igl::tests

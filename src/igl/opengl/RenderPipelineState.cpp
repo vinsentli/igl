@@ -259,7 +259,7 @@ void RenderPipelineState::bind() {
                                                                                        : GL_LINE);
   }
 
-  // alpha-to-coverage
+  // alpha-to-coverage (only meaningful when MSAA is active)
   if (desc_.alphaToCoverageEnabled) {
     getContext().enable(GL_SAMPLE_ALPHA_TO_COVERAGE);
   } else {

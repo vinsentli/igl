@@ -56,6 +56,23 @@ void ComputeCommandEncoder::dispatchThreadGroups(const Dimensions& threadgroupCo
   }
 }
 
+void ComputeCommandEncoder::dispatchThreadGroupsIndirect(IBuffer& indirectBuffer,
+                                                         size_t indirectBufferOffset,
+                                                         const Dimensions& /*threadgroupSize*/,
+                                                         const Dependencies& /*dependencies*/) {
+  // glDispatchComputeIndirect() is GL 4.3 / GLES 3.1+.
+  //
+  // The Dependencies argument is intentionally ignored on the OpenGL backend
+  // (same as dispatchThreadGroups()). Cross-pass synchronization is NOT derived
+  // from it; instead the adapter emits a memory barrier after each dispatch
+  // (gated on the pipeline using shader-storage buffers). Callers must not rely
+  // on Dependencies to insert barriers on this backend.
+  if (IGL_DEBUG_VERIFY(adapter_)) {
+    adapter_->dispatchThreadGroupsIndirect(static_cast<Buffer&>(indirectBuffer),
+                                           indirectBufferOffset);
+  }
+}
+
 void ComputeCommandEncoder::pushDebugGroupLabel(const char* label,
                                                 const igl::Color& /*color*/) const {
   IGL_DEBUG_ASSERT(label != nullptr && *label);

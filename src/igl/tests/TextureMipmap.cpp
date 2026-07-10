@@ -188,11 +188,11 @@ void testUploadToMip(IDevice& device, ICommandQueue& cmdQueue, bool singleUpload
 }
 } // namespace
 
-TEST_F(TextureTest, UploadToMip_LevelByLevel) {
+TEST_F(TextureTest, UploadToMipLevelByLevel) {
   testUploadToMip(*iglDev_, *cmdQueue_, false);
 }
 
-TEST_F(TextureTest, UploadToMip_SingleUpload) {
+TEST_F(TextureTest, UploadToMipSingleUpload) {
   testUploadToMip(*iglDev_, *cmdQueue_, true);
 }
 
@@ -473,6 +473,23 @@ TEST(TextureDescStaticTest, CalcMipmapLevelCount) {
   ASSERT_EQ(TextureDesc::calcNumMipLevels(8, 4, 4), 4);
   ASSERT_EQ(TextureDesc::calcNumMipLevels(4, 8, 4), 4);
   ASSERT_EQ(TextureDesc::calcNumMipLevels(4, 4, 8), 4);
+}
+
+//
+// Test the edge cases of TextureDesc::calcNumMipLevels: a zero in any dimension
+// has no valid base level and must yield zero mip levels, and the mip count is
+// driven by the largest dimension up to large power-of-two sizes.
+//
+TEST(TextureDescStaticTest, CalcMipmapLevelCountEdgeCases) {
+  // A zero in any dimension yields zero mip levels.
+  EXPECT_EQ(TextureDesc::calcNumMipLevels(0, 4), 0);
+  EXPECT_EQ(TextureDesc::calcNumMipLevels(4, 0), 0);
+  EXPECT_EQ(TextureDesc::calcNumMipLevels(4, 4, 0), 0);
+
+  // The largest dimension drives the mip count, even when the others are 1.
+  EXPECT_EQ(TextureDesc::calcNumMipLevels(1024, 1024), 11);
+  EXPECT_EQ(TextureDesc::calcNumMipLevels(1, 1024), 11);
+  EXPECT_EQ(TextureDesc::calcNumMipLevels(1, 1, 1024), 11);
 }
 
 //

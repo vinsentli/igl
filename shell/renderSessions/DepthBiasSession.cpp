@@ -480,14 +480,15 @@ void DepthBiasSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(shaderStages_ != nullptr);
 
   // Command queue
-  commandQueue_ = device.createCommandQueue(CommandQueueDesc{}, nullptr);
+  commandQueue_ = device.createCommandQueue({}, nullptr);
   IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
 
   // Depth stencil state: depth testing and depth writes enabled
   {
-    DepthStencilStateDesc desc;
-    desc.compareFunction = CompareFunction::Less;
-    desc.isDepthWriteEnabled = true;
+    const DepthStencilStateDesc desc{
+        .compareFunction = CompareFunction::Less,
+        .isDepthWriteEnabled = true,
+    };
     depthStencilState_ = device.createDepthStencilState(desc, nullptr);
     IGL_DEBUG_ASSERT(depthStencilState_ != nullptr);
   }
@@ -533,6 +534,11 @@ void DepthBiasSession::initialize() noexcept {
 }
 
 void DepthBiasSession::update(SurfaceTextures textures) noexcept {
+  // Per IGL guidelines, textures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!textures.color) {
+    return;
+  }
   Result ret;
   auto& device = getPlatform().getDevice();
 
@@ -619,7 +625,7 @@ void DepthBiasSession::update(SurfaceTextures textures) noexcept {
   }
 
   // Create command buffer
-  auto buffer = commandQueue_->createCommandBuffer(CommandBufferDesc{}, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
   IGL_DEBUG_ASSERT(buffer != nullptr);
   auto drawableSurface = framebuffer_->getColorAttachment(0);
 

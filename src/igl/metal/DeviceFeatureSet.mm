@@ -9,9 +9,11 @@
 
 #include <vector>
 
+namespace {
+
 // get the GPU family from the device
 // a return value of 0 indicates an error or lack of a supported GPU
-static size_t getGPUFamily(id<MTLDevice> device) {
+size_t getGPUFamily(id<MTLDevice> device) {
   // the new supportsFamily API is applicable to both iOS and macOS
   if (@available(macOS 10.15, iOS 13.0, *)) {
     using GPUFamilyPair = std::pair<MTLGPUFamily, size_t>;
@@ -90,6 +92,8 @@ static size_t getGPUFamily(id<MTLDevice> device) {
   return 0;
 }
 
+} // namespace
+
 namespace igl::metal {
 
 DeviceFeatureSet::DeviceFeatureSet(id<MTLDevice> device) {
@@ -133,6 +137,19 @@ DeviceFeatureSet::DeviceFeatureSet(id<MTLDevice> device) {
   }
 }
 
+/**
+ * @brief Queries whether a device feature is supported on the
+ *        current Metal device.
+ *
+ * Basic features are universally available on Metal (iOS 9.0+).
+ * Advanced features depend on the Apple GPU family and OS
+ * version.
+ *
+ * @param[in] feature The device feature to query.
+ * @return True if the feature is supported, false otherwise.
+ *
+ * @see https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
+ */
 bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
   // Metal supports all the basic features on iOS9.0+
   // see reference https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
@@ -241,6 +258,9 @@ bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
     return true;
   case DeviceFeatures::TimestampQueries:
     return supportsTimestampQueries_;
+  default:
+    IGL_DEBUG_ABORT("unhandled DeviceFeatures value");
+    break;
   }
   return false;
 }
@@ -253,6 +273,9 @@ bool DeviceFeatureSet::hasRequirement(DeviceRequirement requirement) const {
   case DeviceRequirement::TextureFormatRGExtReq:
   case DeviceRequirement::ShaderTextureLodExtReq:
     return false;
+  default:
+    IGL_DEBUG_ABORT("unhandled DeviceRequirement value");
+    break;
   }
   return true;
 }
@@ -339,6 +362,10 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
   case DeviceFeatureLimits::MaxComputeShaderStorageBlocks:
     result = 31;
     return true;
+  case DeviceFeatureLimits::MaxDescriptorHeapCbvSrvUav:
+  case DeviceFeatureLimits::MaxDescriptorHeapSamplers:
+  case DeviceFeatureLimits::MaxDescriptorHeapRtvs:
+  case DeviceFeatureLimits::MaxDescriptorHeapDsvs:
   default:
     IGL_DEBUG_ABORT(
         "invalid feature limit query: feature limit query is not implemented or does not exist\n");
@@ -346,6 +373,18 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
   }
 }
 
+/**
+ * @brief Returns Metal capability flags for a texture format.
+ *
+ * Capability results may vary by platform (iOS, macOS,
+ * simulator) and GPU family. Formats requiring 32-bit float
+ * filtering include SampledFiltered only when the device
+ * supports it.
+ *
+ * @param[in] format The texture format to query.
+ * @return A bitmask of TextureFormatCapabilityBits, or
+ *         Unsupported if the format is not available.
+ */
 ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getTextureFormatCapabilities(
     TextureFormat format) const {
   const auto all = ICapabilities::TextureFormatCapabilityBits::All;

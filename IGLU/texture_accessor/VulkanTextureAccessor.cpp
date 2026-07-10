@@ -42,8 +42,8 @@ void VulkanTextureAccessor::assignTexture(std::shared_ptr<igl::ITexture> texture
   const auto textureFormatProperties =
       igl::TextureFormatProperties::fromTextureFormat(texture->getFormat());
   numBytesRequired_ =
-      static_cast<size_t>(textureFormatProperties.getBytesPerRow(texture->getSize().width) *
-                          textureFormatProperties.getRows(texture->getFullRange()));
+      static_cast<size_t>(textureFormatProperties.getBytesPerRow(texture->getSize().width)) *
+      textureFormatProperties.getRows(texture->getFullRange());
 
   textureWidth_ = texture->getSize().width;
   textureHeight_ = texture->getSize().height;
@@ -80,13 +80,14 @@ size_t VulkanTextureAccessor::copyBytes(unsigned char* ptr, size_t length) {
       vkImage_,
       0,
       0,
-      VkRect2D{VkOffset2D{0, 0}, VkExtent2D{textureWidth_, textureHeight_}},
+      VkRect2D{.offset = VkOffset2D{.x = 0, .y = 0},
+               .extent = VkExtent2D{.width = textureWidth_, .height = textureHeight_}},
       igl::TextureFormatProperties::fromTextureFormat(texture_->getFormat()),
       vkImageFormat_,
       vkImageLayout_,
       VK_IMAGE_ASPECT_COLOR_BIT,
       ptr,
-      bytesPerRow_,
+      static_cast<uint32_t>(bytesPerRow_),
       false);
 #endif
   return numBytesRequired_;

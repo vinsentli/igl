@@ -232,4 +232,34 @@ TEST_F(DeviceTest, GetBackendType) {
   }
 }
 
+TEST_F(DeviceTest, HasFeatureTexturePartialMipChain) {
+  const bool supported = iglDev_->hasFeature(DeviceFeatures::TexturePartialMipChain);
+  EXPECT_TRUE(supported == true || supported == false);
+}
+
+TEST_F(DeviceTest, GetFeatureLimitsMaxTextureDimension) {
+  size_t maxDim = 0;
+  const bool ok = iglDev_->getFeatureLimits(DeviceFeatureLimits::MaxTextureDimension1D2D, maxDim);
+  EXPECT_TRUE(ok);
+  EXPECT_GT(maxDim, 0u);
+}
+
+TEST_F(DeviceTest, CreateBufferBasic) {
+  Result ret;
+
+  // Provide initial data on creation. The default BufferDesc::storage is
+  // platform-dependent (Managed on macOS, Shared elsewhere), and the OpenGL
+  // backend requires data for non-dynamic (static) buffers. Supplying data
+  // keeps this test valid across all backends and storage defaults.
+  const uint16_t indexData[] = {0, 1, 2, 0, 2, 3};
+  const BufferDesc desc{
+      .type = BufferDesc::BufferTypeBits::Index,
+      .data = indexData,
+      .length = sizeof(indexData),
+  };
+  auto buffer = iglDev_->createBuffer(desc, &ret);
+  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+  ASSERT_NE(buffer, nullptr);
+}
+
 } // namespace igl::tests

@@ -108,7 +108,7 @@
     "source": {
         "type": "git",
         "url": "https://github.com/ocornut/imgui.git",
-        "revision": "v1.91.7"
+        "revision": "v1.92.5"
     }
 },
 {
@@ -182,6 +182,14 @@
         "url": "https://github.com/KhronosGroup/KTX-Software.git",
         "revision": "f4acc8d44a2f2dcacf61878c80e1c4061fc6a5b3",
         "recursive": false
+    }
+},
+{
+    "name": "ldrutils",
+    "source": {
+        "type": "git",
+        "url": "https://github.com/corporateshark/ldrutils",
+        "revision": "913b8b353bb4914a71b19e61b7abdf6767a39af8"
     }
 },
 {

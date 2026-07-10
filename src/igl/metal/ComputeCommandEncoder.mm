@@ -11,15 +11,59 @@
 #import <Metal/Metal.h>
 #include <igl/metal/Buffer.h>
 #include <igl/metal/ComputePipelineState.h>
-#include <igl/metal/Framebuffer.h>
 #include <igl/metal/SamplerState.h>
 #include <igl/metal/Texture.h>
+#include <igl/metal/TimestampQueries.h>
 
 namespace igl::metal {
 
 ComputeCommandEncoder::ComputeCommandEncoder(id<MTLCommandBuffer> buffer) {
   id<MTLComputeCommandEncoder> computeEncoder = [buffer computeCommandEncoder];
   encoder_ = computeEncoder;
+}
+
+ComputeCommandEncoder::ComputeCommandEncoder(id<MTLCommandBuffer> buffer,
+                                             const ComputePassDesc& computePass) {
+  // Wire MTLComputePassDescriptor::sampleBufferAttachments to the supplied TimestampQueries so the
+  // resolved start/end samples land in the same slot pair (slot*2, slot*2+1) that the render-pass
+  // path writes to. Consumers iterate slots uniformly across pass types via getElapsedNanos().
+  // MTLComputePassDescriptor's sampleBufferAttachments require macOS 11 / iOS 14; older targets
+  // fall back to a plain encoder (no timestamps) so existing callers still work.
+  if (@available(macOS 11.0, iOS 14.0, *)) {
+    if (computePass.timestampQuery.queries) {
+      auto metalTsQueries =
+          std::static_pointer_cast<TimestampQueries>(computePass.timestampQuery.queries);
+      if (metalTsQueries && metalTsQueries->sampleBuffer_ != nil) {
+        const uint32_t startSampleIdx =
+            computePass.timestampQuery.slotIndex * TimestampQueries::kSamplesPerTimingSlot;
+        const uint32_t endSampleIdx = startSampleIdx + 1;
+        const uint32_t bufferSize =
+            metalTsQueries->maxTimestamps_ * TimestampQueries::kSamplesPerTimingSlot;
+        if (endSampleIdx < bufferSize) {
+          MTLComputePassDescriptor* passDesc = [MTLComputePassDescriptor computePassDescriptor];
+          passDesc.sampleBufferAttachments[0].sampleBuffer = metalTsQueries->sampleBuffer_;
+          passDesc.sampleBufferAttachments[0].startOfEncoderSampleIndex = startSampleIdx;
+          passDesc.sampleBufferAttachments[0].endOfEncoderSampleIndex = endSampleIdx;
+
+          // Advance currentIndex_ so resolveTimestamps() knows how many samples to resolve.
+          // Mirrors the render-pass path so a mixed render/compute frame produces one contiguous
+          // resolve range, not two overlapping ones.
+          const uint32_t requiredCount = endSampleIdx + 1;
+          uint32_t current = metalTsQueries->currentIndex_.load(std::memory_order_relaxed);
+          while (current < requiredCount) {
+            if (metalTsQueries->currentIndex_.compare_exchange_weak(
+                    current, requiredCount, std::memory_order_relaxed)) {
+              break;
+            }
+          }
+
+          encoder_ = [buffer computeCommandEncoderWithDescriptor:passDesc];
+          return;
+        }
+      }
+    }
+  }
+  encoder_ = [buffer computeCommandEncoder];
 }
 
 void ComputeCommandEncoder::endEncoding() {
@@ -68,6 +112,27 @@ void ComputeCommandEncoder::dispatchThreadGroups(const Dimensions& threadgroupCo
   tgs.height = threadgroupSize.height;
   tgs.depth = threadgroupSize.depth;
   [encoder_ dispatchThreadgroups:tgc threadsPerThreadgroup:tgs];
+}
+
+void ComputeCommandEncoder::dispatchThreadGroupsIndirect(IBuffer& indirectBuffer,
+                                                         size_t indirectBufferOffset,
+                                                         const Dimensions& threadgroupSize,
+                                                         const Dependencies& /*dependencies*/) {
+  IGL_DEBUG_ASSERT(encoder_);
+  IGL_DEBUG_ASSERT((indirectBuffer.getBufferType() & BufferDesc::BufferTypeBits::Indirect) != 0,
+                   "indirectBuffer must be created with BufferTypeBits::Indirect");
+  IGL_DEBUG_ASSERT(indirectBufferOffset % 4 == 0, "indirectBufferOffset must be 4-byte aligned");
+
+  const MTLSize tgs{
+      .width = threadgroupSize.width,
+      .height = threadgroupSize.height,
+      .depth = threadgroupSize.depth,
+  };
+
+  auto& iglBuffer = static_cast<Buffer&>(indirectBuffer);
+  [encoder_ dispatchThreadgroupsWithIndirectBuffer:iglBuffer.get()
+                              indirectBufferOffset:indirectBufferOffset
+                             threadsPerThreadgroup:tgs];
 }
 
 void ComputeCommandEncoder::bindUniform(const UniformDesc& /*uniformDesc*/, const void* /*data*/) {

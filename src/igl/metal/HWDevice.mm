@@ -34,16 +34,10 @@ bool isRemovable(id<MTLDevice> device) {
 }
 #endif
 
-} // namespace
-
-HWDeviceType getDeviceType(id<MTLDevice> device);
-
+#if !IGL_PLATFORM_IOS
 HWDeviceType getDeviceType(id<MTLDevice> device) {
   IGL_DEBUG_ASSERT(device != nullptr);
 
-#if IGL_PLATFORM_IOS
-  return HWDeviceType::DiscreteGpu;
-#else
   if (device.lowPower) {
     return HWDeviceType::IntegratedGpu;
   } else if (isRemovable(device)) {
@@ -51,8 +45,10 @@ HWDeviceType getDeviceType(id<MTLDevice> device) {
   } else {
     return HWDeviceType::DiscreteGpu;
   }
-#endif
 }
+#endif
+
+} // namespace
 
 std::vector<HWDeviceDesc> HWDevice::queryDevices(IGL_MAYBE_UNUSED const HWDeviceQueryDesc& desc,
                                                  Result* outResult) {
@@ -62,6 +58,7 @@ std::vector<HWDeviceDesc> HWDevice::queryDevices(IGL_MAYBE_UNUSED const HWDevice
   id<MTLDevice> metalDevice = MTLCreateSystemDefaultDevice();
   if (metalDevice) {
     // We don't need __bridge_retained here as iOS always provides the same ptr
+    // NOLINTNEXTLINE(bugprone-casting-through-void)
     HWDeviceDesc deviceDesc((uintptr_t)(__bridge void*)metalDevice,
                             HWDeviceType::DiscreteGpu,
                             0,
@@ -140,6 +137,7 @@ std::unique_ptr<IDevice> HWDevice::create(const HWDeviceDesc& desc, Result* outR
   }
 
   return createWithMTLDevice(
+      // NOLINTNEXTLINE(bugprone-casting-through-void)
       (__bridge id<MTLDevice>)(void*)desc.guid, // NOLINT(performance-no-int-to-ptr)
       outResult);
 }

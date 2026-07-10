@@ -22,8 +22,6 @@
 #include <igl/opengl/ios/Device.h>
 #include <igl/opengl/ios/TextureBuffer.h>
 
-static void* kAssociatedRenderBufferHolderKey = &kAssociatedRenderBufferHolderKey;
-
 /// Object used to hold onto a renderBuffer so we can attach it as an associated object
 @interface IGLRenderBufferHolder : NSObject {
  @public
@@ -32,6 +30,8 @@ static void* kAssociatedRenderBufferHolderKey = &kAssociatedRenderBufferHolderKe
 @end
 
 namespace {
+void* kAssociatedRenderBufferHolderKey = static_cast<void*>(&kAssociatedRenderBufferHolderKey);
+
 /// Backed by an associated object. This is used to track the last renderBuffer used to create this
 /// texture so we can reuse it and invalidate it when necessary
 /// This always returns a renderBufferHolder, but it is up to the responsibility of the caller to

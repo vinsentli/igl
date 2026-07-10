@@ -320,26 +320,39 @@ void CheckerboardMipmapSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(shaderStages_ != nullptr);
 
   // Command queue: backed by different types of GPU HW queues
-  commandQueue_ = device.createCommandQueue(CommandQueueDesc{}, nullptr);
+  commandQueue_ = device.createCommandQueue({}, nullptr);
   IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
 
-  renderPass_.colorAttachments.resize(1);
-  renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
-  renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPass_.colorAttachments[0].clearColor = getPreferredClearColor();
-  renderPass_.depthAttachment.loadAction = LoadAction::Clear;
-  renderPass_.depthAttachment.clearDepth = 1.0;
+  renderPass_ = {
+      .colorAttachments = {{
+          .loadAction = LoadAction::Clear,
+          .storeAction = StoreAction::Store,
+          .clearColor = getPreferredClearColor(),
+      }},
+      .depthAttachment =
+          {
+              .loadAction = LoadAction::Clear,
+              .clearDepth = 1.0,
+          },
+  };
 }
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
 void CheckerboardMipmapSession::update(SurfaceTextures surfaceTextures) noexcept {
+  // Per IGL guidelines, surfaceTextures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!surfaceTextures.color) {
+    return;
+  }
   Result ret;
   if (framebuffer_ == nullptr) {
-    FramebufferDesc framebufferDesc;
-    framebufferDesc.colorAttachments[0].texture = surfaceTextures.color;
-    framebufferDesc.depthAttachment.texture = surfaceTextures.depth;
-    IGL_DEBUG_ASSERT(framebufferDesc.depthAttachment.texture != nullptr);
-    framebuffer_ = getPlatform().getDevice().createFramebuffer(framebufferDesc, &ret);
+    IGL_DEBUG_ASSERT(surfaceTextures.depth != nullptr);
+    framebuffer_ = getPlatform().getDevice().createFramebuffer(
+        FramebufferDesc{
+            .colorAttachments = {{.texture = surfaceTextures.color}},
+            .depthAttachment = {.texture = surfaceTextures.depth},
+        },
+        &ret);
     IGL_DEBUG_ASSERT(ret.isOk());
     IGL_DEBUG_ASSERT(framebuffer_ != nullptr);
   } else {
@@ -389,9 +402,9 @@ void CheckerboardMipmapSession::update(SurfaceTextures surfaceTextures) noexcept
       glm::rotate(staticViewProjection, planeAngle_, glm::vec3(0.0, 1.f, 0.0));
 
   // Command buffer: create, submit and forget
-  auto buffer = commandQueue_->createCommandBuffer(CommandBufferDesc{}, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
   IGL_DEBUG_ASSERT(buffer != nullptr);
-  auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
+  const auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
   IGL_DEBUG_ASSERT(commands != nullptr);
 
   if (commands) {

@@ -523,133 +523,174 @@ Device::Device(std::unique_ptr<D3D12Context> ctx) : ctx_(std::move(ctx)) {
 
   auto* device = ctx_->getDevice();
   if (device) {
-    // Pre-compile mipmap generation shaders at device initialization.
-    // This avoids runtime compilation overhead in Texture::generateMipmap().
-    {
-      // HLSL shader sources (identical to those in Texture.cpp)
-      static const char* kVS = R"(
+    precompileMipmapShaders(device);
+  }
+}
+
+static bool compileFXC(const char* src,
+                       const char* entry,
+                       const char* target,
+                       std::vector<uint8_t>& outBytecode) {
+  igl::d3d12::ComPtr<ID3DBlob> blob;
+  igl::d3d12::ComPtr<ID3DBlob> errors;
+  const HRESULT hr = D3DCompile(src,
+                                strlen(src),
+                                nullptr,
+                                nullptr,
+                                nullptr,
+                                entry,
+                                target,
+                                D3DCOMPILE_ENABLE_STRICTNESS,
+                                0,
+                                blob.GetAddressOf(),
+                                errors.GetAddressOf());
+  if (FAILED(hr)) {
+    if (errors && errors->GetBufferSize() > 0) {
+      IGL_LOG_ERROR("FXC mipmap shader: %s\n",
+                    static_cast<const char*>(errors->GetBufferPointer()));
+    }
+    return false;
+  }
+  const auto* data = static_cast<const uint8_t*>(blob->GetBufferPointer());
+  outBytecode.assign(data, data + blob->GetBufferSize());
+  return true;
+}
+
+static bool compileDXC(DXCCompiler& compiler,
+                       const char* src,
+                       const char* entry,
+                       const char* target,
+                       const char* debugName,
+                       std::vector<uint8_t>& outBytecode) {
+  std::string errors;
+  const Result result =
+      compiler.compile(src, strlen(src), entry, target, debugName, 0, outBytecode, errors);
+  if (!result.isOk()) {
+    IGL_LOG_ERROR("Failed to compile mipmap shader '%s': %s\n%s\n",
+                  debugName,
+                  result.message.c_str(),
+                  errors.c_str());
+    return false;
+  }
+  return true;
+}
+
+void Device::precompileMipmapShaders(ID3D12Device* IGL_NONNULL device) {
+  static const char* kVS = R"(
 struct VSOut { float4 pos: SV_POSITION; float2 uv: TEXCOORD0; };
 VSOut main(uint id: SV_VertexID) {
   float2 p = float2((id << 1) & 2, id & 2);
   VSOut o; o.pos = float4(p*float2(2,-2)+float2(-1,1), 0, 1); o.uv = p; return o;
 }
 )";
-      static const char* kPS = R"(
+  static const char* kPS = R"(
 Texture2D tex0 : register(t0);
 SamplerState smp : register(s0);
 float4 main(float4 pos:SV_POSITION, float2 uv:TEXCOORD0) : SV_TARGET { return tex0.SampleLevel(smp, uv, 0); }
 )";
 
-      // Initialize DXC compiler
-      DXCCompiler dxcCompiler;
-      Result initResult = dxcCompiler.initialize();
-      if (!initResult.isOk()) {
-        IGL_LOG_ERROR(
-            "Device::Device: Failed to initialize DXC for mipmap shader compilation: %s\n",
-            initResult.message.c_str());
-        IGL_LOG_ERROR("  Mipmap generation will be unavailable\n");
-        return; // Early exit - don't attempt compilation without DXC
-      }
+  // Try DXC first, fall back to FXC if unavailable or compilation fails.
+  // D3D12 PSOs require all stages to use the same bytecode format (DXIL vs
+  // DXBC), so both shaders use the same compiler — all-or-nothing.
+  DXCCompiler dxcCompiler;
+  const Result initResult = dxcCompiler.initialize();
+  const bool dxcAvailable = initResult.isOk();
+  bool useDXC = dxcAvailable;
 
-      // Get shader model from context (minimum SM 6.0 for DXC)
-      D3D_SHADER_MODEL shaderModel = ctx_->getMaxShaderModel();
-      std::string vsTarget = getShaderTarget(shaderModel, ShaderStage::Vertex);
-      std::string psTarget = getShaderTarget(shaderModel, ShaderStage::Fragment);
+  if (!dxcAvailable) {
+    IGL_D3D12_LOG_VERBOSE("DXC unavailable for mipmap shaders, falling back to FXC\n");
+  }
 
-      // Compile vertex shader
-      std::string vsErrors;
-      Result vsResult = dxcCompiler.compile(kVS,
-                                            strlen(kVS),
-                                            "main",
-                                            vsTarget.c_str(),
-                                            "MipmapGenerationVS",
-                                            0,
-                                            pipelineCache_.mipmapVSBytecode_,
-                                            vsErrors);
-      if (!vsResult.isOk()) {
-        IGL_LOG_ERROR("Device::Device: Failed to pre-compile mipmap VS: %s\n%s\n",
-                      vsResult.message.c_str(),
-                      vsErrors.c_str());
-        pipelineCache_.mipmapVSBytecode_.clear();
-        return; // Early exit - can't proceed without VS
-      }
+  if (dxcAvailable) {
+    const D3D_SHADER_MODEL shaderModel = ctx_->getMaxShaderModel();
+    const std::string vsTarget = getShaderTarget(shaderModel, ShaderStage::Vertex);
+    const std::string psTarget = getShaderTarget(shaderModel, ShaderStage::Fragment);
 
-      // Compile pixel shader
-      std::string psErrors;
-      Result psResult = dxcCompiler.compile(kPS,
-                                            strlen(kPS),
-                                            "main",
-                                            psTarget.c_str(),
-                                            "MipmapGenerationPS",
-                                            0,
-                                            pipelineCache_.mipmapPSBytecode_,
-                                            psErrors);
-      if (!psResult.isOk()) {
-        IGL_LOG_ERROR("Device::Device: Failed to pre-compile mipmap PS: %s\n%s\n",
-                      psResult.message.c_str(),
-                      psErrors.c_str());
-        pipelineCache_.mipmapPSBytecode_.clear();
-        pipelineCache_.mipmapVSBytecode_.clear(); // Clear VS too for consistency
-        return; // Early exit - can't proceed without PS
-      }
+    const bool vsOk = compileDXC(dxcCompiler,
+                                 kVS,
+                                 "main",
+                                 vsTarget.c_str(),
+                                 "MipmapGenerationVS",
+                                 pipelineCache_.mipmapVSBytecode_);
+    const bool psOk = compileDXC(dxcCompiler,
+                                 kPS,
+                                 "main",
+                                 psTarget.c_str(),
+                                 "MipmapGenerationPS",
+                                 pipelineCache_.mipmapPSBytecode_);
 
-      // Create root signature for mipmap generation
-      D3D12_DESCRIPTOR_RANGE ranges[2] = {};
-      ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-      ranges[0].NumDescriptors = 1;
-      ranges[0].BaseShaderRegister = 0;
-      ranges[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-      ranges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
-      ranges[1].NumDescriptors = 1;
-      ranges[1].BaseShaderRegister = 0;
-      ranges[1].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-      D3D12_ROOT_PARAMETER params[2] = {};
-      params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-      params[0].DescriptorTable.NumDescriptorRanges = 1;
-      params[0].DescriptorTable.pDescriptorRanges = &ranges[0];
-      params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-      params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-      params[1].DescriptorTable.NumDescriptorRanges = 1;
-      params[1].DescriptorTable.pDescriptorRanges = &ranges[1];
-      params[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-      D3D12_ROOT_SIGNATURE_DESC rsDesc = {};
-      rsDesc.NumParameters = 2;
-      rsDesc.pParameters = params;
-      rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-      igl::d3d12::ComPtr<ID3DBlob> sig, err;
-      if (FAILED(D3D12SerializeRootSignature(
-              &rsDesc, D3D_ROOT_SIGNATURE_VERSION_1, sig.GetAddressOf(), err.GetAddressOf()))) {
-        IGL_LOG_ERROR("Device::Device: Failed to serialize mipmap root signature\n");
-        if (err && err->GetBufferPointer()) {
-          IGL_LOG_ERROR("  D3D12 error: %s\n", static_cast<const char*>(err->GetBufferPointer()));
-        }
-        pipelineCache_.mipmapVSBytecode_.clear();
-        pipelineCache_.mipmapPSBytecode_.clear();
-        return;
-      }
-
-      if (FAILED(device->CreateRootSignature(
-              0,
-              sig->GetBufferPointer(),
-              sig->GetBufferSize(),
-              IID_PPV_ARGS(pipelineCache_.mipmapRootSignature_.GetAddressOf())))) {
-        IGL_LOG_ERROR("Device::Device: Failed to create mipmap root signature\n");
-        pipelineCache_.mipmapVSBytecode_.clear();
-        pipelineCache_.mipmapPSBytecode_.clear();
-        return;
-      }
-
-      // Success! Mark mipmap shaders as available
-      pipelineCache_.mipmapShadersAvailable_ = true;
-      IGL_D3D12_LOG_VERBOSE(
-          "Device::Device: Mipmap shaders pre-compiled successfully (%zu bytes VS, %zu bytes PS)\n",
-          pipelineCache_.mipmapVSBytecode_.size(),
-          pipelineCache_.mipmapPSBytecode_.size());
+    if (!vsOk || !psOk) {
+      pipelineCache_.mipmapVSBytecode_.clear();
+      pipelineCache_.mipmapPSBytecode_.clear();
+      useDXC = false;
     }
   }
+
+  if (!useDXC) {
+    if (!compileFXC(kVS, "main", "vs_5_1", pipelineCache_.mipmapVSBytecode_)) {
+      pipelineCache_.mipmapVSBytecode_.clear();
+      return;
+    }
+    if (!compileFXC(kPS, "main", "ps_5_1", pipelineCache_.mipmapPSBytecode_)) {
+      pipelineCache_.mipmapVSBytecode_.clear();
+      pipelineCache_.mipmapPSBytecode_.clear();
+      return;
+    }
+  }
+
+  // Create root signature for mipmap generation
+  D3D12_DESCRIPTOR_RANGE ranges[2] = {};
+  ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+  ranges[0].NumDescriptors = 1;
+  ranges[0].BaseShaderRegister = 0;
+  ranges[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+  ranges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
+  ranges[1].NumDescriptors = 1;
+  ranges[1].BaseShaderRegister = 0;
+  ranges[1].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+  D3D12_ROOT_PARAMETER params[2] = {};
+  params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+  params[0].DescriptorTable.NumDescriptorRanges = 1;
+  params[0].DescriptorTable.pDescriptorRanges = &ranges[0];
+  params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+  params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+  params[1].DescriptorTable.NumDescriptorRanges = 1;
+  params[1].DescriptorTable.pDescriptorRanges = &ranges[1];
+  params[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+  D3D12_ROOT_SIGNATURE_DESC rsDesc = {};
+  rsDesc.NumParameters = 2;
+  rsDesc.pParameters = params;
+  rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+  igl::d3d12::ComPtr<ID3DBlob> sig, err;
+  if (FAILED(D3D12SerializeRootSignature(
+          &rsDesc, D3D_ROOT_SIGNATURE_VERSION_1, sig.GetAddressOf(), err.GetAddressOf()))) {
+    IGL_LOG_ERROR("Failed to serialize mipmap root signature\n");
+    if (err && err->GetBufferPointer()) {
+      IGL_LOG_ERROR("  D3D12 error: %s\n", static_cast<const char*>(err->GetBufferPointer()));
+    }
+    pipelineCache_.mipmapVSBytecode_.clear();
+    pipelineCache_.mipmapPSBytecode_.clear();
+    return;
+  }
+
+  if (FAILED(device->CreateRootSignature(
+          0,
+          sig->GetBufferPointer(),
+          sig->GetBufferSize(),
+          IID_PPV_ARGS(pipelineCache_.mipmapRootSignature_.GetAddressOf())))) {
+    IGL_LOG_ERROR("Failed to create mipmap root signature\n");
+    pipelineCache_.mipmapVSBytecode_.clear();
+    pipelineCache_.mipmapPSBytecode_.clear();
+    return;
+  }
+
+  pipelineCache_.mipmapShadersAvailable_ = true;
+  IGL_D3D12_LOG_VERBOSE("Mipmap shaders pre-compiled successfully (%zu bytes VS, %zu bytes PS)\n",
+                        pipelineCache_.mipmapVSBytecode_.size(),
+                        pipelineCache_.mipmapPSBytecode_.size());
 }
 
 Device::~Device() {
@@ -1799,7 +1840,7 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipeline(const RenderP
   psoDesc.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 
   // Blend state - configure per render target based on pipeline descriptor
-  psoDesc.BlendState.AlphaToCoverageEnable = FALSE;
+  psoDesc.BlendState.AlphaToCoverageEnable = desc.alphaToCoverageEnabled ? TRUE : FALSE;
   const size_t numColorAttachments = desc.targetDesc.colorAttachments.size();
   psoDesc.BlendState.IndependentBlendEnable = numColorAttachments > 1 ? TRUE : FALSE;
 
@@ -2541,7 +2582,7 @@ igl::d3d12::ComPtr<ID3D12PipelineState> Device::createPipelineStateVariant(
   psoDesc.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 
   // Blend state
-  psoDesc.BlendState.AlphaToCoverageEnable = FALSE;
+  psoDesc.BlendState.AlphaToCoverageEnable = desc.alphaToCoverageEnabled ? TRUE : FALSE;
   const size_t numColorAttachments = desc.targetDesc.colorAttachments.size();
   psoDesc.BlendState.IndependentBlendEnable = numColorAttachments > 1 ? TRUE : FALSE;
 
@@ -2927,9 +2968,10 @@ Result compileShaderFXC(const char* source,
 
   // D3DCompile is the legacy FXC compiler API
   // It's always available on Windows 10+ (via d3dcompiler_47.dll)
+  const char* sourceName = (debugName && debugName[0]) ? debugName : nullptr;
   HRESULT hr = D3DCompile(source,
                           sourceLength,
-                          debugName, // Source name (for error messages)
+                          sourceName,
                           nullptr, // Defines
                           D3D_COMPILE_STANDARD_FILE_INCLUDE,
                           entryPoint,
@@ -2940,12 +2982,16 @@ Result compileShaderFXC(const char* source,
                           errors.GetAddressOf());
 
   if (FAILED(hr)) {
-    std::string errorMsg = "FXC compilation failed";
+    char hrBuf[32];
+    snprintf(hrBuf, sizeof(hrBuf), "0x%08lX", static_cast<unsigned long>(hr));
+    std::string errorMsg = std::string("FXC compilation failed (HRESULT ") + hrBuf + ")";
     if (errors.Get() && errors->GetBufferSize() > 0) {
       outErrors = std::string(static_cast<const char*>(errors->GetBufferPointer()),
                               errors->GetBufferSize());
       errorMsg += ": " + outErrors;
       IGL_LOG_ERROR("FXC: %s\n", outErrors.c_str());
+    } else {
+      IGL_LOG_ERROR("FXC: compilation failed with HRESULT %s (no error output)\n", hrBuf);
     }
     return Result(Result::Code::RuntimeError, errorMsg);
   }
@@ -3397,8 +3443,21 @@ std::shared_ptr<IShaderModule> Device::createShaderModule(const ShaderModuleDesc
         }
       }
     } else {
-      IGL_D3D12_LOG_VERBOSE("  Failed to create DXC utils for reflection: 0x%08X (non-fatal)\n",
-                            hr);
+      IGL_D3D12_LOG_VERBOSE("  Failed to create DXC utils for reflection: 0x%08X\n", hr);
+      IGL_D3D12_LOG_VERBOSE("  Trying D3DReflect for DXBC bytecode...\n");
+
+      igl::d3d12::ComPtr<ID3D12ShaderReflection> reflection;
+      hr = D3DReflect(module->getBytecode().data(),
+                      module->getBytecode().size(),
+                      IID_PPV_ARGS(reflection.GetAddressOf()));
+
+      if (SUCCEEDED(hr)) {
+        module->setReflection(reflection);
+        IGL_D3D12_LOG_VERBOSE("  Shader reflection created successfully (DXBC reflection)\n");
+      } else {
+        IGL_D3D12_LOG_VERBOSE("  Failed to create reflection with D3DReflect: 0x%08X (non-fatal)\n",
+                              hr);
+      }
     }
   }
 

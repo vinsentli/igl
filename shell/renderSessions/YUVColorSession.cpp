@@ -132,9 +132,8 @@ YUVColorSession::YUVColorSession(std::shared_ptr<Platform> platform) :
                                                          getPlatform().getInputDispatcher());
 }
 
-// clang-tidy off
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void YUVColorSession::initialize() noexcept {
-  // clang-tidy on
   auto& device = getPlatform().getDevice();
 
   // Vertex & Index buffer
@@ -198,7 +197,7 @@ void YUVColorSession::initialize() noexcept {
         const igl::TextureDesc textureDesc = igl::TextureDesc::new2D(
             yuvFormat, width, height, TextureDesc::TextureUsageBits::Sampled, "YUV texture");
         IGL_DEBUG_ASSERT(width * height + width * height / 2 == fileData.length);
-        auto texture = device.createTexture(textureDesc, nullptr);
+        const auto texture = device.createTexture(textureDesc, nullptr);
         IGL_DEBUG_ASSERT(texture);
         texture->upload(TextureRangeDesc{.x = 0, .y = 0, .z = 0, .width = width, .height = height},
                         fileData.data.get());
@@ -214,7 +213,7 @@ void YUVColorSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(shaderStages_ != nullptr);
 
   // Command queue
-  commandQueue_ = device.createCommandQueue(CommandQueueDesc{}, nullptr);
+  commandQueue_ = device.createCommandQueue({}, nullptr);
   IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
 
   renderPass_ = {
@@ -227,7 +226,13 @@ void YUVColorSession::initialize() noexcept {
   };
 } // namespace igl::shell
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void YUVColorSession::update(SurfaceTextures surfaceTextures) noexcept {
+  // Per IGL guidelines, surfaceTextures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!surfaceTextures.color) {
+    return;
+  }
   Result ret;
   framebufferDesc_.colorAttachments[0].texture = surfaceTextures.color;
   if (framebuffer_ == nullptr) {
@@ -267,7 +272,7 @@ void YUVColorSession::update(SurfaceTextures surfaceTextures) noexcept {
   }
 
   // Command Buffers
-  auto buffer = commandQueue_->createCommandBuffer(CommandBufferDesc{}, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
   IGL_DEBUG_ASSERT(buffer != nullptr);
   auto drawableSurface = framebuffer_->getColorAttachment(0);
 

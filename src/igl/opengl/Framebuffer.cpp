@@ -9,32 +9,108 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <string>
 #include <igl/RenderPass.h>
 #include <igl/opengl/DeviceFeatureSet.h>
 #include <igl/opengl/DummyTexture.h>
 #include <igl/opengl/GLIncludes.h>
-#if !IGL_PLATFORM_ANDROID
-#include <string>
-#else
-#include <sstream>
-
-namespace std {
-
-// TODO: Remove once STL in Android NDK supports std::to_string
-template<typename T>
-string to_string(const T& t) {
-  ostringstream os;
-  os << t;
-  return os.str();
-}
-
-} // namespace std
-
-#endif
 
 namespace igl::opengl {
 
 namespace {
+
+/// Read pixels for half-float texture formats (RGBA_F16, RGB_F16, RG_F16, R_F16).
+void readPixelsByFormatHalfFloat(IContext& context,
+                                 TextureFormat textureFormat,
+                                 GLint x,
+                                 GLint y,
+                                 GLsizei width,
+                                 GLsizei height,
+                                 void* pixelBytes,
+                                 GLenum halfFloatFormat) {
+  if (textureFormat == TextureFormat::RGBA_F16) {
+    if (IGL_DEBUG_VERIFY(context.deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat))) {
+      context.readPixels(x, y, width, height, GL_RGBA, halfFloatFormat, pixelBytes);
+    }
+  } else if (textureFormat == TextureFormat::RGB_F16) {
+    if (IGL_DEBUG_VERIFY(context.deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat))) {
+      context.readPixels(x, y, width, height, GL_RGB, halfFloatFormat, pixelBytes);
+    }
+  } else if (textureFormat == TextureFormat::RG_F16) {
+    if (IGL_DEBUG_VERIFY(context.deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat)) &&
+        IGL_DEBUG_VERIFY(context.deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
+      context.readPixels(x, y, width, height, GL_RG, halfFloatFormat, pixelBytes);
+    }
+  } else if (textureFormat == TextureFormat::R_F16) {
+    if (IGL_DEBUG_VERIFY(context.deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat)) &&
+        IGL_DEBUG_VERIFY(context.deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
+      context.readPixels(x, y, width, height, GL_RED, halfFloatFormat, pixelBytes);
+    }
+  }
+}
+
+/// Read pixels for float texture formats (RGBA_F32, RGB_F32, RG_F32, R_F32).
+void readPixelsByFormatFloat(IContext& context,
+                             TextureFormat textureFormat,
+                             GLint x,
+                             GLint y,
+                             GLsizei width,
+                             GLsizei height,
+                             void* pixelBytes) {
+  if (textureFormat == TextureFormat::RGBA_F32) {
+    if (IGL_DEBUG_VERIFY(context.deviceFeatures().hasFeature(DeviceFeatures::TextureFloat))) {
+      context.readPixels(x, y, width, height, GL_RGBA, GL_FLOAT, pixelBytes);
+    }
+  } else if (textureFormat == TextureFormat::RGB_F32) {
+    if (IGL_DEBUG_VERIFY(context.deviceFeatures().hasFeature(DeviceFeatures::TextureFloat))) {
+      context.readPixels(x, y, width, height, GL_RGB, GL_FLOAT, pixelBytes);
+    }
+  } else if (textureFormat == TextureFormat::RG_F32) {
+    if (IGL_DEBUG_VERIFY(context.deviceFeatures().hasFeature(DeviceFeatures::TextureFloat)) &&
+        IGL_DEBUG_VERIFY(context.deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
+      context.readPixels(x, y, width, height, GL_RG, GL_FLOAT, pixelBytes);
+    }
+  } else if (textureFormat == TextureFormat::R_F32) {
+    if (IGL_DEBUG_VERIFY(context.deviceFeatures().hasFeature(DeviceFeatures::TextureFloat)) &&
+        IGL_DEBUG_VERIFY(context.deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
+      context.readPixels(x, y, width, height, GL_RED, GL_FLOAT, pixelBytes);
+    }
+  }
+}
+
+/// Dispatch readPixels() based on textureFormat. See copyBytesColorAttachment() for context.
+void readPixelsByFormat(IContext& context,
+                        TextureFormat textureFormat,
+                        GLint x,
+                        GLint y,
+                        GLsizei width,
+                        GLsizei height,
+                        void* pixelBytes,
+                        GLenum halfFloatFormat) {
+  if (textureFormat == TextureFormat::RGBA_UInt32) {
+    if (IGL_DEBUG_VERIFY(
+            context.deviceFeatures().hasTextureFeature(TextureFeatures::TextureInteger))) {
+      context.readPixels(x, y, width, height, GL_RGBA_INTEGER, GL_UNSIGNED_INT, pixelBytes);
+    }
+  } else if (textureFormat == TextureFormat::R_UNorm8) {
+    if (IGL_DEBUG_VERIFY(context.deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
+      context.readPixels(x, y, width, height, GL_RED, GL_UNSIGNED_BYTE, pixelBytes);
+    }
+  } else if (textureFormat == TextureFormat::RG_UNorm8) {
+    if (IGL_DEBUG_VERIFY(context.deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
+      context.readPixels(x, y, width, height, GL_RG, GL_UNSIGNED_BYTE, pixelBytes);
+    }
+  } else if (textureFormat == TextureFormat::RGBA_F16 || textureFormat == TextureFormat::RGB_F16 ||
+             textureFormat == TextureFormat::RG_F16 || textureFormat == TextureFormat::R_F16) {
+    readPixelsByFormatHalfFloat(
+        context, textureFormat, x, y, width, height, pixelBytes, halfFloatFormat);
+  } else if (textureFormat == TextureFormat::RGBA_F32 || textureFormat == TextureFormat::RGB_F32 ||
+             textureFormat == TextureFormat::RG_F32 || textureFormat == TextureFormat::R_F32) {
+    readPixelsByFormatFloat(context, textureFormat, x, y, width, height, pixelBytes);
+  } else {
+    context.readPixels(x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixelBytes);
+  }
+}
 
 Result checkFramebufferStatus(IContext& context, bool read) {
   auto code = Result::Code::Ok;
@@ -217,11 +293,12 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* unused */,
 
   if (isCustomFrameBuffer()){
     Result ret;
-    FramebufferDesc desc;
-    desc.colorAttachments[0].texture = itexture;
+    const FramebufferDesc desc{
+        .colorAttachments = {{.texture = itexture}},
+    };
     extraFramebuffer.initialize(desc, &ret);
     IGL_DEBUG_ASSERT(ret.isOk(), ret.message.c_str());
-    
+
     extraFramebuffer.bindBufferForRead();
     attachAsColor(*itexture, 0, toReadAttachmentParams(range, FramebufferMode::Mono));
     checkFramebufferStatus(getContext(), true);
@@ -267,79 +344,14 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* unused */,
                                     InternalRequirement::TextureHalfFloatExtReq)
                                     ? GL_HALF_FLOAT_OES
                                     : GL_HALF_FLOAT;
-  if (textureFormat == TextureFormat::RGBA_UInt32) {
-    if (IGL_DEBUG_VERIFY(
-            getContext().deviceFeatures().hasTextureFeature(TextureFeatures::TextureInteger))) {
-      getContext().readPixels(
-          rangeX, rangeY, rangeWidth, rangeHeight, GL_RGBA_INTEGER, GL_UNSIGNED_INT, pixelBytes);
-    }
-  } else if (textureFormat == TextureFormat::R_UNorm8) {
-    if (IGL_DEBUG_VERIFY(
-            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
-      getContext().readPixels(
-          rangeX, rangeY, rangeWidth, rangeHeight, GL_RED, GL_UNSIGNED_BYTE, pixelBytes);
-    }
-  } else if (textureFormat == TextureFormat::RG_UNorm8) {
-    if (IGL_DEBUG_VERIFY(
-            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
-      getContext().readPixels(
-          rangeX, rangeY, rangeWidth, rangeHeight, GL_RG, GL_UNSIGNED_BYTE, pixelBytes);
-    }
-  } else if (textureFormat == TextureFormat::RGBA_F16) {
-    if (IGL_DEBUG_VERIFY(
-            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat))) {
-      getContext().readPixels(
-          rangeX, rangeY, rangeWidth, rangeHeight, GL_RGBA, kHalfFloatFormat, pixelBytes);
-    }
-  } else if (textureFormat == TextureFormat::RGB_F16) {
-    if (IGL_DEBUG_VERIFY(
-            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat))) {
-      getContext().readPixels(
-          rangeX, rangeY, rangeWidth, rangeHeight, GL_RGB, kHalfFloatFormat, pixelBytes);
-    }
-  } else if (textureFormat == TextureFormat::RG_F16) {
-    if (IGL_DEBUG_VERIFY(
-            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat)) &&
-        IGL_DEBUG_VERIFY(
-            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
-      getContext().readPixels(
-          rangeX, rangeY, rangeWidth, rangeHeight, GL_RG, kHalfFloatFormat, pixelBytes);
-    }
-  } else if (textureFormat == TextureFormat::R_F16) {
-    if (IGL_DEBUG_VERIFY(
-            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureHalfFloat)) &&
-        IGL_DEBUG_VERIFY(
-            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
-      getContext().readPixels(
-          rangeX, rangeY, rangeWidth, rangeHeight, GL_RED, kHalfFloatFormat, pixelBytes);
-    }
-  } else if (textureFormat == TextureFormat::RGBA_F32) {
-    if (IGL_DEBUG_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFloat))) {
-      getContext().readPixels(
-          rangeX, rangeY, rangeWidth, rangeHeight, GL_RGBA, GL_FLOAT, pixelBytes);
-    }
-  } else if (textureFormat == TextureFormat::RGB_F32) {
-    if (IGL_DEBUG_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFloat))) {
-      getContext().readPixels(
-          rangeX, rangeY, rangeWidth, rangeHeight, GL_RGB, GL_FLOAT, pixelBytes);
-    }
-  } else if (textureFormat == TextureFormat::RG_F32) {
-    if (IGL_DEBUG_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFloat)) &&
-        IGL_DEBUG_VERIFY(
-            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
-      getContext().readPixels(rangeX, rangeY, rangeWidth, rangeHeight, GL_RG, GL_FLOAT, pixelBytes);
-    }
-  } else if (textureFormat == TextureFormat::R_F32) {
-    if (IGL_DEBUG_VERIFY(getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFloat)) &&
-        IGL_DEBUG_VERIFY(
-            getContext().deviceFeatures().hasFeature(DeviceFeatures::TextureFormatRG))) {
-      getContext().readPixels(
-          rangeX, rangeY, rangeWidth, rangeHeight, GL_RED, GL_FLOAT, pixelBytes);
-    }
-  } else {
-    getContext().readPixels(
-        rangeX, rangeY, rangeWidth, rangeHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixelBytes);
-  }
+  readPixelsByFormat(getContext(),
+                     textureFormat,
+                     rangeX,
+                     rangeY,
+                     rangeWidth,
+                     rangeHeight,
+                     pixelBytes,
+                     kHalfFloatFormat);
 
   // Reset the GL_PACK_ROW_LENGTH
   if (usePackRowLength) {
@@ -545,6 +557,7 @@ bool CustomFramebuffer::hasImplicitColorAttachment() const {
          static_cast<Texture&>(*colorAttachment0.texture).isImplicitStorage();
 }
 
+// NOLINTNEXTLINE(misc-no-recursion)
 void CustomFramebuffer::initialize(const FramebufferDesc& desc, Result* outResult) {
   if (IGL_DEBUG_VERIFY_NOT(isInitialized())) {
     Result::setResult(outResult, Result::Code::RuntimeError, "Framebuffer already initialized.");
@@ -564,6 +577,7 @@ void CustomFramebuffer::initialize(const FramebufferDesc& desc, Result* outResul
   }
 }
 
+// NOLINTNEXTLINE(misc-no-recursion)
 void CustomFramebuffer::prepareResource(const std::string& debugName, Result* outResult) {
   // create a new frame buffer if we don't already have one
   getContext().genFramebuffers(1, &frameBufferID_);
@@ -621,6 +635,11 @@ void CustomFramebuffer::prepareResource(const std::string& debugName, Result* ou
     return;
   }
 
+  setupResolveFramebuffer(outResult);
+}
+
+// NOLINTNEXTLINE(misc-no-recursion)
+void CustomFramebuffer::setupResolveFramebuffer(Result* outResult) {
   // Check if resolve framebuffer is needed
   FramebufferDesc resolveDesc;
   auto createResolveFramebuffer = false;
@@ -659,6 +678,7 @@ void CustomFramebuffer::prepareResource(const std::string& debugName, Result* ou
   }
 
   if (createResolveFramebuffer) {
+    Result result;
     auto cfb = std::make_shared<CustomFramebuffer>(getContext());
     cfb->initialize(resolveDesc, &result);
     if (outResult) {
@@ -683,6 +703,54 @@ Viewport CustomFramebuffer::getViewport() const {
   // By default, we set viewport to dimensions of framebuffer
   const auto size = texture->getSize();
   return {.x = 0, .y = 0, .width = size.width, .height = size.height};
+}
+
+void CustomFramebuffer::applyClearMask(int targetCount) const {
+  // clear the buffers if we're not loading previous contents
+  GLbitfield clearMask = 0;
+  if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::ClearBufferfv) &&
+      targetCount > 1) {
+    for (size_t index = 0; index != IGL_COLOR_ATTACHMENTS_MAX; index++) {
+      const auto& colorAttachment = renderTarget_.colorAttachments[index];
+
+      if (colorAttachment.texture != nullptr &&
+          renderPass_.colorAttachments[index].loadAction == LoadAction::Clear) {
+        auto clearColor = renderPass_.colorAttachments[index].clearColor;
+        getContext().colorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        getContext().clearBufferfv(GL_COLOR, (GLint)index, clearColor.toFloatPtr());
+      }
+    }
+  } else {
+    const auto& colorAttachment0 = renderTarget_.colorAttachments[0];
+
+    if (colorAttachment0.texture != nullptr &&
+        renderPass_.colorAttachments[0].loadAction == LoadAction::Clear) {
+      clearMask |= GL_COLOR_BUFFER_BIT;
+      auto clearColor = renderPass_.colorAttachments[0].clearColor;
+      getContext().colorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+      getContext().clearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
+    }
+  }
+
+  if (renderTarget_.depthAttachment.texture != nullptr) {
+    if (renderPass_.depthAttachment.loadAction == LoadAction::Clear) {
+      clearMask |= GL_DEPTH_BUFFER_BIT;
+      getContext().depthMask(GL_TRUE);
+      getContext().clearDepthf(renderPass_.depthAttachment.clearDepth);
+    }
+  }
+  if (renderTarget_.stencilAttachment.texture != nullptr) {
+    getContext().enable(GL_STENCIL_TEST);
+    if (renderPass_.stencilAttachment.loadAction == LoadAction::Clear) {
+      clearMask |= GL_STENCIL_BUFFER_BIT;
+      getContext().stencilMask(0xFF);
+      getContext().clearStencil(renderPass_.stencilAttachment.clearStencil);
+    }
+  }
+
+  if (clearMask != 0) {
+    getContext().clear(clearMask);
+  }
 }
 
 void CustomFramebuffer::bind(const RenderPassDesc& renderPass) const {
@@ -746,51 +814,7 @@ void CustomFramebuffer::bind(const RenderPassDesc& renderPass) const {
                       toAttachmentParams(renderPassAttachment, renderTarget_.mode));
     }
   }
-  // clear the buffers if we're not loading previous contents
-  GLbitfield clearMask = 0;
-  if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::ClearBufferfv) &&
-      targetCount > 1) {
-    for (size_t index = 0; index != IGL_COLOR_ATTACHMENTS_MAX; index++) {
-      const auto& colorAttachment = renderTarget_.colorAttachments[index];
-
-      if (colorAttachment.texture != nullptr &&
-          renderPass_.colorAttachments[index].loadAction == LoadAction::Clear) {
-        auto clearColor = renderPass_.colorAttachments[index].clearColor;
-        getContext().colorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-        getContext().clearBufferfv(GL_COLOR, (GLint)index, clearColor.toFloatPtr());
-      }
-    }
-  } else {
-    const auto& colorAttachment0 = renderTarget_.colorAttachments[0];
-
-    if (colorAttachment0.texture != nullptr &&
-        renderPass_.colorAttachments[0].loadAction == LoadAction::Clear) {
-      clearMask |= GL_COLOR_BUFFER_BIT;
-      auto clearColor = renderPass_.colorAttachments[0].clearColor;
-      getContext().colorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-      getContext().clearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
-    }
-  }
-
-  if (renderTarget_.depthAttachment.texture != nullptr) {
-    if (renderPass_.depthAttachment.loadAction == LoadAction::Clear) {
-      clearMask |= GL_DEPTH_BUFFER_BIT;
-      getContext().depthMask(GL_TRUE);
-      getContext().clearDepthf(renderPass_.depthAttachment.clearDepth);
-    }
-  }
-  if (renderTarget_.stencilAttachment.texture != nullptr) {
-    getContext().enable(GL_STENCIL_TEST);
-    if (renderPass_.stencilAttachment.loadAction == LoadAction::Clear) {
-      clearMask |= GL_STENCIL_BUFFER_BIT;
-      getContext().stencilMask(0xFF);
-      getContext().clearStencil(renderPass_.stencilAttachment.clearStencil);
-    }
-  }
-
-  if (clearMask != 0) {
-    getContext().clear(clearMask);
-  }
+  applyClearMask(targetCount);
 }
 
 void CustomFramebuffer::unbind() const {

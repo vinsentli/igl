@@ -199,6 +199,7 @@ void HelloOpenXRSession::createSamplerAndTextures(const igl::IDevice& device) {
   tex0_ = getPlatform().loadTexture("macbeth.png");
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void HelloOpenXRSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
@@ -240,7 +241,7 @@ void HelloOpenXRSession::initialize() noexcept {
   shaderStages_ = getShaderStagesForBackend(device, shaderCross, stereoRendering);
 
   // Command queue: backed by different types of GPU HW queues
-  commandQueue_ = device.createCommandQueue(CommandQueueDesc{}, nullptr);
+  commandQueue_ = device.createCommandQueue({}, nullptr);
 
   // Set up vertex uniform data
   ub_.scaleZ = 1.0f;
@@ -288,7 +289,13 @@ void HelloOpenXRSession::updateUniformBlock() {
   ub_.scaleZ = scaleZ;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void HelloOpenXRSession::update(SurfaceTextures surfaceTextures) noexcept {
+  // Per IGL guidelines, surfaceTextures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!surfaceTextures.color) {
+    return;
+  }
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
     return;
@@ -347,7 +354,7 @@ void HelloOpenXRSession::update(SurfaceTextures surfaceTextures) noexcept {
   }
 
   // Command buffers (1-N per thread): create, submit and forget
-  auto buffer = commandQueue_->createCommandBuffer(CommandBufferDesc{}, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
   const std::shared_ptr<IRenderCommandEncoder> commands =
       buffer->createRenderCommandEncoder(renderPass_, framebuffer_[viewIndex]);
   commands->pushDebugGroupLabel("HelloOpenXRSession Commands", Color(0.0f, 1.0f, 0.0f));

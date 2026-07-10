@@ -9,6 +9,8 @@
 
 #include <igl/vulkan/Common.h>
 
+#include <cstdint>
+#include <cstring>
 #include <igl/tests/util/device/TestDevice.h>
 #include <igl/vulkan/CommandBuffer.h>
 #include <igl/vulkan/Device.h>
@@ -165,6 +167,64 @@ TEST(CommonTest, AtVkLayerTest) {
   }
 }
 
+// invertRedAndBlue **************************************************************************
+TEST(CommonTest, InvertRedAndBlueTest) {
+  EXPECT_EQ(igl::vulkan::invertRedAndBlue(VK_FORMAT_B8G8R8A8_UNORM), VK_FORMAT_R8G8B8A8_UNORM);
+  EXPECT_EQ(igl::vulkan::invertRedAndBlue(VK_FORMAT_R8G8B8A8_UNORM), VK_FORMAT_B8G8R8A8_UNORM);
+  EXPECT_EQ(igl::vulkan::invertRedAndBlue(VK_FORMAT_R8G8B8A8_SRGB), VK_FORMAT_B8G8R8A8_SRGB);
+  EXPECT_EQ(igl::vulkan::invertRedAndBlue(VK_FORMAT_B8G8R8A8_SRGB), VK_FORMAT_R8G8B8A8_SRGB);
+  EXPECT_EQ(igl::vulkan::invertRedAndBlue(VK_FORMAT_A2R10G10B10_UNORM_PACK32),
+            VK_FORMAT_A2B10G10R10_UNORM_PACK32);
+  EXPECT_EQ(igl::vulkan::invertRedAndBlue(VK_FORMAT_A2B10G10R10_UNORM_PACK32),
+            VK_FORMAT_A2R10G10B10_UNORM_PACK32);
+}
+
+// isTextureFormatRGB / isTextureFormatBGR ***************************************************
+TEST(CommonTest, IsTextureFormatRGBTest) {
+  EXPECT_TRUE(igl::vulkan::isTextureFormatRGB(VK_FORMAT_R8G8B8A8_UNORM));
+  EXPECT_TRUE(igl::vulkan::isTextureFormatRGB(VK_FORMAT_R8G8B8A8_SRGB));
+  EXPECT_TRUE(igl::vulkan::isTextureFormatRGB(VK_FORMAT_A2R10G10B10_UNORM_PACK32));
+  EXPECT_FALSE(igl::vulkan::isTextureFormatRGB(VK_FORMAT_B8G8R8A8_UNORM));
+  EXPECT_FALSE(igl::vulkan::isTextureFormatRGB(VK_FORMAT_B8G8R8A8_SRGB));
+  EXPECT_FALSE(igl::vulkan::isTextureFormatRGB(VK_FORMAT_R16G16B16A16_SFLOAT));
+}
+
+TEST(CommonTest, IsTextureFormatBGRTest) {
+  EXPECT_TRUE(igl::vulkan::isTextureFormatBGR(VK_FORMAT_B8G8R8A8_UNORM));
+  EXPECT_TRUE(igl::vulkan::isTextureFormatBGR(VK_FORMAT_B8G8R8A8_SRGB));
+  EXPECT_TRUE(igl::vulkan::isTextureFormatBGR(VK_FORMAT_A2B10G10R10_UNORM_PACK32));
+  EXPECT_FALSE(igl::vulkan::isTextureFormatBGR(VK_FORMAT_R8G8B8A8_UNORM));
+  EXPECT_FALSE(igl::vulkan::isTextureFormatBGR(VK_FORMAT_R8G8B8A8_SRGB));
+  EXPECT_FALSE(igl::vulkan::isTextureFormatBGR(VK_FORMAT_R16G16B16A16_SFLOAT));
+}
+
+// hasDepth / hasStencil *********************************************************************
+TEST(CommonTest, HasDepthTest) {
+  EXPECT_TRUE(igl::vulkan::hasDepth(VK_FORMAT_D16_UNORM));
+  EXPECT_TRUE(igl::vulkan::hasDepth(VK_FORMAT_D32_SFLOAT));
+  EXPECT_TRUE(igl::vulkan::hasDepth(VK_FORMAT_D24_UNORM_S8_UINT));
+  EXPECT_TRUE(igl::vulkan::hasDepth(VK_FORMAT_D32_SFLOAT_S8_UINT));
+  EXPECT_FALSE(igl::vulkan::hasDepth(VK_FORMAT_S8_UINT));
+  EXPECT_FALSE(igl::vulkan::hasDepth(VK_FORMAT_R8G8B8A8_UNORM));
+}
+
+TEST(CommonTest, HasStencilTest) {
+  EXPECT_TRUE(igl::vulkan::hasStencil(VK_FORMAT_S8_UINT));
+  EXPECT_TRUE(igl::vulkan::hasStencil(VK_FORMAT_D24_UNORM_S8_UINT));
+  EXPECT_TRUE(igl::vulkan::hasStencil(VK_FORMAT_D32_SFLOAT_S8_UINT));
+  EXPECT_FALSE(igl::vulkan::hasStencil(VK_FORMAT_D16_UNORM));
+  EXPECT_FALSE(igl::vulkan::hasStencil(VK_FORMAT_D32_SFLOAT));
+  EXPECT_FALSE(igl::vulkan::hasStencil(VK_FORMAT_R8G8B8A8_UNORM));
+}
+
+// getVkLayer ********************************************************************************
+TEST(CommonTest, GetVkLayerTest) {
+  EXPECT_EQ(igl::vulkan::getVkLayer(TextureType::Cube, 3, 0), 3);
+  EXPECT_EQ(igl::vulkan::getVkLayer(TextureType::TwoD, 0, 5), 5);
+  EXPECT_EQ(igl::vulkan::getVkLayer(TextureType::TwoDArray, 0, 7), 7);
+  EXPECT_EQ(igl::vulkan::getVkLayer(TextureType::ThreeD, 0, 2), 2);
+}
+
 // getNumImagePlanes ************************************************************************
 TEST(CommonTest, GetNumImagePlanesTest) {
   EXPECT_EQ(igl::vulkan::getNumImagePlanes(VK_FORMAT_UNDEFINED), 0);
@@ -174,6 +234,116 @@ TEST(CommonTest, GetNumImagePlanesTest) {
   EXPECT_EQ(igl::vulkan::getNumImagePlanes(VK_FORMAT_R8G8B8A8_SRGB), 1);
   EXPECT_EQ(igl::vulkan::getNumImagePlanes(VK_FORMAT_R8G8B8A8_SINT), 1);
   EXPECT_EQ(igl::vulkan::getNumImagePlanes(VK_FORMAT_R8G8B8A8_UINT), 1);
+}
+
+// textureFormatToVkFormat / vkFormatToTextureFormat *******************************************
+TEST(CommonTest, TextureFormatRoundTripTest) {
+  const std::pair<TextureFormat, VkFormat> formats[] = {
+      {TextureFormat::RGBA_UNorm8, VK_FORMAT_R8G8B8A8_UNORM},
+      {TextureFormat::BGRA_UNorm8, VK_FORMAT_B8G8R8A8_UNORM},
+      {TextureFormat::R_UNorm8, VK_FORMAT_R8_UNORM},
+      {TextureFormat::RG_UNorm8, VK_FORMAT_R8G8_UNORM},
+      {TextureFormat::RGBA_F16, VK_FORMAT_R16G16B16A16_SFLOAT},
+      {TextureFormat::R_F32, VK_FORMAT_R32_SFLOAT},
+      {TextureFormat::RGBA_F32, VK_FORMAT_R32G32B32A32_SFLOAT},
+      {TextureFormat::RGBA_SRGB, VK_FORMAT_R8G8B8A8_SRGB},
+      {TextureFormat::BGRA_SRGB, VK_FORMAT_B8G8R8A8_SRGB},
+      {TextureFormat::Z_UNorm16, VK_FORMAT_D16_UNORM},
+      {TextureFormat::Z_UNorm32, VK_FORMAT_D32_SFLOAT},
+      {TextureFormat::S_UInt8, VK_FORMAT_S8_UINT},
+  };
+  for (const auto& [iglFormat, vkFormat] : formats) {
+    EXPECT_EQ(igl::vulkan::textureFormatToVkFormat(iglFormat), vkFormat);
+    EXPECT_EQ(igl::vulkan::vkFormatToTextureFormat(vkFormat), iglFormat);
+  }
+  EXPECT_EQ(igl::vulkan::textureFormatToVkFormat(TextureFormat::Invalid), VK_FORMAT_UNDEFINED);
+}
+
+// colorSpaceToVkColorSpace / vkColorSpaceToColorSpace ****************************************
+TEST(CommonTest, ColorSpaceRoundTripTest) {
+  const std::pair<ColorSpace, VkColorSpaceKHR> spaces[] = {
+      {ColorSpace::SRGBNonlinear, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
+      {ColorSpace::DisplayP3Nonlinear, VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT},
+      {ColorSpace::DisplayP3Linear, VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT},
+      {ColorSpace::ExtendedSRGBLinear, VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT},
+      {ColorSpace::BT709Nonlinear, VK_COLOR_SPACE_BT709_NONLINEAR_EXT},
+      {ColorSpace::BT2020Linear, VK_COLOR_SPACE_BT2020_LINEAR_EXT},
+      {ColorSpace::HDR10St2084, VK_COLOR_SPACE_HDR10_ST2084_EXT},
+      {ColorSpace::DolbyVision, VK_COLOR_SPACE_DOLBYVISION_EXT},
+      {ColorSpace::HDR10HLG, VK_COLOR_SPACE_HDR10_HLG_EXT},
+      {ColorSpace::AdobeRGBLinear, VK_COLOR_SPACE_ADOBERGB_LINEAR_EXT},
+      {ColorSpace::AdobeRGBNonlinear, VK_COLOR_SPACE_ADOBERGB_NONLINEAR_EXT},
+      {ColorSpace::PassThrough, VK_COLOR_SPACE_PASS_THROUGH_EXT},
+      {ColorSpace::ExtendedSRGBNonlinear, VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT},
+      {ColorSpace::DisplayNativeAMD, VK_COLOR_SPACE_DISPLAY_NATIVE_AMD},
+  };
+  for (const auto& [iglSpace, vkSpace] : spaces) {
+    EXPECT_EQ(igl::vulkan::colorSpaceToVkColorSpace(iglSpace), vkSpace);
+    EXPECT_EQ(igl::vulkan::vkColorSpaceToColorSpace(vkSpace), iglSpace);
+  }
+}
+
+// resourceStorageToVkMemoryPropertyFlags *******************************************************
+TEST(CommonTest, ResourceStoragePrivateReturnsDeviceLocal) {
+  const VkMemoryPropertyFlags flags =
+      igl::vulkan::resourceStorageToVkMemoryPropertyFlags(ResourceStorage::Private);
+  EXPECT_EQ(flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+}
+
+TEST(CommonTest, ResourceStorageSharedReturnsHostVisibleCoherent) {
+  const VkMemoryPropertyFlags flags =
+      igl::vulkan::resourceStorageToVkMemoryPropertyFlags(ResourceStorage::Shared);
+  EXPECT_EQ(flags, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+}
+
+TEST(CommonTest, ResourceStorageManagedReturnsHostVisibleCoherent) {
+  const VkMemoryPropertyFlags flags =
+      igl::vulkan::resourceStorageToVkMemoryPropertyFlags(ResourceStorage::Managed);
+  EXPECT_EQ(flags, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+}
+
+TEST(CommonTest, ResourceStorageMemorylessWithoutPropertiesReturnsDeviceLocal) {
+  const VkMemoryPropertyFlags flags =
+      igl::vulkan::resourceStorageToVkMemoryPropertyFlags(ResourceStorage::Memoryless, nullptr);
+  EXPECT_EQ(flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+}
+
+TEST(CommonTest, ResourceStorageMemorylessWithLazilyAllocated) {
+  VkPhysicalDeviceMemoryProperties memProps = {};
+  memProps.memoryTypeCount = 1;
+  memProps.memoryTypes[0].propertyFlags =
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT;
+
+  const VkMemoryPropertyFlags flags =
+      igl::vulkan::resourceStorageToVkMemoryPropertyFlags(ResourceStorage::Memoryless, &memProps);
+  EXPECT_EQ(flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT);
+}
+
+TEST(CommonTest, ResourceStorageMemorylessWithoutLazilyAllocated) {
+  VkPhysicalDeviceMemoryProperties memProps = {};
+  memProps.memoryTypeCount = 1;
+  memProps.memoryTypes[0].propertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+
+  const VkMemoryPropertyFlags flags =
+      igl::vulkan::resourceStorageToVkMemoryPropertyFlags(ResourceStorage::Memoryless, &memProps);
+  EXPECT_EQ(flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+}
+
+// componentMappingToVkComponentMapping *******************************************************
+TEST(CommonTest, ComponentMappingToVkComponentMappingTest) {
+  const ComponentMapping identity{};
+  const VkComponentMapping vkIdentity = igl::vulkan::componentMappingToVkComponentMapping(identity);
+  EXPECT_EQ(vkIdentity.r, VK_COMPONENT_SWIZZLE_IDENTITY);
+  EXPECT_EQ(vkIdentity.g, VK_COMPONENT_SWIZZLE_IDENTITY);
+  EXPECT_EQ(vkIdentity.b, VK_COMPONENT_SWIZZLE_IDENTITY);
+  EXPECT_EQ(vkIdentity.a, VK_COMPONENT_SWIZZLE_IDENTITY);
+
+  const ComponentMapping swizzled{.r = Swizzle_0, .g = Swizzle_1, .b = Swizzle_A, .a = Swizzle_R};
+  const VkComponentMapping vkSwizzled = igl::vulkan::componentMappingToVkComponentMapping(swizzled);
+  EXPECT_EQ(vkSwizzled.r, VK_COMPONENT_SWIZZLE_ZERO);
+  EXPECT_EQ(vkSwizzled.g, VK_COMPONENT_SWIZZLE_ONE);
+  EXPECT_EQ(vkSwizzled.b, VK_COMPONENT_SWIZZLE_A);
+  EXPECT_EQ(vkSwizzled.a, VK_COMPONENT_SWIZZLE_R);
 }
 
 class CommonWithDeviceTest : public ::testing::Test {
@@ -224,6 +394,151 @@ TEST_F(CommonWithDeviceTest, TransitionToGeneralTest) {
 
   EXPECT_EQ(img.imageLayout_, VK_IMAGE_LAYOUT_GENERAL);
 }
+
+// transitionToColorAttachment ********************************************************
+TEST_F(CommonWithDeviceTest, TransitionToColorAttachmentTest) {
+  Result result;
+
+  const CommandQueueDesc queueDesc{};
+  auto commandQueue = device_->createCommandQueue(queueDesc, &result);
+  EXPECT_TRUE(result.isOk());
+
+  const CommandBufferDesc cmdBufferDesc{};
+  const auto cmdBuffer = commandQueue->createCommandBuffer(cmdBufferDesc, &result);
+  EXPECT_TRUE(result.isOk());
+
+  const TextureDesc texDesc = TextureDesc::new2D(
+      TextureFormat::RGBA_UNorm8, 1, 1, TextureDesc::TextureUsageBits::Attachment);
+  const auto texture = device_->createTexture(texDesc, &result);
+  EXPECT_TRUE(result.isOk());
+
+  igl::vulkan::transitionToColorAttachment(
+      static_cast<const igl::vulkan::CommandBuffer*>(cmdBuffer.get())->getVkCommandBuffer(),
+      texture.get());
+
+  const igl::vulkan::Texture& tex = static_cast<igl::vulkan::Texture&>(*texture);
+  const vulkan::VulkanImage& img = tex.getVulkanTexture().image;
+
+  EXPECT_EQ(img.imageLayout_, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+}
+
+// transitionToShaderReadOnly ********************************************************
+TEST_F(CommonWithDeviceTest, TransitionToShaderReadOnlyTest) {
+  Result result;
+
+  const CommandQueueDesc queueDesc{};
+  auto commandQueue = device_->createCommandQueue(queueDesc, &result);
+  EXPECT_TRUE(result.isOk());
+
+  const CommandBufferDesc cmdBufferDesc{};
+  const auto cmdBuffer = commandQueue->createCommandBuffer(cmdBufferDesc, &result);
+  EXPECT_TRUE(result.isOk());
+
+  const TextureDesc texDesc =
+      TextureDesc::new2D(TextureFormat::RGBA_UNorm8, 1, 1, TextureDesc::TextureUsageBits::Sampled);
+  const auto texture = device_->createTexture(texDesc, &result);
+  EXPECT_TRUE(result.isOk());
+
+  igl::vulkan::transitionToShaderReadOnly(
+      static_cast<const igl::vulkan::CommandBuffer*>(cmdBuffer.get())->getVkCommandBuffer(),
+      texture.get());
+
+  const igl::vulkan::Texture& tex = static_cast<igl::vulkan::Texture&>(*texture);
+  const vulkan::VulkanImage& img = tex.getVulkanTexture().image;
+
+  EXPECT_EQ(img.imageLayout_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+}
+
+// buildSpecializationInfo ********************************************************
+TEST(CommonTest, BuildSpecializationInfoEmptyReturnsZero) {
+  const FunctionConstantValues fcv;
+  std::vector<VkSpecializationMapEntry> entries;
+  const VkSpecializationInfo info = igl::vulkan::buildSpecializationInfo(fcv, entries);
+  EXPECT_EQ(info.mapEntryCount, 0u);
+  EXPECT_EQ(info.dataSize, 0u);
+  EXPECT_TRUE(entries.empty());
+}
+
+TEST(CommonTest, BuildSpecializationInfoSingleFloat) {
+  FunctionConstantValues fcv;
+  const float val = 3.14f;
+  fcv.setConstantValue(0, ConstantValueType::Float1, &val);
+
+  std::vector<VkSpecializationMapEntry> entries;
+  const VkSpecializationInfo info = igl::vulkan::buildSpecializationInfo(fcv, entries);
+
+  ASSERT_EQ(info.mapEntryCount, 1u);
+  ASSERT_EQ(entries.size(), 1u);
+  EXPECT_EQ(entries[0].constantID, 0u);
+  EXPECT_EQ(entries[0].offset, 0u);
+  EXPECT_EQ(entries[0].size, sizeof(float));
+  EXPECT_EQ(info.dataSize, sizeof(float));
+  ASSERT_NE(info.pData, nullptr);
+  EXPECT_FLOAT_EQ(*static_cast<const float*>(info.pData), val);
+}
+
+TEST(CommonTest, BuildSpecializationInfoMultipleConstants) {
+  FunctionConstantValues fcv;
+  const float fVal = 1.0f;
+  const int32_t iVal = 42;
+  fcv.setConstantValue(0, ConstantValueType::Float1, &fVal);
+  fcv.setConstantValue(1, ConstantValueType::Int1, &iVal);
+
+  std::vector<VkSpecializationMapEntry> entries;
+  const VkSpecializationInfo info = igl::vulkan::buildSpecializationInfo(fcv, entries);
+
+  ASSERT_EQ(info.mapEntryCount, 2u);
+  ASSERT_EQ(entries.size(), 2u);
+  EXPECT_EQ(entries[0].constantID, 0u);
+  EXPECT_EQ(entries[0].offset, 0u);
+  EXPECT_EQ(entries[0].size, sizeof(float));
+  EXPECT_EQ(entries[1].constantID, 1u);
+  EXPECT_EQ(entries[1].offset, sizeof(float));
+  EXPECT_EQ(entries[1].size, sizeof(int32_t));
+  EXPECT_EQ(info.dataSize, sizeof(float) + sizeof(int32_t));
+  ASSERT_NE(info.pData, nullptr);
+  // Verify the packed byte contents at each entry's offset.
+  const auto* bytes = static_cast<const uint8_t*>(info.pData);
+  float packedFloat = 0.0f;
+  std::memcpy(&packedFloat, bytes + entries[0].offset, sizeof(float));
+  EXPECT_FLOAT_EQ(packedFloat, fVal);
+  int32_t packedInt = 0;
+  std::memcpy(&packedInt, bytes + entries[1].offset, sizeof(int32_t));
+  EXPECT_EQ(packedInt, iVal);
+}
+
+TEST(CommonTest, BuildSpecializationInfoSparseSkipsInvalid) {
+  FunctionConstantValues fcv;
+  const int32_t val = 7;
+  fcv.setConstantValue(2, ConstantValueType::Int1, &val);
+
+  std::vector<VkSpecializationMapEntry> entries;
+  const VkSpecializationInfo info = igl::vulkan::buildSpecializationInfo(fcv, entries);
+
+  ASSERT_EQ(info.mapEntryCount, 1u);
+  ASSERT_EQ(entries.size(), 1u);
+  EXPECT_EQ(entries[0].constantID, 2u);
+  EXPECT_EQ(entries[0].size, sizeof(int32_t));
+  EXPECT_EQ(info.dataSize, sizeof(int32_t));
+}
+
+// overrideImageLayout ********************************************************
+TEST_F(CommonWithDeviceTest, OverrideImageLayoutTest) {
+  Result result;
+
+  const TextureDesc texDesc =
+      TextureDesc::new2D(TextureFormat::RGBA_UNorm8, 1, 1, TextureDesc::TextureUsageBits::Sampled);
+  const auto texture = device_->createTexture(texDesc, &result);
+  EXPECT_TRUE(result.isOk());
+
+  igl::vulkan::overrideImageLayout(texture.get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+  const igl::vulkan::Texture& tex = static_cast<igl::vulkan::Texture&>(*texture);
+  const vulkan::VulkanImage& img = tex.getVulkanTexture().image;
+
+  EXPECT_EQ(img.imageLayout_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+}
+
 } // namespace igl::tests
 
 #endif

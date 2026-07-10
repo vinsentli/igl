@@ -48,7 +48,7 @@ struct ObstacleVertex {
 
 std::vector<ClothVertex> getClothVertexData() {
   std::vector<ClothVertex> vertices(static_cast<size_t>(kN * kN));
-  const float cellSize = 1.0f / (float)kN;
+  const float cellSize = 1.0f / static_cast<float>(kN);
   for (int i = 0; i < kN; ++i) {
     for (int j = 0; j < kN; ++j) {
       const int index = i * kN + j;
@@ -127,7 +127,7 @@ UBO getUniformBuffer(float aspectRatio) {
   ubo.aspectRatio = aspectRatio;
 
   ubo.n = kN;
-  ubo.cellSize = 1.f / (float)kN;
+  ubo.cellSize = 1.f / static_cast<float>(kN);
 
   ubo.view = glm::lookAt(glm::vec3(ubo.eye.x, ubo.eye.y, ubo.eye.z),
                          glm::vec3(ubo.ballCenter.x, ubo.ballCenter.y, ubo.ballCenter.z),
@@ -270,7 +270,7 @@ void ClothSimulationSession::initialize() noexcept {
   IGL_DEBUG_ASSERT(updateNormalStages_ != nullptr);
 
   // Command queue: backed by different types of GPU HW queues
-  commandQueue_ = device.createCommandQueue(CommandQueueDesc{}, nullptr);
+  commandQueue_ = device.createCommandQueue({}, nullptr);
   IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
 
   depthStencilState_ = device.createDepthStencilState(
@@ -326,6 +326,11 @@ void ClothSimulationSession::createOrUpdateDefaultFramebuffer(
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
 void ClothSimulationSession::update(SurfaceTextures surfaceTextures) noexcept {
+  // Per IGL guidelines, surfaceTextures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!surfaceTextures.color) {
+    return;
+  }
   auto& device = getPlatform().getDevice();
   if (!isDeviceCompatible(device)) {
     return;
@@ -333,8 +338,7 @@ void ClothSimulationSession::update(SurfaceTextures surfaceTextures) noexcept {
 
   IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
 
-  const CommandBufferDesc cbDesc;
-  auto buffer = commandQueue_->createCommandBuffer(cbDesc, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
   IGL_DEBUG_ASSERT(buffer != nullptr);
   if (!buffer) {
     return;
@@ -399,6 +403,12 @@ void ClothSimulationSession::update(SurfaceTextures surfaceTextures) noexcept {
   }
 
   if (clothRenderPipelineState_ == nullptr) {
+    // Per IGL guidelines, surfaceTextures.depth may be null on configurations
+    // without a depth buffer; fall back to TextureFormat::Invalid in that case
+    // (matches what the framebuffer reports for a missing depth attachment).
+    const TextureFormat depthFormat = surfaceTextures.depth
+                                          ? surfaceTextures.depth->getProperties().format
+                                          : TextureFormat::Invalid;
     const RenderPipelineDesc graphicsDesc = {
         .vertexInputState = clothVertexInput_,
         .shaderStages = clothShaderStages_,
@@ -406,7 +416,7 @@ void ClothSimulationSession::update(SurfaceTextures surfaceTextures) noexcept {
             {
                 .colorAttachments = {{.textureFormat =
                                           surfaceTextures.color->getProperties().format}},
-                .depthAttachmentFormat = surfaceTextures.depth->getProperties().format,
+                .depthAttachmentFormat = depthFormat,
             },
         .cullMode = igl::CullMode::Disabled,
         .frontFaceWinding = igl::WindingMode::Clockwise,
@@ -417,6 +427,9 @@ void ClothSimulationSession::update(SurfaceTextures surfaceTextures) noexcept {
   }
 
   if (obstacleRenderPipelineState_ == nullptr) {
+    const TextureFormat depthFormat = surfaceTextures.depth
+                                          ? surfaceTextures.depth->getProperties().format
+                                          : TextureFormat::Invalid;
     const RenderPipelineDesc graphicsDesc = {
         .vertexInputState = obstacleVertexInput_,
         .shaderStages = obstacleShaderStages_,
@@ -424,7 +437,7 @@ void ClothSimulationSession::update(SurfaceTextures surfaceTextures) noexcept {
             {
                 .colorAttachments = {{.textureFormat =
                                           surfaceTextures.color->getProperties().format}},
-                .depthAttachmentFormat = surfaceTextures.depth->getProperties().format,
+                .depthAttachmentFormat = depthFormat,
             },
         .cullMode = igl::CullMode::Disabled,
         .frontFaceWinding = igl::WindingMode::Clockwise,

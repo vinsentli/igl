@@ -17,6 +17,7 @@ namespace igl::vulkan {
 
 /// @brief This class provides a simplified interface for obtaining and submitting Command Buffers,
 /// while providing features to help manage their synchronization.
+// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class VulkanImmediateCommands final {
  public:
   // The maximum number of command buffers which can simultaneously exist in the system; when we run
@@ -39,6 +40,8 @@ class VulkanImmediateCommands final {
   ~VulkanImmediateCommands();
   VulkanImmediateCommands(const VulkanImmediateCommands&) = delete;
   VulkanImmediateCommands& operator=(const VulkanImmediateCommands&) = delete;
+  VulkanImmediateCommands(VulkanImmediateCommands&&) = delete;
+  VulkanImmediateCommands& operator=(VulkanImmediateCommands&&) = delete;
 
   /** @brief A structure that encapsulates synchronization information about command buffers and
    * that is used by the `VulkanImmediateCommands` class to manage command buffer acquisition and

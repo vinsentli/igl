@@ -482,6 +482,8 @@ void FireworksSession::generateParticleTexture(std::vector<uint8_t>& image) {
       // @fb-only
 // @fb-only
       {
+        // image is resized to numPixels above and pixel < numPixels by loop bounds
+        // NOLINTNEXTLINE(facebook-hte-ParameterUncheckedArrayBounds)
         image[pixel] = value;
       }
     }
@@ -1063,7 +1065,7 @@ void FireworksSession::update(SurfaceTextures surfaceTextures) noexcept {
                                     .width = static_cast<uint32_t>(dimensions.width),
                                     .height = static_cast<uint32_t>(dimensions.height)};
 
-  auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
+  const auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
   IGL_DEBUG_ASSERT(commands != nullptr);
   if (commands) {
     commands->bindRenderPipelineState(renderPipelineState_);

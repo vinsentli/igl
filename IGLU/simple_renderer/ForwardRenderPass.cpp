@@ -14,8 +14,12 @@
 namespace iglu::renderpass {
 
 ForwardRenderPass::ForwardRenderPass(igl::IDevice& device) {
-  const igl::CommandQueueDesc desc{};
-  commandQueue_ = device.createCommandQueue(desc, nullptr);
+  // Per IGL Error Handling rule #24, every resource creation call must pass a
+  // Result* and check it; passing nullptr silently swallows errors.
+  igl::Result result;
+  commandQueue_ = device.createCommandQueue(igl::CommandQueueDesc{}, &result);
+  IGL_DEBUG_ASSERT(result.isOk(), "createCommandQueue() failed: %s", result.message.c_str());
+  IGL_DEBUG_ASSERT(commandQueue_ != nullptr);
   backendType_ = device.getBackendType();
 }
 
@@ -35,17 +39,18 @@ void ForwardRenderPass::begin(std::shared_ptr<igl::IFramebuffer> target,
   renderPipelineDesc_.targetDesc.stencilAttachmentFormat =
       stencilAttachment ? stencilAttachment->getFormat() : igl::TextureFormat::Invalid;
 
-  igl::RenderPassDesc defaultRenderPassDesc;
-  defaultRenderPassDesc.colorAttachments.resize(1);
-  defaultRenderPassDesc.colorAttachments[0].loadAction = igl::LoadAction::Clear;
-  defaultRenderPassDesc.colorAttachments[0].storeAction = igl::StoreAction::Store;
-  defaultRenderPassDesc.colorAttachments[0].clearColor = {0.0, 0.0, 0.0, 1.0};
-  defaultRenderPassDesc.depthAttachment.clearDepth = 1.0f;
+  const igl::RenderPassDesc defaultRenderPassDesc{
+      .colorAttachments = {{
+          .loadAction = igl::LoadAction::Clear,
+          .storeAction = igl::StoreAction::Store,
+          .clearColor = {0.0, 0.0, 0.0, 1.0},
+      }},
+      .depthAttachment = {.clearDepth = 1.0f},
+  };
   const igl::RenderPassDesc* finalDesc = renderPassDescOverride ? renderPassDescOverride
                                                                 : &defaultRenderPassDesc;
 
-  const igl::CommandBufferDesc cbDesc;
-  commandBuffer_ = commandQueue_->createCommandBuffer(cbDesc, nullptr);
+  commandBuffer_ = commandQueue_->createCommandBuffer({}, nullptr);
   commandEncoder_ =
       commandBuffer_->createRenderCommandEncoder(*finalDesc, framebuffer_, {}, nullptr);
 }

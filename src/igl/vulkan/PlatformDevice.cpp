@@ -54,7 +54,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(uint32_t 
   IGL_DEBUG_ASSERT(vkTex->image.imageFormat_ != VK_FORMAT_UNDEFINED, "Invalid image format");
 
   const auto iglFormat = vkFormatToTextureFormat(vkTex->image.imageFormat_);
-  if (!IGL_DEBUG_VERIFY(iglFormat != igl::TextureFormat::Invalid)) {
+  if (!IGL_DEBUG_VERIFY(iglFormat != TextureFormat::Invalid)) {
     Result::setResult(outResult, Result::Code::RuntimeError, "Invalid surface depth format");
     return nullptr;
   }
@@ -102,8 +102,8 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
 
   IGL_DEBUG_ASSERT(vkTex->image.imageFormat_ != VK_FORMAT_UNDEFINED, "Invalid image format");
 
-  const igl::TextureFormat iglFormat = vkFormatToTextureFormat(vkTex->image.imageFormat_);
-  if (!IGL_DEBUG_VERIFY(iglFormat != igl::TextureFormat::Invalid)) {
+  const TextureFormat iglFormat = vkFormatToTextureFormat(vkTex->image.imageFormat_);
+  if (!IGL_DEBUG_VERIFY(iglFormat != TextureFormat::Invalid)) {
     Result::setResult(outResult, Result::Code::RuntimeError, "Invalid surface color format");
     return nullptr;
   }
@@ -123,8 +123,27 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
   // allocate new drawable textures if its null or mismatches in size or format
   if (!result || width != result->getDimensions().width ||
       height != result->getDimensions().height || iglFormat != result->getFormat()) {
-    const TextureDesc desc = TextureDesc::new2D(
-        iglFormat, width, height, TextureDesc::TextureUsageBits::Attachment, "SwapChain Texture");
+    // The swapchain VkImage may carry VK_IMAGE_USAGE_STORAGE_BIT when the
+    // surface + format support it (see VulkanSwapchain::chooseUsageFlags(), e.g.
+    // a UNORM swapchain that exposes VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT).
+    // Advertise Storage on the igl texture so consumers can bind the drawable as
+    // a storage image -- e.g. a compute shader that imageStore()s directly to the
+    // swapchain instead of round-tripping through a resolve pass.
+    //
+    // Hold Storage back for sRGB drawables even if the VkImage reports it: a
+    // compute imageStore() to an sRGB image is not consistent across drivers
+    // (most bypass the sRGB encode -- SPIR-V rgba8 stores are UNORM -- while
+    // MoltenVK applies it), so exposing it would be a cross-platform trap. UNORM
+    // swapchains (the recommended path) are unaffected.
+    TextureDesc::TextureUsage usage = TextureDesc::TextureUsageBits::Attachment;
+    if ((vkTex->image.usageFlags_ & VK_IMAGE_USAGE_STORAGE_BIT) != 0 &&
+        !TextureFormatProperties::fromTextureFormat(iglFormat).isSRGB()) {
+      usage |= TextureDesc::TextureUsageBits::Storage;
+    }
+    // NOLINTBEGIN(clang-diagnostic-shorten-64-to-32)
+    const TextureDesc desc =
+        TextureDesc::new2D(iglFormat, width, height, usage, "SwapChain Texture");
+    // NOLINTEND(clang-diagnostic-shorten-64-to-32)
     nativeDrawableTextures_[currentImageIndex] =
         std::make_shared<Texture>(device_, std::move(vkTex), desc);
   }
@@ -149,8 +168,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const Te
 
   Result subResult;
 
-  auto texture =
-      std::make_shared<igl::vulkan::android::NativeHWTextureBuffer>(device_, funcTable_,  desc.format);
+  auto texture = std::make_shared<android::NativeHWTextureBuffer>(device_, funcTable_,  desc.format);
   subResult = texture->createHWBuffer(desc, false, false);
   Result::setResult(outResult, subResult.code, subResult.message);
   if (!subResult.isOk()) {
@@ -172,8 +190,15 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(
   AHardwareBuffer_Desc hwbDesc;
   funcTable_->AHardwareBuffer_describe(buffer, &hwbDesc);
 
-  auto texture = std::make_shared<igl::vulkan::android::NativeHWTextureBuffer>(
-      device_, funcTable_, igl::android::getIglFormat(hwbDesc.format));
+  // Vendor-specific YCbCr AHB formats are valid Vulkan imports but may not map to IGL formats.
+  // Use YUV_NV12 only to satisfy Texture's non-invalid format assert before import overwrites
+  // desc_.
+  TextureFormat textureFormat = igl::android::getIglFormat(hwbDesc.format);
+  if (textureFormat == TextureFormat::Invalid) {
+    textureFormat = TextureFormat::YUV_NV12;
+  }
+
+  auto texture = std::make_shared<android::NativeHWTextureBuffer>(device_, funcTable_, textureFormat);
   subResult = texture->createWithHWBuffer(buffer);
   Result::setResult(outResult, subResult.code, subResult.message);
   if (!subResult.isOk()) {

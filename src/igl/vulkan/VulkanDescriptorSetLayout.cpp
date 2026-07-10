@@ -23,8 +23,8 @@ VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(const VulkanContext& ctx,
   // The underlying VkDescriptorSetLayout is de-duplicated and owned by VulkanContext. Multiple
   // VulkanDescriptorSetLayout instances with identical bindings/flags will therefore share the
   // same handle, and consequently share the same DescriptorPoolsArena in VulkanContext.
-  vkDescriptorSetLayout = ctx.getOrCreateVkDescriptorSetLayout(
-      flags, numBindings, bindings, bindingFlags, debugName);
+  vkDescriptorSetLayout =
+      ctx.getOrCreateVkDescriptorSetLayout(flags, numBindings, bindings, bindingFlags, debugName);
 
   if (ctx.features().has_VK_EXT_descriptor_buffer) {
     ctx.vf_.vkGetDescriptorSetLayoutSizeEXT(ctx.getVkDevice(), vkDescriptorSetLayout, &layoutSize);

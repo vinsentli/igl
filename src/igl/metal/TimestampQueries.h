@@ -34,6 +34,10 @@ class API_AVAILABLE(macos(10.15), ios(14.0)) TimestampQueries : public ITimestam
   void reset() override;
   bool resultsAvailable() const override;
   uint64_t getElapsedNanos(uint32_t slotIndex) const override;
+  uint64_t getStartNanos(uint32_t slotIndex) const override;
+  uint64_t getEndNanos(uint32_t slotIndex) const override;
+  uint64_t getFrameElapsedNanos() const override;
+  bool supportsComputePassTimestamps() const override;
 
   /// Called from CommandQueue completion handler -- resolves counter data
   API_AVAILABLE(macos(10.15), ios(14.0))
@@ -58,6 +62,7 @@ class API_AVAILABLE(macos(10.15), ios(14.0)) TimestampQueries : public ITimestam
   mutable std::mutex resolveMutex_;
 
   friend class CommandQueue;
+  friend class ComputeCommandEncoder;
   friend class RenderCommandEncoder;
 };
 

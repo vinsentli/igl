@@ -47,6 +47,7 @@ ComputePipelineState ::~ComputePipelineState() {
   }
 }
 
+// NOLINTNEXTLINE(facebook-hte-NullableReturn)
 VkPipeline ComputePipelineState::getVkPipeline() const {
   const VulkanContext& ctx = device_.getVulkanContext();
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(&ctx);
@@ -110,10 +111,16 @@ VkPipeline ComputePipelineState::getVkPipeline() const {
                             IGL_FORMAT("Pipeline Layout: {}", desc_.debugName.c_str()).c_str()));
 
   const auto& shaderModule = desc_.shaderStages->getComputeModule();
+  if (!IGL_DEBUG_VERIFY(shaderModule)) {
+    return VK_NULL_HANDLE;
+  }
   std::vector<VkSpecializationMapEntry> specEntries;
   const VkSpecializationInfo specInfo =
       buildSpecializationInfo(shaderModule->info().functionConstantValues, specEntries);
 
+  // `device` comes from ctx.getVkDevice(), which is annotated IGL_NULLABLE but is non-null by
+  // construction whenever a pipeline is being created; this is a false positive.
+  // NOLINTNEXTLINE(facebook-hte-NullableDereference)
   VulkanComputePipelineBuilder()
       .shaderStage(VkPipelineShaderStageCreateInfo{
           .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,

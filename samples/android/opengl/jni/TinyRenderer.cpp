@@ -103,14 +103,19 @@ void TinyRenderer::init() {
     indexBuffer_ = device_->createBuffer(indexBufferDesc, &result);
     throwOnBadResult(result);
 
-    VertexInputStateDesc vertexInputDesc;
-    vertexInputDesc.numAttributes = 2;
-    vertexInputDesc.attributes[0] = VertexAttribute(
-        0, VertexAttributeFormat::Float3, offsetof(VertexPosUv, position), "position");
-    vertexInputDesc.attributes[1] =
-        VertexAttribute(0, VertexAttributeFormat::Float2, offsetof(VertexPosUv, uv), "uv_in");
-    vertexInputDesc.numInputBindings = 1;
-    vertexInputDesc.inputBindings[0].stride = sizeof(VertexPosUv);
+    const VertexInputStateDesc vertexInputDesc = {
+        .numAttributes = 2,
+        .attributes = {{.bufferIndex = 0,
+                        .format = VertexAttributeFormat::Float3,
+                        .offset = offsetof(VertexPosUv, position),
+                        .name = "position"},
+                       {.bufferIndex = 0,
+                        .format = VertexAttributeFormat::Float2,
+                        .offset = offsetof(VertexPosUv, uv),
+                        .name = "uv_in"}},
+        .numInputBindings = 1,
+        .inputBindings = {{.stride = sizeof(VertexPosUv)}},
+    };
     vertexInputState_ = device_->createVertexInputState(vertexInputDesc, &result);
     throwOnBadResult(result);
   }
@@ -176,12 +181,10 @@ void TinyRenderer::render() {
   }
 
   // Create and submit command buffers
-  const CommandBufferDesc commandBufferDesc;
-  const std::shared_ptr<ICommandBuffer> buffer =
-      commandQueue_->createCommandBuffer(commandBufferDesc, &result);
+  const std::shared_ptr<ICommandBuffer> buffer = commandQueue_->createCommandBuffer({}, &result);
   throwOnBadResult(result);
 
-  auto cmds = buffer->createRenderCommandEncoder(renderPassDesc_, framebuffer_);
+  const auto cmds = buffer->createRenderCommandEncoder(renderPassDesc_, framebuffer_);
 
   cmds->bindVertexBuffer(0, *vertexBuffer_);
   cmds->bindIndexBuffer(*indexBuffer_, IndexFormat::UInt16);

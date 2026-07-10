@@ -456,13 +456,15 @@ std::shared_ptr<ITimer> Device::createTimer(Result* IGL_NULLABLE outResult) cons
   return std::make_shared<Timer>();
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 std::shared_ptr<ITimestampQueries> Device::createTimestampQueries(uint32_t maxTimestamps,
                                                                   Result* IGL_NULLABLE
                                                                       outResult) const noexcept {
   if (@available(macOS 10.15, iOS 14.0, *)) {
     // Find the timestamp counter set
     id<MTLCounterSet> timestampCounterSet = nil;
-    for (id<MTLCounterSet> counterSet = nullptr in device_.counterSets) {
+    // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
+    for (id<MTLCounterSet> counterSet in device_.counterSets) {
       if ([counterSet.name isEqualToString:MTLCommonCounterSetTimestamp]) {
         timestampCounterSet = counterSet;
         break;
@@ -486,6 +488,7 @@ std::shared_ptr<ITimestampQueries> Device::createTimestampQueries(uint32_t maxTi
     if (!csb || error) {
       Result::setResult(outResult,
                         Result::Code::RuntimeError,
+                        // NOLINTNEXTLINE(clang-analyzer-nullability.NullablePassedToNonnull)
                         error ? [error.localizedDescription UTF8String]
                               : "Failed to create counter sample buffer");
       return nullptr;
@@ -500,6 +503,24 @@ std::shared_ptr<ITimestampQueries> Device::createTimestampQueries(uint32_t maxTi
   }
 }
 
+/**
+ * @brief Creates a Metal vertex input state from a descriptor.
+ *
+ * Validates the descriptor's attributes and input bindings,
+ * ensuring counts are within limits, buffer indices and attribute
+ * locations are in range, buffer indices match the binding count,
+ * and attribute locations are unique. On success, populates a
+ * MTLVertexDescriptor with attribute formats, buffer layouts,
+ * and step functions, and wraps it in a VertexInputState.
+ *
+ * @param[in] desc Vertex input state descriptor specifying
+ *        attributes, bindings, strides, and sample functions.
+ * @param[out] outResult Receives the result status. Set to an
+ *        error code (ArgumentOutOfRange, ArgumentInvalid, or
+ *        RuntimeError) on failure, or OK on success.
+ * @return Shared pointer to the created VertexInputState, or
+ *         nullptr on validation or creation failure.
+ */
 std::shared_ptr<IVertexInputState> Device::createVertexInputState(const VertexInputStateDesc& desc,
                                                                   Result* outResult) const {
   // Avoid buffer overrun in numAttributes.
@@ -800,6 +821,22 @@ std::shared_ptr<IRenderPipelineState> Device::createTraditionalRenderPipeline(
   return std::make_shared<RenderPipelineState>(metalObject, reflection, desc);
 }
 
+/**
+ * @brief Creates a Metal render pipeline state using mesh shaders.
+ *
+ * Builds an MTLMeshRenderPipelineDescriptor from the provided
+ * descriptor. Requires iOS 16+/macOS 13+ and Apple GPU Family 7
+ * (A14/M1 or later). The mesh shader module is required; task
+ * (object) and fragment shader modules are optional. Configures
+ * color attachments, blending, and depth/stencil formats from
+ * the descriptor's target description.
+ *
+ * @param[in] desc Pipeline configuration including shader
+ *        stages, attachment formats, sample count, and blending.
+ * @param[out] outResult Receives the error code on failure, or
+ *        OK on success. May be null.
+ * @return The created pipeline state, or nullptr on failure.
+ */
 std::shared_ptr<IRenderPipelineState> Device::createMeshRenderPipeline(
     const RenderPipelineDesc& desc,
     Result* outResult) const {
@@ -821,6 +858,7 @@ std::shared_ptr<IRenderPipelineState> Device::createMeshRenderPipeline(
     metalDesc.label = [NSString stringWithUTF8String:desc.debugName.c_str()];
 
     metalDesc.rasterSampleCount = desc.sampleCount;
+    metalDesc.alphaToCoverageEnabled = desc.alphaToCoverageEnabled ? YES : NO;
 
     if (!IGL_DEBUG_VERIFY(desc.shaderStages)) {
       Result::setResult(
@@ -931,7 +969,8 @@ std::shared_ptr<IRenderPipelineState> Device::createTileRenderPipeline(const Til
     return std::make_shared<RenderPipelineState>(metalObject, reflection, fake_desc);
 }
 
-static MTLDataType convertConstantValueType(ConstantValueType type) {
+namespace {
+MTLDataType convertConstantValueType(ConstantValueType type) {
   switch (type) {
   case ConstantValueType::Invalid:
     return MTLDataTypeNone;
@@ -969,6 +1008,7 @@ static MTLDataType convertConstantValueType(ConstantValueType type) {
     return MTLDataTypeNone;
   }
 }
+} // namespace
 
 std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryDesc& desc,
                                                             Result* outResult) const {

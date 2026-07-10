@@ -13,6 +13,7 @@
 #import <Metal/MTLCommandBuffer.h> // @donotremove
 #import <Metal/MTLCounters.h>
 #include <algorithm>
+#include <limits>
 
 namespace igl::metal {
 
@@ -46,6 +47,17 @@ bool TimestampQueries::resultsAvailable() const {
   return resolved_.load(std::memory_order_acquire);
 }
 
+bool TimestampQueries::supportsComputePassTimestamps() const {
+  // MTLComputePassDescriptor::sampleBufferAttachments is only available on macOS 11+ / iOS 14+;
+  // ComputeCommandEncoder falls back to the plain `computeCommandEncoder` (no descriptor) on older
+  // targets, which records no samples. Return true only under the same availability so callers
+  // don't allocate compute slots that would silently resolve to zero on older OSes.
+  if (@available(macOS 11.0, iOS 14.0, *)) {
+    return true;
+  }
+  return false;
+}
+
 uint64_t TimestampQueries::getElapsedNanos(uint32_t slotIndex) const {
   if (!resolved_.load(std::memory_order_acquire)) {
     return 0;
@@ -62,6 +74,65 @@ uint64_t TimestampQueries::getElapsedNanos(uint32_t slotIndex) const {
     return end - start;
   }
   return 0;
+}
+
+uint64_t TimestampQueries::getStartNanos(uint32_t slotIndex) const {
+  if (!resolved_.load(std::memory_order_acquire)) {
+    return 0;
+  }
+  std::lock_guard<std::mutex> lock(resolveMutex_);
+  const uint32_t startIdx = slotIndex * kSamplesPerTimingSlot;
+  if (startIdx >= resolvedTimestamps_.size()) {
+    return 0;
+  }
+  return resolvedTimestamps_[startIdx];
+}
+
+uint64_t TimestampQueries::getEndNanos(uint32_t slotIndex) const {
+  if (!resolved_.load(std::memory_order_acquire)) {
+    return 0;
+  }
+  std::lock_guard<std::mutex> lock(resolveMutex_);
+  const uint32_t endIdx = slotIndex * kSamplesPerTimingSlot + 1;
+  if (endIdx >= resolvedTimestamps_.size()) {
+    return 0;
+  }
+  return resolvedTimestamps_[endIdx];
+}
+
+uint64_t TimestampQueries::getFrameElapsedNanos() const {
+  if (!resolved_.load(std::memory_order_acquire)) {
+    return 0;
+  }
+  std::lock_guard<std::mutex> lock(resolveMutex_);
+  // Walk every slot once and track the earliest vertex-start and the latest
+  // fragment-end. `max(end) - min(start)` is the GPU wall-clock duration —
+  // unlike summing per-slot deltas, it does NOT double-count the overlap
+  // between consecutive passes that the GPU pipelines (pass N+1's vertex
+  // stage starts while pass N's fragment stage is still running).
+  uint64_t minStart = std::numeric_limits<uint64_t>::max();
+  uint64_t maxEnd = 0;
+  const size_t slots = resolvedTimestamps_.size() / kSamplesPerTimingSlot;
+  for (size_t slot = 0; slot < slots; ++slot) {
+    const uint64_t start = resolvedTimestamps_[slot * kSamplesPerTimingSlot];
+    const uint64_t end = resolvedTimestamps_[slot * kSamplesPerTimingSlot + 1U];
+    // Slots written but never paired with a valid end (e.g. abort()'d compute
+    // paths on backends that still allocate a slot) leave end <= start —
+    // skip them so the wall span isn't anchored to a stale zero.
+    if (end <= start) {
+      continue;
+    }
+    if (start < minStart) {
+      minStart = start;
+    }
+    if (end > maxEnd) {
+      maxEnd = end;
+    }
+  }
+  if (maxEnd == 0 || minStart == std::numeric_limits<uint64_t>::max()) {
+    return 0;
+  }
+  return maxEnd - minStart;
 }
 
 void TimestampQueries::resolveTimestamps(id<MTLCounterSampleBuffer> csb) {

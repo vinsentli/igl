@@ -43,6 +43,17 @@ CommandQueue::CommandQueue(Device& device,
 
 std::shared_ptr<ICommandBuffer> CommandQueue::createCommandBuffer(const CommandBufferDesc& desc,
                                                                   Result* outResult) {
+  // If the previous frame ended, perform the triple-buffering wait here -- at the start of the
+  // frame, before anything is recorded into the next in-flight buffer slot -- rather than at
+  // frame end. The flag keeps this to one wait per frame even when a frame records multiple
+  // command buffers; blit/upload command buffers are created directly off the MTLCommandQueue
+  // and never reach this path.
+  // 我们与IGL实现不一样
+  // if (frameBoundaryPending_) {
+  //   frameBoundaryPending_ = false;
+  //   bufferSyncManager_->manageEndOfFrameSync();
+  // }
+
   id<MTLCommandBuffer> metalObject = [value_ commandBuffer];
   metalObject.label = [NSString stringWithUTF8String:desc.debugName.c_str()];
   auto resource = std::make_shared<CommandBuffer>(device_, metalObject, desc);
@@ -92,10 +103,11 @@ SubmitHandle CommandQueue::submit(const igl::ICommandBuffer& commandBuffer, bool
 
   [metalCommandBuffer.get() commit];
 
-    // move to beginFrame
-//  if (endOfFrame) {
-//    bufferSyncManager_->manageEndOfFrameSync();
-//  }
+  if (endOfFrame) {
+    // Defer the CPU wait to the start of the next frame (createCommandBuffer) instead of
+    // stalling here at frame end.
+    frameBoundaryPending_ = true;
+  }
 
   if constexpr (kIGLMetalNumberCommandBuffersToCapture > 0) {
     static uint32_t currentCommandBuffer = 0;

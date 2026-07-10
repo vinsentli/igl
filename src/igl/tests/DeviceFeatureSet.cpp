@@ -319,6 +319,99 @@ TEST_F(DeviceFeatureSetTest, getTextureFormatCapabilities) {
   EXPECT_TRUE(contains(capability, ICapabilities::TextureFormatCapabilityBits::Sampled));
 }
 
+//
+// ShaderVersion / BackendVersion value semantics
+//
+// ShaderVersion and BackendVersion are plain value types with defaulted fields
+// and hand-written equality operators. They require no device, so the tests use
+// a bare fixture and verify the default-constructed state plus that operator== /
+// operator!= compare every field independently.
+//
+
+TEST(ShaderVersionTest, DefaultValues) {
+  const ShaderVersion version;
+  EXPECT_EQ(version.family, ShaderFamily::Unknown);
+  EXPECT_EQ(version.majorVersion, 0);
+  EXPECT_EQ(version.minorVersion, 0);
+  EXPECT_EQ(version.extra, 0);
+}
+
+TEST(ShaderVersionTest, Equality) {
+  const ShaderVersion versionA{
+      .family = ShaderFamily::Glsl, .majorVersion = 4, .minorVersion = 6, .extra = 0};
+  const ShaderVersion versionB{
+      .family = ShaderFamily::Glsl, .majorVersion = 4, .minorVersion = 6, .extra = 0};
+  EXPECT_TRUE(versionA == versionB);
+  EXPECT_FALSE(versionA != versionB);
+}
+
+TEST(ShaderVersionTest, InequalityPerField) {
+  const ShaderVersion base{
+      .family = ShaderFamily::Metal, .majorVersion = 2, .minorVersion = 4, .extra = 1};
+  {
+    ShaderVersion other = base;
+    other.family = ShaderFamily::SpirV;
+    EXPECT_FALSE(base == other);
+    EXPECT_TRUE(base != other);
+  }
+  {
+    ShaderVersion other = base;
+    other.majorVersion = 3;
+    EXPECT_FALSE(base == other);
+    EXPECT_TRUE(base != other);
+  }
+  {
+    ShaderVersion other = base;
+    other.minorVersion = 5;
+    EXPECT_FALSE(base == other);
+    EXPECT_TRUE(base != other);
+  }
+  {
+    ShaderVersion other = base;
+    other.extra = 2;
+    EXPECT_FALSE(base == other);
+    EXPECT_TRUE(base != other);
+  }
+}
+
+TEST(BackendVersionTest, DefaultValues) {
+  const BackendVersion version;
+  EXPECT_EQ(version.flavor, BackendFlavor::Invalid);
+  EXPECT_EQ(version.majorVersion, 0);
+  EXPECT_EQ(version.minorVersion, 0);
+}
+
+TEST(BackendVersionTest, Equality) {
+  const BackendVersion versionA{
+      .flavor = BackendFlavor::Vulkan, .majorVersion = 1, .minorVersion = 3};
+  const BackendVersion versionB{
+      .flavor = BackendFlavor::Vulkan, .majorVersion = 1, .minorVersion = 3};
+  EXPECT_TRUE(versionA == versionB);
+  EXPECT_FALSE(versionA != versionB);
+}
+
+TEST(BackendVersionTest, InequalityPerField) {
+  const BackendVersion base{.flavor = BackendFlavor::Metal, .majorVersion = 3, .minorVersion = 0};
+  {
+    BackendVersion other = base;
+    other.flavor = BackendFlavor::OpenGL;
+    EXPECT_FALSE(base == other);
+    EXPECT_TRUE(base != other);
+  }
+  {
+    BackendVersion other = base;
+    other.majorVersion = 2;
+    EXPECT_FALSE(base == other);
+    EXPECT_TRUE(base != other);
+  }
+  {
+    BackendVersion other = base;
+    other.minorVersion = 1;
+    EXPECT_FALSE(base == other);
+    EXPECT_TRUE(base != other);
+  }
+}
+
 #if IGL_BACKEND_OPENGL
 // classifyGpuTimerTier — pure function tests (no GL context needed)
 class GpuTimerTierTest : public ::testing::Test {};
@@ -362,6 +455,18 @@ TEST_F(GpuTimerTierTest, AdrenoVendorCrossCheck) {
   EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno (TM) 505", "ARM"), opengl::GpuTimerTier::Full);
 }
 
+TEST_F(GpuTimerTierTest, AdrenoVendorVariants) {
+  // Qualcomm GL drivers report at least three vendor string variants — all
+  // must match so budget Adreno devices land in Disabled (not Full default).
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno (TM) 505", "Qualcomm Technologies, Inc."),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno (TM) 505", "QUALCOMM"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno (TM) 630", "Qualcomm Technologies, Inc."),
+            opengl::GpuTimerTier::Conservative);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Adreno 730", "QUALCOMM"), opengl::GpuTimerTier::Full);
+}
+
 TEST_F(GpuTimerTierTest, MaliBudget) {
   EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-G31", "ARM"), opengl::GpuTimerTier::Disabled);
   EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-G52", "ARM"), opengl::GpuTimerTier::Disabled);
@@ -380,6 +485,16 @@ TEST_F(GpuTimerTierTest, MaliFull) {
 
 TEST_F(GpuTimerTierTest, MaliVendorCrossCheck) {
   EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-G52", "Qualcomm"), opengl::GpuTimerTier::Full);
+}
+
+TEST_F(GpuTimerTierTest, MaliVendorVariants) {
+  // ARM ships at least three vendor string variants in Android GL drivers —
+  // same set as the Mali-T branch. Mali-G70+ on some Samsung Exynos builds
+  // reports "ARM Limited"; verify all variants land in their intended tier.
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-G52", "ARM Limited"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-G76", "Arm"), opengl::GpuTimerTier::Conservative);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Mali-G710", "ARM Limited"), opengl::GpuTimerTier::Full);
 }
 
 TEST_F(GpuTimerTierTest, MaliTBudget) {
@@ -461,13 +576,40 @@ TEST_F(GpuTimerTierTest, PowerVRNonImaginationVendorFallsThrough) {
   EXPECT_EQ(opengl::classifyGpuTimerTier("PowerVR SGX 540", "ARM"), opengl::GpuTimerTier::Full);
 }
 
-TEST_F(GpuTimerTierTest, XclipseConservative) {
+TEST_F(GpuTimerTierTest, XclipseDisabled) {
+  // SEV S647462 follow-up: Conservative (32 slots) was insufficient for
+  // Xclipse drivers — all variants treated as Disabled, matching Mali-T.
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Samsung Xclipse 530", "Samsung"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Samsung Xclipse 540", "Samsung"),
+            opengl::GpuTimerTier::Disabled);
   EXPECT_EQ(opengl::classifyGpuTimerTier("Samsung Xclipse 920", "Samsung"),
-            opengl::GpuTimerTier::Conservative);
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Samsung Xclipse 940", "Samsung"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Samsung Xclipse 960", "Samsung"),
+            opengl::GpuTimerTier::Disabled);
+}
+
+TEST_F(GpuTimerTierTest, XclipseVendorVariants) {
+  // Samsung ships at least three vendor string variants; all must match via
+  // the substring check on "Samsung". A bare-renderer "Xclipse N" without the
+  // "Samsung" prefix is also accepted in case future driver versions drop it.
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Samsung Xclipse 940", "Samsung Electronics Co., Ltd."),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Samsung Xclipse 940", "Samsung Mobile"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Samsung Xclipse 940", "Samsung Electronics"),
+            opengl::GpuTimerTier::Disabled);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Xclipse 940", "Samsung"), opengl::GpuTimerTier::Disabled);
 }
 
 TEST_F(GpuTimerTierTest, XclipseVendorCrossCheck) {
+  // Non-Samsung vendor must not match Xclipse — defense against a future GPU
+  // sharing the renderer substring.
   EXPECT_EQ(opengl::classifyGpuTimerTier("Samsung Xclipse 920", "ARM"), opengl::GpuTimerTier::Full);
+  EXPECT_EQ(opengl::classifyGpuTimerTier("Samsung Xclipse 920", "Qualcomm"),
+            opengl::GpuTimerTier::Full);
 }
 
 TEST_F(GpuTimerTierTest, DesktopAndUnknown) {

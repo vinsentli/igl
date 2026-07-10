@@ -80,6 +80,7 @@
 - (instancetype)init:(igl::shell::RenderSessionConfig)config
      factoryProvider:(RenderSessionFactoryProvider*)factoryProvider
                frame:(CGRect)frame {
+  // NOLINTNEXTLINE(bugprone-assignment-in-if-condition)
   if (self = [super initWithNibName:nil bundle:nil]) {
     self->_config = config;
     self->_frame = frame;
@@ -223,6 +224,8 @@
   // @fb-only
     // @fb-only
     // @fb-only
+  default:
+    break;
   }
 }
 

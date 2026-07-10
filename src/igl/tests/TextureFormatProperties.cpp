@@ -341,6 +341,24 @@ TEST(TextureFormatProperties, getBytesPerRange) {
   }
 }
 
+TEST(TextureFormatProperties, getNumMipLevels) {
+  const auto props = TextureFormatProperties::fromTextureFormat(TextureFormat::RGBA_UNorm8);
+  // 4x4 RGBA_UNorm8 mip chain:
+  //   Level 0: 4x4 x 4 bytes = 64 bytes
+  //   Level 1: 2x2 x 4 bytes = 16 bytes
+  //   Level 2: 1x1 x 4 bytes =  4 bytes
+  // Full chain = 84 bytes
+
+  // Fewer bytes than the base level holds no complete mip level.
+  EXPECT_EQ(props.getNumMipLevels(4, 4, 63), 0);
+  // Exactly enough for the base level.
+  EXPECT_EQ(props.getNumMipLevels(4, 4, 64), 1);
+  // Enough for the base level plus the first mip level.
+  EXPECT_EQ(props.getNumMipLevels(4, 4, 80), 2);
+  // Enough for the full mip chain.
+  EXPECT_EQ(props.getNumMipLevels(4, 4, 84), 3);
+}
+
 TEST(TextureFormatProperties, getSubRangeByteOffset) {
   {
     const auto props = TextureFormatProperties::fromTextureFormat(TextureFormat::RGBA_UNorm8);
@@ -452,6 +470,119 @@ TEST(TextureFormatProperties, getSubRangeByteOffset) {
       EXPECT_EQ(props.getSubRangeByteOffset(range, range.atMipLevel(1).atFace(1)), 320);
     }
   }
+}
+
+TEST(TextureFormatProperties, GetNumMipLevels) {
+  {
+    const auto props = TextureFormatProperties::fromTextureFormat(TextureFormat::RGBA_UNorm8);
+    // 4x4 RGBA_UNorm8 mip chain:
+    // Level 0: 4 pixels x 4 pixels = 64 bytes (cumulative 64)
+    // Level 1: 2 pixels x 2 pixels = 16 bytes (cumulative 80)
+    // Level 2: 1 pixel  x 1 pixel  =  4 bytes (cumulative 84)
+    EXPECT_EQ(props.getNumMipLevels(4, 4, 64), 1);
+    EXPECT_EQ(props.getNumMipLevels(4, 4, 80), 2);
+    EXPECT_EQ(props.getNumMipLevels(4, 4, 84), 3);
+  }
+  {
+    const auto props = TextureFormatProperties::fromTextureFormat(TextureFormat::RGBA_UNorm8);
+    // 10x10 RGBA_UNorm8 mip chain:
+    // Level 0: 10 pixels x 10 pixels = 400 bytes (cumulative 400)
+    // Level 1:  5 pixels x  5 pixels = 100 bytes (cumulative 500)
+    // Level 2:  2 pixels x  2 pixels =  16 bytes (cumulative 516)
+    // Level 3:  1 pixel  x  1 pixel  =   4 bytes (cumulative 520)
+    EXPECT_EQ(props.getNumMipLevels(10, 10, 400), 1);
+    EXPECT_EQ(props.getNumMipLevels(10, 10, 500), 2);
+    EXPECT_EQ(props.getNumMipLevels(10, 10, 516), 3);
+    EXPECT_EQ(props.getNumMipLevels(10, 10, 520), 4);
+
+    // Not enough bytes for even the base mip level yields zero.
+    EXPECT_EQ(props.getNumMipLevels(10, 10, 399), 0);
+    // A partially-filled second mip level does not count.
+    EXPECT_EQ(props.getNumMipLevels(10, 10, 450), 1);
+  }
+}
+
+TEST(TextureFormatProperties, InvalidFormat) {
+  const auto props = TextureFormatProperties::fromTextureFormat(TextureFormat::Invalid);
+  EXPECT_FALSE(props.isValid());
+}
+
+TEST(TextureFormatProperties, ColorFormatFlags) {
+  const auto props = TextureFormatProperties::fromTextureFormat(TextureFormat::RGBA_UNorm8);
+  EXPECT_TRUE(props.isValid());
+  EXPECT_FALSE(props.isCompressed());
+  EXPECT_FALSE(props.isInteger());
+  EXPECT_FALSE(props.isSRGB());
+  EXPECT_FALSE(props.isHDR());
+  EXPECT_FALSE(props.hasDepth());
+  EXPECT_FALSE(props.hasStencil());
+  EXPECT_TRUE(props.hasColor());
+  EXPECT_FALSE(props.isDepthOnly());
+  EXPECT_FALSE(props.isDepthOrDepthStencil());
+  EXPECT_FALSE(props.isStencilOnly());
+  EXPECT_FALSE(props.isDepthOrStencil());
+  EXPECT_FALSE(props.isVariableLength());
+}
+
+TEST(TextureFormatProperties, SrgbFormatFlags) {
+  const auto props = TextureFormatProperties::fromTextureFormat(TextureFormat::RGBA_SRGB);
+  EXPECT_TRUE(props.isSRGB());
+  EXPECT_FALSE(props.isCompressed());
+  EXPECT_TRUE(props.hasColor());
+}
+
+TEST(TextureFormatProperties, HdrFormatFlags) {
+  const auto props = TextureFormatProperties::fromTextureFormat(TextureFormat::RGBA_F16);
+  EXPECT_TRUE(props.isHDR());
+  EXPECT_FALSE(props.isInteger());
+  EXPECT_TRUE(props.hasColor());
+}
+
+TEST(TextureFormatProperties, IntegerFormatFlags) {
+  const auto props = TextureFormatProperties::fromTextureFormat(TextureFormat::RGBA_UInt32);
+  EXPECT_TRUE(props.isInteger());
+  EXPECT_TRUE(props.isHDR());
+  EXPECT_TRUE(props.hasColor());
+}
+
+TEST(TextureFormatProperties, CompressedFormatFlags) {
+  const auto props = TextureFormatProperties::fromTextureFormat(TextureFormat::RGBA_ASTC_4x4);
+  EXPECT_TRUE(props.isCompressed());
+  EXPECT_FALSE(props.isSRGB());
+  EXPECT_TRUE(props.hasColor());
+}
+
+TEST(TextureFormatProperties, DepthOnlyFormatFlags) {
+  const auto props = TextureFormatProperties::fromTextureFormat(TextureFormat::Z_UNorm24);
+  EXPECT_TRUE(props.hasDepth());
+  EXPECT_FALSE(props.hasStencil());
+  EXPECT_FALSE(props.hasColor());
+  EXPECT_TRUE(props.isDepthOnly());
+  EXPECT_TRUE(props.isDepthOrDepthStencil());
+  EXPECT_FALSE(props.isStencilOnly());
+  EXPECT_TRUE(props.isDepthOrStencil());
+}
+
+TEST(TextureFormatProperties, DepthStencilFormatFlags) {
+  const auto props = TextureFormatProperties::fromTextureFormat(TextureFormat::S8_UInt_Z24_UNorm);
+  EXPECT_TRUE(props.hasDepth());
+  EXPECT_TRUE(props.hasStencil());
+  EXPECT_FALSE(props.hasColor());
+  EXPECT_FALSE(props.isDepthOnly());
+  EXPECT_TRUE(props.isDepthOrDepthStencil());
+  EXPECT_FALSE(props.isStencilOnly());
+  EXPECT_TRUE(props.isDepthOrStencil());
+}
+
+TEST(TextureFormatProperties, StencilOnlyFormatFlags) {
+  const auto props = TextureFormatProperties::fromTextureFormat(TextureFormat::S_UInt8);
+  EXPECT_FALSE(props.hasDepth());
+  EXPECT_TRUE(props.hasStencil());
+  EXPECT_FALSE(props.hasColor());
+  EXPECT_FALSE(props.isDepthOnly());
+  EXPECT_FALSE(props.isDepthOrDepthStencil());
+  EXPECT_TRUE(props.isStencilOnly());
+  EXPECT_TRUE(props.isDepthOrStencil());
 }
 
 } // namespace igl::tests

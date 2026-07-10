@@ -9,6 +9,8 @@
 
 #include <igl/VertexInputState.h>
 
+#include <functional>
+
 namespace igl::tests {
 
 //
@@ -249,6 +251,280 @@ TEST_F(VertexInputStateTest, VertexInputStateDescEquality) {
   ASSERT_NE(desc1, desc2);
   desc1.inputBindings[0].stride = desc2.inputBindings[0].stride;
   ASSERT_EQ(desc1, desc2);
+}
+
+TEST_F(VertexInputStateTest, VertexInputStateDescHashConsistency) {
+  const VertexInputStateDesc desc;
+  const std::hash<VertexInputStateDesc> hasher;
+  EXPECT_EQ(hasher(desc), hasher(desc));
+}
+
+TEST_F(VertexInputStateTest, VertexInputStateDescHashEqualObjectsHaveSameHash) {
+  const VertexInputStateDesc a{
+      .numAttributes = 1,
+      .attributes = {{.format = VertexAttributeFormat::Float3, .offset = 0}},
+      .numInputBindings = 1,
+      .inputBindings = {{.stride = 12}},
+  };
+  const VertexInputStateDesc b{
+      .numAttributes = 1,
+      .attributes = {{.format = VertexAttributeFormat::Float3, .offset = 0}},
+      .numInputBindings = 1,
+      .inputBindings = {{.stride = 12}},
+  };
+
+  const std::hash<VertexInputStateDesc> hasher;
+  EXPECT_EQ(a, b);
+  EXPECT_EQ(hasher(a), hasher(b));
+}
+
+TEST_F(VertexInputStateTest, VertexInputStateDescHashDifferentObjectsHaveDifferentHash) {
+  const VertexInputStateDesc a{
+      .numAttributes = 1,
+      .attributes = {{.format = VertexAttributeFormat::Float3}},
+      .numInputBindings = 1,
+      .inputBindings = {{.stride = 12}},
+  };
+  const VertexInputStateDesc b{
+      .numAttributes = 1,
+      .attributes = {{.format = VertexAttributeFormat::Float4}},
+      .numInputBindings = 1,
+      .inputBindings = {{.stride = 16}},
+  };
+
+  const std::hash<VertexInputStateDesc> hasher;
+  EXPECT_NE(a, b);
+  EXPECT_NE(hasher(a), hasher(b));
+}
+
+TEST_F(VertexInputStateTest, VertexInputBindingHashEqualObjectsHaveSameHash) {
+  const VertexInputBinding a{
+      .stride = 16,
+      .sampleFunction = VertexSampleFunction::PerVertex,
+      .sampleRate = 1,
+  };
+  const VertexInputBinding b{
+      .stride = 16,
+      .sampleFunction = VertexSampleFunction::PerVertex,
+      .sampleRate = 1,
+  };
+
+  const std::hash<VertexInputBinding> hasher;
+  EXPECT_EQ(a, b);
+  EXPECT_EQ(hasher(a), hasher(b));
+}
+
+TEST_F(VertexInputStateTest, VertexInputBindingHashDifferentObjectsHaveDifferentHash) {
+  const VertexInputBinding a{
+      .stride = 16,
+      .sampleFunction = VertexSampleFunction::PerVertex,
+      .sampleRate = 1,
+  };
+  const VertexInputBinding b{
+      .stride = 32,
+      .sampleFunction = VertexSampleFunction::Instance,
+      .sampleRate = 2,
+  };
+
+  const std::hash<VertexInputBinding> hasher;
+  EXPECT_NE(a, b);
+  EXPECT_NE(hasher(a), hasher(b));
+}
+
+TEST_F(VertexInputStateTest, VertexAttributeHashEqualObjectsHaveSameHash) {
+  const VertexAttribute a{
+      .bufferIndex = 1,
+      .format = VertexAttributeFormat::Float3,
+      .offset = 12,
+      .name = "position",
+      .location = 0,
+  };
+  const VertexAttribute b{
+      .bufferIndex = 1,
+      .format = VertexAttributeFormat::Float3,
+      .offset = 12,
+      .name = "position",
+      .location = 0,
+  };
+
+  const std::hash<VertexAttribute> hasher;
+  EXPECT_EQ(a, b);
+  EXPECT_EQ(hasher(a), hasher(b));
+}
+
+TEST_F(VertexInputStateTest, VertexAttributeHashDifferentObjectsHaveDifferentHash) {
+  const VertexAttribute a{
+      .bufferIndex = 0,
+      .format = VertexAttributeFormat::Float3,
+      .offset = 0,
+  };
+  const VertexAttribute b{
+      .bufferIndex = 0,
+      .format = VertexAttributeFormat::Float4,
+      .offset = 0,
+  };
+
+  const std::hash<VertexAttribute> hasher;
+  EXPECT_NE(a, b);
+  EXPECT_NE(hasher(a), hasher(b));
+}
+
+//
+// VertexAttributeHash
+//
+// Exercises the std::hash<VertexAttribute> specialization: hashing is
+// deterministic, equal attributes hash equally, and attributes differing in any
+// field hash differently.
+//
+TEST_F(VertexInputStateTest, VertexAttributeHash) {
+  const std::hash<VertexAttribute> hasher;
+
+  const VertexAttribute a{
+      .bufferIndex = 1,
+      .format = VertexAttributeFormat::Float3,
+      .offset = 12,
+      .name = "pos",
+      .location = 0,
+  };
+  // Distinct object with identical field values.
+  const VertexAttribute b{
+      .bufferIndex = 1,
+      .format = VertexAttributeFormat::Float3,
+      .offset = 12,
+      .name = "pos",
+      .location = 0,
+  };
+
+  EXPECT_EQ(hasher(a), hasher(a));
+  EXPECT_EQ(a, b);
+  EXPECT_EQ(hasher(a), hasher(b));
+
+  // Each variant differs from `a` in exactly one hashed field, so a regression
+  // that drops any single field from the hash combine surfaces here.
+  const VertexAttribute differsInBufferIndex{
+      .bufferIndex = 2,
+      .format = VertexAttributeFormat::Float3,
+      .offset = 12,
+      .name = "pos",
+      .location = 0,
+  };
+  EXPECT_NE(a, differsInBufferIndex);
+  EXPECT_NE(hasher(a), hasher(differsInBufferIndex));
+
+  const VertexAttribute differsInFormat{
+      .bufferIndex = 1,
+      .format = VertexAttributeFormat::Float4,
+      .offset = 12,
+      .name = "pos",
+      .location = 0,
+  };
+  EXPECT_NE(a, differsInFormat);
+  EXPECT_NE(hasher(a), hasher(differsInFormat));
+
+  const VertexAttribute differsInOffset{
+      .bufferIndex = 1,
+      .format = VertexAttributeFormat::Float3,
+      .offset = 16,
+      .name = "pos",
+      .location = 0,
+  };
+  EXPECT_NE(a, differsInOffset);
+  EXPECT_NE(hasher(a), hasher(differsInOffset));
+
+  const VertexAttribute differsInName{
+      .bufferIndex = 1,
+      .format = VertexAttributeFormat::Float3,
+      .offset = 12,
+      .name = "normal",
+      .location = 0,
+  };
+  EXPECT_NE(a, differsInName);
+  EXPECT_NE(hasher(a), hasher(differsInName));
+
+  const VertexAttribute differsInLocation{
+      .bufferIndex = 1,
+      .format = VertexAttributeFormat::Float3,
+      .offset = 12,
+      .name = "pos",
+      .location = 1,
+  };
+  EXPECT_NE(a, differsInLocation);
+  EXPECT_NE(hasher(a), hasher(differsInLocation));
+}
+
+//
+// VertexInputBindingHash
+//
+// Exercises the std::hash<VertexInputBinding> specialization: hashing is
+// deterministic, equal bindings hash equally, and bindings differing in any
+// field hash differently.
+//
+TEST_F(VertexInputStateTest, VertexInputBindingHash) {
+  const std::hash<VertexInputBinding> hasher;
+
+  const VertexInputBinding a{
+      .stride = 16,
+      .sampleFunction = VertexSampleFunction::PerVertex,
+      .sampleRate = 1,
+  };
+  // Distinct object with identical field values.
+  const VertexInputBinding b{
+      .stride = 16,
+      .sampleFunction = VertexSampleFunction::PerVertex,
+      .sampleRate = 1,
+  };
+
+  EXPECT_EQ(hasher(a), hasher(a));
+  EXPECT_EQ(a, b);
+  EXPECT_EQ(hasher(a), hasher(b));
+
+  // Each variant differs from `a` in exactly one hashed field, so a regression
+  // that drops any single field from the hash combine surfaces here.
+  const VertexInputBinding differsInStride{
+      .stride = 32,
+      .sampleFunction = VertexSampleFunction::PerVertex,
+      .sampleRate = 1,
+  };
+  EXPECT_NE(a, differsInStride);
+  EXPECT_NE(hasher(a), hasher(differsInStride));
+
+  const VertexInputBinding differsInSampleFunction{
+      .stride = 16,
+      .sampleFunction = VertexSampleFunction::Instance,
+      .sampleRate = 1,
+  };
+  EXPECT_NE(a, differsInSampleFunction);
+  EXPECT_NE(hasher(a), hasher(differsInSampleFunction));
+
+  const VertexInputBinding differsInSampleRate{
+      .stride = 16,
+      .sampleFunction = VertexSampleFunction::PerVertex,
+      .sampleRate = 4,
+  };
+  EXPECT_NE(a, differsInSampleRate);
+  EXPECT_NE(hasher(a), hasher(differsInSampleRate));
+}
+
+TEST_F(VertexInputStateTest, VertexAttributeDefaultConstruction) {
+  const VertexAttribute attr;
+  EXPECT_EQ(attr.bufferIndex, 0u);
+  EXPECT_EQ(attr.format, VertexAttributeFormat::Float1);
+  EXPECT_EQ(attr.offset, 0u);
+  EXPECT_TRUE(attr.name.empty());
+  EXPECT_EQ(attr.location, -1);
+}
+
+TEST_F(VertexInputStateTest, VertexInputBindingDefaultConstruction) {
+  const VertexInputBinding binding;
+  EXPECT_EQ(binding.stride, 0u);
+  EXPECT_EQ(binding.sampleFunction, VertexSampleFunction::PerVertex);
+  EXPECT_EQ(binding.sampleRate, 1u);
+}
+
+TEST_F(VertexInputStateTest, VertexInputStateDescDefaultConstruction) {
+  const VertexInputStateDesc desc;
+  EXPECT_EQ(desc.numAttributes, 0u);
+  EXPECT_EQ(desc.numInputBindings, 0u);
 }
 
 } // namespace igl::tests

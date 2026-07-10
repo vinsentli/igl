@@ -8,6 +8,7 @@
 #include "VulkanImage.h"
 
 #include <array>
+// NOLINTNEXTLINE(facebook-unused-include-check)
 #include <cinttypes>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanContext.h>
@@ -62,6 +63,65 @@ constexpr auto kHandleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
 
 namespace igl::vulkan {
 
+namespace {
+
+/// @brief Attempts VMA image allocation, retrying once after draining deferred tasks on failure.
+/// Returns true if the allocation succeeded.
+bool tryAllocateImageVma(const VulkanContext& ctx,
+                         const VkImageCreateInfo& ci,
+                         const VmaAllocationCreateInfo& ciAlloc,
+                         VkImage* outImage,
+                         VmaAllocation* outAllocation,
+                         VkFormat imageFormat,
+                         VkMemoryPropertyFlags memFlags) {
+  const VkResult result = vmaCreateImage(static_cast<VmaAllocator>(ctx.getVmaAllocator()),
+                                         &ci,
+                                         &ciAlloc,
+                                         outImage,
+                                         outAllocation,
+                                         nullptr);
+
+  if (result == VK_SUCCESS && *outAllocation != nullptr) {
+    return true;
+  }
+
+  IGL_LOG_INFO(
+      "vmaCreateImage failed: error result: %d, memflags: %d, imageformat: %d. Retrying after "
+      "draining deferred tasks.\n",
+      result,
+      memFlags,
+      imageFormat);
+  // Allocation failed - possibly due to memory pressure from deferred tasks not being
+  // processed. Drain deferred tasks queue to free memory and retry.
+  const_cast<VulkanContext&>(ctx).waitDeferredTasks();
+
+  const VkResult retryResult = vmaCreateImage(static_cast<VmaAllocator>(ctx.getVmaAllocator()),
+                                              &ci,
+                                              &ciAlloc,
+                                              outImage,
+                                              outAllocation,
+                                              nullptr);
+
+  if (retryResult != VK_SUCCESS || *outAllocation == nullptr) {
+    IGL_LOG_INFO(
+        "vmaCreateImage retry failed: error result: %d, memflags: %d, imageformat: %d. "
+        "Continuing with null allocation.\n",
+        retryResult,
+        memFlags,
+        imageFormat);
+    return false;
+  }
+
+  IGL_LOG_INFO(
+      "vmaCreateImage retry succeeded: memflags: %d, imageformat: %d after draining "
+      "deferred tasks.\n",
+      memFlags,
+      imageFormat);
+  return true;
+}
+
+} // namespace
+
 VulkanImage::VulkanImage(const VulkanContext& ctx,
                          VkImage image,
                          const char* debugName,
@@ -90,6 +150,8 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
   isStencilFormat_(hasStencil(imageFormat)), // NOLINT(readability-identifier-naming)
   isDepthOrStencilFormat_(isDepthFormat_ || isStencilFormat_),
   isImported_(isImported) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+
   setName(debugName);
   VK_ASSERT(ivkSetDebugObjectName(
       &ctx_->vf_, device_, VK_OBJECT_TYPE_IMAGE, (uint64_t)vkImage_, debugName));
@@ -180,47 +242,7 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
                               : static_cast<VkMemoryPropertyFlags>(0),
     };
 
-    const VkResult result = vmaCreateImage(static_cast<VmaAllocator>(ctx_->getVmaAllocator()),
-                                           &ci,
-                                           &ciAlloc,
-                                           &vkImage_,
-                                           &vmaAllocation_,
-                                           nullptr);
-
-    if (result != VK_SUCCESS || vmaAllocation_ == nullptr) {
-      IGL_LOG_INFO(
-          "vmaCreateImage failed: error result: %d, memflags: %d, imageformat: %d. Retrying after "
-          "draining deferred tasks.\n",
-          result,
-          memFlags,
-          imageFormat_);
-      // Allocation failed - possibly due to memory pressure from deferred tasks not being
-      // processed. Drain deferred tasks queue to free memory and retry.
-      const_cast<VulkanContext&>(*ctx_).waitDeferredTasks();
-
-      const VkResult retryResult =
-          vmaCreateImage(static_cast<VmaAllocator>(ctx_->getVmaAllocator()),
-                         &ci,
-                         &ciAlloc,
-                         &vkImage_,
-                         &vmaAllocation_,
-                         nullptr);
-
-      if (retryResult != VK_SUCCESS || vmaAllocation_ == nullptr) {
-        IGL_LOG_INFO(
-            "vmaCreateImage retry failed: error result: %d, memflags: %d, imageformat: %d. "
-            "Continuing with null allocation.\n",
-            retryResult,
-            memFlags,
-            imageFormat_);
-      } else {
-        IGL_LOG_INFO(
-            "vmaCreateImage retry succeeded: memflags: %d, imageformat: %d after draining "
-            "deferred tasks.\n",
-            memFlags,
-            imageFormat_);
-      }
-    }
+    tryAllocateImageVma(*ctx_, ci, ciAlloc, &vkImage_, &vmaAllocation_, imageFormat_, memFlags);
 
     if (vmaAllocation_) {
       VkMemoryRequirements memRequirements;
@@ -878,6 +900,9 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
                  memoryAllocateInfo.memoryTypeIndex);
 
     VK_ASSERT(ctx_->vf_.vkAllocateMemory(device_, &memoryAllocateInfo, nullptr, &vkMemory_[p]));
+    // Record allocation size so consumers (e.g. test framework swapchains)
+    // can advertise it to memory importers.
+    allocatedSize += memoryRequirements.memoryRequirements.size;
 
     VK_ASSERT(ivkSetDebugObjectName(&ctx_->vf_,
                                     device_,
@@ -978,6 +1003,9 @@ void VulkanImage::destroy() {
       }));
     }
   }
+
+  // ycbcrConversion_ is context-owned; VulkanImage only clears its non-owning reference.
+  ycbcrConversion_ = VK_NULL_HANDLE;
 
   ctx_ = nullptr;
   vkImage_ = VK_NULL_HANDLE;
@@ -1213,10 +1241,16 @@ void VulkanImage::generateMipmap(VkCommandBuffer commandBuffer,
     const bool hardwareDownscalingSupported =
         ((formatProperties_.optimalTilingFeatures & formatFeatureMask) == formatFeatureMask);
 
-    if (!IGL_DEBUG_VERIFY(hardwareDownscalingSupported)) {
-      IGL_DEBUG_ABORT(IGL_FORMAT("Doesn't support hardware downscaling of this image format: {}",
-                                 uint32_t(imageFormat_))
-                          .c_str());
+    if (!hardwareDownscalingSupported) {
+      // Not all drivers can blit-downscale every format. In particular, KosmicKrisp (the Vulkan-to-
+      // Metal driver) cannot blit into depth images, so depth formats such as VK_FORMAT_D16_UNORM
+      // report BLIT_SRC but not BLIT_DST. Mipmap generation is implemented via vkCmdBlitImage, so
+      // there is nothing we can do here other than skip it; aborting would take down any otherwise
+      // healthy application (e.g. one rendering a mipmapped depth shadow map). Warn once and no-op.
+      IGL_LOG_ERROR_ONCE(
+          "VulkanImage::generateMipmap: skipping; image format %u does not support hardware blit "
+          "downscaling (optimalTilingFeatures missing BLIT_SRC/BLIT_DST)\n",
+          uint32_t(imageFormat_));
       return;
     }
   }
@@ -1397,12 +1431,14 @@ VulkanImage& VulkanImage::operator=(VulkanImage&& other) noexcept {
   isCoherentMemory_ = other.isCoherentMemory_;
   extendedFormat_ = other.extendedFormat_;
   samplerYcbcrConversionCreateInfo_ = other.samplerYcbcrConversionCreateInfo_;
+  ycbcrConversion_ = other.ycbcrConversion_;
   for (size_t i = 0; i != IGL_ARRAY_NUM_ELEMENTS(vkMemory_); i++) {
     vkMemory_[i] = other.vkMemory_[i];
   }
 
   other.ctx_ = nullptr;
   other.vkImage_ = VK_NULL_HANDLE;
+  other.ycbcrConversion_ = VK_NULL_HANDLE;
 
   return *this;
 }

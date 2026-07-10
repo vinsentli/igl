@@ -279,7 +279,7 @@ void TQMultiRenderPassSession::initialize() noexcept {
   shaderStages_ = getShaderStagesForBackend(device);
 
   // Command queue
-  commandQueue_ = device.createCommandQueue(CommandQueueDesc{}, nullptr);
+  commandQueue_ = device.createCommandQueue({}, nullptr);
 
   renderPass0_ = {
       .colorAttachments =
@@ -306,7 +306,7 @@ void TQMultiRenderPassSession::initialize() noexcept {
   };
 
   // init uniforms
-  fragmentParameters_ = FragmentFormat{{1.0f, 1.0f, 1.0f}};
+  fragmentParameters_ = FragmentFormat{.color = {1.0f, 1.0f, 1.0f}};
 
   fragmentParamBuffer_ = device.createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Uniform,
                                                         .data = &fragmentParameters_,
@@ -317,6 +317,11 @@ void TQMultiRenderPassSession::initialize() noexcept {
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
 void TQMultiRenderPassSession::update(SurfaceTextures surfaceTextures) noexcept {
+  // Per IGL guidelines, surfaceTextures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!surfaceTextures.color) {
+    return;
+  }
   Result ret;
   if (framebuffer0_ == nullptr) {
     const auto dimensions = surfaceTextures.color->getDimensions();

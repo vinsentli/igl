@@ -10,6 +10,7 @@
 
 #include <string>
 #include <igl/CommandBuffer.h>
+#include <igl/ComputePipelineState.h>
 #include <igl/DepthStencilState.h>
 #include <igl/NameHandle.h>
 #include <igl/RenderPipelineState.h>
@@ -87,6 +88,13 @@ TEST_F(HashTest, GraphicsPipeline1) {
 
   ASSERT_NE(std::hash<RenderPipelineDesc>()(descOne), std::hash<RenderPipelineDesc>()(descTwo));
   descTwo.shaderStages = descOne.shaderStages;
+
+  // Modify alphaToCoverageEnabled
+  descTwo.alphaToCoverageEnabled = true;
+
+  ASSERT_NE(std::hash<RenderPipelineDesc>()(descOne), std::hash<RenderPipelineDesc>()(descTwo));
+  descTwo.alphaToCoverageEnabled = descOne.alphaToCoverageEnabled;
+  ASSERT_EQ(std::hash<RenderPipelineDesc>()(descOne), std::hash<RenderPipelineDesc>()(descTwo));
 }
 
 //
@@ -107,9 +115,9 @@ TEST_F(HashTest, GraphicsPipeline2) {
     return;
   }
 
-  // 64 is the size without unitSamplerMaps, colorAttachments, and debugName as those fields may
+  // 72 is the size without unitSamplerMaps, colorAttachments, and debugName as those fields may
   // vary between compilers and machines
-  const size_t expectedSize = 64 + 2 * sizeof(std::unordered_map<size_t, std::string>) +
+  const size_t expectedSize = 72 + 2 * sizeof(std::unordered_map<size_t, std::string>) +
                               sizeof(std::unordered_map<size_t, NameHandle>) +
                               sizeof(std::vector<RenderPipelineDesc::TargetDesc::ColorAttachment>) +
                               sizeof(NameHandle) +
@@ -157,6 +165,12 @@ TEST_F(HashTest, GraphicsPipeline3) {
   descTwo.shaderStages = shaderStages_;
   ASSERT_TRUE(descOne != descTwo);
   descTwo.shaderStages = descOne.shaderStages;
+  ASSERT_TRUE(descOne == descTwo);
+
+  // Change and restore alphaToCoverageEnabled
+  descTwo.alphaToCoverageEnabled = true;
+  ASSERT_TRUE(descOne != descTwo);
+  descTwo.alphaToCoverageEnabled = descOne.alphaToCoverageEnabled;
   ASSERT_TRUE(descOne == descTwo);
 }
 
@@ -238,6 +252,77 @@ TEST_F(HashTest, DepthStencilState1) {
   descTwo.backFaceStencil.depthStencilPassOperation = StencilOperation::Replace;
   ASSERT_EQ(std::hash<DepthStencilStateDesc>()(descOne),
             std::hash<DepthStencilStateDesc>()(descTwo));
+}
+
+//
+// ComputePipeline1
+//
+// Test hashing correctness in the ComputePipelineDesc structure
+//
+TEST_F(HashTest, ComputePipeline1) {
+  ComputePipelineDesc descOne, descTwo;
+
+  // Should have the same hash
+  ASSERT_EQ(std::hash<ComputePipelineDesc>()(descOne), std::hash<ComputePipelineDesc>()(descTwo));
+
+  // Modify and restore debugName
+  descTwo.debugName = "computePipeline";
+  ASSERT_NE(std::hash<ComputePipelineDesc>()(descOne), std::hash<ComputePipelineDesc>()(descTwo));
+  descTwo.debugName = descOne.debugName;
+  ASSERT_EQ(std::hash<ComputePipelineDesc>()(descOne), std::hash<ComputePipelineDesc>()(descTwo));
+
+  // Modify and restore buffersMap
+  descTwo.buffersMap[0] = IGL_NAMEHANDLE("buffer");
+  ASSERT_NE(std::hash<ComputePipelineDesc>()(descOne), std::hash<ComputePipelineDesc>()(descTwo));
+  descTwo.buffersMap.clear();
+  ASSERT_EQ(std::hash<ComputePipelineDesc>()(descOne), std::hash<ComputePipelineDesc>()(descTwo));
+
+  // Modify and restore imagesMap
+  descTwo.imagesMap[0] = IGL_NAMEHANDLE("image");
+  ASSERT_NE(std::hash<ComputePipelineDesc>()(descOne), std::hash<ComputePipelineDesc>()(descTwo));
+  descTwo.imagesMap.clear();
+  ASSERT_EQ(std::hash<ComputePipelineDesc>()(descOne), std::hash<ComputePipelineDesc>()(descTwo));
+
+  // Modify shaderStages
+  descTwo.shaderStages = std::make_shared<TestShaderStages>();
+  ASSERT_NE(std::hash<ComputePipelineDesc>()(descOne), std::hash<ComputePipelineDesc>()(descTwo));
+  descTwo.shaderStages = descOne.shaderStages;
+}
+
+//
+// ComputePipeline2
+//
+// This test checks the "==" operator, which is a necessary complement to
+// hashing, since this is how unordered_map uses in case of collision.
+//
+TEST_F(HashTest, ComputePipeline2) {
+  ComputePipelineDesc descOne, descTwo;
+
+  ASSERT_TRUE(descOne == descTwo);
+
+  // Change and restore debugName
+  descTwo.debugName = "computePipeline";
+  ASSERT_TRUE(descOne != descTwo);
+  descTwo.debugName = descOne.debugName;
+  ASSERT_TRUE(descOne == descTwo);
+
+  // Change and restore buffersMap
+  descTwo.buffersMap[0] = IGL_NAMEHANDLE("buffer");
+  ASSERT_TRUE(descOne != descTwo);
+  descTwo.buffersMap.clear();
+  ASSERT_TRUE(descOne == descTwo);
+
+  // Change and restore imagesMap
+  descTwo.imagesMap[0] = IGL_NAMEHANDLE("image");
+  ASSERT_TRUE(descOne != descTwo);
+  descTwo.imagesMap.clear();
+  ASSERT_TRUE(descOne == descTwo);
+
+  // Change and restore shaderStages
+  descTwo.shaderStages = shaderStages_;
+  ASSERT_TRUE(descOne != descTwo);
+  descTwo.shaderStages = descOne.shaderStages;
+  ASSERT_TRUE(descOne == descTwo);
 }
 
 } // namespace igl::tests

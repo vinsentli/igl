@@ -13,7 +13,6 @@
 #import "ViewController.h"
 
 #include <shell/shared/renderSession/DefaultRenderSessionFactory.h>
-#include <shell/shared/renderSession/RenderSessionConfig.h>
 #import <igl/Common.h> // IWYU pragma: keep
 
 namespace {
@@ -144,6 +143,8 @@ NSColorSpace* colorSpaceToNSColorSpace(igl::ColorSpace colorSpace) {
       {
 #if IGL_USE_STATIC_LAVAPIPE
           .displayName = "Vulkan (Lavapipe)",
+#elif IGL_USE_STATIC_KOSMICKRISP
+          .displayName = "Vulkan (KosmicKrisp)",
 #else
           .displayName = "Vulkan",
 #endif
@@ -173,6 +174,17 @@ NSColorSpace* colorSpaceToNSColorSpace(igl::ColorSpace colorSpace) {
   for (const auto& sessionConfig : requestedSessionConfigs) {
     [self addTab:requestedWindowConfig sessionConfig:sessionConfig frame:frame];
   }
+
+#if IGL_USE_STATIC_LAVAPIPE || IGL_USE_STATIC_KOSMICKRISP
+  // A static Vulkan driver (Lavapipe or KosmicKrisp) is explicitly enabled, so default to the
+  // Vulkan tab. (When neither is enabled, the first tab — typically Metal — stays selected.)
+  for (NSInteger i = 0; i < self.tabViewController.tabViewItems.count; ++i) {
+    if ([self.tabViewController.tabViewItems[i].label hasPrefix:@"Vulkan"]) {
+      self.tabViewController.selectedTabViewItemIndex = i;
+      break;
+    }
+  }
+#endif
 }
 
 - (void)addTab:(igl::shell::RenderSessionWindowConfig)windowConfig

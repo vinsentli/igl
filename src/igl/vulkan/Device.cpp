@@ -23,6 +23,7 @@
 #include <igl/vulkan/SamplerState.h>
 #include <igl/vulkan/ShaderModule.h>
 #include <igl/vulkan/Texture.h>
+#include <igl/vulkan/TimestampQueries.h>
 #include <igl/vulkan/VulkanBuffer.h>
 #include <igl/vulkan/VulkanShaderModule.h>
 
@@ -331,6 +332,9 @@ std::shared_ptr<IShaderModule> Device::createShaderModuleInternal(const ShaderMo
     Result::setResult(outResult, std::move(result));
     return nullptr;
   }
+
+  ctx_->shaderCompilationCount_++;
+
   Result::setResult(outResult, std::move(result));
   auto shaderModule = std::make_shared<ShaderModule>(desc.info, std::move(vulkanShaderModule));
 
@@ -363,6 +367,11 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(const void* IGL_N
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
+
+  if (!data || length == 0) {
+    Result::setResult(outResult, Result::Code::ArgumentInvalid, "Shader data is null or empty");
+    return nullptr;
+  }
 
 #if IGL_SHADER_DUMP && IGL_DEBUG
   uint64_t hash = 0;
@@ -563,6 +572,32 @@ std::shared_ptr<IFramebuffer> Device::createFramebufferInternal(const Framebuffe
   return resource;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
+std::shared_ptr<ITimestampQueries> Device::createTimestampQueriesInternal(
+    uint32_t maxTimestamps,
+    Result* IGL_NULLABLE outResult) const noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+
+  IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
+
+  if (!hasFeatureInternal(DeviceFeatures::TimestampQueries)) {
+    Result::setResult(
+        outResult, Result::Code::Unsupported, "TimestampQueries unsupported by this Vulkan device");
+    return nullptr;
+  }
+
+  auto queries = std::make_shared<TimestampQueries>(*ctx_, maxTimestamps);
+  if (!queries->isValid()) {
+    Result::setResult(outResult,
+                      Result::Code::RuntimeError,
+                      "TimestampQueries: failed to create Vulkan query pool");
+    return nullptr;
+  }
+
+  Result::setOk(outResult);
+  return queries;
+}
+
 base::IFramebufferInterop* IGL_NULLABLE
 Device::createFramebufferInterop(const base::FramebufferInteropDesc& desc) {
   auto framebuffer = createFramebufferFromBaseDesc(desc);
@@ -608,6 +643,11 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibraryInternal(const Shader
       Result::setResult(outResult, Result::Code::Unsupported);
       return nullptr;
     }
+    if (!IGL_DEBUG_VERIFY(!desc.moduleInfo.empty())) {
+      Result::setResult(outResult, Result::Code::ArgumentInvalid, "moduleInfo is empty");
+      return nullptr;
+    }
+    // NOLINTNEXTLINE(facebook-hte-ParameterUncheckedArrayBounds)
     vulkanShaderModule = createShaderModule(
         desc.moduleInfo.front().stage, desc.input.source, desc.debugName, &result);
   }
@@ -649,7 +689,10 @@ bool Device::hasFeatureInternal(DeviceFeatures feature) const {
   IGL_PROFILER_FUNCTION();
 
   const VkPhysicalDevice physicalDevice = ctx_->vkPhysicalDevice_;
-  IGL_DEBUG_ASSERT(physicalDevice != VK_NULL_HANDLE);
+  if (physicalDevice == VK_NULL_HANDLE) {
+    IGL_SOFT_ERROR("VkPhysicalDevice is null");
+    return false;
+  }
   const VkPhysicalDeviceProperties& deviceProperties = ctx_->getVkPhysicalDeviceProperties();
 
   switch (feature) {
@@ -765,7 +808,8 @@ bool Device::hasFeatureInternal(DeviceFeatures feature) const {
   case DeviceFeatures::Timers:
     return false;
   case DeviceFeatures::TimestampQueries:
-    return false;
+    return deviceProperties.limits.timestampPeriod > 0.0f &&
+           (deviceProperties.limits.timestampComputeAndGraphics == VK_TRUE);
   }
 
   IGL_DEBUG_ABORT("DeviceFeatures value not handled: %d", (int)feature);

@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/ShellParams.h>
+#include <igl/CommandBuffer.h>
 #include <igl/Device.h>
 #include <igl/NameHandle.h>
 #include <igl/RenderPass.h>
@@ -194,6 +195,7 @@ TextureViewSession::TextureViewSession(std::shared_ptr<Platform> platform) :
                                                          getPlatform().getInputDispatcher());
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void TextureViewSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
 
@@ -263,7 +265,7 @@ void TextureViewSession::initialize() noexcept {
           .colorAttachments = {{.texture = texture_}},
       },
       nullptr);
-  auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
   const std::array<Color, 10> kColors = {
       Color{1, 0, 0},
       Color{0, 1, 0},
@@ -288,13 +290,19 @@ void TextureViewSession::initialize() noexcept {
             .clearColor = kColors[i % kColors.size()],
         }},
     };
-    auto commands = buffer->createRenderCommandEncoder(pass, fb);
+    const auto commands = buffer->createRenderCommandEncoder(pass, fb);
     commands->endEncoding();
   }
   commandQueue_->submit(*buffer);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void TextureViewSession::update(SurfaceTextures surfaceTextures) noexcept {
+  // Per IGL guidelines, surfaceTextures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!surfaceTextures.color) {
+    return;
+  }
   auto& device = getPlatform().getDevice();
 
   const float deltaSeconds = getDeltaSeconds();
@@ -347,7 +355,7 @@ void TextureViewSession::update(SurfaceTextures surfaceTextures) noexcept {
     IGL_DEBUG_ASSERT(ret.isOk());
   }
 
-  auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
+  const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
 
   const igl::RenderPassDesc renderPass{
       .colorAttachments = {{

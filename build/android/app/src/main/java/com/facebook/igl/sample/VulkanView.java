@@ -93,9 +93,11 @@ public class VulkanView extends SurfaceView
 
     RenderHandler rh = mRenderThread.getHandler();
     if (rh != null) {
+      // Send surface created — the RenderThread will call init() and then decide
+      // whether to enter headless (unrestricted) or vsync (Choreographer) mode.
+      // We cannot check isHeadless() here because init() runs asynchronously on
+      // the RenderThread and hasn't read shell params yet.
       rh.sendSurfaceCreated();
-      // start the draw events
-      Choreographer.getInstance().postFrameCallback(this);
     }
   }
 
@@ -203,6 +205,21 @@ public class VulkanView extends SurfaceView
       Surface surface = mSurfaceHolder.getSurface();
       SampleLib.init(
           mBackendVersion, mSwapchainColorTextureFormat, mContext.getAssets(), surface, mIntent);
+
+      // Now that init() has completed and shell params are read, decide render mode.
+      if (SampleLib.isHeadless()) {
+        // Headless: enter unrestricted render loop directly on this thread
+        startUnrestrictedLoop();
+      } else {
+        // Normal: kick off vsync-driven rendering via Choreographer on the UI thread
+        new Handler(Looper.getMainLooper())
+            .post(
+                () -> {
+                  if (mRenderThread != null) {
+                    Choreographer.getInstance().postFrameCallback(VulkanView.this);
+                  }
+                });
+      }
     }
 
     public void surfaceChanged(int width, int height) {
@@ -238,6 +255,26 @@ public class VulkanView extends SurfaceView
         }
         android.util.Log.i("igl", "[IGL Benchmark] Java: Exiting process");
         System.exit(0);
+      }
+    }
+
+    /** Run an unrestricted render loop (no vsync gating) for headless benchmarks. */
+    private void startUnrestrictedLoop() {
+      Log.i(TAG, "Starting unrestricted render loop (headless mode)");
+      float density = mContext.getResources().getDisplayMetrics().density;
+      while (true) {
+        boolean shouldExit = SampleLib.render(density);
+        if (shouldExit) {
+          android.util.Log.i(
+              "igl", "[IGL Benchmark] Java: Benchmark complete, waiting for logs to flush...");
+          try {
+            Thread.sleep(2000);
+          } catch (InterruptedException e) {
+            // Ignore
+          }
+          android.util.Log.i("igl", "[IGL Benchmark] Java: Exiting process");
+          System.exit(0);
+        }
       }
     }
 

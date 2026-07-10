@@ -286,12 +286,12 @@ namespace igl::shell {
 
 void BindGroupSession::createSamplerAndTextures(const igl::IDevice& device) {
   // Sampler & Texture
-  auto sampler = device.createSamplerState(SamplerStateDesc::newLinearMipmapped(), nullptr);
+  const auto sampler = device.createSamplerState(SamplerStateDesc::newLinearMipmapped(), nullptr);
 
   std::shared_ptr<ITexture> tex0, tex1;
 
   {
-    auto imageData = getPlatform().getImageLoader().loadImageData("igl.png");
+    const auto imageData = getPlatform().getImageLoader().loadImageData("igl.png");
     TextureDesc desc = igl::TextureDesc::new2D(igl::TextureFormat::RGBA_UNorm8,
                                                imageData.desc.width,
                                                imageData.desc.height,
@@ -398,6 +398,11 @@ void BindGroupSession::initialize() noexcept {
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
 void BindGroupSession::update(SurfaceTextures surfaceTextures) noexcept {
+  // Per IGL guidelines, surfaceTextures.color may be null on some platforms
+  // before the surface is ready (e.g., during window resize on Android/iOS).
+  if (!surfaceTextures.color) {
+    return;
+  }
   auto& device = getPlatform().getDevice();
 
   const float deltaSeconds = getDeltaSeconds();

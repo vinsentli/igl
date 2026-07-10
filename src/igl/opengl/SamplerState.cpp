@@ -60,29 +60,8 @@ void SamplerState::bind(ITexture* t) {
   // depth and stencil format (see table 8.14), the value of TEXTURE_COMPARE_MODE is NONE , and
   // either the magnification filter is not NEAREST or the minification filter is neither
   // NEAREST nor NEAREST_MIPMAP_NEAREST.
-  if (!depthCompareEnabled_ && isDepthOrDepthStencil && minMipFilter_ != GL_NEAREST &&
-      minMipFilter_ != GL_NEAREST_MIPMAP_NEAREST) {
-    IGL_LOG_INFO_ONCE(
-        "OpenGL requires a GL_NEAREST or NEAREST_MIPMAP_NEAREST min filter for depth/stencil "
-        "samplers when DepthCompareEnabled is false, falling back to supported mode instead of "
-        "requested format.");
-    auto supportedMode = GL_NEAREST;
-    if (minMipFilter_ == GL_LINEAR_MIPMAP_NEAREST || minMipFilter_ == GL_NEAREST_MIPMAP_LINEAR ||
-        minMipFilter_ == GL_LINEAR_MIPMAP_LINEAR) {
-      supportedMode = GL_NEAREST_MIPMAP_NEAREST;
-    }
-    getContext().texParameteri(target, GL_TEXTURE_MIN_FILTER, supportedMode);
-  } else {
-    getContext().texParameteri(target, GL_TEXTURE_MIN_FILTER, minMipFilter_);
-  }
-  if (!depthCompareEnabled_ && isDepthOrDepthStencil && magFilter_ != GL_NEAREST) {
-    IGL_LOG_INFO_ONCE(
-        "OpenGL requires a GL_NEAREST mag filter for depth/stencil samplers when "
-        "DepthCompareEnabled is false, falling back to GL_NEAREST instead of requested format.");
-    getContext().texParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  } else {
-    getContext().texParameteri(target, GL_TEXTURE_MAG_FILTER, magFilter_);
-  }
+  applyMinFilter(target, isDepthOrDepthStencil);
+  applyMagFilter(target, isDepthOrDepthStencil);
 
   // See https://www.khronos.org/registry/OpenGL-Refpages/gl2.1/xhtml/glTexParameter.xml
   // for OpenGL version information.
@@ -97,6 +76,7 @@ void SamplerState::bind(ITexture* t) {
     // @fb-only
     // Disable the anisotropic filter for now, it's causing a crash on some devices
 #if 1
+    // Facebook关闭了anisotropic filter，腾讯地图渲染引擎需要打开anisotropic filter。
     getContext().texParameteri(target, GL_TEXTURE_MAX_ANISOTROPY, maxAnisotropy_);
 #else
     (void)maxAnisotropy_;
@@ -112,20 +92,9 @@ void SamplerState::bind(ITexture* t) {
   }
 
   // Fall back to GL_CLAMP_TO_EDGE when GL_CLAMP_TO_BORDER is not supported
-  GLint wrapS = addressU_;
-  GLint wrapT = addressV_;
-  GLint wrapR = addressW_;
-  if (!deviceFeatures.hasInternalFeature(InternalFeatures::TextureClampToBorder)) {
-    if (wrapS == GL_CLAMP_TO_BORDER) {
-      wrapS = GL_CLAMP_TO_EDGE;
-    }
-    if (wrapT == GL_CLAMP_TO_BORDER) {
-      wrapT = GL_CLAMP_TO_EDGE;
-    }
-    if (wrapR == GL_CLAMP_TO_BORDER) {
-      wrapR = GL_CLAMP_TO_EDGE;
-    }
-  }
+  const GLint wrapS = resolveWrapMode(addressU_);
+  const GLint wrapT = resolveWrapMode(addressV_);
+  const GLint wrapR = resolveWrapMode(addressW_);
 
   if (!deviceFeatures.hasFeature(DeviceFeatures::TextureNotPot)) {
     const auto dimensions = texture->getDimensions();
@@ -146,6 +115,43 @@ void SamplerState::bind(ITexture* t) {
   }
 }
 
+void SamplerState::applyMinFilter(GLint target, bool isDepthOrDepthStencil) const {
+  if (!depthCompareEnabled_ && isDepthOrDepthStencil && minMipFilter_ != GL_NEAREST &&
+      minMipFilter_ != GL_NEAREST_MIPMAP_NEAREST) {
+    IGL_LOG_INFO_ONCE(
+        "OpenGL requires a GL_NEAREST or NEAREST_MIPMAP_NEAREST min filter for depth/stencil "
+        "samplers when DepthCompareEnabled is false, falling back to supported mode instead of "
+        "requested format.");
+    const auto supportedMode =
+        (minMipFilter_ == GL_LINEAR_MIPMAP_NEAREST || minMipFilter_ == GL_NEAREST_MIPMAP_LINEAR ||
+         minMipFilter_ == GL_LINEAR_MIPMAP_LINEAR)
+            ? GL_NEAREST_MIPMAP_NEAREST
+            : GL_NEAREST;
+    getContext().texParameteri(target, GL_TEXTURE_MIN_FILTER, supportedMode);
+  } else {
+    getContext().texParameteri(target, GL_TEXTURE_MIN_FILTER, minMipFilter_);
+  }
+}
+
+void SamplerState::applyMagFilter(GLint target, bool isDepthOrDepthStencil) const {
+  if (!depthCompareEnabled_ && isDepthOrDepthStencil && magFilter_ != GL_NEAREST) {
+    IGL_LOG_INFO_ONCE(
+        "OpenGL requires a GL_NEAREST mag filter for depth/stencil samplers when "
+        "DepthCompareEnabled is false, falling back to GL_NEAREST instead of requested format.");
+    getContext().texParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  } else {
+    getContext().texParameteri(target, GL_TEXTURE_MAG_FILTER, magFilter_);
+  }
+}
+
+GLint SamplerState::resolveWrapMode(GLint wrap) const {
+  if (!getContext().deviceFeatures().hasInternalFeature(InternalFeatures::TextureClampToBorder) &&
+      wrap == GL_CLAMP_TO_BORDER) {
+    return GL_CLAMP_TO_EDGE;
+  }
+  return wrap;
+}
+
 // utility functions for converting from IGL sampler state enums to GL enums
 GLint SamplerState::convertMinMipFilter(SamplerMinMagFilter minFilter, SamplerMipFilter mipFilter) {
   switch (mipFilter) {
@@ -159,9 +165,11 @@ GLint SamplerState::convertMinMipFilter(SamplerMinMagFilter minFilter, SamplerMi
   case SamplerMipFilter::Linear:
     return (minFilter == SamplerMinMagFilter::Nearest) ? GL_NEAREST_MIPMAP_LINEAR
                                                        : GL_LINEAR_MIPMAP_LINEAR;
-  }
 
-  return 0;
+  default:
+    IGL_DEBUG_ASSERT_NOT_REACHED();
+    return 0;
+  }
 }
 
 GLint SamplerState::convertMagFilter(SamplerMinMagFilter magFilter) {
@@ -227,9 +235,11 @@ GLint SamplerState::convertAddressMode(SamplerAddressMode addressMode) {
 
   case SamplerAddressMode::ClampToBorder:
     return GL_CLAMP_TO_BORDER;
-  }
 
-  return 0;
+  default:
+    IGL_DEBUG_ASSERT_NOT_REACHED();
+    return 0;
+  }
 }
 
 SamplerAddressMode SamplerState::convertGLAddressMode(GLint glAddressMode) {

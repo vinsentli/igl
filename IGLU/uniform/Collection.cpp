@@ -35,6 +35,7 @@ void Collection::clear(const igl::NameHandle& name) {
   descriptors_.erase(name);
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 std::vector<igl::NameHandle> Collection::getNames() const noexcept {
   IGL_LOG_INFO_ONCE("Collection::getNames() is deprecated. Use Collection::names() instead\n");
   std::vector<igl::NameHandle> ret;

@@ -24,7 +24,9 @@ namespace iglu::imgui {
 #define PLAIN_SHADER_STRINGIFY(...) #__VA_ARGS__
 #define PLAIN_SHADER(...) PLAIN_SHADER_STRINGIFY(__VA_ARGS__)
 
-static const char* metalShaderStr() {
+namespace {
+
+const char* metalShaderStr() {
   return PLAIN_SHADER(
       using namespace metal;
 
@@ -62,7 +64,7 @@ static const char* metalShaderStr() {
   );
 }
 
-static std::string getOpenGLVertexShaderSource(igl::ShaderVersion shaderVersion) {
+std::string getOpenGLVertexShaderSource(igl::ShaderVersion shaderVersion) {
   std::string shader;
   if (shaderVersion.majorVersion > 1 || shaderVersion.minorVersion > 30 ||
       shaderVersion.family == igl::ShaderFamily::GlslEs) {
@@ -83,7 +85,7 @@ static std::string getOpenGLVertexShaderSource(igl::ShaderVersion shaderVersion)
 
   return shader;
 }
-static const char* getVulkanVertexShaderSource() {
+const char* getVulkanVertexShaderSource() {
   return R"(
 layout(location = 0) in vec2 position;
 layout(location = 1) in vec2 texCoords;
@@ -105,7 +107,7 @@ void main() {
 })";
 }
 
-static std::string getOpenGLFragmentShaderSource(igl::ShaderVersion shaderVersion) {
+std::string getOpenGLFragmentShaderSource(igl::ShaderVersion shaderVersion) {
   std::string shader;
   if (shaderVersion.majorVersion > 1 || shaderVersion.minorVersion > 30 ||
       shaderVersion.family == igl::ShaderFamily::GlslEs) {
@@ -119,7 +121,7 @@ static std::string getOpenGLFragmentShaderSource(igl::ShaderVersion shaderVersio
                    void main() { gl_FragColor = Frag_Color * texture2D(texture, Frag_UV.st); });
   return shader;
 }
-static const char* getVulkanFragmentShaderSource() {
+const char* getVulkanFragmentShaderSource() {
   return R"(
 layout(location = 0) out vec4 fColor;
 layout(location = 0) in vec4 color;
@@ -135,7 +137,7 @@ void main() {
 // Note: D3D12 shader source functions are kept for reference but not used.
 // The D3D12 backend uses pre-compiled binary shaders.
 #if IGL_PLATFORM_WINDOWS
-static const char* getD3D12VertexShaderSource() {
+const char* getD3D12VertexShaderSource() {
   return R"(
 cbuffer Uniforms : register(b0) {
   float4x4 projectionMatrix;
@@ -164,7 +166,7 @@ PSInput main(VSInput input) {
 })";
 }
 
-static const char* getD3D12FragmentShaderSource() {
+const char* getD3D12FragmentShaderSource() {
   return R"(
 struct PSInput {
   float4 position : SV_Position;
@@ -181,7 +183,7 @@ float4 main(PSInput input) : SV_Target {
 }
 #endif
 
-static std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
+std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
   igl::Result result;
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
@@ -230,6 +232,8 @@ static std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevic
   IGL_UNREACHABLE_RETURN(nullptr)
 }
 
+} // namespace
+
 namespace {
 struct DrawableData {
   std::shared_ptr<iglu::vertexdata::VertexData> vertexData;
@@ -260,10 +264,20 @@ struct DrawableData {
     iglu::vertexdata::PrimitiveDesc primitiveDesc;
     primitiveDesc.numEntries = 0;
 
+    // Per IGL Error Handling rule #24, every resource creation call must pass
+    // a Result* and check it; passing nullptr silently swallows errors.
+    igl::Result result;
+    auto vb = device.createBuffer(vbDesc, &result);
+    IGL_DEBUG_ASSERT(result.isOk(), "createBuffer(vertex) failed: %s", result.message.c_str());
+    IGL_DEBUG_ASSERT(vb != nullptr);
+    auto ib = device.createBuffer(ibDesc, &result);
+    IGL_DEBUG_ASSERT(result.isOk(), "createBuffer(index) failed: %s", result.message.c_str());
+    IGL_DEBUG_ASSERT(ib != nullptr);
+
     vertexData = std::make_shared<iglu::vertexdata::VertexData>(
         inputState,
-        device.createBuffer(vbDesc, nullptr),
-        device.createBuffer(ibDesc, nullptr),
+        std::move(vb),
+        std::move(ib),
         sizeof(ImDrawIdx) == sizeof(uint16_t) ? igl::IndexFormat::UInt16 : igl::IndexFormat::UInt32,
         primitiveDesc);
 
@@ -303,7 +317,12 @@ Session::Renderer::Renderer(igl::IDevice& device) {
   ImGuiIO& io = ImGui::GetIO();
   io.BackendRendererName = "imgui_impl_igl";
 
-  linearSampler_ = device.createSamplerState(igl::SamplerStateDesc::newLinear(), nullptr);
+  // Per IGL Error Handling rule #24, every resource creation call must pass a
+  // Result* and check it; passing nullptr silently swallows errors.
+  igl::Result result;
+  linearSampler_ = device.createSamplerState(igl::SamplerStateDesc::newLinear(), &result);
+  IGL_DEBUG_ASSERT(result.isOk(), "createSamplerState() failed: %s", result.message.c_str());
+  IGL_DEBUG_ASSERT(linearSampler_ != nullptr);
 
   { // init fonts
     unsigned char* pixels = nullptr;
@@ -314,39 +333,47 @@ Session::Renderer::Renderer(igl::IDevice& device) {
                                                     height,
                                                     igl::TextureDesc::TextureUsageBits::Sampled);
     desc.debugName = "IGLU/imgui/Session.cpp:Session::Renderer::_fontTexture";
-    fontTexture_ = device.createTexture(desc, nullptr);
+    fontTexture_ = device.createTexture(desc, &result);
+    IGL_DEBUG_ASSERT(result.isOk(), "createTexture() failed: %s", result.message.c_str());
+    IGL_DEBUG_ASSERT(fontTexture_ != nullptr);
+    if (!fontTexture_) {
+      return;
+    }
     fontTexture_->upload(igl::TextureRangeDesc::new2D(0, 0, width, height), pixels);
 
     io.Fonts->TexID = reinterpret_cast<ImTextureID>(fontTexture_.get());
   }
 
   {
-    igl::VertexInputStateDesc inputDesc;
-    inputDesc.numAttributes = 3;
-    inputDesc.attributes[0] = igl::VertexAttribute{
-        .bufferIndex = 0,
-        .format = igl::VertexAttributeFormat::Float2,
-        .offset = offsetof(ImDrawVert, pos),
-        .name = "position",
-        .location = 0,
+    const igl::VertexInputStateDesc inputDesc = {
+        .numAttributes = 3,
+        .attributes = {{
+                           .bufferIndex = 0,
+                           .format = igl::VertexAttributeFormat::Float2,
+                           .offset = offsetof(ImDrawVert, pos),
+                           .name = "position",
+                           .location = 0,
+                       },
+                       {
+                           .bufferIndex = 0,
+                           .format = igl::VertexAttributeFormat::Float2,
+                           .offset = offsetof(ImDrawVert, uv),
+                           .name = "texCoords",
+                           .location = 1,
+                       },
+                       {
+                           .bufferIndex = 0,
+                           .format = igl::VertexAttributeFormat::UByte4Norm,
+                           .offset = offsetof(ImDrawVert, col),
+                           .name = "color",
+                           .location = 2,
+                       }},
+        .numInputBindings = 1,
+        .inputBindings = {{.stride = sizeof(ImDrawVert)}},
     };
-    inputDesc.attributes[1] = igl::VertexAttribute{
-        .bufferIndex = 0,
-        .format = igl::VertexAttributeFormat::Float2,
-        .offset = offsetof(ImDrawVert, uv),
-        .name = "texCoords",
-        .location = 1,
-    };
-    inputDesc.attributes[2] = igl::VertexAttribute{
-        .bufferIndex = 0,
-        .format = igl::VertexAttributeFormat::UByte4Norm,
-        .offset = offsetof(ImDrawVert, col),
-        .name = "color",
-        .location = 2,
-    };
-    inputDesc.numInputBindings = 1;
-    inputDesc.inputBindings[0].stride = sizeof(ImDrawVert);
-    vertexInputState_ = device.createVertexInputState(inputDesc, nullptr);
+    vertexInputState_ = device.createVertexInputState(inputDesc, &result);
+    IGL_DEBUG_ASSERT(result.isOk(), "createVertexInputState() failed: %s", result.message.c_str());
+    IGL_DEBUG_ASSERT(vertexInputState_ != nullptr);
   }
 
   {
@@ -371,7 +398,7 @@ Session::Renderer::Renderer(igl::IDevice& device) {
 Session::Renderer::~Renderer() {
   const ImGuiIO& io = ImGui::GetIO();
   fontTexture_ = nullptr;
-  io.Fonts->TexID = 0;
+  io.Fonts->TexID = (ImTextureID)0;
 }
 
 void Session::Renderer::newFrame(const igl::FramebufferDesc& desc) {
@@ -461,7 +488,7 @@ void Session::Renderer::renderDrawData(igl::IDevice& device,
   const bool isD3D12 = device.getBackendType() == igl::BackendType::D3D12;
   const bool usesDirectBinding = isVulkan || isD3D12;
 
-  ImTextureID lastBoundTextureId = 0;
+  auto lastBoundTextureId = (ImTextureID)0;
 
   for (int n = 0; n < drawData->CmdListsCount; n++) {
     const ImDrawList* cmdList = drawData->CmdLists[n];
@@ -499,9 +526,10 @@ void Session::Renderer::renderDrawData(igl::IDevice& device,
                                   .height = uint32_t(clipMax.y - clipMin.y)};
       cmdEncoder.bindScissorRect(rect);
 
-      if (cmd.TextureId != lastBoundTextureId) {
-        lastBoundTextureId = cmd.TextureId;
-        auto* tex = reinterpret_cast<igl::ITexture*>((ImTextureID)(intptr_t)cmd.TextureId);
+      if (cmd.GetTexID() != lastBoundTextureId) {
+        lastBoundTextureId = cmd.GetTexID();
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto* tex = reinterpret_cast<igl::ITexture*>((ImTextureID)(intptr_t)cmd.GetTexID());
         if (usesDirectBinding) {
           // D3D12 and Vulkan use direct slot binding
           // Add Vulkan support for texture reflection info in ShaderUniforms so we don't need to
@@ -618,7 +646,7 @@ void Session::drawFPS(float fps) const {
   ImGui::SetNextWindowBgAlpha(0.30f);
   ImGui::SetNextWindowSize(ImVec2(ImGui::CalcTextSize("FPS : _______").x, 0));
   if (ImGui::Begin("##FPS", nullptr, flags)) {
-    ImGui::Text("FPS : %i", (int)fps);
+    ImGui::Text("FPS : %i", static_cast<int>(fps));
     ImGui::Text("Ms  : %.1f", 1000.0 / fps);
   }
   ImGui::End();

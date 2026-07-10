@@ -7,6 +7,7 @@
 
 #include "Common.h"
 
+// NOLINTNEXTLINE(facebook-unused-include-check) used on Linux (kPreloadLibs, libs arrays)
 #include <array>
 #include <cstdlib>
 
@@ -32,6 +33,13 @@
 #include <igl/vulkan/util/SpvReflection.h>
 #include <igl/vulkan/util/TextureFormat.h>
 
+#if defined(IGL_USE_STATIC_KOSMICKRISP)
+// KosmicKrisp (Mesa Vulkan-to-Metal driver) is statically linked on macOS and exposes its
+// loader through kk_GetInstanceProcAddr instead of the standard vkGetInstanceProcAddr symbol.
+extern "C" VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL kk_GetInstanceProcAddr(VkInstance instance,
+                                                                           const char* pName);
+#endif
+
 namespace igl::vulkan {
 
 Result getResultFromVkResult(VkResult result) {
@@ -41,6 +49,7 @@ Result getResultFromVkResult(VkResult result) {
 
   Result res(Result::Code::RuntimeError, ivkGetVulkanResultString(result));
 
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (result) {
   case VK_ERROR_LAYER_NOT_PRESENT:
   case VK_ERROR_EXTENSION_NOT_PRESENT:
@@ -72,6 +81,7 @@ void setResultFrom(Result* IGL_NULLABLE outResult, VkResult result) {
 }
 
 VkFormat invertRedAndBlue(VkFormat format) {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (format) {
   case VK_FORMAT_B8G8R8A8_UNORM:
     return VK_FORMAT_R8G8B8A8_UNORM;
@@ -429,6 +439,7 @@ VkColorSpaceKHR colorSpaceToVkColorSpace(ColorSpace colorSpace) {
 }
 
 ColorSpace vkColorSpaceToColorSpace(VkColorSpaceKHR colorSpace) {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (colorSpace) {
   case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR:
     return ColorSpace::SRGBNonlinear;
@@ -710,6 +721,7 @@ VkComponentMapping componentMappingToVkComponentMapping(const ComponentMapping& 
 }
 
 uint32_t getNumImagePlanes(VkFormat format) {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (format) {
   case VK_FORMAT_UNDEFINED:
     return 0;
@@ -765,8 +777,13 @@ VkSpecializationInfo buildSpecializationInfo(const FunctionConstantValues& const
 namespace igl::vulkan::functions {
 
 namespace {
+// NOLINTNEXTLINE(facebook-hte-NullableReturn)
 PFN_vkGetInstanceProcAddr getVkGetInstanceProcAddr() {
-#if defined(FORCE_USE_STATIC_VULKAN_LOADER) && !defined(FORCE_USE_STATIC_VULKAN_LOADER_DISABLED)
+#if defined(IGL_USE_STATIC_KOSMICKRISP)
+  // KosmicKrisp is statically linked — no dlopen, no ICD, no Vulkan loader. Route every
+  // entry point through the driver's own kk_GetInstanceProcAddr (mirrors LVK's KK path).
+  return reinterpret_cast<PFN_vkGetInstanceProcAddr>(&kk_GetInstanceProcAddr);
+#elif defined(FORCE_USE_STATIC_VULKAN_LOADER) && !defined(FORCE_USE_STATIC_VULKAN_LOADER_DISABLED)
   return nullptr;
 #elif defined(_WIN32)
   HMODULE lib = LoadLibraryA("vulkan-1.dll");

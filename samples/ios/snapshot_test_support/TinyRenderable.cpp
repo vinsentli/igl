@@ -198,23 +198,31 @@ void TinyRenderable::initialize(igl::IDevice& device, const igl::IFramebuffer& f
   IGL_DEBUG_ASSERT(result.isOk(), "create buffer failed: %s\n", result.message.c_str());
 
   // Vertex input state
-  igl::VertexInputStateDesc inputDesc;
-  inputDesc.numAttributes = 2;
-  inputDesc.attributes[0] = igl::VertexAttribute(
-      0, igl::VertexAttributeFormat::Float3, offsetof(VertexPosUv, position), "position", 0);
-  inputDesc.attributes[1] = igl::VertexAttribute(
-      0, igl::VertexAttributeFormat::Float2, offsetof(VertexPosUv, uv), "uv_in", 1);
-  inputDesc.numInputBindings = 1;
-  inputDesc.inputBindings[0].stride = sizeof(VertexPosUv);
+  const igl::VertexInputStateDesc inputDesc = {
+      .numAttributes = 2,
+      .attributes = {{.bufferIndex = 0,
+                      .format = igl::VertexAttributeFormat::Float3,
+                      .offset = offsetof(VertexPosUv, position),
+                      .name = "position",
+                      .location = 0},
+                     {.bufferIndex = 0,
+                      .format = igl::VertexAttributeFormat::Float2,
+                      .offset = offsetof(VertexPosUv, uv),
+                      .name = "uv_in",
+                      .location = 1}},
+      .numInputBindings = 1,
+      .inputBindings = {{.stride = sizeof(VertexPosUv)}},
+  };
   vertexInput_ = device.createVertexInputState(inputDesc, &result);
   IGL_DEBUG_ASSERT(result.isOk(), "create vertex state failed: %s\n", result.message.c_str());
 
   // Sampler & Texture
-  igl::SamplerStateDesc samplerDesc;
-  samplerDesc.addressModeU = igl::SamplerAddressMode::Repeat;
-  samplerDesc.addressModeV = igl::SamplerAddressMode::Repeat;
-  samplerDesc.minFilter = samplerDesc.magFilter = igl::SamplerMinMagFilter::Nearest;
-  samplerDesc.magFilter = samplerDesc.magFilter = igl::SamplerMinMagFilter::Nearest;
+  const igl::SamplerStateDesc samplerDesc{
+      .minFilter = igl::SamplerMinMagFilter::Nearest,
+      .magFilter = igl::SamplerMinMagFilter::Nearest,
+      .addressModeU = igl::SamplerAddressMode::Repeat,
+      .addressModeV = igl::SamplerAddressMode::Repeat,
+  };
   sampler_ = device.createSamplerState(samplerDesc, nullptr);
   texture_ = createCheckerboardTexture(device);
 
@@ -224,7 +232,7 @@ void TinyRenderable::initialize(igl::IDevice& device, const igl::IFramebuffer& f
   auto indices = framebuffer.getColorAttachmentIndices();
   IGL_DEBUG_ASSERT(!indices.empty());
   graphicsDesc.targetDesc.colorAttachments.resize(1);
-  auto textureFormat = framebuffer.getColorAttachment(indices[0])->getProperties().format;
+  const auto textureFormat = framebuffer.getColorAttachment(indices[0])->getProperties().format;
   graphicsDesc.targetDesc.colorAttachments[0].textureFormat = textureFormat;
   graphicsDesc.targetDesc.colorAttachments[0].blendEnabled = true;
   graphicsDesc.targetDesc.colorAttachments[0].rgbBlendOp = igl::BlendOp::Add;
