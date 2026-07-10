@@ -236,10 +236,11 @@ void ResourcesBinder::updateBindingsByDescriptorBuffer(VkPipelineLayout layout,
     ctx_.updateBindingsBuffersByDescriptorBuffer(cmdBuffer_,
                                                  layout,
                                                  bindPoint_,
+                                                 kBindPoint_Buffers,
                                                  nextSubmitHandle_,
                                                  bindingsBuffers_,
                                                  *state.dslBuffers,
-                                                 state.info);
+                                                 state.info.buffers);
   }
   if (isDirtyFlags_ & DirtyFlagBits_StorageImages) {
     ctx_.updateBindingsStorageImagesByDescriptorBuffer(cmdBuffer_,
@@ -284,10 +285,11 @@ void ResourcesBinder::updateBindingsByDescriptorSet(VkPipelineLayout layout,
     ctx_.updateBindingsBuffers(cmdBuffer_,
                                layout,
                                bindPoint_,
+                               kBindPoint_Buffers,
                                nextSubmitHandle_,
                                bindingsBuffers_,
                                *state.dslBuffers,
-                               state.info);
+                               state.info.buffers);
   }
   if (isDirtyFlags_ & DirtyFlagBits_StorageImages) {
     ctx_.updateBindingsStorageImages(cmdBuffer_,
