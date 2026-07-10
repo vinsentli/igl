@@ -2290,49 +2290,90 @@ void VulkanContext::updateBindingsStorageImages(
       cmdBuf, bindPoint, layout, kBindPoint_StorageImages, 1, &dset, 0, nullptr);
 }
 
-void VulkanContext::updateBindingsBuffers(VkCommandBuffer IGL_NONNULL cmdBuf,
-                                          VkPipelineLayout layout,
-                                          VkPipelineBindPoint bindPoint,
-                                          VulkanImmediateCommands::SubmitHandle nextSubmitHandle,
-                                          BindingsBuffers& data,
-                                          const VulkanDescriptorSetLayout& dsl,
-                                          const util::SpvModuleInfo& info) const {
+void VulkanContext::updateBindingsBuffers(
+    VkCommandBuffer IGL_NONNULL cmdBuf,
+    VkPipelineLayout layout,
+    VkPipelineBindPoint bindPoint,
+    uint32_t descriptorSet,
+    VulkanImmediateCommands::SubmitHandle nextSubmitHandle,
+    BindingsBuffers& data,
+    const VulkanDescriptorSetLayout& dsl,
+    const std::vector<util::BufferDescription>& info) const {
   IGL_PROFILER_FUNCTION();
+  if (info.empty()) {
+    return;
+  }
 
-  DescriptorPoolsArena& arena =
-      pimpl_->getOrCreateArena_Buffers(*this, dsl.getVkDescriptorSetLayout(), dsl.numBindings);
+  auto expectBufferCount = std::count_if(info.begin(), info.end(),[descriptorSet](const util::BufferDescription& buffer){
+      return buffer.descriptorSet == descriptorSet;
+  });
 
-  VkDescriptorSet dset = arena.getNextDescriptorSet(*immediate_, nextSubmitHandle);
+  if (!expectBufferCount) return;
 
+  auto& arena =
+      pimpl_->getOrCreateArena_Buffers(*this, dsl.getVkDescriptorSetLayout(), dsl.numBindings, true);
+
+  BuffersKey key{};
+  // Parallel to key.slots[], but not part of the cache key (see BuffersKey comment).
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  VkWriteDescriptorSet writes[IGL_UNIFORM_BLOCKS_BINDING_MAX]; // uninitialized
-  uint32_t numWrites = 0;
+  bool slotIsStorage[IGL_UNIFORM_BLOCKS_BINDING_MAX] = {};
 
-  for (const util::BufferDescription& b : info.buffers) {
-    IGL_DEBUG_ASSERT(b.descriptorSet == kBindPoint_Buffers);
+  std::array<uint32_t, IGL_UNIFORM_BLOCKS_BINDING_MAX> offsets{};
+  uint32_t bufferCount = 0;
+
+  for (const util::BufferDescription& b : info) {
+    if (b.descriptorSet != descriptorSet)
+      continue;
     IGL_DEBUG_ASSERT(
         data.buffers[b.bindingLocation].buffer != VK_NULL_HANDLE,
         IGL_FORMAT("Did you forget to call bindBuffer() for a buffer at the binding location {}?",
                    b.bindingLocation)
             .c_str());
-    writes[numWrites++] = ivkGetWriteDescriptorSetBufferInfo(
-        dset,
-        b.bindingLocation,
-        b.isStorage ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        1,
-        &data.buffers[b.bindingLocation]);
+
+    slotIsStorage[key.count] = b.isStorage;
+    auto& s = key.slots[key.count++];
+    s.binding = b.bindingLocation;
+    s.buffer = data.buffers[b.bindingLocation].buffer;
+    s.offset = 0;
+    s.range = data.buffers[b.bindingLocation].range;
+
+    offsets[bufferCount++] = data.buffers[b.bindingLocation].offset;
   }
 
-  if (numWrites) {
-    IGL_PROFILER_ZONE("vkUpdateDescriptorSets()", IGL_PROFILER_COLOR_UPDATE);
-    vf_.vkUpdateDescriptorSets(vkDevice_, numWrites, writes, 0, nullptr);
-    IGL_PROFILER_ZONE_END();
+  auto [dset, isFresh] = arena.acquireDescriptorSet(*immediate_, nextSubmitHandle, key);
 
+  if (isFresh) {
+    // NOLINTNEXTLINE(modernize-avoid-c-arrays)
+    VkWriteDescriptorSet writes[IGL_UNIFORM_BLOCKS_BINDING_MAX]; // uninitialized
+    uint32_t numWrites = 0;
+
+    auto cloneData = data;
+
+    for (uint32_t i = 0; i < key.count; ++i) {
+      const auto& s = key.slots[i];
+      cloneData.buffers[s.binding].offset = 0;
+      writes[numWrites++] = ivkGetWriteDescriptorSetBufferInfo(
+          dset,
+          s.binding,
+          slotIsStorage[i] ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
+                           : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+          1,
+          &cloneData.buffers[s.binding]);
+    }
+
+    if (numWrites) {
+      IGL_PROFILER_ZONE("vkUpdateDescriptorSets()", IGL_PROFILER_COLOR_UPDATE);
+      vf_.vkUpdateDescriptorSets(vkDevice_, numWrites, writes, 0, nullptr);
+      IGL_PROFILER_ZONE_END();
+    }
+  }
+
+  if (dset) {
 #if IGL_VULKAN_PRINT_COMMANDS
     IGL_LOG_INFO("%p vkCmdBindDescriptorSets(%u) - buffers\n", cmdBuf, bindPoint);
 #endif // IGL_VULKAN_PRINT_COMMANDS
     vf_.vkCmdBindDescriptorSets(
-        cmdBuf, bindPoint, layout, kBindPoint_Buffers, 1, &dset, 0, nullptr);
+        cmdBuf, bindPoint, layout, descriptorSet, 1, &dset, bufferCount, offsets.data());
   }
 }
 

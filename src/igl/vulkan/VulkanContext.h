@@ -21,6 +21,7 @@
 #include <igl/vulkan/VulkanQueuePool.h>
 #include <igl/vulkan/VulkanRenderPassBuilder.h>
 #include <igl/vulkan/VulkanStagingDevice.h>
+#include <igl/vulkan/util/SpvReflection.h>
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 struct AHardwareBuffer;
@@ -393,12 +394,13 @@ private:
                               const VulkanDescriptorSetLayout& dsl,
                               const util::SpvModuleInfo& info) const;
   void updateBindingsBuffers(VkCommandBuffer IGL_NONNULL cmdBuf,
-                             VkPipelineLayout IGL_NULLABLE layout,
-                             VkPipelineBindPoint  bindPoint,
+                             VkPipelineLayout layout,
+                             VkPipelineBindPoint bindPoint,
+                             uint32_t descriptorSet,
                              VulkanImmediateCommands::SubmitHandle nextSubmitHandle,
                              BindingsBuffers& data,
                              const VulkanDescriptorSetLayout& dsl,
-                             const util::SpvModuleInfo& info) const;
+                             const std::vector<util::BufferDescription>& info) const;
   void updateBindingsStorageImages(VkCommandBuffer IGL_NONNULL cmdBuf,
                                    VkPipelineLayout IGL_NULLABLE layout,
                                    VkPipelineBindPoint bindPoint,
