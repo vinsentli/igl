@@ -64,6 +64,9 @@ class PlatformDevice : public opengl::PlatformDevice {
                                                           Result* IGL_NULLABLE outResult) const;
   std::shared_ptr<ITexture> createTextureWithSharedMemory(AHardwareBuffer* IGL_NONNULL buffer,
                                                           Result* IGL_NULLABLE outResult) const;
+
+  /// Returns true if AHardwareBuffer function table is available (API 26+).
+  std::shared_ptr<AHardwareBufferFunctionTable> getFunctionTable() const { return funcTable_; }
 #endif // defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
   /// This function must be called every time the currently bound EGL read and/or draw surfaces
