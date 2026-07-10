@@ -106,7 +106,7 @@ class ResourcesBinder final {
   BindingsStorageImages bindingsStorageImages_;
   VkPipelineBindPoint bindPoint_ = VK_PIPELINE_BIND_POINT_GRAPHICS;
   VulkanImmediateCommands::SubmitHandle nextSubmitHandle_ = {};
-  bool hasBindGlobalUbo_ = false;
+  bool hasBindGlobalBuffers_ = false;
 };
 
 } // namespace igl::vulkan

@@ -29,6 +29,10 @@ ResourcesBinder::ResourcesBinder(const CommandBuffer* commandBuffer,
                                   : VulkanImmediateCommands::SubmitHandle{}) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(&ctx_);
+  if (VK_PIPELINE_BIND_POINT_GRAPHICS != bindPoint){
+    // 目前只有渲染管线有Global Buffer;
+    hasBindGlobalBuffers_ = true;
+  }
 }
 
 void ResourcesBinder::bindBuffer(uint32_t index,
@@ -226,8 +230,8 @@ void ResourcesBinder::updateBindingsByDescriptorBuffer(VkPipelineLayout layout,
                                                   state.info);
   }
   if (isDirtyFlags_ & DirtyFlagBits_Buffers) {
-    if (!hasBindGlobalUbo_) {
-      hasBindGlobalUbo_ = true;
+    if (!hasBindGlobalBuffers_) {
+      hasBindGlobalBuffers_ = true;
       ctx_.updateBindingsBuffersByDescriptorBuffer(cmdBuffer_,
                                                    layout,
                                                    bindPoint_,
@@ -276,8 +280,8 @@ void ResourcesBinder::updateBindingsByDescriptorSet(VkPipelineLayout layout,
                                 state.info);
   }
   if (isDirtyFlags_ & DirtyFlagBits_Buffers) {
-    if (!hasBindGlobalUbo_) {
-      hasBindGlobalUbo_ = true;
+    if (!hasBindGlobalBuffers_) {
+      hasBindGlobalBuffers_ = true;
       ctx_.updateBindingsBuffers(cmdBuffer_,
                                  layout,
                                  bindPoint_,
