@@ -418,6 +418,8 @@ void RenderCommandEncoder::bindRenderPipelineState(
   }
 
   binder_.bindPipeline(VK_NULL_HANDLE, nullptr);
+
+  applyPipelineRasterizationDynamicState();
 }
 
 void RenderCommandEncoder::applyPipelineRasterizationDynamicState() {
@@ -903,6 +905,8 @@ void RenderCommandEncoder::flushDynamicState() {
   IGL_PROFILER_FUNCTION();
 
   binder_.bindPipeline(rps_->getVkPipeline(dynamicState_), &rps_->getSpvModuleInfo());
+
+  flushDynamicDepthStencilState();
 
   const VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
