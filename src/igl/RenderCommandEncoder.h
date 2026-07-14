@@ -116,6 +116,10 @@ class IRenderCommandEncoder : public ICommandEncoder {
   /// (e.g. D3D12) may keep the default implementation.
   virtual void setCullMode(CullMode /*cullMode*/) {}
   virtual void setDepthBias(float depthBias, float slopeScale, float clamp) = 0;
+  /// Overrides the front-face winding baked into the currently bound pipeline state.
+  /// Only Metal, Vulkan and OpenGL implement this today; other backends
+  /// (e.g. D3D12) may keep the default implementation.
+  virtual void setFrontFacingWinding(WindingMode /*mode*/) {}
 
   //@tencent only
   virtual void * getImpl() { return NULL;}

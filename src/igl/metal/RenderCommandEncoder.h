@@ -86,6 +86,7 @@ class RenderCommandEncoder final : public IRenderCommandEncoder {
   void setStencilReferenceValue(uint32_t value) override;
   void setBlendColor(const Color& color) override;
   void setCullMode(CullMode cullMode) override;
+  void setFrontFacingWinding(WindingMode mode) override;
   void setDepthBias(float depthBias, float slopeScale, float clamp) override;
     
   //@tencent only
@@ -104,7 +105,6 @@ class RenderCommandEncoder final : public IRenderCommandEncoder {
                   const std::shared_ptr<IFramebuffer>& framebuffer,
                   Result* outResult);
 
-  void bindFrontFacingWinding(const WindingMode& frontFaceWinding);
   void bindPolygonFillMode(const PolygonFillMode& polygonFillMode);
 
   id<MTLRenderCommandEncoder> encoder_ = nil;
