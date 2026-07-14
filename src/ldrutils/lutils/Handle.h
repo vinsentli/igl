@@ -19,7 +19,7 @@ namespace ldr {
 // Based on https://enginearchitecture.realtimerendering.com/downloads/reac2023_modern_mobile_rendering_at_hypehype.pdf
 template<typename HandleTag, typename IndexType = uint32_t>
 class Handle final {
-  static_assert(sizeof(ptrdiff_t) == 8);
+//  static_assert(sizeof(ptrdiff_t) == 8);
   static_assert(sizeof(IndexType) >= sizeof(uint16_t) && sizeof(IndexType) <= sizeof(uint32_t), "Unsupported IndexType size");
 
  public:
@@ -43,10 +43,10 @@ class Handle final {
   LFORCEINLINE void* indexAsVoid() const {
     return reinterpret_cast<void*>(static_cast<ptrdiff_t>(index_));
   }
-  LFORCEINLINE void* handleAsVoid() const {
-    static_assert(sizeof(void*) >= sizeof(uint64_t));
-    return reinterpret_cast<void*>((static_cast<ptrdiff_t>(gen_) << 32) + static_cast<ptrdiff_t>(index_));
-  }
+//  LFORCEINLINE void* handleAsVoid() const {
+//    static_assert(sizeof(void*) >= sizeof(uint64_t));
+//    return reinterpret_cast<void*>((static_cast<ptrdiff_t>(gen_) << 32) + static_cast<ptrdiff_t>(index_));
+//  }
   LFORCEINLINE bool operator==(const Handle<HandleTag, IndexType>& other) const {
     return index_ == other.index_ && gen_ == other.gen_;
   }
