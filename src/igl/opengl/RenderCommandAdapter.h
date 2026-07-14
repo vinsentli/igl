@@ -36,6 +36,7 @@ class RenderCommandAdapter final : public WithContext {
     PIPELINE = 1 << 1,
     DepthStencil = 1 << 2,
     CullMode = 1 << 3,
+    FrontFace = 1 << 4,
   };
 
  private:
@@ -62,6 +63,7 @@ class RenderCommandAdapter final : public WithContext {
   void setStencilReferenceValue(uint32_t value);
   void setBlendColor(const Color& color);
   void setCullMode(CullMode cullMode);
+  void setFrontFacingWinding(WindingMode mode);
   void setDepthBias(float depthBias, float slopeScale, float clamp);
 
   void clearVertexBuffers();
@@ -191,6 +193,11 @@ class RenderCommandAdapter final : public WithContext {
   // StateMask::CullMode is dirty, so a single frame emits at most one GL call
   // regardless of the setCullMode()/setPipelineState() ordering.
   CullMode cullMode_ = CullMode::Disabled;
+
+  // Effective front-face winding for the next draw call. Same pattern as
+  // cullMode_: written by setFrontFacingWinding() and setPipelineState(),
+  // applied once via willDraw() when StateMask::FrontFace is dirty.
+  WindingMode windingMode_ = WindingMode::CounterClockwise;
 
   bool useVAO_ = false;
   bool vaoBound_ = false;

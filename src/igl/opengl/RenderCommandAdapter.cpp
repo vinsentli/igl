@@ -110,6 +110,11 @@ void RenderCommandAdapter::setCullMode(CullMode cullMode) {
   setDirty(StateMask::CullMode);
 }
 
+void RenderCommandAdapter::setFrontFacingWinding(WindingMode mode) {
+  windingMode_ = mode;
+  setDirty(StateMask::FrontFace);
+}
+
 void RenderCommandAdapter::setDepthBias(float depthBias, float slopeScale, float clamp) {
   getContext().setEnabled(true, GL_POLYGON_OFFSET_FILL);
   getContext().polygonOffsetClamp(slopeScale, depthBias, clamp);
@@ -281,11 +286,14 @@ void RenderCommandAdapter::setPipelineState(const std::shared_ptr<IRenderPipelin
     clearDependentResources(newValue, outResult); // Only clear if pipeline state was previously set
   }
   pipelineState_ = newValue;
-  // Reset the effective cull mode to what the new pipeline bakes in, matching
-  // Metal's bindRenderPipelineState() semantics. willDraw() will apply it once.
+  // Reset the effective cull mode / front-face to what the new pipeline bakes in,
+  // matching Metal's bindRenderPipelineState() semantics. willDraw() will apply
+  // them once.
   if (auto* newStateOpenGL = static_cast<RenderPipelineState*>(pipelineState_.get())) {
     cullMode_ = newStateOpenGL->getCullMode();
     setDirty(StateMask::CullMode);
+    windingMode_ = newStateOpenGL->getWindingMode();
+    setDirty(StateMask::FrontFace);
   }
   setDirty(StateMask::PIPELINE);
 }
@@ -467,6 +475,10 @@ void RenderCommandAdapter::willDraw() {
         getContext().cullFace(cullMode_ == CullMode::Front ? GL_FRONT : GL_BACK);
       }
       clearDirty(StateMask::CullMode);
+    }
+    if (isDirty(StateMask::FrontFace)) {
+      getContext().frontFace(windingMode_ == WindingMode::Clockwise ? GL_CW : GL_CCW);
+      clearDirty(StateMask::FrontFace);
     }
   }
 

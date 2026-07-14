@@ -247,8 +247,9 @@ void RenderPipelineState::bind() {
   // emits at most a single GL_CULL_FACE update regardless of whether the user
   // calls setCullMode() after binding the pipeline.
 
-  // face winding mode
-  getContext().frontFace((desc_.frontFaceWinding == WindingMode::Clockwise) ? GL_CW : GL_CCW);
+  // face winding mode is also programmed by RenderCommandAdapter in willDraw(),
+  // driven by StateMask::FrontFace, so that setFrontFacingWinding() overrides
+  // are not clobbered by pipeline binding.
 
   // polygon rasterization mode
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::PolygonFillMode)) {

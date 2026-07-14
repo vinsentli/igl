@@ -602,6 +602,12 @@ void RenderCommandEncoder::setCullMode(CullMode cullMode) {
   }
 }
 
+void RenderCommandEncoder::setFrontFacingWinding(WindingMode mode) {
+  if (IGL_DEBUG_VERIFY(adapter_)) {
+    adapter_->setFrontFacingWinding(mode);
+  }
+}
+
 void RenderCommandEncoder::setDepthBias(float depthBias, float slopeScale, float clamp) {
   if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setDepthBias(depthBias, slopeScale, clamp);
