@@ -259,7 +259,7 @@ bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
   case DeviceFeatures::TimestampQueries:
     return supportsTimestampQueries_;
   case DeviceFeatures::DynamicSetCullMode:
-  case DeviceFeatures::DynamicSetFrontFace:
+  case DeviceFeatures::DynamicSetFrontFacingWinding:
     return true;
   default:
     IGL_DEBUG_ABORT("unhandled DeviceFeatures value");
