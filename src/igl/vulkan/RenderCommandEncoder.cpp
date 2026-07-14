@@ -834,6 +834,18 @@ void RenderCommandEncoder::setCullMode(CullMode cullMode) {
   }
 }
 
+void RenderCommandEncoder::setFrontFacingWinding(WindingMode mode) {
+  IGL_PROFILER_FUNCTION();
+
+  if (ctx_.vf_.vkCmdSetFrontFace) {
+    ctx_.vf_.vkCmdSetFrontFace(cmdBuffer_, windingModeToVkFrontFace(mode));
+  } else {
+    IGL_LOG_ERROR_ONCE(
+        "RenderCommandEncoder::setFrontFacingWinding: vkCmdSetFrontFace(EXT) not available; "
+        "front face change ignored. Enable VK_EXT_extended_dynamic_state or Vulkan 1.3.");
+  }
+}
+
 void RenderCommandEncoder::setDepthBias(float depthBias, float slopeScale, float clamp) {
   IGL_PROFILER_FUNCTION();
 
