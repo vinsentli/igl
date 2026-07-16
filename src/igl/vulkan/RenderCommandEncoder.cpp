@@ -455,13 +455,19 @@ void RenderCommandEncoder::bindDepthStencilState(
 
   dynamicState_.depthWriteEnable = desc.isDepthWriteEnabled;
   dynamicState_.setDepthCompareOp(compareFunctionToVkCompareOp(desc.compareFunction));
+  dynamicState_.stencilTestEnable = false;
 
   auto setStencilState = [this](VkStencilFaceFlagBits faceMask, const igl::StencilStateDesc& desc) {
-    dynamicState_.setStencilStateOps(faceMask == VK_STENCIL_FACE_FRONT_BIT,
-                                     stencilOperationToVkStencilOp(desc.stencilFailureOperation),
-                                     stencilOperationToVkStencilOp(desc.depthStencilPassOperation),
-                                     stencilOperationToVkStencilOp(desc.depthFailureOperation),
-                                     compareFunctionToVkCompareOp(desc.stencilCompareFunction));
+    const VkStencilOp failOp = stencilOperationToVkStencilOp(desc.stencilFailureOperation);
+    const VkStencilOp passOp = stencilOperationToVkStencilOp(desc.depthStencilPassOperation);
+    const VkStencilOp depthFailOp = stencilOperationToVkStencilOp(desc.depthFailureOperation);
+    const VkCompareOp compareOp = compareFunctionToVkCompareOp(desc.stencilCompareFunction);
+    dynamicState_.setStencilStateOps(
+        faceMask == VK_STENCIL_FACE_FRONT_BIT, failOp, passOp, depthFailOp, compareOp);
+    dynamicState_.stencilTestEnable =
+        dynamicState_.stencilTestEnable || failOp != VK_STENCIL_OP_KEEP ||
+        passOp != VK_STENCIL_OP_KEEP || depthFailOp != VK_STENCIL_OP_KEEP ||
+        compareOp != VK_COMPARE_OP_ALWAYS;
     ctx_.vf_.vkCmdSetStencilCompareMask(cmdBuffer_, faceMask, desc.readMask);
     ctx_.vf_.vkCmdSetStencilWriteMask(cmdBuffer_, faceMask, desc.writeMask);
   };
@@ -853,17 +859,18 @@ bool RenderCommandEncoder::setDrawCallCountEnabled(bool value) {
 void RenderCommandEncoder::flushDynamicDepthStencilState() {
   IGL_PROFILER_FUNCTION();
 
-  const bool isVulkan13 =
-      ctx_.getVkPhysicalDeviceProperties().apiVersion >= VK_API_VERSION_1_3;
+  const bool isVulkan13 = ctx_.getVkPhysicalDeviceProperties().apiVersion >= VK_API_VERSION_1_3;
 
   if (isVulkan13 || ctx_.features().has_VK_EXT_extended_dynamic_state) {
-    ctx_.vf_.vkCmdSetDepthTestEnable(cmdBuffer_,
-                                     dynamicState_.depthWriteEnable ? VK_TRUE : VK_FALSE);
+    const bool depthTestEnable = dynamicState_.getDepthCompareOp() != VK_COMPARE_OP_ALWAYS ||
+                                 dynamicState_.depthWriteEnable;
+    ctx_.vf_.vkCmdSetDepthTestEnable(cmdBuffer_, depthTestEnable ? VK_TRUE : VK_FALSE);
     ctx_.vf_.vkCmdSetDepthWriteEnable(cmdBuffer_,
                                       dynamicState_.depthWriteEnable ? VK_TRUE : VK_FALSE);
     ctx_.vf_.vkCmdSetDepthCompareOp(cmdBuffer_, dynamicState_.getDepthCompareOp());
 
-    ctx_.vf_.vkCmdSetStencilTestEnable(cmdBuffer_, VK_TRUE);
+    ctx_.vf_.vkCmdSetStencilTestEnable(cmdBuffer_,
+                                       dynamicState_.stencilTestEnable ? VK_TRUE : VK_FALSE);
     ctx_.vf_.vkCmdSetStencilOp(cmdBuffer_,
                                VK_STENCIL_FACE_FRONT_BIT,
                                dynamicState_.getStencilStateFailOp(true),
