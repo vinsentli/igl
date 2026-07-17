@@ -113,7 +113,7 @@ Result RenderPipelineState::create() {
   }
   if (shaderStages->getType() != ShaderStagesType::Render) {
     return Result(Result::Code::ArgumentInvalid, "Expected render shader stages.");
-  } else if (!shaderStages->isValid()) {
+  } else if (!shaderStages->isValid() && shaderStages->getProgramBinaryFormat() == 0) {
     return Result(Result::Code::ArgumentInvalid, "Missing required shader module(s).");
   }
 

@@ -418,7 +418,7 @@ class IShaderStages : public ITrackedResource<IShaderStages> {
   /**
    * for opengl only
    */
-  [[nodiscard]] const std::vector<uint8_t>& getProgramBinary() const {
+  [[nodiscard]] std::vector<uint8_t>& getProgramBinary() {
     return programBinary_;
   }
   [[nodiscard]] uint32_t getProgramBinaryFormat() const {

@@ -31,6 +31,52 @@ ShaderStages::~ShaderStages() {
 }
 
 void ShaderStages::createRenderProgram(Result* result) {
+  // check support program binary
+  GLint numProgramBinayFormats = 0;
+  getContext().getIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &numProgramBinayFormats);
+
+  if (numProgramBinayFormats && desc_.programBinary.size()) {
+    if (!desc_.programBinaryFormat) {
+      Result::setResult(result, Result::Code::ArgumentInvalid, "ProgramBinaryFormat is invalid");
+      return;
+    }
+
+    // always create a new temp program ID
+    // we'll set or update this object's program ID after the linking succeeds
+    // otherwise we won't modify this program, so we can still use it
+    const GLuint programID = getContext().createProgram();
+    if (programID == 0) {
+      Result::setResult(result, Result::Code::RuntimeError, "Failed to create GL program");
+      return;
+    }
+
+    getContext().programBinary(programID,
+                               desc_.programBinaryFormat,
+                               desc_.programBinary.data(),
+                               desc_.programBinary.size());
+    GLint status = 0;
+    getContext().getProgramiv(programID, GL_LINK_STATUS, &status);
+    if (status) {
+      // now that the program successfully linked, set the program
+      if (programID_ != 0) {
+        getContext().deleteProgram(programID_);
+      }
+      programID_ = programID;
+      programBinaryFormat_ = desc_.programBinaryFormat;
+
+      desc_.programBinary.clear();
+      desc_.programBinary.shrink_to_fit();
+
+      Result::setResult(result, Result::Code::Ok);
+    } else {
+      auto error = getProgramInfoLog(programID);
+      IGL_DEBUG_ASSERT(true, "%s", error.c_str());
+      Result::setResult(result, Result::Code::RuntimeError, "Failed to glProgramBinary");
+    }
+
+    return;
+  }
+
   if (!IGL_DEBUG_VERIFY(getVertexModule())) {
     // we need a vertex shader and a fragment shader in order to link the program
     Result::setResult(
@@ -44,10 +90,6 @@ void ShaderStages::createRenderProgram(Result* result) {
         result, Result::Code::ArgumentInvalid, "Missing required fragment shader stage");
     return;
   }
-
-  // check support program binary
-  GLint numProgramBinayFormats = 0;
-  getContext().getIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &numProgramBinayFormats);
 
   const auto& vertexShader = static_cast<ShaderModule&>(*getVertexModule());
   const auto& fragmentShader = static_cast<ShaderModule&>(*getFragmentModule());
@@ -69,32 +111,10 @@ void ShaderStages::createRenderProgram(Result* result) {
     return;
   }
 
-  if (numProgramBinayFormats && desc_.programBinaryFormat && desc_.programBinary.size()) {
-    getContext().programBinary(programID,
-                               desc_.programBinaryFormat,
-                               desc_.programBinary.data(),
-                               desc_.programBinary.size());
-    GLint status = 0;
-    getContext().getProgramiv(programID, GL_LINK_STATUS, &status);
-    if (status) {
-      // now that the program successfully linked, set the program
-      if (programID_ != 0) {
-        getContext().deleteProgram(programID_);
-      }
-      programID_ = programID;
-
-      Result::setResult(result, Result::Code::Ok);
-      return;
-    } else {
-      auto error = getProgramInfoLog(programID);
-      IGL_DEBUG_ASSERT(true, "%s", error.c_str());
-    }
-  }
-    
   // attach the shaders and link them
   getContext().attachShader(programID, vertexShaderID);
   getContext().attachShader(programID, fragmentShaderID);
-  if (numProgramBinayFormats){
+  if (numProgramBinayFormats) {
     getContext().programParameteri(programID, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE);
   }
   getContext().linkProgram(programID);
@@ -135,6 +155,7 @@ void ShaderStages::createRenderProgram(Result* result) {
     if (newLength == 0 || programBinaryFormat_ == 0) {
       // failed
       programBinary_.clear();
+      programBinary_.shrink_to_fit();
       programBinaryFormat_ = 0;
     }
   }
