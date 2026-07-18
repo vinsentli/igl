@@ -16,7 +16,7 @@
 
 namespace igl::vulkan {
 
-VkPrimitiveTopology primitiveTypeToVkPrimitiveTopology(igl::PrimitiveType t) {
+VkPrimitiveTopology primitiveTypeToVkPrimitiveTopology(PrimitiveType t) {
   switch (t) {
   case igl::PrimitiveType::Point:
     return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
@@ -29,11 +29,11 @@ VkPrimitiveTopology primitiveTypeToVkPrimitiveTopology(igl::PrimitiveType t) {
   case igl::PrimitiveType::TriangleStrip:
     return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
   }
-  IGL_DEBUG_ABORT("Implement PrimitiveType = %u", (uint32_t)t);
+  IGL_DEBUG_ABORT("Implement PrimitiveType = %u", static_cast<uint32_t>(t));
   return VK_PRIMITIVE_TOPOLOGY_MAX_ENUM;
 }
 
-VkPolygonMode polygonFillModeToVkPolygonMode(igl::PolygonFillMode mode) {
+VkPolygonMode polygonFillModeToVkPolygonMode(PolygonFillMode mode) {
   switch (mode) {
   case igl::PolygonFillMode::Fill:
     return VK_POLYGON_MODE_FILL;
@@ -44,7 +44,7 @@ VkPolygonMode polygonFillModeToVkPolygonMode(igl::PolygonFillMode mode) {
   return VK_POLYGON_MODE_FILL;
 }
 
-VkCullModeFlags cullModeToVkCullMode(igl::CullMode mode) {
+VkCullModeFlags cullModeToVkCullMode(CullMode mode) {
   switch (mode) {
   case igl::CullMode::Disabled:
     return VK_CULL_MODE_NONE;
@@ -57,7 +57,7 @@ VkCullModeFlags cullModeToVkCullMode(igl::CullMode mode) {
   return VK_CULL_MODE_NONE;
 }
 
-VkFrontFace windingModeToVkFrontFace(igl::WindingMode mode) {
+VkFrontFace windingModeToVkFrontFace(WindingMode mode) {
   switch (mode) {
   case igl::WindingMode::Clockwise:
     return VK_FRONT_FACE_CLOCKWISE;
@@ -68,7 +68,7 @@ VkFrontFace windingModeToVkFrontFace(igl::WindingMode mode) {
   return VK_FRONT_FACE_CLOCKWISE;
 }
 
-VkFormat vertexAttributeFormatToVkFormat(igl::VertexAttributeFormat fmt) {
+VkFormat vertexAttributeFormatToVkFormat(VertexAttributeFormat fmt) {
   using igl::VertexAttributeFormat;
   switch (fmt) {
   case VertexAttributeFormat::Float1:
@@ -177,7 +177,7 @@ VkFormat vertexAttributeFormatToVkFormat(igl::VertexAttributeFormat fmt) {
   return VK_FORMAT_UNDEFINED;
 }
 
-VkBlendOp blendOpToVkBlendOp(igl::BlendOp value) {
+VkBlendOp blendOpToVkBlendOp(BlendOp value) {
   using igl::BlendOp;
   switch (value) {
   case BlendOp::Add:
@@ -196,7 +196,7 @@ VkBlendOp blendOpToVkBlendOp(igl::BlendOp value) {
   return VK_BLEND_OP_ADD;
 }
 
-VkBool32 checkDualSrcBlendFactor(igl::BlendFactor value, VkBool32 dualSrcBlendSupported) {
+VkBool32 checkDualSrcBlendFactor(BlendFactor value, VkBool32 dualSrcBlendSupported) {
   if (!dualSrcBlendSupported) {
     // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
     switch (value) {
@@ -213,7 +213,7 @@ VkBool32 checkDualSrcBlendFactor(igl::BlendFactor value, VkBool32 dualSrcBlendSu
   return VK_TRUE;
 }
 
-VkBlendFactor blendFactorToVkBlendFactor(igl::BlendFactor value) {
+VkBlendFactor blendFactorToVkBlendFactor(BlendFactor value) {
   using igl::BlendFactor;
   switch (value) {
   case BlendFactor::Zero:
@@ -260,7 +260,7 @@ VkBlendFactor blendFactorToVkBlendFactor(igl::BlendFactor value) {
   }
 }
 
-VkColorComponentFlags colorWriteMaskToVkColorComponentFlags(igl::ColorWriteMask value) {
+VkColorComponentFlags colorWriteMaskToVkColorComponentFlags(ColorWriteMask value) {
   VkColorComponentFlags result = 0;
   if (value & igl::kColorWriteBitsRed) {
     result |= VK_COLOR_COMPONENT_R_BIT;
@@ -306,10 +306,10 @@ RenderPipelineState::RenderPipelineState(const igl::vulkan::Device& device,
       const size_t bufferIndex = attr.bufferIndex;
 
       vkAttributes_[i] = VkVertexInputAttributeDescription{
-          .location = (uint32_t)attr.location,
-          .binding = (uint32_t)bufferIndex,
+          .location = static_cast<uint32_t>(attr.location),
+          .binding = static_cast<uint32_t>(bufferIndex),
           .format = format,
-          .offset = (uint32_t)attr.offset,
+          .offset = static_cast<uint32_t>(attr.offset),
       };
 
       if (!bufferAlreadyBound[bufferIndex]) {
@@ -320,8 +320,8 @@ RenderPipelineState::RenderPipelineState(const igl::vulkan::Device& device,
                                            ? VK_VERTEX_INPUT_RATE_VERTEX
                                            : VK_VERTEX_INPUT_RATE_INSTANCE;
         vkBindings_.emplace_back(VkVertexInputBindingDescription{
-            .binding = (uint32_t)bufferIndex,
-            .stride = (uint32_t)binding.stride,
+            .binding = static_cast<uint32_t>(bufferIndex),
+            .stride = static_cast<uint32_t>(binding.stride),
             .inputRate = rate,
         });
       }
@@ -337,7 +337,7 @@ RenderPipelineState::RenderPipelineState(const igl::vulkan::Device& device,
 }
 
 void RenderPipelineState::deferDestroyPipelinesAndLayout(const VulkanContext& ctx) const {
-  VkDevice device = ctx.getVkDevice();
+  const VkDevice device = ctx.getVkDevice();
   for (const auto& p : pipelines_) {
     if (p.second != VK_NULL_HANDLE) {
       ctx.deferredTask(std::packaged_task<void()>([vf = &ctx.vf_, device, pipeline = p.second]() {
@@ -377,28 +377,20 @@ VkPipeline RenderPipelineState::getVkPipeline(
   }
 
   const auto& vkFeatures = ctx.features();
-  const bool isVulkan13 =
-      ctx.getVkPhysicalDeviceProperties().apiVersion >= VK_API_VERSION_1_3;
-  const bool useEDS =
-      isVulkan13 || vkFeatures.has_VK_EXT_extended_dynamic_state;
-  const bool useEDS2 =
-      isVulkan13 || vkFeatures.has_VK_EXT_extended_dynamic_state2;
+  const bool isVulkan13 = ctx.getVkPhysicalDeviceProperties().apiVersion >= VK_API_VERSION_1_3;
+  const bool useEDS = isVulkan13 || vkFeatures.has_VK_EXT_extended_dynamic_state;
+  const bool useEDS2 = isVulkan13 || vkFeatures.has_VK_EXT_extended_dynamic_state2;
 
   RenderPipelineDynamicState cacheKey = dynamicState;
   if (useEDS) {
     // Normalize all EDS-controlled fields to their default so different depth/stencil
     // configurations collapse to the same cache entry.
     cacheKey.setDepthCompareOp(VK_COMPARE_OP_ALWAYS);
-    cacheKey.setStencilStateOps(true,
-                                VK_STENCIL_OP_KEEP,
-                                VK_STENCIL_OP_KEEP,
-                                VK_STENCIL_OP_KEEP,
-                                VK_COMPARE_OP_ALWAYS);
-    cacheKey.setStencilStateOps(false,
-                                VK_STENCIL_OP_KEEP,
-                                VK_STENCIL_OP_KEEP,
-                                VK_STENCIL_OP_KEEP,
-                                VK_COMPARE_OP_ALWAYS);
+    cacheKey.setStencilStateOps(
+        true, VK_STENCIL_OP_KEEP, VK_STENCIL_OP_KEEP, VK_STENCIL_OP_KEEP, VK_COMPARE_OP_ALWAYS);
+    cacheKey.setStencilStateOps(
+        false, VK_STENCIL_OP_KEEP, VK_STENCIL_OP_KEEP, VK_STENCIL_OP_KEEP, VK_COMPARE_OP_ALWAYS);
+    cacheKey.stencilTestEnable = 0;
     cacheKey.depthWriteEnable = 0;
   }
   if (useEDS2) {
@@ -448,7 +440,7 @@ VkPipeline RenderPipelineState::getVkPipeline(
       deviceFeatures.vkPhysicalDeviceFeatures2.features.dualSrcBlend;
 
   // build a new Vulkan pipeline
-  VkRenderPass renderPass = ctx.getRenderPass(dynamicState.renderPassIndex).pass;
+  const VkRenderPass renderPass = ctx.getRenderPass(dynamicState.renderPassIndex).pass;
 
   VkPipeline pipeline = VK_NULL_HANDLE;
 
@@ -554,21 +546,25 @@ VkPipeline RenderPipelineState::getVkPipeline(
       .pSpecializationInfo = fragSpecInfo.mapEntryCount ? &fragSpecInfo : nullptr,
   });
 
-  // Base set of dynamic states, always available since Vulkan 1.0.
-  std::vector<VkDynamicState> dynamicStates = {
-      VK_DYNAMIC_STATE_VIEWPORT,
-      VK_DYNAMIC_STATE_SCISSOR,
-      VK_DYNAMIC_STATE_DEPTH_BIAS,
-      VK_DYNAMIC_STATE_BLEND_CONSTANTS,
-      VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK,
-      VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
-      VK_DYNAMIC_STATE_STENCIL_REFERENCE,
-  };
+  // Dynamic states, passed to the builder which requires a std::vector. Reserve the maximum
+  // possible size up front (7 base + 7 EDS + 1 EDS2) to avoid reallocations while appending.
+  std::vector<VkDynamicState> dynamicStates;
+  dynamicStates.reserve(15);
+  // Base set, always available since Vulkan 1.0.
+  dynamicStates.insert(dynamicStates.end(),
+                       {
+                           VK_DYNAMIC_STATE_VIEWPORT,
+                           VK_DYNAMIC_STATE_SCISSOR,
+                           VK_DYNAMIC_STATE_DEPTH_BIAS,
+                           VK_DYNAMIC_STATE_BLEND_CONSTANTS,
+                           VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK,
+                           VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
+                           VK_DYNAMIC_STATE_STENCIL_REFERENCE,
+                       });
   if (useEDS) {
     // VK_EXT_extended_dynamic_state (promoted to Vulkan 1.3)
     dynamicStates.push_back(VK_DYNAMIC_STATE_CULL_MODE);
     dynamicStates.push_back(VK_DYNAMIC_STATE_FRONT_FACE);
-    dynamicStates.push_back(VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY);
     dynamicStates.push_back(VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE);
     dynamicStates.push_back(VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE);
     dynamicStates.push_back(VK_DYNAMIC_STATE_DEPTH_COMPARE_OP);
@@ -580,60 +576,43 @@ VkPipeline RenderPipelineState::getVkPipeline(
     dynamicStates.push_back(VK_DYNAMIC_STATE_DEPTH_BIAS_ENABLE);
   }
 
-  bool depthBiasEnable = dynamicState.depthBiasEnable;
-  bool depthWriteEnable = static_cast<bool>(dynamicState.depthWriteEnable);
-  VkCullModeFlags cullMode = cullModeToVkCullMode(desc_.cullMode);
-  VkFrontFace frontFace = windingModeToVkFrontFace(desc_.frontFaceWinding);
-  VkPrimitiveTopology primitiveTopology = primitiveTypeToVkPrimitiveTopology(desc_.topology);
-  VkCompareOp depthCompareOp = dynamicState.getDepthCompareOp();
-  VkStencilOp stencilFrontFailOp = dynamicState.getStencilStateFailOp(true);
-  VkStencilOp stencilFrontPassOp = dynamicState.getStencilStatePassOp(true);
-  VkStencilOp stencilFrontDepthFailOp = dynamicState.getStencilStateDepthFailOp(true);
-  VkCompareOp stencilFrontCompareOp = dynamicState.getStencilStateCompareOp(true);
-  VkStencilOp stencilBackFailOp = dynamicState.getStencilStateFailOp(false);
-  VkStencilOp stencilBackPassOp = dynamicState.getStencilStatePassOp(false);
-  VkStencilOp stencilBackDepthFailOp = dynamicState.getStencilStateDepthFailOp(false);
-  VkCompareOp stencilBackCompareOp = dynamicState.getStencilStateCompareOp(false);
-
-  if (useEDS) {
-    cullMode = VK_CULL_MODE_NONE;
-    frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    depthWriteEnable = false;
-    depthCompareOp = VK_COMPARE_OP_ALWAYS;
-    stencilFrontFailOp = VK_STENCIL_OP_KEEP;
-    stencilFrontPassOp = VK_STENCIL_OP_KEEP;
-    stencilFrontDepthFailOp = VK_STENCIL_OP_KEEP;
-    stencilFrontCompareOp = VK_COMPARE_OP_ALWAYS;
-    stencilBackFailOp = VK_STENCIL_OP_KEEP;
-    stencilBackPassOp = VK_STENCIL_OP_KEEP;
-    stencilBackDepthFailOp = VK_STENCIL_OP_KEEP;
-    stencilBackCompareOp = VK_COMPARE_OP_ALWAYS;
-  }
-  if (useEDS2) {
-    depthBiasEnable = false;
-  }
+  // Cull mode and front face are not part of RenderPipelineDynamicState, so default them here when
+  // they will be set dynamically at draw time. All depth/stencil/bias state is read directly from
+  // cacheKey, which already holds these defaults when EDS is active (see the normalization above)
+  // -- keeping a single source of truth for the baked static state.
+  //
+  // Primitive topology stays static and is always baked from desc_. Under
+  // VK_EXT_extended_dynamic_state (without EDS3's dynamicPrimitiveTopologyUnrestricted),
+  // vkCmdSetPrimitiveTopology() may only change topology within the pipeline's baked topology
+  // class, so baking a fixed default (e.g. TRIANGLE_LIST) would break line/point pipelines. It is
+  // also per-pipeline constant, so making it dynamic buys nothing.
+  const VkCullModeFlags cullMode = useEDS ? VK_CULL_MODE_NONE
+                                          : cullModeToVkCullMode(desc_.cullMode);
+  const VkFrontFace frontFace = useEDS ? VK_FRONT_FACE_COUNTER_CLOCKWISE
+                                       : windingModeToVkFrontFace(desc_.frontFaceWinding);
+  const VkPrimitiveTopology primitiveTopology = primitiveTypeToVkPrimitiveTopology(desc_.topology);
 
   VK_ASSERT_RETURN_NULL_HANDLE(
       igl::vulkan::VulkanPipelineBuilder()
           .dynamicStates(dynamicStates)
           .primitiveTopology(primitiveTopology)
-          .depthBiasEnable(depthBiasEnable)
-          .depthCompareOp(depthCompareOp, depthWriteEnable)
-          .depthWriteEnable(depthWriteEnable)
+          .depthBiasEnable(cacheKey.depthBiasEnable)
+          .depthCompareOp(cacheKey.getDepthCompareOp(),
+                          static_cast<bool>(cacheKey.depthWriteEnable))
+          .depthWriteEnable(static_cast<bool>(cacheKey.depthWriteEnable))
           .rasterizationSamples(getVulkanSampleCountFlags(desc_.sampleCount))
           .alphaToCoverageEnable(desc_.alphaToCoverageEnabled)
           .polygonMode(polygonFillModeToVkPolygonMode(desc_.polygonFillMode))
           .stencilStateOps(VK_STENCIL_FACE_FRONT_BIT,
-                           stencilFrontFailOp,
-                           stencilFrontPassOp,
-                           stencilFrontDepthFailOp,
-                           stencilFrontCompareOp)
+                           cacheKey.getStencilStateFailOp(true),
+                           cacheKey.getStencilStatePassOp(true),
+                           cacheKey.getStencilStateDepthFailOp(true),
+                           cacheKey.getStencilStateCompareOp(true))
           .stencilStateOps(VK_STENCIL_FACE_BACK_BIT,
-                           stencilBackFailOp,
-                           stencilBackPassOp,
-                           stencilBackDepthFailOp,
-                           stencilBackCompareOp)
+                           cacheKey.getStencilStateFailOp(false),
+                           cacheKey.getStencilStatePassOp(false),
+                           cacheKey.getStencilStateDepthFailOp(false),
+                           cacheKey.getStencilStateCompareOp(false))
           .shaderStages(stages)
           .cullMode(cullMode)
           .frontFace(frontFace)

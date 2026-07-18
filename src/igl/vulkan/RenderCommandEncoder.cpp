@@ -432,12 +432,11 @@ void RenderCommandEncoder::applyPipelineRasterizationDynamicState() {
   const bool isVulkan13 =
       ctx_.getVkPhysicalDeviceProperties().apiVersion >= VK_API_VERSION_1_3;
 
-  if (isVulkan13 || ctx_.features().has_VK_EXT_extended_dynamic_state) {
+  if ((isVulkan13 || ctx_.features().has_VK_EXT_extended_dynamic_state) &&
+      ctx_.vf_.vkCmdSetCullMode) {
     const RenderPipelineDesc& desc = rps_->getRenderPipelineDesc();
     ctx_.vf_.vkCmdSetCullMode(cmdBuffer_, cullModeToVkCullMode(desc.cullMode));
     ctx_.vf_.vkCmdSetFrontFace(cmdBuffer_, windingModeToVkFrontFace(desc.frontFaceWinding));
-    ctx_.vf_.vkCmdSetPrimitiveTopology(cmdBuffer_,
-                                       primitiveTypeToVkPrimitiveTopology(desc.topology));
   }
 }
 
@@ -861,7 +860,8 @@ void RenderCommandEncoder::flushDynamicDepthStencilState() {
 
   const bool isVulkan13 = ctx_.getVkPhysicalDeviceProperties().apiVersion >= VK_API_VERSION_1_3;
 
-  if (isVulkan13 || ctx_.features().has_VK_EXT_extended_dynamic_state) {
+  if ((isVulkan13 || ctx_.features().has_VK_EXT_extended_dynamic_state) &&
+      ctx_.vf_.vkCmdSetDepthTestEnable) {
     const bool depthTestEnable = dynamicState_.getDepthCompareOp() != VK_COMPARE_OP_ALWAYS ||
                                  dynamicState_.depthWriteEnable;
     ctx_.vf_.vkCmdSetDepthTestEnable(cmdBuffer_, depthTestEnable ? VK_TRUE : VK_FALSE);
