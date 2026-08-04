@@ -400,13 +400,16 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
   }
 }
 
-void RenderCommandEncoder::bindVertexBuffer(uint32_t index, IBuffer& buffer, size_t bufferOffset) {
+void RenderCommandEncoder::bindVertexBuffer(uint32_t index,
+                                            IBuffer& buffer,
+                                            size_t bufferOffset,
+                                            size_t attributeStride) {
   if (IGL_DEBUG_VERIFY(adapter_)) {
     Buffer& glBuffer = static_cast<Buffer&>(buffer);
 
     IGL_DEBUG_ASSERT(glBuffer.getType() == Buffer::Type::Attribute);
 
-    adapter_->setVertexBuffer(glBuffer, bufferOffset, static_cast<int>(index));
+    adapter_->setVertexBuffer(glBuffer, bufferOffset, static_cast<int>(index), attributeStride);
   }
 }
 
