@@ -511,7 +511,10 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
   binder_.bindBuffer(index, buf, bufferOffset, bufferSize);
 }
 
-void RenderCommandEncoder::bindVertexBuffer(uint32_t index, IBuffer& buffer, size_t bufferOffset) {
+void RenderCommandEncoder::bindVertexBuffer(uint32_t index,
+                                            IBuffer& buffer,
+                                            size_t bufferOffset,
+                                            size_t attributeStride) {
   IGL_PROFILER_FUNCTION();
   IGL_PROFILER_ZONE_GPU_VK("bindVertexBuffer()", ctx_.tracyCtx_, cmdBuffer_);
 
@@ -534,7 +537,14 @@ void RenderCommandEncoder::bindVertexBuffer(uint32_t index, IBuffer& buffer, siz
   }
   const VkBuffer vkBuf = static_cast<Buffer&>(buffer).getVkBuffer();
   const VkDeviceSize offset = bufferOffset;
-  ctx_.vf_.vkCmdBindVertexBuffers(cmdBuffer_, index, 1, &vkBuf, &offset);
+
+  if (attributeStride == 0) {
+    ctx_.vf_.vkCmdBindVertexBuffers(cmdBuffer_, index, 1, &vkBuf, &offset);
+  } else {
+    const VkDeviceSize size = buffer.getSizeInBytes() - bufferOffset;
+    const VkDeviceSize stride = attributeStride;
+    ctx_.vf_.vkCmdBindVertexBuffers2(cmdBuffer_, index, 1, &vkBuf, &offset, &size, &stride);
+  }
 }
 
 void RenderCommandEncoder::bindIndexBuffer(IBuffer& buffer,
