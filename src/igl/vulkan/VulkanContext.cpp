@@ -209,6 +209,8 @@ bool validateImageLimits(VkImageType imageType,
 
 namespace igl::vulkan {
 
+//@tencent only
+
 // FNV-1a（Fowler-Noll-Vo）Non-cryptographic Hash Function）
 namespace {
 inline size_t fnv1aBytes(const void* data, size_t size) {
@@ -285,6 +287,8 @@ struct BuffersKey {
   };
 };
 
+//@tencent only
+
 // @fb-only
 template <typename Key>
 class DescriptorPoolsArena final {
@@ -355,7 +359,8 @@ class DescriptorPoolsArena final {
     numRemainingDSetsInPool_--;
     return dset;
   }
-
+  
+  //@tencent only
   // Acquire a descriptor set for a given binding key.
   //   - On cache hit: returns {cachedDset, /*isFresh=*/false}. Caller can bind directly and MUST
   //     NOT call vkUpdateDescriptorSets on it (that would corrupt other in-flight uses).
@@ -384,6 +389,7 @@ class DescriptorPoolsArena final {
     hasLast_ = true;
     return {dset, true};
   }
+  //@tencent only
 
  private:
   void switchToNewDescriptorPool(VulkanImmediateCommands& ic,
@@ -402,10 +408,12 @@ class DescriptorPoolsArena final {
         pool_ = p.pool;
         allocatedDSet_ = std::move(p.allocatedDSet);
         dsetCursor_ = 0;
+		//@tencent only
         // The old pool is being recycled: every dset it produced is about to be re-issued
         // by the bump allocator, so any cached key->dset mapping is stale.
         dsetCache_.clear();
         hasLast_ = false;
+		//@tencent only
         isNewPool_ = false;
         extinct_.pop_front();
         return;
@@ -428,13 +436,16 @@ class DescriptorPoolsArena final {
         &ctx_.vf_, device_, VK_OBJECT_TYPE_DESCRIPTOR_POOL, (uint64_t)pool_, dpDebugName_.c_str()));
     allocatedDSet_.clear();
     dsetCursor_ = 0;
+	//@tencent only
     // A brand new pool has no dsets yet; drop cached mappings that pointed into old pools.
     dsetCache_.clear();
     hasLast_ = false;
+	//@tencent only
     isNewPool_ = true;
   }
 
 private:
+  //@tencent only
   // Full key->dset cache within the current pool. Cleared whenever the arena advances to a
   // fresh pool or recycles an extinct one (see switchToNewDescriptorPool). A cached dset is
   // safe to bind again as long as we don't rewrite it, which is exactly what a hit does.
@@ -445,6 +456,7 @@ private:
   Key lastKey_{};
   VkDescriptorSet lastDset_ = VK_NULL_HANDLE;
   bool hasLast_ = false;
+  //@tencent only
 
   static constexpr uint32_t kNumDSetsPerPool = 64;
 
@@ -639,9 +651,9 @@ struct VulkanContextImpl final {
                      DescriptorSetLayoutCacheKeyHash>
       dslCache;
   std::unique_ptr<VulkanDescriptorSetLayout> dslBindless; // everything
-  std::unique_ptr<VulkanDescriptorSetLayout> dslGlobalBuffers;
   std::unique_ptr<DescriptorBuffersArena> descriptorBuffersArena;
-  std::vector<util::BufferDescription> dslGlobalBufferDescs;
+  std::unique_ptr<VulkanDescriptorSetLayout> dslGlobalBuffers;  //@tencent only
+  std::vector<util::BufferDescription> dslGlobalBufferDescs;  //@tencent only
   VkDescriptorPool dpBindless = VK_NULL_HANDLE;
   VkDescriptorSet dsBindless = VK_NULL_HANDLE;
   uint32_t currentMaxBindlessTextures = 8;
@@ -697,15 +709,15 @@ struct VulkanContextImpl final {
     if (it != arenaBuffers.end()) {
       return *it->second;
     }
+	// SSBO 始终不使用 DYNAMIC 类型，避免超过设备
+    // maxDescriptorSetStorageBuffersDynamic 上限（部分 Android GPU 仅为 4）。
     const VkDescriptorType uboType = useDynamic ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
                                                 : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    // SSBO 始终不使用 DYNAMIC 类型，避免超过设备
-    // maxDescriptorSetStorageBuffersDynamic 上限（部分 Android GPU 仅为 4）。
-    const VkDescriptorType ssboType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+
     arenaBuffers[dsl] = std::make_unique<DescriptorPoolsArena<BuffersKey>>(
         ctx,
         uboType,
-        ssboType,
+        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
         dsl,
         numBindings,
         "arenaBuffers_");
@@ -840,20 +852,7 @@ VulkanContext::~VulkanContext() {
 
   swapchain_ = nullptr; // Swapchain has to be destroyed prior to Surface
 
-  pimpl_->arenaCombinedImageSamplers.clear();
-  pimpl_->arenaStorageImages.clear();
-  pimpl_->arenaBuffers.clear();
 
-  // Destroy all cached VkDescriptorSetLayout handles owned by the context. VulkanDescriptorSetLayout
-  // instances only reference these handles through the cache and no longer own them.
-  if (vkDevice_) {
-    for (auto& kv : pimpl_->dslCache) {
-      if (kv.second != VK_NULL_HANDLE) {
-        vf_.vkDestroyDescriptorSetLayout(vkDevice_, kv.second, nullptr);
-      }
-    }
-  }
-  pimpl_->dslCache.clear();
 
   pimpl_->arenaCombinedImageSamplers.clear();
   pimpl_->arenaStorageImages.clear();
@@ -1482,11 +1481,12 @@ Result VulkanContext::initContext(const HWDeviceDesc& desc,
   growBindlessDescriptorPool(pimpl_->currentMaxBindlessTextures,
                              pimpl_->currentMaxBindlessSamplers);
 
+  // @tencent only
   {
     const VkDescriptorType descriptorType =
             features().has_VK_EXT_descriptor_buffer
             ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-            : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+            : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     // NOLINTNEXTLINE(modernize-avoid-c-arrays)
     VkDescriptorSetLayoutBinding globalBindings[kNumGlobalBufferBindings] = {};
     for (uint32_t i = 0; i < kNumGlobalBufferBindings; ++i) {
@@ -1516,6 +1516,7 @@ Result VulkanContext::initContext(const HWDeviceDesc& desc,
         /*bindingFlags=*/nullptr,
         "Descriptor Set Layout: VulkanContext::dslGlobalBuffers_");
   }
+  // @tencent only
 
   querySurfaceCapabilities();
 
@@ -1563,6 +1564,7 @@ Result VulkanContext::initContext(const HWDeviceDesc& desc,
   IGL_DEBUG_ASSERT(tracyCtx_, "Failed to create Tracy GPU profiling context");
 #endif // IGL_WITH_TRACY_GPU
 
+  // @tencent only
   supportMemoryLess_ = iFindMemoryType(&vf_, vkPhysicalDevice_, VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT);
   IGL_LOG_INFO("Vulkan, this device support memory less : %s", supportMemoryLess_ ? "true" : "false");
 
@@ -1571,6 +1573,7 @@ Result VulkanContext::initContext(const HWDeviceDesc& desc,
 
   bool supportMemoryCached= iFindMemoryType(&vf_, vkPhysicalDevice_, VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
   IGL_LOG_INFO("Vulkan, this device support Memory Cached : %s", supportMemoryCached ? "true" : "false");
+  // @tencent only
 
   return Result();
 }
@@ -2232,6 +2235,16 @@ void VulkanContext::updateBindingsTextures(VkCommandBuffer IGL_NONNULL cmdBuf,
   auto& arena = pimpl_->getOrCreateArena_CombinedImageSamplers(
       *this, dsl.getVkDescriptorSetLayout(), dsl.numBindings);
 
+  VkDescriptorSet dset = arena.getNextDescriptorSet(*immediate_, nextSubmitHandle);
+
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
+  VkDescriptorImageInfo infoSampledImages[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
+  uint32_t numImages = 0;
+
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
+  VkWriteDescriptorSet writes[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
+  uint32_t numWrites = 0;
+
   // make sure the guard value is always there
   IGL_DEBUG_ASSERT(!textures_.objects_.empty());
   IGL_DEBUG_ASSERT(!samplers_.objects_.empty());
@@ -2242,8 +2255,6 @@ void VulkanContext::updateBindingsTextures(VkCommandBuffer IGL_NONNULL cmdBuf,
 
   const bool isGraphics = bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS;
 
-  // Build the type-safe cache key.
-  TexturesKey key{};
   for (const util::TextureDescription& d : info.textures) {
     IGL_DEBUG_ASSERT(d.descriptorSet == kBindPoint_CombinedImageSamplers);
     const uint32_t loc = d.bindingLocation;
@@ -2254,50 +2265,26 @@ void VulkanContext::updateBindingsTextures(VkCommandBuffer IGL_NONNULL cmdBuf,
       IGL_DEBUG_ASSERT(data.samplers[loc], "A sampler should be bound to every bound texture slot");
     }
     VkSampler sampler = data.samplers[loc] ? data.samplers[loc] : dummySampler;
-    key.slots[loc].view = hasTexture ? texture : dummyImageView;
-    key.slots[loc].sampler = hasTexture ? sampler : dummySampler;
-    // Track the used-prefix length so Hash/operator== can skip the trailing zero slots.
-    if (loc + 1 > key.maxLoc) {
-      key.maxLoc = loc + 1;
-    }
+    writes[numWrites++] = ivkGetWriteDescriptorSetImageInfo(
+        dset, loc, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &infoSampledImages[numImages]);
+    infoSampledImages[numImages++] = VkDescriptorImageInfo{
+        .sampler = hasTexture ? sampler : dummySampler,
+        .imageView = hasTexture ? texture : dummyImageView,
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
   }
 
-  auto [dset, isFresh] = arena.acquireDescriptorSet(*immediate_, nextSubmitHandle, key);
-
-  if (isFresh) {
-    // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-    VkDescriptorImageInfo infoSampledImages[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
-    uint32_t numImages = 0;
-
-    // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-    VkWriteDescriptorSet writes[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
-    uint32_t numWrites = 0;
-
-    for (const util::TextureDescription& d : info.textures) {
-      const uint32_t loc = d.bindingLocation;
-      writes[numWrites++] = ivkGetWriteDescriptorSetImageInfo(
-          dset, loc, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &infoSampledImages[numImages]);
-      infoSampledImages[numImages++] = VkDescriptorImageInfo{
-          .sampler = key.slots[loc].sampler,
-          .imageView = key.slots[loc].view,
-          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-      };
-    }
-
-    if (!numWrites) {
-      return;
-    }
-
+  if (numWrites) {
     IGL_PROFILER_ZONE("vkUpdateDescriptorSets()", IGL_PROFILER_COLOR_UPDATE);
     vf_.vkUpdateDescriptorSets(vkDevice_, numWrites, writes, 0, nullptr);
     IGL_PROFILER_ZONE_END();
-  }
 
 #if IGL_VULKAN_PRINT_COMMANDS
-  IGL_LOG_INFO("%p vkCmdBindDescriptorSets(%u) - textures\n", cmdBuf, bindPoint);
+    IGL_LOG_INFO("%p vkCmdBindDescriptorSets(%u) - textures\n", cmdBuf, bindPoint);
 #endif // IGL_VULKAN_PRINT_COMMANDS
-  vf_.vkCmdBindDescriptorSets(
-      cmdBuf, bindPoint, layout, kBindPoint_CombinedImageSamplers, 1, &dset, 0, nullptr);
+    vf_.vkCmdBindDescriptorSets(
+        cmdBuf, bindPoint, layout, kBindPoint_CombinedImageSamplers, 1, &dset, 0, nullptr);
+  }
 }
 
 void VulkanContext::updateBindingsStorageImages(
@@ -2313,57 +2300,47 @@ void VulkanContext::updateBindingsStorageImages(
   auto& arena = pimpl_->getOrCreateArena_StorageImages(
       *this, dsl.getVkDescriptorSetLayout(), dsl.numBindings);
 
+  VkDescriptorSet dset = arena.getNextDescriptorSet(*immediate_, nextSubmitHandle);
+
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
+  VkDescriptorImageInfo infoStorageImages[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
+  uint32_t numStorageImages = 0;
+
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
+  VkWriteDescriptorSet writes[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
+  uint32_t numWrites = 0;
+
   // make sure the guard value is always there
   IGL_DEBUG_ASSERT(!textures_.objects_.empty());
 
   // use the dummy texture to avoid sparse array
   VkImageView dummyImageView = textures_.objects_[0]->imageView_.getVkImageView();
 
-  StorageImagesKey key{};
   for (const util::ImageDescription& d : info.images) {
     IGL_DEBUG_ASSERT(d.descriptorSet == kBindPoint_StorageImages);
     const uint32_t loc = d.bindingLocation;
     IGL_DEBUG_ASSERT(loc < IGL_TEXTURE_SAMPLERS_MAX);
     VkImageView imageView = data.images[loc];
-    key.views[loc] = imageView ? imageView : dummyImageView;
+    writes[numWrites++] = ivkGetWriteDescriptorSetImageInfo(
+        dset, loc, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, &infoStorageImages[numStorageImages]);
+    infoStorageImages[numStorageImages++] = VkDescriptorImageInfo{
+        .sampler = VK_NULL_HANDLE,
+        .imageView = imageView ? imageView : dummyImageView,
+        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+    };
   }
 
-  auto [dset, isFresh] = arena.acquireDescriptorSet(*immediate_, nextSubmitHandle, key);
-
-  if (isFresh) {
-    // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-    VkDescriptorImageInfo infoStorageImages[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
-    uint32_t numStorageImages = 0;
-
-    // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-    VkWriteDescriptorSet writes[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
-    uint32_t numWrites = 0;
-
-    for (const util::ImageDescription& d : info.images) {
-      const uint32_t loc = d.bindingLocation;
-      writes[numWrites++] = ivkGetWriteDescriptorSetImageInfo(
-          dset, loc, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, &infoStorageImages[numStorageImages]);
-      infoStorageImages[numStorageImages++] = VkDescriptorImageInfo{
-          .sampler = VK_NULL_HANDLE,
-          .imageView = key.views[loc],
-          .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-      };
-    }
-
-    if (!numWrites) {
-      return;
-    }
-
+  if (numWrites) {
     IGL_PROFILER_ZONE("vkUpdateDescriptorSets()", IGL_PROFILER_COLOR_UPDATE);
     vf_.vkUpdateDescriptorSets(vkDevice_, numWrites, writes, 0, nullptr);
     IGL_PROFILER_ZONE_END();
-  }
 
 #if IGL_VULKAN_PRINT_COMMANDS
-  IGL_LOG_INFO("%p vkCmdBindDescriptorSets(%u) - storage images\n", cmdBuf, bindPoint);
+    IGL_LOG_INFO("%p vkCmdBindDescriptorSets(%u) - storage images\n", cmdBuf, bindPoint);
 #endif // IGL_VULKAN_PRINT_COMMANDS
-  vf_.vkCmdBindDescriptorSets(
-      cmdBuf, bindPoint, layout, kBindPoint_StorageImages, 1, &dset, 0, nullptr);
+    vf_.vkCmdBindDescriptorSets(
+        cmdBuf, bindPoint, layout, kBindPoint_StorageImages, 1, &dset, 0, nullptr);
+  }
 }
 
 void VulkanContext::updateBindingsBuffers(
@@ -2387,78 +2364,38 @@ void VulkanContext::updateBindingsBuffers(
   if (!expectBufferCount) return;
 
   auto& arena =
-      pimpl_->getOrCreateArena_Buffers(*this, dsl.getVkDescriptorSetLayout(), dsl.numBindings, true);
+          pimpl_->getOrCreateArena_Buffers(*this, dsl.getVkDescriptorSetLayout(), dsl.numBindings, false);
+  VkDescriptorSet dset = arena.getNextDescriptorSet(*immediate_, nextSubmitHandle);
 
-  BuffersKey key{};
-  // Parallel to key.slots[], but not part of the cache key (see BuffersKey comment).
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  bool slotIsStorage[IGL_UNIFORM_BLOCKS_BINDING_MAX] = {};
-
-  // 仅 UBO 使用 DYNAMIC 类型，因此 pDynamicOffsets 只对 UBO 的 slot 生效。
-  // SSBO 使用 non-dynamic，其 offset 会直接写入 VkDescriptorBufferInfo。
-  std::array<uint32_t, IGL_UNIFORM_BLOCKS_BINDING_MAX> offsets{};
-  uint32_t dynamicOffsetCount = 0;
+  VkWriteDescriptorSet writes[IGL_UNIFORM_BLOCKS_BINDING_MAX]; // uninitialized
+  uint32_t numWrites = 0;
 
   for (const util::BufferDescription& b : info) {
-    if (b.descriptorSet != descriptorSet)
-      continue;
+    if (b.descriptorSet != descriptorSet) continue;
     IGL_DEBUG_ASSERT(
         data.buffers[b.bindingLocation].buffer != VK_NULL_HANDLE,
         IGL_FORMAT("Did you forget to call bindBuffer() for a buffer at the binding location {}?",
                    b.bindingLocation)
             .c_str());
-
-    slotIsStorage[key.count] = b.isStorage;
-    auto& s = key.slots[key.count++];
-    s.binding = b.bindingLocation;
-    s.buffer = data.buffers[b.bindingLocation].buffer;
-    // 对于 SSBO (non-dynamic) 需要把真实 offset 写入 descriptor，range 也据此裁剪；
-    // 对于 UBO (dynamic) 保留 offset=0，运行时通过 pDynamicOffsets 提供偏移。
-    s.offset = b.isStorage ? data.buffers[b.bindingLocation].offset : 0;
-    s.range = data.buffers[b.bindingLocation].range;
-
-    if (!b.isStorage) {
-      offsets[dynamicOffsetCount++] = data.buffers[b.bindingLocation].offset;
-    }
+    writes[numWrites++] = ivkGetWriteDescriptorSetBufferInfo(
+        dset,
+        b.bindingLocation,
+        b.isStorage ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        1,
+        &data.buffers[b.bindingLocation]);
   }
 
-  auto [dset, isFresh] = arena.acquireDescriptorSet(*immediate_, nextSubmitHandle, key);
+  if (numWrites) {
+    IGL_PROFILER_ZONE("vkUpdateDescriptorSets()", IGL_PROFILER_COLOR_UPDATE);
+    vf_.vkUpdateDescriptorSets(vkDevice_, numWrites, writes, 0, nullptr);
+    IGL_PROFILER_ZONE_END();
 
-  if (isFresh) {
-    // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-    VkWriteDescriptorSet writes[IGL_UNIFORM_BLOCKS_BINDING_MAX]; // uninitialized
-    uint32_t numWrites = 0;
-
-    auto cloneData = data;
-
-    for (uint32_t i = 0; i < key.count; ++i) {
-      const auto& s = key.slots[i];
-      // UBO (dynamic) 通过 dynamic offset 提供偏移，descriptor 里 offset 应为 0。
-      // SSBO (non-dynamic) 必须把真实 offset 写入 descriptor。
-      cloneData.buffers[s.binding].offset =
-          slotIsStorage[i] ? data.buffers[s.binding].offset : 0;
-      writes[numWrites++] = ivkGetWriteDescriptorSetBufferInfo(
-          dset,
-          s.binding,
-          slotIsStorage[i] ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
-                           : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-          1,
-          &cloneData.buffers[s.binding]);
-    }
-
-    if (numWrites) {
-      IGL_PROFILER_ZONE("vkUpdateDescriptorSets()", IGL_PROFILER_COLOR_UPDATE);
-      vf_.vkUpdateDescriptorSets(vkDevice_, numWrites, writes, 0, nullptr);
-      IGL_PROFILER_ZONE_END();
-    }
-  }
-
-  if (dset) {
 #if IGL_VULKAN_PRINT_COMMANDS
     IGL_LOG_INFO("%p vkCmdBindDescriptorSets(%u) - buffers\n", cmdBuf, bindPoint);
 #endif // IGL_VULKAN_PRINT_COMMANDS
     vf_.vkCmdBindDescriptorSets(
-        cmdBuf, bindPoint, layout, descriptorSet, 1, &dset, dynamicOffsetCount, offsets.data());
+        cmdBuf, bindPoint, layout, descriptorSet, 1, &dset, 0, nullptr);
   }
 }
 
@@ -2788,6 +2725,7 @@ VkDescriptorSetLayout VulkanContext::getBindlessVkDescriptorSetLayout() const {
                                           : VK_NULL_HANDLE;
 }
 
+// @tencent only
 const VulkanDescriptorSetLayout& VulkanContext::getGlobalUBOVulkanDescriptorSetLayout() const {
   IGL_DEBUG_ASSERT(pimpl_->dslGlobalBuffers);
   return *pimpl_->dslGlobalBuffers;
@@ -2796,6 +2734,7 @@ const VulkanDescriptorSetLayout& VulkanContext::getGlobalUBOVulkanDescriptorSetL
 const std::vector<util::BufferDescription>& VulkanContext::getGlobalUBOBufferDescs() const{
   return pimpl_->dslGlobalBufferDescs;
 }
+// @tencent only
 
 VkDescriptorSet VulkanContext::getBindlessVkDescriptorSet() const {
   return config_.enableDescriptorIndexing ? pimpl_->dsBindless : VK_NULL_HANDLE;

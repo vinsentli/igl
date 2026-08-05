@@ -168,21 +168,13 @@ PipelineState::PipelineState(
   {
     std::vector<VkDescriptorSetLayoutBinding> bindings;
     bindings.reserve(info.buffers.size());
-    const bool useDescriptorBuffer = ctx.features().has_VK_EXT_descriptor_buffer;
     for (const auto& b : info.buffers) {
-      if (b.descriptorSet != kBindPoint_Buffers)
-        continue;
-      // vinsentli 使用动态UBO需要修改成true，但是VK_EXT_descriptor_buffer不能使用DYNAMIC。
-      // Note: SSBO 不使用 DYNAMIC 类型，因为很多设备 (尤其 Android GPU) 的
-      // maxDescriptorSetStorageBuffersDynamic 上限较小（常见为 4），容易超限触发
-      // VUID-VkPipelineLayoutCreateInfo-descriptorType-03032 校验错误。
-      // UBO 仍然使用 DYNAMIC，以复用同一个 descriptor set 通过 dynamic offset 切换偏移。
-      const bool isDynamic =
-          !useDescriptorBuffer; //(isDynamicBufferMask & (1ul << b.bindingLocation)) != 0;
-      const VkDescriptorType type =
-          b.isStorage ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
-                      : (isDynamic ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
-                                   : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+      const bool isDynamic = (isDynamicBufferMask & (1ul << b.bindingLocation)) != 0;
+      const VkDescriptorType type = b.isStorage
+                                        ? (isDynamic ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
+                                                     : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+                                        : (isDynamic ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+                                                     : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
       bindings.emplace_back(VkDescriptorSetLayoutBinding{
           .binding = b.bindingLocation,
           .descriptorType = type,
