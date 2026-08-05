@@ -429,8 +429,7 @@ void RenderCommandEncoder::applyPipelineRasterizationDynamicState() {
     return;
   }
 
-  const bool isVulkan13 =
-      ctx_.getVkPhysicalDeviceProperties().apiVersion >= VK_API_VERSION_1_3;
+  const bool isVulkan13 = false; //ctx_.getVkPhysicalDeviceProperties().apiVersion >= VK_API_VERSION_1_3;
 
   if ((isVulkan13 || ctx_.features().has_VK_EXT_extended_dynamic_state) &&
       ctx_.vf_.vkCmdSetCullMode) {
@@ -868,7 +867,7 @@ bool RenderCommandEncoder::setDrawCallCountEnabled(bool value) {
 void RenderCommandEncoder::flushDynamicDepthStencilState() {
   IGL_PROFILER_FUNCTION();
 
-  const bool isVulkan13 = ctx_.getVkPhysicalDeviceProperties().apiVersion >= VK_API_VERSION_1_3;
+  const bool isVulkan13 = false;//ctx_.getVkPhysicalDeviceProperties().apiVersion >= VK_API_VERSION_1_3;
 
   if ((isVulkan13 || ctx_.features().has_VK_EXT_extended_dynamic_state) &&
       ctx_.vf_.vkCmdSetDepthTestEnable) {

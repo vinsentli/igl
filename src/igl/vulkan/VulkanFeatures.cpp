@@ -729,10 +729,14 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
   // VK_EXT_extended_dynamic_state / _state2 (promoted to core in Vulkan 1.3).
   // Only meaningful when device apiVersion < 1.3; on >= 1.3 core entry points are used
   // directly. Enabling here as extensions also loads the *EXT-suffixed function pointers.
+#if 0
+  // 在高通Adreno 740, vulkan version = 1.3设备上(如小米K70, 一加11)，开启VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE等有问题。
+  // 先不开启EXT_extended_dynamic_state。
   has_VK_EXT_extended_dynamic_state =
       enable(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME, ExtensionType::Device);
   has_VK_EXT_extended_dynamic_state2 =
       enable(VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME, ExtensionType::Device);
+#endif
 
   // Enable fragment shading rate extension (required when primitiveFragmentShadingRateMeshShader is
   // used)
