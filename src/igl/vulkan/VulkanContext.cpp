@@ -1193,16 +1193,19 @@ Result VulkanContext::initContext(const HWDeviceDesc& desc,
   vf_.vkGetPhysicalDeviceProperties2(vkPhysicalDevice_, &vkPhysicalDeviceProperties2_);
 
   const uint32_t apiVersion = vkPhysicalDeviceProperties2_.properties.apiVersion;
+  const uint32_t driverVersion = vkPhysicalDeviceProperties2_.properties.driverVersion;
 
   if (config_.enableExtraLogs) {
     IGL_LOG_INFO("Device: %s\n", debugName ? debugName : "igl/vulkan/VulkanContext.cpp");
-    IGL_LOG_INFO("Vulkan physical device: %s\n",
-                 vkPhysicalDeviceProperties2_.properties.deviceName);
-    IGL_LOG_INFO("           API version: %i.%i.%i.%i\n",
+    IGL_LOG_INFO("Vulkan physical device: %s, vendorID: 0X%X\n",
+                 vkPhysicalDeviceProperties2_.properties.deviceName,
+                 vkPhysicalDeviceProperties2_.properties.vendorID);
+    IGL_LOG_INFO("           API version: %i.%i.%i.%i, Driver Version: %u\n",
                  VK_API_VERSION_MAJOR(apiVersion),
                  VK_API_VERSION_MINOR(apiVersion),
                  VK_API_VERSION_PATCH(apiVersion),
-                 VK_API_VERSION_VARIANT(apiVersion));
+                 VK_API_VERSION_VARIANT(apiVersion),
+                 driverVersion);
     IGL_LOG_INFO("           Driver info: %s %s\n",
                  vkPhysicalDeviceDriverProperties_.driverName,
                  vkPhysicalDeviceDriverProperties_.driverInfo);
@@ -1221,7 +1224,7 @@ Result VulkanContext::initContext(const HWDeviceDesc& desc,
   }
 #endif
 
-  features_.enableCommonDeviceExtensions(config_);
+  features_.enableCommonDeviceExtensions(config_, vkPhysicalDeviceProperties2_, vkPhysicalDeviceDriverProperties_);
   // Enable extra device extensions
   for (size_t i = 0; i < numExtraDeviceExtensions; i++) {
     features_.enable(extraDeviceExtensions[i], VulkanFeatures::ExtensionType::Device);

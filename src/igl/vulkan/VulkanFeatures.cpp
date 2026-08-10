@@ -11,6 +11,47 @@
 
 namespace igl::vulkan {
 
+struct VulkanDeviceInfo {
+  std::string deviceName;
+  uint32_t driverID;
+  uint32_t driverVersion;
+};
+
+bool IsDevice(const VkPhysicalDeviceProperties2& devicePro2, const VkPhysicalDeviceDriverProperties& driverPro,
+              const std::vector<VulkanDeviceInfo>& devices) {
+  for (const auto& device : devices) {
+    if (device.driverVersion == devicePro2.properties.driverVersion && device.driverID == driverPro.driverID &&
+        strcmp(device.deviceName.c_str(), devicePro2.properties.deviceName) == 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// VK_EXT_extended_dynamic_state在大部分设备上功能正常。
+// 目前只发现在红米K70，一加11，高通Adreno 740, vulkan version = 1.3开启VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE等字段有问题。
+bool IsValidDeviceSupport_VK_EXT_extended_dynamic_state(const VkPhysicalDeviceProperties2& devicePro2,
+                                                        const VkPhysicalDeviceDriverProperties& driverPro) {
+  std::vector<VulkanDeviceInfo> devices = {
+      {// 红米K60，高通Adreno 730，有效，先开启
+       .deviceName = "Adreno (TM) 730",
+       .driverID = VK_DRIVER_ID_QUALCOMM_PROPRIETARY,
+       .driverVersion = 2150002783},
+  };
+
+  return IsDevice(devicePro2, driverPro, devices);
+}
+
+// VK_EXT_descriptor_buffer在ARM Mali/Immortalis驱动上存在bug，导致渲染闪烁。
+// 传统descriptor set路径在同样设备上正常，确认是驱动的descriptor_buffer实现问题。
+// 目前仅在高通Adreno驱动上验证稳定，采用白名单策略。
+bool IsValidDeviceSupport_VK_EXT_descriptor_buffer(
+    const VkPhysicalDeviceDriverProperties& driverPro) {
+  // 仅高通Adreno驱动启用，其他驱动（ARM Mali/Immortalis等）走传统descriptor set路径
+  return driverPro.driverID == VK_DRIVER_ID_QUALCOMM_PROPRIETARY;
+}
+
 static uint64_t g_DeviceMemoryTotal = 0;
 
 std::string VkObjectTypeToString(VkObjectType type){
@@ -459,12 +500,12 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& contextConf
   if (hasExtension(VK_KHR_UNIFORM_BUFFER_STANDARD_LAYOUT_EXTENSION_NAME)) {
     ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresUniformBufferStandardLayout);
   }
-#ifndef NDEBUG
-  if (hasExtension(VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME)) {
-    ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresMemoryReport);
-    ivkAddNext(&vkPhysicalDeviceFeatures2, &deviceMemoryReportCreateInfo);
-  }
-#endif
+//#ifndef NDEBUG
+//  if (hasExtension(VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME)) {
+//    ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresMemoryReport);
+//    ivkAddNext(&vkPhysicalDeviceFeatures2, &deviceMemoryReportCreateInfo);
+//  }
+//#endif
   if (contextConfig.enableMultiviewPerViewViewports) {
     if (hasExtension(VK_QCOM_MULTIVIEW_PER_VIEW_VIEWPORTS_EXTENSION_NAME)) {
       ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresMultiviewPerViewViewports);
@@ -637,7 +678,9 @@ void VulkanFeatures::enableCommonInstanceExtensions(const VulkanContextConfig& c
   }
 }
 
-void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& contextConfig) {
+void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& contextConfig,
+                                                  const VkPhysicalDeviceProperties2 &devicePro2,
+                                                  const VkPhysicalDeviceDriverProperties& driverPro) {
   enable(VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME, ExtensionType::Device);
   enable(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME, ExtensionType::Device);
   enable(VK_KHR_SWAPCHAIN_EXTENSION_NAME, ExtensionType::Device);
@@ -704,8 +747,11 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
   has_VK_KHR_vulkan_memory_model =
       enable(VK_KHR_VULKAN_MEMORY_MODEL_EXTENSION_NAME, ExtensionType::Device);
 
-  has_VK_EXT_descriptor_buffer =
-      enable(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME, ExtensionType::Device);
+  // VK_EXT_descriptor_buffer在ARM Mali/Immortalis驱动上有bug（渲染闪烁），按设备驱动判断是否启用
+  if (IsValidDeviceSupport_VK_EXT_descriptor_buffer(driverPro)) {
+    has_VK_EXT_descriptor_buffer =
+        enable(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME, ExtensionType::Device);
+  }
 
   has_VK_EXT_descriptor_indexing =
       enable(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, ExtensionType::Device);
@@ -713,9 +759,9 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
 //  has_VK_EXT_fragment_density_map =
 //      enable(VK_EXT_FRAGMENT_DENSITY_MAP_EXTENSION_NAME, ExtensionType::Device);
 
-#ifndef NDEBUG
-  has_VK_EXT_device_memory_report = enable(VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME, ExtensionType::Device);
-#endif
+//#ifndef NDEBUG
+//  has_VK_EXT_device_memory_report = enable(VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME, ExtensionType::Device);
+//#endif
 
   if (contextConfig.enableMultiviewPerViewViewports) {
     has_VK_QCOM_multiview_per_view_viewports =
@@ -729,14 +775,21 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
   // VK_EXT_extended_dynamic_state / _state2 (promoted to core in Vulkan 1.3).
   // Only meaningful when device apiVersion < 1.3; on >= 1.3 core entry points are used
   // directly. Enabling here as extensions also loads the *EXT-suffixed function pointers.
-#if 0
-  // 在高通Adreno 740, vulkan version = 1.3设备上(如小米K70, 一加11)，开启VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE等有问题。
-  // 先不开启EXT_extended_dynamic_state。
-  has_VK_EXT_extended_dynamic_state =
-      enable(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME, ExtensionType::Device);
-  has_VK_EXT_extended_dynamic_state2 =
-      enable(VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME, ExtensionType::Device);
+#if 1
+  if (IsValidDeviceSupport_VK_EXT_extended_dynamic_state(devicePro2, driverPro)) {
+    if (devicePro2.properties.apiVersion >= VK_API_VERSION_1_3) {
+      has_VK_EXT_extended_dynamic_state = true;
+      has_VK_EXT_extended_dynamic_state2 = true;
+    } else {
+      has_VK_EXT_extended_dynamic_state = enable(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME, ExtensionType::Device);
+      has_VK_EXT_extended_dynamic_state2 =
+          enable(VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME, ExtensionType::Device);
+    }
+  }
 #endif
+
+  IGL_LOG_INFO("has_VK_EXT_extended_dynamic_state:%d", has_VK_EXT_extended_dynamic_state);
+  IGL_LOG_INFO("has_VK_EXT_extended_dynamic_state2:%d", has_VK_EXT_extended_dynamic_state2);
 
   // Enable fragment shading rate extension (required when primitiveFragmentShadingRateMeshShader is
   // used)

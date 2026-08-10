@@ -110,7 +110,9 @@ class VulkanFeatures final {
 
   /// @brief Enables the common device extensions used in IGL.
   /// @param contextConfig The VulkanContextConfig used to create the VulkanContext
-  void enableCommonDeviceExtensions(const VulkanContextConfig& contextConfig);
+  void enableCommonDeviceExtensions(const VulkanContextConfig& contextConfig,
+                                    const VkPhysicalDeviceProperties2& devicePro2,
+                                    const VkPhysicalDeviceDriverProperties& driverPro);
 
  public:
   friend class Device;
