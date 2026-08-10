@@ -429,10 +429,7 @@ void RenderCommandEncoder::applyPipelineRasterizationDynamicState() {
     return;
   }
 
-  const bool isVulkan13 = false; //ctx_.getVkPhysicalDeviceProperties().apiVersion >= VK_API_VERSION_1_3;
-
-  if ((isVulkan13 || ctx_.features().has_VK_EXT_extended_dynamic_state) &&
-      ctx_.vf_.vkCmdSetCullMode) {
+  if (ctx_.features().has_VK_EXT_extended_dynamic_state && ctx_.vf_.vkCmdSetCullMode) {
     const RenderPipelineDesc& desc = rps_->getRenderPipelineDesc();
     ctx_.vf_.vkCmdSetCullMode(cmdBuffer_, cullModeToVkCullMode(desc.cullMode));
     ctx_.vf_.vkCmdSetFrontFace(cmdBuffer_, windingModeToVkFrontFace(desc.frontFaceWinding));
@@ -867,10 +864,7 @@ bool RenderCommandEncoder::setDrawCallCountEnabled(bool value) {
 void RenderCommandEncoder::flushDynamicDepthStencilState() {
   IGL_PROFILER_FUNCTION();
 
-  const bool isVulkan13 = false;//ctx_.getVkPhysicalDeviceProperties().apiVersion >= VK_API_VERSION_1_3;
-
-  if ((isVulkan13 || ctx_.features().has_VK_EXT_extended_dynamic_state) &&
-      ctx_.vf_.vkCmdSetDepthTestEnable) {
+  if (ctx_.features().has_VK_EXT_extended_dynamic_state && ctx_.vf_.vkCmdSetDepthTestEnable) {
     const bool depthTestEnable = dynamicState_.getDepthCompareOp() != VK_COMPARE_OP_ALWAYS ||
                                  dynamicState_.depthWriteEnable;
     ctx_.vf_.vkCmdSetDepthTestEnable(cmdBuffer_, depthTestEnable ? VK_TRUE : VK_FALSE);
@@ -894,7 +888,7 @@ void RenderCommandEncoder::flushDynamicDepthStencilState() {
                                dynamicState_.getStencilStateCompareOp(false));
   }
 
-  if (ctx_.vf_.vkCmdSetDepthBiasEnable) {
+  if (ctx_.features().has_VK_EXT_extended_dynamic_state2 && ctx_.vf_.vkCmdSetDepthBiasEnable) {
     ctx_.vf_.vkCmdSetDepthBiasEnable(cmdBuffer_,
                                      dynamicState_.depthBiasEnable ? VK_TRUE : VK_FALSE);
   }

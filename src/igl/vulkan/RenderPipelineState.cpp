@@ -377,9 +377,8 @@ VkPipeline RenderPipelineState::getVkPipeline(
   }
 
   const auto& vkFeatures = ctx.features();
-  const bool isVulkan13 = false; //ctx.getVkPhysicalDeviceProperties().apiVersion >= VK_API_VERSION_1_3;
-  const bool useEDS = isVulkan13 || vkFeatures.has_VK_EXT_extended_dynamic_state;
-  const bool useEDS2 = isVulkan13 || vkFeatures.has_VK_EXT_extended_dynamic_state2;
+  const bool useEDS = vkFeatures.has_VK_EXT_extended_dynamic_state;
+  const bool useEDS2 = vkFeatures.has_VK_EXT_extended_dynamic_state2;
 
   RenderPipelineDynamicState cacheKey = dynamicState;
   if (useEDS) {
