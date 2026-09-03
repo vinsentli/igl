@@ -605,6 +605,7 @@ bool DeviceFeatureSet::isFeatureSupportedMiscGroup(DeviceFeatures feature) const
     return true;
 
   default:
+    IGL_DEBUG_ASSERT(false);
     return false;
   }
 }
@@ -647,6 +648,9 @@ bool DeviceFeatureSet::isFeatureSupported(DeviceFeatures feature) const {
   case DeviceFeatures::SRGBSwapchain:
   case DeviceFeatures::SRGBWriteControl:
     return isFeatureSupportedTextureGroup(feature);
+
+  case DeviceFeatures::TextureCompressionAstc:
+    return isCompressionFeatureSupported(TextureFeatures::TextureCompressionAstc);
 
   default:
     return isFeatureSupportedMiscGroup(feature);
