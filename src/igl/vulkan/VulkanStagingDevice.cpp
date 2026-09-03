@@ -367,10 +367,12 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
     IGL_DEBUG_ASSERT(image.extent_.width == range.width && image.extent_.height == range.height);
     const uint32_t w = image.extent_.width;
     const uint32_t h = image.extent_.height;
+#ifndef NDEBUG
     ivkCmdBeginDebugUtilsLabel(&ctx_.vf_,
                                wrapper.cmdBuf,
                                "VulkanStagingDevice::imageData (upload YUV image data)",
                                K_COLOR_UPLOAD_IMAGE.toFloatPtr());
+#endif
     VkImageAspectFlags imageAspect = VK_IMAGE_ASPECT_PLANE_0_BIT;
 
     // Luminance (1 plane)
@@ -483,7 +485,9 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
 
     image.imageLayout_ = targetLayout;
 
+#ifndef NDEBUG
     ivkCmdEndDebugUtilsLabel(&ctx_.vf_, wrapper.cmdBuf);
+#endif
 
     // Store the allocated block with the SubmitHandle at the end of the deque
     memoryChunk.handle = immediate->submit(wrapper);
@@ -500,10 +504,12 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
       image.isDepthFormat_ ? VK_IMAGE_ASPECT_DEPTH_BIT
                            : (image.isStencilFormat_ ? VK_IMAGE_ASPECT_STENCIL_BIT : aspectFlags);
 
+#ifndef NDEBUG
   ivkCmdBeginDebugUtilsLabel(&ctx_.vf_,
                              wrapper.cmdBuf,
                              "VulkanStagingDevice::imageData (upload image data)",
                              K_COLOR_UPLOAD_IMAGE.toFloatPtr());
+#endif
 
   for (uint32_t mipLevel = range.mipLevel; mipLevel < range.mipLevel + range.numMipLevels;
        ++mipLevel) {
@@ -640,7 +646,9 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
 
   image.imageLayout_ = targetLayout;
 
+#ifndef NDEBUG
   ivkCmdEndDebugUtilsLabel(&ctx_.vf_, wrapper.cmdBuf);
+#endif
 
   // Store the allocated block with the SubmitHandle at the end of the deque
   memoryChunk.handle = immediate->submit(wrapper);
