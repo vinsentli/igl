@@ -168,7 +168,7 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
 }
 
 VulkanSwapchain::~VulkanSwapchain() {
-  resetSwapchainTextures(/*drainTransactions=*/true);
+  resetSwapchainTextures();
   surfaceControl_ = nullptr;
 }
 
@@ -181,10 +181,9 @@ void VulkanSwapchain::drainPendingTransactions() {
   transactionCV_.wait(lock, [this] { return this->transactionCount_ <= 0; });
 }
 
-void VulkanSwapchain::resetSwapchainTextures(bool drainTransactions) {
-  if (drainTransactions) {
-    drainPendingTransactions();
-  }
+void VulkanSwapchain::resetSwapchainTextures() {
+  drainPendingTransactions();
+  ctx_.vf_.vkDeviceWaitIdle(ctx_.getVkDevice());
 
   texturePool_.clear();
   currentAcquireTexture_ = nullptr;
@@ -217,12 +216,12 @@ void VulkanSwapchain::onSurfaceCreated(ANativeWindow* nativeWindow) {
 }
 
 void VulkanSwapchain::onSurfaceDestroyed() {
-  resetSwapchainTextures(/*drainTransactions=*/false);
+  resetSwapchainTextures();
 }
 
 void VulkanSwapchain::onSurfaceChanged(int width, int height) {
   if (width_ != width || height_ != height) {
-    resetSwapchainTextures(/*drainTransactions=*/false);
+    resetSwapchainTextures();
     width_ = width;
     height_ = height;
   }

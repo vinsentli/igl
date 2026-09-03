@@ -189,7 +189,7 @@ class VulkanSwapchain : public std::enable_shared_from_this<VulkanSwapchain> {
   int exportFDFromVkSemaphore(VkSemaphore semaphore);
   void printFileDescriptorCount() const;
   void drainPendingTransactions();
-  void resetSwapchainTextures(bool drainTransactions);
+  void resetSwapchainTextures();
 
  public:
   uint32_t numSwapchainImages_ = 0;
