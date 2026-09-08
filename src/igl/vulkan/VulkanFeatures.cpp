@@ -491,9 +491,9 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& contextConf
   if (hasExtension(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME)) {
     ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresTimelineSemaphore);
   }
-  if (hasExtension(VK_EXT_FRAGMENT_DENSITY_MAP_EXTENSION_NAME)) {
-    ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresFragmentDensityMap);
-  }
+//  if (hasExtension(VK_EXT_FRAGMENT_DENSITY_MAP_EXTENSION_NAME)) {
+//    ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresFragmentDensityMap);
+//  }
   if (hasExtension(VK_KHR_8BIT_STORAGE_EXTENSION_NAME)) {
     ivkAddNext(&vkPhysicalDeviceFeatures2, &features8BitStorage);
   }
