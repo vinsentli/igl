@@ -210,6 +210,10 @@ class VulkanContext final {
     return vkPhysicalDeviceMeshShaderPropertiesEXT_;
   }
 
+  const VkPhysicalDeviceDescriptorBufferPropertiesEXT& getVkPhysicalDeviceDescriptorBufferProperties() const {
+    return vkPhysicalDeviceDescriptorBufferProperties_;
+  }
+
   VkFormat getClosestDepthStencilFormat(TextureFormat desiredFormat) const;
 
   struct RenderPassHandle {

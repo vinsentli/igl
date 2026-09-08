@@ -492,6 +492,12 @@ inline size_t alignUp(size_t value, size_t alignment) {
 class DescriptorBuffersArena final {
  public:
   explicit DescriptorBuffersArena(const VulkanContext& ctx) : ctx_(ctx) {
+    const auto& props = ctx_.getVkPhysicalDeviceDescriptorBufferProperties();
+    const VkDeviceSize maxRange =
+        std::min(props.maxSamplerDescriptorBufferRange, props.maxResourceDescriptorBufferRange);
+    bufferSize_ =
+        maxRange > 0 ? static_cast<uint32_t>(std::min<VkDeviceSize>(kMaxBufferSize, maxRange))
+                     : kMaxBufferSize;
     buffer_ = createNewBuffer();
   }
 
@@ -500,9 +506,9 @@ class DescriptorBuffersArena final {
                                         VulkanImmediateCommands& ic,
                                         VulkanImmediateCommands::SubmitHandle nextSubmitHandle) {
     IGL_DEBUG_ASSERT(requireSize && alignment);
-    IGL_DEBUG_ASSERT(requireSize <= kBufferSize);
+    IGL_DEBUG_ASSERT(requireSize <= bufferSize_);
     buffer_.offset = alignUp(buffer_.offset, alignment);
-    if ((buffer_.offset + requireSize) <= kBufferSize) {
+    if ((buffer_.offset + requireSize) <= bufferSize_) {
       return buffer_;
     }
 
@@ -527,7 +533,7 @@ class DescriptorBuffersArena final {
  private:
   [[nodiscard]] DescriptorBuffer createNewBuffer() const {
     return DescriptorBuffer{
-        .buffer = ctx_.createBuffer(kBufferSize,
+        .buffer = ctx_.createBuffer(bufferSize_,
                                     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                                         VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT |
                                         VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
@@ -538,8 +544,9 @@ class DescriptorBuffersArena final {
   }
 
  private:
-  static constexpr uint32_t kBufferSize = 512 * 1024;
+  static constexpr uint32_t kMaxBufferSize = 512 * 1024;
   const VulkanContext& ctx_;
+  uint32_t bufferSize_ = kMaxBufferSize;
   DescriptorBuffer buffer_;
   std::deque<DescriptorBuffer> extinct_;
 };
