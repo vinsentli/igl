@@ -44,7 +44,9 @@ class TimestampQueries final : public ITimestampQueries {
   [[nodiscard]] uint64_t getElapsedNanos(uint32_t slotIndex) const override;
   [[nodiscard]] bool isValid() const override;
 
-  [[nodiscard]] uint32_t beginElapsedQuery(VkCommandBuffer commandBuffer, const char* label);
+  [[nodiscard]] uint32_t beginElapsedQuery(VkCommandBuffer commandBuffer,
+                                           uint32_t slotIndex,
+                                           const char* label);
   void endElapsedQuery(VkCommandBuffer commandBuffer, uint32_t slotIndex);
 
   [[nodiscard]] const char* getLabel(uint32_t slotIndex) const override;
