@@ -72,6 +72,8 @@ uint32_t getNativeHWBufferUsage(TextureDesc::TextureUsage iglUsage) {
   if (iglUsage & TextureDesc::TextureUsageBits::Attachment) {
     bufferUsage |= AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT;
     bufferUsage |= AHARDWAREBUFFER_USAGE_COMPOSER_OVERLAY;
+    // 高通的默认交换链有此flag，带来GPU Write Total指标的下降。
+    bufferUsage |= AHARDWAREBUFFER_USAGE_VENDOR_0;
   }
 
   return bufferUsage;
