@@ -17,6 +17,7 @@
 #include <igl/vulkan/RenderPipelineState.h>
 #include <igl/vulkan/SamplerState.h>
 #include <igl/vulkan/Texture.h>
+#include <igl/vulkan/TimestampQueries.h>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanImage.h>
 #include <igl/vulkan/VulkanRenderPassBuilder.h>
@@ -251,6 +252,13 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
     return;
   }
 
+  if (renderPass.timestampQuery.queries) {
+    timestampQueries_ = renderPass.timestampQuery.queries;
+    timestampQuerySlotIndex_ = renderPass.timestampQuery.slotIndex;
+    static_cast<TimestampQueries&>(*timestampQueries_)
+        .beginElapsedQuery(cmdBuffer_, timestampQuerySlotIndex_, NULL);
+  }
+
   ctx_.vf_.vkCmdBeginRenderPass(cmdBuffer_, &bi, VK_SUBPASS_CONTENTS_INLINE);
 
   isEncoding_ = true;
@@ -338,6 +346,12 @@ void RenderCommandEncoder::endEncoding() {
                       VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
   transitionToShaderReadOnly(cmdBuffer_, desc.depthAttachment.texture.get());
   transitionToShaderReadOnly(cmdBuffer_, desc.depthAttachment.resolveTexture.get());
+
+  if (timestampQueries_) {
+    static_cast<TimestampQueries&>(*timestampQueries_)
+        .endElapsedQuery(cmdBuffer_, timestampQuerySlotIndex_);
+    timestampQueries_ = nullptr;
+  }
 
 #if defined(IGL_WITH_TRACY_GPU)
   TracyVkCollect(ctx_.tracyCtx_, cmdBuffer_);
