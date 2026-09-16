@@ -287,7 +287,7 @@ VulkanSwapchain::createAHBTexture(Device& device, int width, int height) {
                                         height,
                                         igl::TextureDesc::TextureUsageBits::Attachment |
                                             igl::TextureDesc::TextureUsageBits::Sampled);
-  desc.storage = igl::ResourceStorage::Shared;
+  //desc.storage = igl::ResourceStorage::Shared;
   desc.debugName = "VulkanSwapchainAHB Image";
   auto texture = std::dynamic_pointer_cast<igl::vulkan::android::NativeHWTextureBuffer>(
       platformDevice.createTextureWithSharedMemory(desc, &result));
