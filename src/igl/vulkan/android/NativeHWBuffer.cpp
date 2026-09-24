@@ -76,6 +76,28 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
   AHardwareBuffer_Desc hwbDesc;
   funcTable_->AHardwareBuffer_describe(hwBuffer, &hwbDesc);
 
+  VkImageAspectFlags aspectMask = 0;
+  switch (hwbDesc.format) {
+  case AHARDWAREBUFFER_FORMAT_D16_UNORM:
+  case AHARDWAREBUFFER_FORMAT_D24_UNORM:
+  case AHARDWAREBUFFER_FORMAT_D32_FLOAT:
+    aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    break;
+
+  case AHARDWAREBUFFER_FORMAT_S8_UINT:
+    aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
+    break;
+
+  case AHARDWAREBUFFER_FORMAT_D24_UNORM_S8_UINT:
+  case AHARDWAREBUFFER_FORMAT_D32_FLOAT_S8_UINT:
+    aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+    break;
+
+  default:
+    aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    break;
+  }
+
   auto& ctx = device_.getVulkanContext();
   auto device = device_.getVulkanContext().getVkDevice();
   VkImageCreateFlags create_flags = 0;
@@ -87,7 +109,9 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
     usage_flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
   }
   if (hwbDesc.usage & AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT) {
-    usage_flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    usage_flags |= (aspectMask == VK_IMAGE_ASPECT_COLOR_BIT)
+                       ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                       : VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
   }
   if (hwbDesc.usage & AHARDWAREBUFFER_USAGE_GPU_DATA_BUFFER) {
     usage_flags |= VK_IMAGE_USAGE_STORAGE_BIT;
@@ -231,7 +255,7 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
               .b = VK_COMPONENT_SWIZZLE_IDENTITY,
               .a = VK_COMPONENT_SWIZZLE_IDENTITY,
           },
-      .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      .subresourceRange = {.aspectMask = aspectMask,
                            .baseMipLevel = 0,
                            .levelCount = vk_image_info.mipLevels,
                            .baseArrayLayer = 0,
