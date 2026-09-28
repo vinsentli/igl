@@ -678,6 +678,12 @@ void loadVulkanDeviceFunctions(struct VulkanFunctionTable* table,
   table->vkQueueSubmit2 = (PFN_vkQueueSubmit2)load(context, "vkQueueSubmit2");
   table->vkSetPrivateData = (PFN_vkSetPrivateData)load(context, "vkSetPrivateData");
 #endif /* defined(VK_VERSION_1_3) */
+#if defined(VK_VERSION_1_4)
+  table->vkCopyImageToImage = (PFN_vkCopyImageToImage)load(context, "vkCopyImageToImage");
+  table->vkCopyImageToMemory = (PFN_vkCopyImageToMemory)load(context, "vkCopyImageToMemory");
+  table->vkCopyMemoryToImage = (PFN_vkCopyMemoryToImage)load(context, "vkCopyMemoryToImage");
+  table->vkTransitionImageLayout = (PFN_vkTransitionImageLayout)load(context, "vkTransitionImageLayout");
+#endif /* defined(VK_VERSION_1_4) */
 #if defined(VK_AMD_buffer_marker)
   table->vkCmdWriteBufferMarkerAMD =
       (PFN_vkCmdWriteBufferMarkerAMD)load(context, "vkCmdWriteBufferMarkerAMD");
@@ -845,6 +851,18 @@ void loadVulkanDeviceFunctions(struct VulkanFunctionTable* table,
 #if defined(VK_EXT_host_query_reset)
   table->vkResetQueryPoolEXT = (PFN_vkResetQueryPoolEXT)load(context, "vkResetQueryPoolEXT");
 #endif /* defined(VK_EXT_host_query_reset) */
+#if defined(VK_EXT_host_image_copy)
+  table->vkCopyImageToImageEXT = (PFN_vkCopyImageToImageEXT)load(context, "vkCopyImageToImageEXT");
+  table->vkCopyImageToMemoryEXT = (PFN_vkCopyImageToMemoryEXT)load(context, "vkCopyImageToMemoryEXT");
+  table->vkCopyMemoryToImageEXT = (PFN_vkCopyMemoryToImageEXT)load(context, "vkCopyMemoryToImageEXT");
+  table->vkTransitionImageLayoutEXT = (PFN_vkTransitionImageLayoutEXT)load(context, "vkTransitionImageLayoutEXT");
+  if (!table->vkCopyImageToImage) {
+    table->vkCopyImageToImage = table->vkCopyImageToImageEXT;
+    table->vkCopyImageToMemory = table->vkCopyImageToMemoryEXT;
+    table->vkCopyMemoryToImage = table->vkCopyMemoryToImageEXT;
+    table->vkTransitionImageLayout = table->vkTransitionImageLayoutEXT;
+  }
+#endif /* defined(VK_EXT_host_image_copy) */
 #if defined(VK_EXT_image_drm_format_modifier)
   table->vkGetImageDrmFormatModifierPropertiesEXT =
       (PFN_vkGetImageDrmFormatModifierPropertiesEXT)load(

@@ -302,6 +302,10 @@ VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT,
       .extendedDynamicState2 = VK_TRUE,
   }),
+  featureHostImageCopy({
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_FEATURES,
+      .hostImageCopy = VK_FALSE,
+  }),
   config(config) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
@@ -526,6 +530,12 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& contextConf
   }
   if (hasExtension(VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME)) {
     ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresExtendedDynamicState2);
+  }
+  if (hasExtension(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME)) {
+    ivkAddNext(&vkPhysicalDeviceFeatures2, &featureHostImageCopy);
+  }
+  if (hasExtension(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)) {
+    ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresDescriptorBuffer);
   }
 }
 
@@ -794,6 +804,12 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
   // Enable fragment shading rate extension (required when primitiveFragmentShadingRateMeshShader is
   // used)
 //  enable(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, ExtensionType::Device);
+
+#if 0
+  has_VK_EXT_host_image_copy =
+      enable(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME, ExtensionType::Device) &&
+      featureHostImageCopy.hostImageCopy == VK_TRUE;
+#endif
 }
 
 bool VulkanFeatures::enabled(const char* extensionName) const {

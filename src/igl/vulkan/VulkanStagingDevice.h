@@ -65,6 +65,19 @@ class VulkanStagingDevice final {
                  VkImageAspectFlags aspectFlags,
                  const void* data);
 
+  /// @brief Uploads the texture data using VK_EXT_host_image_copy (`vkCopyMemoryToImageEXT`).
+  /// This performs the copy on the host (CPU) without going through a staging buffer or a command
+  /// buffer, and is used when the extension (or Vulkan 1.4 core equivalent) is available. The image
+  /// must have been created with `VK_IMAGE_USAGE_HOST_TRANSFER_BIT`. This function fully honors the
+  /// mip levels, layers/faces and offset described by `range`, and updates `image.imageLayout_`.
+  void imageDataHostCopy(const VulkanImage& image,
+                         TextureType type,
+                         const TextureRangeDesc& range,
+                         const TextureFormatProperties& properties,
+                         uint32_t bytesPerRow,
+                         VkImageAspectFlags aspectFlags,
+                         const void* data);
+
   /** @brief Downloads the texture data from the VulkanImage object on the device to the location
    * pointed by `data`. The data requested may span the entire texture or just part of it. The
    * download operation is synchronous and the data is expected to be available at location `data`

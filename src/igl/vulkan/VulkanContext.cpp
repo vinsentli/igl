@@ -757,6 +757,10 @@ VulkanContext::VulkanContext(VulkanContextConfig config,
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT,
       .pNext = nullptr,
   }),
+  vkPhysicalDeviceHostImageCopyProperties_({
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_PROPERTIES,
+      .pNext = nullptr,
+  }),
   // NOLINTEND(clang-diagnostic-missing-designated-field-initializers)
   features_(config),
   vf_(*tableImpl_),
@@ -1238,13 +1242,6 @@ Result VulkanContext::initContext(const HWDeviceDesc& desc,
   }
 
   if (features_.enabled(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)) {
-    // descriptorBuffer is the only enabled()-gated feature in the chain, and the extra opt-in
-    // device extensions are enabled after the chain was last assembled in
-    // populateWithAvailablePhysicalDeviceFeatures() -- so append just that struct rather than
-    // re-running assembleFeatureChain() (which would re-log unrelated warnings). It is not yet in
-    // the chain (gated on enabled(), false at the prior assemble) and its pNext is null. Does not
-    // touch has_VK_EXT_descriptor_buffer.
-    ivkAddNext(&features_.vkPhysicalDeviceFeatures2, &features_.featuresDescriptorBuffer);
     vkPhysicalDeviceDescriptorBufferProperties_.pNext = vkPhysicalDeviceProperties2_.pNext;
     vkPhysicalDeviceProperties2_.pNext = &vkPhysicalDeviceDescriptorBufferProperties_;
     vf_.vkGetPhysicalDeviceProperties2(vkPhysicalDevice_, &vkPhysicalDeviceProperties2_);
@@ -1253,6 +1250,23 @@ Result VulkanContext::initContext(const HWDeviceDesc& desc,
   if (features_.available(VK_EXT_MESH_SHADER_EXTENSION_NAME,
                           VulkanFeatures::ExtensionType::Device)) {
     vkPhysicalDeviceDescriptorIndexingProperties_.pNext = &vkPhysicalDeviceMeshShaderPropertiesEXT_;
+    vf_.vkGetPhysicalDeviceProperties2(vkPhysicalDevice_, &vkPhysicalDeviceProperties2_);
+  }
+
+  if (features_.available(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME,
+                          VulkanFeatures::ExtensionType::Device)) {
+    vkPhysicalDeviceHostImageCopyProperties_.pNext = vkPhysicalDeviceProperties2_.pNext;
+    vkPhysicalDeviceProperties2_.pNext = &vkPhysicalDeviceHostImageCopyProperties_;
+    vf_.vkGetPhysicalDeviceProperties2(vkPhysicalDevice_, &vkPhysicalDeviceProperties2_);
+
+    vkPhysicalDeviceHostImageCopyPropertiesCopySrcLayouts_.resize(
+        vkPhysicalDeviceHostImageCopyProperties_.copySrcLayoutCount);
+    vkPhysicalDeviceHostImageCopyPropertiesCopyDstLayouts_.resize(
+        vkPhysicalDeviceHostImageCopyProperties_.copyDstLayoutCount);
+    vkPhysicalDeviceHostImageCopyProperties_.pCopySrcLayouts =
+        vkPhysicalDeviceHostImageCopyPropertiesCopySrcLayouts_.data();
+    vkPhysicalDeviceHostImageCopyProperties_.pCopyDstLayouts =
+        vkPhysicalDeviceHostImageCopyPropertiesCopyDstLayouts_.data();
     vf_.vkGetPhysicalDeviceProperties2(vkPhysicalDevice_, &vkPhysicalDeviceProperties2_);
   }
 

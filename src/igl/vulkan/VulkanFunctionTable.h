@@ -281,6 +281,14 @@ struct VulkanFunctionTable {
 #else
   PFN_vkVoidFunction ignoreAlignment4[37];
 #endif /* defined(VK_VERSION_1_3) */
+#if defined(VK_VERSION_1_4)
+  PFN_vkCopyImageToImage vkCopyImageToImage;
+  PFN_vkCopyImageToMemory vkCopyImageToMemory;
+  PFN_vkCopyMemoryToImage vkCopyMemoryToImage;
+  PFN_vkTransitionImageLayout vkTransitionImageLayout;
+#else
+  PFN_vkVoidFunction ignoreAlignment4_0[4];
+#endif /* defined(VK_VERSION_1_4) */
 #if defined(VK_AMD_buffer_marker)
   PFN_vkCmdWriteBufferMarkerAMD vkCmdWriteBufferMarkerAMD;
 #else
@@ -471,6 +479,14 @@ struct VulkanFunctionTable {
 #else
   PFN_vkVoidFunction ignoreAlignment30;
 #endif /* defined(VK_EXT_host_query_reset) */
+#if defined(VK_EXT_host_image_copy)
+  PFN_vkCopyImageToImageEXT vkCopyImageToImageEXT;
+  PFN_vkCopyImageToMemoryEXT vkCopyImageToMemoryEXT;
+  PFN_vkCopyMemoryToImageEXT vkCopyMemoryToImageEXT;
+  PFN_vkTransitionImageLayoutEXT vkTransitionImageLayoutEXT;
+#else
+  PFN_vkVoidFunction ignoreAlignment30_0[4];
+#endif /* defined(VK_EXT_host_image_copy) */
 #if defined(VK_EXT_image_drm_format_modifier)
   PFN_vkGetImageDrmFormatModifierPropertiesEXT vkGetImageDrmFormatModifierPropertiesEXT;
 #else
@@ -1138,7 +1154,7 @@ struct VulkanFunctionTable {
 
 #ifdef __cplusplus
 /* IGL_GENERATE_SIZE_CHECK */
-static_assert(sizeof(VulkanFunctionTable) == 555 * sizeof(PFN_vkVoidFunction));
+static_assert(sizeof(VulkanFunctionTable) == 563 * sizeof(PFN_vkVoidFunction));
 /* IGL_GENERATE_SIZE_CHECK */
 #endif
 

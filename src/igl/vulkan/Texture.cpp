@@ -177,6 +177,59 @@ Result Texture::create(const TextureDesc& desc) {
                    VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
   }
 
+  // Decide whether to create the image with VK_IMAGE_USAGE_HOST_TRANSFER_BIT so uploads can use the
+  // VK_EXT_host_image_copy path (host-side copy, no staging buffer). This is gated on:
+  //   1. the extension (or Vulkan 1.4 core equivalent) being available;
+  //   2. the storage not being Memoryless and the format not being multiplanar (the host-copy
+  //      upload path does not handle per-plane layouts);
+  //   3. the FORMAT actually supporting VK_FORMAT_FEATURE_2_HOST_IMAGE_TRANSFER_BIT for the tiling
+  //      we're using. This is what VUID-VkImageCreateInfo-imageCreateFormatFeatures-09048 actually
+  //      checks; some driver/validation-layer combinations do NOT reject an unsupported format via
+  //      vkGetPhysicalDeviceImageFormatProperties2() (step 4 below can incorrectly return
+  //      VK_SUCCESS), so this format-feature query is the authoritative check and MUST pass;
+  //   4. the exact image-creation parameter set (format + type + tiling + usage + flags) being
+  //      accepted by vkGetPhysicalDeviceImageFormatProperties2() (extra validation for other
+  //      usage/flags combinations, e.g. exportability, array layers, create flags);
+  //   5. host copy not degrading subsequent GPU access (optimalDeviceAccess == VK_TRUE). If the
+  //      driver reports that supporting host copy for this format would hurt device access, we
+  //      prefer the staging path to keep runtime sampling performance optimal.
+  if (ctx.features().has_VK_EXT_host_image_copy &&
+      desc_.storage != igl::ResourceStorage::Memoryless && getProperties().numPlanes <= 1) {
+    VkFormatProperties3 formatProps3 = {.sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_3};
+    VkFormatProperties2 formatProps2 = {.sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2,
+                                        .pNext = &formatProps3};
+    ctx.vf_.vkGetPhysicalDeviceFormatProperties2(
+        ctx.getVkPhysicalDevice(), vkFormat, &formatProps2);
+
+    const VkFormatFeatureFlags2 formatFeatures = tiling == VK_IMAGE_TILING_OPTIMAL
+                                                     ? formatProps3.optimalTilingFeatures
+                                                     : formatProps3.linearTilingFeatures;
+    const bool formatSupportsHostTransfer =
+        (formatFeatures & VK_FORMAT_FEATURE_2_HOST_IMAGE_TRANSFER_BIT) != 0;
+
+    if (formatSupportsHostTransfer) {
+      VkHostImageCopyDevicePerformanceQuery hostCopyPerf = {
+          .sType = VK_STRUCTURE_TYPE_HOST_IMAGE_COPY_DEVICE_PERFORMANCE_QUERY};
+      VkImageFormatProperties2 imageFormatProps = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2, .pNext = &hostCopyPerf};
+      const VkPhysicalDeviceImageFormatInfo2 imageFormatInfo = {
+          .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+          .format = vkFormat,
+          .type = imageType,
+          .tiling = tiling,
+          .usage = usageFlags | VK_IMAGE_USAGE_HOST_TRANSFER_BIT,
+          .flags = createFlags,
+      };
+      const VkResult queryResult = ctx.vf_.vkGetPhysicalDeviceImageFormatProperties2(
+          ctx.getVkPhysicalDevice(), &imageFormatInfo, &imageFormatProps);
+
+      if (queryResult == VK_SUCCESS && hostCopyPerf.optimalDeviceAccess == VK_TRUE) {
+        usageFlags |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT;
+      }
+    }
+    IGL_LOG_INFO("VK_IMAGE_USAGE_HOST_TRANSFER_BIT:%d", (usageFlags & VK_IMAGE_USAGE_HOST_TRANSFER_BIT));
+  }
+
   Result result;
   VulkanImage image;
 
@@ -400,9 +453,16 @@ Result Texture::uploadInternal(TextureType /*type*/,
   const VulkanContext& ctx = device_.getVulkanContext();
 
   const VkImageAspectFlags imageAspectFlags = texture_->imageView_.getVkImageAspectFlags();
-  // NOLINTNEXTLINE(clang-diagnostic-shorten-64-to-32)
-  ctx.stagingDevice_->imageData(
-      vulkanImage, desc_.type, range, getProperties(), bytesPerRow, imageAspectFlags, data);
+
+  if (vulkanImage.getVkImageUsageFlags() & VK_IMAGE_USAGE_HOST_TRANSFER_BIT) {
+    // NOLINTNEXTLINE(clang-diagnostic-shorten-64-to-32)
+    ctx.stagingDevice_->imageDataHostCopy(
+        vulkanImage, desc_.type, range, getProperties(), bytesPerRow, imageAspectFlags, data);
+  } else {
+    // NOLINTNEXTLINE(clang-diagnostic-shorten-64-to-32)
+    ctx.stagingDevice_->imageData(
+        vulkanImage, desc_.type, range, getProperties(), bytesPerRow, imageAspectFlags, data);
+  }
 
   // Generate mipmaps if requested by the user
   if (desc_.mipmapGeneration == TextureDesc::TextureMipmapGeneration::AutoGenerateOnUpload) {

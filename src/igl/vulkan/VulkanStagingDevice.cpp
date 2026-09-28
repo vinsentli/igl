@@ -659,6 +659,177 @@ void VulkanStagingDevice::imageData(const VulkanImage& image,
   regions_.push_back(memoryChunk);
 }
 
+void VulkanStagingDevice::imageDataHostCopy(const VulkanImage& image,
+                                            TextureType type,
+                                            const TextureRangeDesc& range,
+                                            const TextureFormatProperties& properties,
+                                            uint32_t bytesPerRow,
+                                            VkImageAspectFlags aspectFlags,
+                                            const void* data) {
+  IGL_PROFILER_FUNCTION();
+
+  const VkDevice vkDevice = ctx_.getVkDevice();
+  const VkImage vkImage = image.getVkImage();
+
+  IGL_DEBUG_ASSERT(image.getVkImageUsageFlags() & VK_IMAGE_USAGE_HOST_TRANSFER_BIT);
+
+  if (!IGL_DEBUG_VERIFY(ctx_.vf_.vkTransitionImageLayout) ||
+      !IGL_DEBUG_VERIFY(ctx_.vf_.vkCopyMemoryToImage)) {
+    return;
+  }
+
+  // vkCopyMemoryToImageEXT() accepts only a single image aspect bit. IGL cannot distinguish between
+  // Depth and Stencil for combined depth/stencil formats, so prefer Depth then Stencil.
+  const VkImageAspectFlags copyAspectMask =
+      image.isDepthFormat_ ? VK_IMAGE_ASPECT_DEPTH_BIT
+                           : (image.isStencilFormat_ ? VK_IMAGE_ASPECT_STENCIL_BIT : aspectFlags);
+
+  const uint32_t initialLayer = getVkLayer(type, range.face, range.layer);
+  const uint32_t numLayers = getVkLayer(type, range.numFaces, range.numLayers);
+  const uint32_t bytesPerBlock = static_cast<uint32_t>(properties.bytesPerBlock);
+  // memoryRowLength is expressed in texels, not bytes (0 means tightly packed).
+  const uint32_t texelsPerRow = bytesPerBlock ? bytesPerRow / bytesPerBlock : 0u;
+
+  // The subresource range covers every mip/layer touched by this upload.
+  const VkImageSubresourceRange subresourceRange = {
+      .aspectMask = aspectFlags,
+      .baseMipLevel = range.mipLevel,
+      .levelCount = range.numMipLevels,
+      .baseArrayLayer = initialLayer,
+      .layerCount = numLayers,
+  };
+
+  const bool isSampled = (image.getVkImageUsageFlags() & VK_IMAGE_USAGE_SAMPLED_BIT) != 0;
+  const bool isStorage = (image.getVkImageUsageFlags() & VK_IMAGE_USAGE_STORAGE_BIT) != 0;
+  const bool isColorAttachment =
+          (image.getVkImageUsageFlags() & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) != 0;
+  const bool isDepthStencilAttachment =
+          (image.getVkImageUsageFlags() & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0;
+
+  // a ternary cascade...
+  const VkImageLayout targetLayout =
+          isSampled ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                    : (isStorage ? VK_IMAGE_LAYOUT_GENERAL
+                                 : (isColorAttachment
+                                    ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                                    : (isDepthStencilAttachment
+                                       ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                                       : VK_IMAGE_LAYOUT_UNDEFINED)));
+
+  IGL_DEBUG_ASSERT(targetLayout != VK_IMAGE_LAYOUT_UNDEFINED, "Missing usage flags");
+
+  const bool isTargetLayoutInCopyDstLayouts =
+      std::find(ctx_.vkPhysicalDeviceHostImageCopyPropertiesCopyDstLayouts_.begin(),
+                ctx_.vkPhysicalDeviceHostImageCopyPropertiesCopyDstLayouts_.end(),
+                targetLayout) != ctx_.vkPhysicalDeviceHostImageCopyPropertiesCopyDstLayouts_.end();
+
+  const VkImageLayout copyLayout = isTargetLayoutInCopyDstLayouts ? targetLayout : VK_IMAGE_LAYOUT_GENERAL;
+
+  // 1. Transition the image into `copyLayout`
+  if (!isTargetLayoutInCopyDstLayouts || image.imageLayout_ != copyLayout) {
+    const VkHostImageLayoutTransitionInfo transitionInfo = {
+        .sType = VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO,
+        .image = vkImage,
+        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout = copyLayout,
+        .subresourceRange = subresourceRange,
+    };
+    VK_ASSERT(ctx_.vf_.vkTransitionImageLayout(vkDevice, 1, &transitionInfo));
+    image.imageLayout_ = copyLayout;
+  }
+
+  std::vector<VkMemoryToImageCopy> copyRegions;
+  copyRegions.reserve(range.numMipLevels);
+
+  const uint8_t* const basePtr = static_cast<const uint8_t*>(data);
+
+  for (uint32_t mipLevel = range.mipLevel; mipLevel < range.mipLevel + range.numMipLevels;
+       ++mipLevel) {
+    const auto mipRange = range.atMipLevel(mipLevel);
+    const uint32_t offset =
+        static_cast<uint32_t>(properties.getSubRangeByteOffset(range, mipRange, bytesPerRow));
+
+    const bool is3D = image.type_ == VK_IMAGE_TYPE_3D;
+
+    copyRegions.emplace_back(VkMemoryToImageCopy{
+        .sType = VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY,
+        .pHostPointer = basePtr + offset,
+        // memoryRowLength/memoryImageHeight are in texels; 0 means tightly packed.
+        .memoryRowLength = texelsPerRow,
+        .memoryImageHeight = 0,
+        .imageSubresource =
+            VkImageSubresourceLayers{
+                .aspectMask = copyAspectMask,
+                .mipLevel = mipLevel,
+                .baseArrayLayer = initialLayer,
+                .layerCount = numLayers,
+            },
+        .imageOffset = {.x = static_cast<int32_t>(mipRange.x),
+                        .y = static_cast<int32_t>(mipRange.y),
+                        .z = is3D ? static_cast<int32_t>(mipRange.z) : 0},
+        .imageExtent = {.width = static_cast<uint32_t>(mipRange.width),
+                        .height = static_cast<uint32_t>(mipRange.height),
+                        .depth = is3D ? static_cast<uint32_t>(mipRange.depth) : 1u},
+    });
+  }
+
+  // 2. Copy data to image
+  const VkCopyMemoryToImageInfo copyInfo = {
+      .sType = VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO,
+      .flags = 0,
+      .dstImage = vkImage,
+      .dstImageLayout = copyLayout,
+      .regionCount = static_cast<uint32_t>(copyRegions.size()),
+      .pRegions = copyRegions.data(),
+  };
+  VK_ASSERT(ctx_.vf_.vkCopyMemoryToImage(vkDevice, &copyInfo));
+
+  if (copyLayout == targetLayout) {
+    return;
+  }
+
+  const VkAccessFlags dstAccessMask =
+      isSampled
+          ? VK_ACCESS_SHADER_READ_BIT
+          : (isStorage ? VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT
+                       : (isColorAttachment ? VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                                            : (isDepthStencilAttachment
+                                                   ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+                                                   : 0)));
+
+  // Priority ordering mirrors the targetLayout/dstAccessMask cascades above: when multiple usage
+  // bits are set (e.g. SAMPLED | STORAGE), isSampled wins and the layout becomes
+  // SHADER_READ_ONLY_OPTIMAL. The image will require a subsequent transition before use as an
+  // attachment or storage, so covering only the shader stages is correct for the post-upload case.
+  const VkPipelineStageFlags dstStageMask =
+      isSampled
+          ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+          : (isStorage
+                 ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+                 : (isColorAttachment
+                        ? VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                        : (isDepthStencilAttachment ? VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                                                          VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
+                                                    : VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)));
+
+  // 3. Transition VK_IMAGE_LAYOUT_GENERAL into `targetLayout`
+  const auto& wrapper = immediate->acquire();
+  ivkImageMemoryBarrier(&ctx_.vf_,
+                        wrapper.cmdBuf,
+                        image.getVkImage(),
+                        VK_ACCESS_HOST_WRITE_BIT,
+                        dstAccessMask,
+                        VK_IMAGE_LAYOUT_GENERAL,
+                        targetLayout,
+                        VK_PIPELINE_STAGE_HOST_BIT,
+                        dstStageMask,
+                        subresourceRange);
+  immediate->submit(wrapper);
+
+  image.imageLayout_ = targetLayout;
+}
+
 void VulkanStagingDevice::getImageData2D(VkImage srcImage,
                                          const uint32_t level,
                                          const uint32_t layer,
