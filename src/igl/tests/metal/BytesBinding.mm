@@ -29,7 +29,6 @@ namespace igl::tests {
 class MetalBytesBindingTest : public ::testing::Test {
  public:
   MetalBytesBindingTest() = default;
-  ~MetalBytesBindingTest() override = default;
 
   void SetUp() override {
     setDebugBreakEnabled(false);
@@ -47,8 +46,7 @@ class MetalBytesBindingTest : public ::testing::Test {
     colorTexture_ = device_->createTexture(texDesc, &res);
     ASSERT_TRUE(res.isOk()) << res.message;
 
-    FramebufferDesc fbDesc;
-    fbDesc.colorAttachments[0].texture = colorTexture_;
+    const FramebufferDesc fbDesc{.colorAttachments = {{.texture = colorTexture_}}};
     framebuffer_ = device_->createFramebuffer(fbDesc, &res);
     ASSERT_TRUE(res.isOk()) << res.message;
 
@@ -73,10 +71,8 @@ class MetalBytesBindingTest : public ::testing::Test {
 // Test binding inline bytes to the vertex stage.
 //
 TEST_F(MetalBytesBindingTest, BindBytesVertex) {
-  RenderPassDesc rpDesc;
-  rpDesc.colorAttachments.resize(1);
-  rpDesc.colorAttachments[0].loadAction = LoadAction::Clear;
-  rpDesc.colorAttachments[0].storeAction = StoreAction::Store;
+  const RenderPassDesc rpDesc{
+      .colorAttachments = {{.loadAction = LoadAction::Clear, .storeAction = StoreAction::Store}}};
 
   auto encoder = commandBuffer_->createRenderCommandEncoder(rpDesc, framebuffer_);
   ASSERT_NE(encoder, nullptr);
@@ -92,10 +88,8 @@ TEST_F(MetalBytesBindingTest, BindBytesVertex) {
 // Test binding inline bytes to the fragment stage.
 //
 TEST_F(MetalBytesBindingTest, BindBytesFragment) {
-  RenderPassDesc rpDesc;
-  rpDesc.colorAttachments.resize(1);
-  rpDesc.colorAttachments[0].loadAction = LoadAction::Clear;
-  rpDesc.colorAttachments[0].storeAction = StoreAction::Store;
+  const RenderPassDesc rpDesc{
+      .colorAttachments = {{.loadAction = LoadAction::Clear, .storeAction = StoreAction::Store}}};
 
   auto encoder = commandBuffer_->createRenderCommandEncoder(rpDesc, framebuffer_);
   ASSERT_NE(encoder, nullptr);

@@ -12,13 +12,20 @@
 #include <shell/shared/imageLoader/ImageLoader.h>
 #include <shell/shared/input/InputDispatcher.h>
 #include <shell/shared/platform/DisplayContext.h>
+#include <shell/shared/platform/PresentationRateController.h>
 
 namespace {
 
 int gArgc = 0;
 char** gArgv = nullptr;
 #if IGL_PLATFORM_ANDROID
-bool gArgsInitialized = true; // Android has no argc/argv to initialize with
+// Android has no main()-supplied argc/argv. The IGL Android shell instead derives
+// argv from Intent extras and calls initializeCommandLineArgs() once per backend
+// init; mark args as initialized up front so accessing argc()/argv() before that
+// call returns zero/nullptr instead of asserting, and allow the JNI bridge to
+// re-call initializeCommandLineArgs() across backend tab switches with the same
+// Intent.
+bool gArgsInitialized = true;
 #else
 bool gArgsInitialized = false;
 #endif
@@ -31,6 +38,7 @@ struct Platform::State {
   ExtensionLoader extensionLoader;
   InputDispatcher inputDispatcher;
   DisplayContext displayContext;
+  PresentationRateController presentationRateController;
 };
 
 Platform::Platform() noexcept : state_(std::make_unique<State>()) {}
@@ -47,6 +55,10 @@ InputDispatcher& Platform::getInputDispatcher() noexcept {
 
 [[nodiscard]] DisplayContext& Platform::getDisplayContext() noexcept {
   return state_->displayContext;
+}
+
+[[nodiscard]] PresentationRateController& Platform::getPresentationRateController() noexcept {
+  return state_->presentationRateController;
 }
 
 std::shared_ptr<ITexture> Platform::loadTexture(const char* filename,
@@ -102,7 +114,9 @@ char** Platform::argv() {
 }
 
 void Platform::initializeCommandLineArgs(int argc, char** argv) {
+#if !IGL_PLATFORM_ANDROID
   IGL_DEBUG_ASSERT(!gArgsInitialized, "Must not initialize command line arguments more than once.");
+#endif
   gArgc = argc;
   gArgv = argv;
   gArgsInitialized = true;

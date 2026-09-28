@@ -8,6 +8,7 @@
 #include <IGLU/managedUniformBuffer/ManagedUniformBuffer.h>
 
 #include <cstdlib>
+#include <cstring>
 #include <igl/Macros.h>
 
 #if defined(IGL_CMAKE_BUILD)
@@ -26,9 +27,25 @@
 #endif
 
 namespace iglu {
+// NOLINTNEXTLINE(bugprone-exception-escape)
+ManagedUniformBufferInfo getSpirvCrossCompatibleManagedUniformBufferInfo(
+    const std::string& uboBlockName,
+    ManagedUniformBufferInfo info) noexcept {
+  const std::string prefix = uboBlockName + ".";
+  for (auto& uniform : info.uniforms) {
+    uniform.name = prefix + uniform.name;
+  }
+  // Record the block name so the OpenGL bind path can fall back to a real UBO buffer binding when
+  // the program keeps the block native (GLSL ES 3.x) instead of flattening it to the plain
+  // `<block>.<member>` uniforms named above.
+  info.blockName = uboBlockName;
+  return info;
+}
+
 ManagedUniformBuffer::ManagedUniformBuffer(igl::IDevice& device,
                                            const ManagedUniformBufferInfo& info) :
   uniformInfo(info) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   igl::BufferDesc desc;
   desc.length = info.length;
 
@@ -53,7 +70,7 @@ ManagedUniformBuffer::ManagedUniformBuffer(igl::IDevice& device,
     length_ = ((length_ + roundVal - 1) / roundVal) * roundVal;
     useBindBytes_ = (length_ < pageSize);
     if (useBindBytes_) {
-      data_ = malloc(length_);
+      data_ = std::malloc(length_);
       createBuffer = false;
     } else {
       auto pagesRequired = desc.length / pageSize;
@@ -67,8 +84,10 @@ ManagedUniformBuffer::ManagedUniformBuffer(igl::IDevice& device,
       // per what documentation says here
       // https://developer.apple.com/documentation/metal/gpu_selection_in_macos/selecting_device_objects_for_compute_processing?language=objc#3544751
       vmAllocLength_ = desc.length;
-      kern_return_t err = vm_allocate(
-          (vm_map_t)mach_task_self(), (vm_address_t*)&data_, vmAllocLength_, VM_FLAGS_ANYWHERE);
+      kern_return_t err = vm_allocate(static_cast<vm_map_t>(mach_task_self()),
+                                      reinterpret_cast<vm_address_t*>(&data_),
+                                      vmAllocLength_,
+                                      VM_FLAGS_ANYWHERE);
       if (err != KERN_SUCCESS) {
         data_ = nullptr;
       }
@@ -82,7 +101,7 @@ ManagedUniformBuffer::ManagedUniformBuffer(igl::IDevice& device,
 
 #endif
   } else {
-    data_ = malloc(desc.length);
+    data_ = std::malloc(desc.length);
   }
   if (data_ == nullptr) {
     result.code = igl::Result::Code::RuntimeError;
@@ -93,35 +112,87 @@ ManagedUniformBuffer::ManagedUniformBuffer(igl::IDevice& device,
     desc.type = igl::BufferDesc::BufferTypeBits::Uniform;
     desc.storage = igl::ResourceStorage::Shared;
 
-    if (device.hasFeature(igl::DeviceFeatures::BufferNoCopy)) {
-      desc.type |= igl::BufferDesc::BufferAPIHintBits::NoCopy;
+    // bind() uploads the whole block into this buffer on every bind, so without a ring the CPU
+    // overwrites bytes the GPU may still be reading for a frame that is in flight. A device that
+    // implements the hint hands out one sub-allocation per in-flight frame instead; one that does
+    // not keeps the single-slot behavior, so the hint is gated on the capability.
+    if (device.hasFeature(igl::DeviceFeatures::BufferRing)) {
+      desc.hint = igl::BufferDesc::BufferAPIHintBits::Ring;
     }
+
+    // NoCopy is a BufferAPIHintBits value; it must never be ORed into desc.type, where its bit
+    // aliases an unrelated BufferTypeBits entry. Routing it to desc.hint is not safe here either:
+    // createBufferNoCopy() aliases desc.data with a nil deallocator, while ~ManagedUniformBuffer()
+    // frees data_ with no queue to wait on, so a buffer still in flight would read freed memory.
     buffer_ = device.createBuffer(desc, &result);
+  } else if (device.getBackendType() == igl::BackendType::OpenGL && !info.blockName.empty() &&
+             device.hasFeature(igl::DeviceFeatures::UniformBlocks)) {
+    // The OpenGL path normally binds each uniform individually, because SPIRV-Cross flattens
+    // uniform blocks into plain uniforms. On GLSL ES 3.x the block is kept as a native UBO whose
+    // members are NOT addressable via glGetUniformLocation() -- they must be bound through a
+    // buffer. Create a uniform-block buffer so bind() can upload + bind the block as a UBO when the
+    // linked program exposes it natively. It is left unused (per-uniform binding is used instead)
+    // when the block was flattened. Gated on UniformBlocks so UBO-less contexts (e.g. GLES2) issue
+    // no GL_UNIFORM_BUFFER calls and use the per-uniform fallback in bind() instead.
+    const igl::BufferDesc uboBufferDesc{
+        .type = igl::BufferDesc::BufferTypeBits::Uniform,
+        .data = data_,
+        .length = info.length,
+        .storage = igl::ResourceStorage::Shared,
+        .hint = igl::BufferDesc::BufferAPIHintBits::UniformBlock,
+    };
+    buffer_ = device.createBuffer(uboBufferDesc, &result);
   }
 }
 
 ManagedUniformBuffer::~ManagedUniformBuffer() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
 #if IGL_PLATFORM_IOS_SIMULATOR
   if (vmAllocLength_) {
     // if vmAllocLength_ is nonzero it implies we used vm_alloc to allocate the memory
-    vm_deallocate((vm_map_t)mach_task_self(), (vm_address_t)data_, vmAllocLength_);
+    vm_deallocate(static_cast<vm_map_t>(mach_task_self()),
+                  reinterpret_cast<vm_address_t>(data_),
+                  vmAllocLength_);
   } else {
 #endif
-    free(data_);
+    std::free(data_);
 #if IGL_PLATFORM_IOS_SIMULATOR
   }
 #endif
+}
+
+bool ManagedUniformBuffer::bindOpenGLUniformBlock(int blockBindingPoint) {
+  IGL_PROFILER_FUNCTION();
+  if (blockBindingPoint < 0 || buffer_ == nullptr) {
+    return false;
+  }
+  buffer_->upload(data_, igl::BufferRange(buffer_->getSizeInBytes(), 0));
+  return true;
 }
 
 void ManagedUniformBuffer::bind(const igl::IDevice& device,
                                 const igl::IRenderPipelineState& pipelineState,
                                 igl::IRenderCommandEncoder& encoder) {
+  IGL_PROFILER_FUNCTION();
   if (data_ == nullptr) {
     IGL_LOG_ERROR_ONCE("ManagedUniformBuffer::bind called with null data\n");
     return;
   }
   if (device.getBackendType() == igl::BackendType::OpenGL) {
 #if IGL_BACKEND_OPENGL && !IGL_PLATFORM_MACCATALYST
+    // When the linked program keeps `blockName` as a native uniform block (GLSL ES 3.x), its
+    // members have no individual glGetUniformLocation; upload + bind the whole block as a UBO.
+    // Otherwise (SPIRV-Cross flattened it to plain uniforms) fall through to per-uniform binding
+    // below.
+    const int blockBindingPoint =
+        uniformInfo.blockName.empty()
+            ? -1
+            : pipelineState.getIndexByName(igl::genNameHandle(uniformInfo.blockName),
+                                           igl::ShaderStage::Fragment);
+    if (bindOpenGLUniformBlock(blockBindingPoint)) {
+      encoder.bindBuffer(static_cast<uint32_t>(blockBindingPoint), buffer_.get());
+      return;
+    }
     for (auto& uniform : uniformInfo.uniforms) {
       // Since the backend is opengl, getIndexByName's igl::ShaderStage parameter is ignored and
       // will work when binding vertex/fragment
@@ -157,7 +228,18 @@ void ManagedUniformBuffer::bind(const igl::IDevice& device,
 void ManagedUniformBuffer::bind(const igl::IDevice& device,
                                 const igl::IComputePipelineState& pipelineState,
                                 igl::IComputeCommandEncoder& encoder) {
+  IGL_PROFILER_FUNCTION();
   if (device.getBackendType() == igl::BackendType::OpenGL) {
+    // Bind a native uniform block (GLSL ES 3.x) as a UBO; otherwise bind per-uniform (see the
+    // render-stage bind() above for details).
+    const int blockBindingPoint = uniformInfo.blockName.empty()
+                                      ? -1
+                                      : static_cast<int>(pipelineState.getIndexByName(
+                                            igl::genNameHandle(uniformInfo.blockName)));
+    if (bindOpenGLUniformBlock(blockBindingPoint)) {
+      encoder.bindBuffer(static_cast<uint32_t>(blockBindingPoint), buffer_.get());
+      return;
+    }
     for (auto& uniform : uniformInfo.uniforms) {
       uniform.location = pipelineState.getIndexByName(igl::genNameHandle(uniform.name));
       if (uniform.location >= 0) {
@@ -187,6 +269,7 @@ void* ManagedUniformBuffer::getData() {
 }
 
 void ManagedUniformBuffer::buildUniformLUT() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   uniformLUT_ = std::make_unique<std::unordered_map<std::string, size_t>>();
   for (size_t i = 0; i < uniformInfo.uniforms.size(); ++i) {
     auto& uniform = uniformInfo.uniforms[i];
@@ -197,8 +280,8 @@ void ManagedUniformBuffer::buildUniformLUT() {
 namespace {
 int findUniformByName(const std::vector<igl::UniformDesc>& uniforms, const char* name) {
   for (size_t i = 0; i < uniforms.size(); ++i) {
-    if (strcmp(name, uniforms[i].name.c_str()) == 0) {
-      return i;
+    if (std::strcmp(name, uniforms[i].name.c_str()) == 0) {
+      return static_cast<int>(i);
     }
   }
   return -1;
@@ -206,6 +289,7 @@ int findUniformByName(const std::vector<igl::UniformDesc>& uniforms, const char*
 } // namespace
 
 int ManagedUniformBuffer::getIndex(const char* name) const {
+  IGL_PROFILER_FUNCTION();
   if (uniformLUT_) {
     auto search = uniformLUT_->find(name);
     return search != uniformLUT_->end() ? static_cast<int>(search->second) : -1;
@@ -215,13 +299,14 @@ int ManagedUniformBuffer::getIndex(const char* name) const {
 }
 
 bool ManagedUniformBuffer::updateData(const char* name, const void* data, size_t dataSize) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(name);
 
   const int index = getIndex(name);
 
   if (index >= 0) {
     auto& uniform = uniformInfo.uniforms[index];
-    if (strcmp(name, uniform.name.c_str()) == 0) {
+    if (std::strcmp(name, uniform.name.c_str()) == 0) {
       // If dataSize is smaller than the expected size, we will just update as client requested.
       // This could mean the user knows only a portion of the uniform data needs updating
       // However, if dataSize is larger than or equal to what we expect for this uniform, we will
@@ -247,8 +332,9 @@ bool ManagedUniformBuffer::updateData(const char* name, const void* data, size_t
 }
 
 size_t ManagedUniformBuffer::getUniformDataSize(const char* name) {
+  IGL_PROFILER_FUNCTION();
   for (auto& uniform : uniformInfo.uniforms) {
-    if (strcmp(name, uniform.name.c_str()) == 0) {
+    if (std::strcmp(name, uniform.name.c_str()) == 0) {
       return getUniformDataSizeInternal(uniform);
     }
   }
@@ -258,6 +344,7 @@ size_t ManagedUniformBuffer::getUniformDataSize(const char* name) {
 // return the type of the uniform
 // return igl::UniformType::Invalid if name invalid
 igl::UniformType ManagedUniformBuffer::getUniformType(const char* name) const {
+  IGL_PROFILER_FUNCTION();
   auto index = findUniformByName(uniformInfo.uniforms, name);
   if (index != -1) {
     const auto& u = uniformInfo.uniforms.at(index);
@@ -267,6 +354,7 @@ igl::UniformType ManagedUniformBuffer::getUniformType(const char* name) const {
 }
 
 size_t ManagedUniformBuffer::getUniformDataSizeInternal(igl::UniformDesc& uniform) {
+  IGL_PROFILER_FUNCTION();
   const size_t uniformDataSize = uniform.elementStride != 0
                                      ? uniform.numElements * uniform.elementStride
                                      : uniform.numElements * igl::sizeForUniformType(uniform.type);

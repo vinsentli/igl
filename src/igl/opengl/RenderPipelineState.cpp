@@ -7,6 +7,8 @@
 
 #include <igl/opengl/RenderPipelineState.h>
 
+#include <algorithm>
+#include <igl/Macros.h>
 #include <igl/RenderCommandEncoder.h> // for igl::BindTarget
 #include <igl/opengl/VertexInputState.h>
 
@@ -24,6 +26,7 @@ RenderPipelineState::RenderPipelineState(IContext& context,
                                          const RenderPipelineDesc& desc,
                                          Result* outResult) :
   WithContext(context), IRenderPipelineState(desc) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   activeAttributesLocations_.reserve(64);
   unitSamplerLocationMap_.fill(-1);
   auto ret = create();
@@ -100,6 +103,7 @@ GLenum RenderPipelineState::convertBlendFactor(BlendFactor value) {
 }
 
 Result RenderPipelineState::create() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (IGL_DEBUG_VERIFY_NOT(desc_.shaderStages == nullptr)) {
     return Result(Result::Code::ArgumentInvalid, "Missing shader stages");
   }
@@ -143,6 +147,12 @@ Result RenderPipelineState::create() {
 
   // Note this work is only done once. Beyond this point, there is no more query by name
   for (const auto& [textureUnit, samplerName] : desc_.fragmentUnitSamplerMap) {
+    if (textureUnit >= unitSamplerLocationMap_.size()) {
+      IGL_LOG_ERROR("Fragment sampler unit %zu exceeds max %zu\n",
+                    static_cast<size_t>(textureUnit),
+                    unitSamplerLocationMap_.size());
+      continue;
+    }
     const int loc = reflection_->getIndexByName(samplerName);
     if (loc >= 0) {
       unitSamplerLocationMap_[textureUnit] = loc;
@@ -163,7 +173,7 @@ Result RenderPipelineState::create() {
           uniformBlockBindingMap_[blockIndex] = blockDescIt->second.bindingIndex;
         } else {
           uniformBlockBindingMap_[blockIndex] = bindingIndex;
-          blockDescIt->second.bindingIndex = bindingIndex;
+          blockDescIt->second.bindingIndex = static_cast<GLint>(bindingIndex);
         }
       }
     }
@@ -218,7 +228,7 @@ Result RenderPipelineState::create() {
 }
 
 void RenderPipelineState::bind() {
-  IGL_PROFILER_ZONE_GPU_OGL("bindRenderPipelineState");
+  IGL_PROFILER_FUNCTION();
   if (desc_.shaderStages) {
     const auto* shaderStages = static_cast<ShaderStages*>(desc_.shaderStages.get());
     shaderStages->bind();
@@ -226,7 +236,9 @@ void RenderPipelineState::bind() {
       for (const auto& binding : uniformBlockBindingMap_) {
         const auto& blockIndex = binding.first;
         const auto& bindingIndex = binding.second;
-        getContext().uniformBlockBinding(shaderStages->getProgramID(), blockIndex, bindingIndex);
+        getContext().uniformBlockBinding(shaderStages->getProgramID(),
+                                         static_cast<GLuint>(blockIndex),
+                                         static_cast<GLuint>(bindingIndex));
       }
       uniformBlockBindingPointSet_ = true;
     }
@@ -241,15 +253,6 @@ void RenderPipelineState::bind() {
   } else {
     getContext().disable(GL_BLEND);
   }
-
-  // face cull mode is programmed by RenderCommandAdapter in willDraw(),
-  // driven by StateMask::CullMode. Keeping it out of bind() ensures each frame
-  // emits at most a single GL_CULL_FACE update regardless of whether the user
-  // calls setCullMode() after binding the pipeline.
-
-  // face winding mode is also programmed by RenderCommandAdapter in willDraw(),
-  // driven by StateMask::FrontFace, so that setFrontFacingWinding() overrides
-  // are not clobbered by pipeline binding.
 
   // polygon rasterization mode
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::PolygonFillMode)) {
@@ -266,6 +269,7 @@ void RenderPipelineState::bind() {
 }
 
 void RenderPipelineState::unbind() {
+  IGL_PROFILER_FUNCTION();
   if (desc_.shaderStages) {
     static_cast<ShaderStages*>(desc_.shaderStages.get())->unbind();
   }
@@ -281,6 +285,7 @@ void RenderPipelineState::unbind() {
 void RenderPipelineState::bindVertexAttributes(size_t bufferIndex,
                                                size_t bufferOffset,
                                                size_t stride) {
+  IGL_PROFILER_FUNCTION();
 #if IGL_DEBUG_ABORT_ENABLED
   static GLint sMaxNumVertexAttribs = 0;
   if (0 == sMaxNumVertexAttribs) {
@@ -326,7 +331,7 @@ void RenderPipelineState::bindVertexAttributes(size_t bufferIndex,
       if (attribute.sampleFunction == igl::VertexSampleFunction::PerVertex) {
         getContext().vertexAttribDivisor(location, 0);
       } else if (attribute.sampleFunction == igl::VertexSampleFunction::Instance) {
-        getContext().vertexAttribDivisor(location, attribute.sampleRate);
+        getContext().vertexAttribDivisor(location, static_cast<GLuint>(attribute.sampleRate));
       } else {
         getContext().vertexAttribDivisor(location, 0);
       }
@@ -335,6 +340,7 @@ void RenderPipelineState::bindVertexAttributes(size_t bufferIndex,
 }
 
 void RenderPipelineState::unbindVertexAttributes() {
+  IGL_PROFILER_FUNCTION();
   for (const auto& l : activeAttributesLocations_) {
     getContext().disableVertexAttribArray(l);
   }
@@ -342,6 +348,7 @@ void RenderPipelineState::unbindVertexAttributes() {
 }
 
 void RenderPipelineState::unbindPrevPipelineVertexAttributes() {
+  IGL_PROFILER_FUNCTION();
   for (const auto& l : prevPipelineStateAttributesLocations_) {
     getContext().disableVertexAttribArray(l);
   }
@@ -355,6 +362,7 @@ void RenderPipelineState::unbindPrevPipelineVertexAttributes() {
 Result RenderPipelineState::bindTextureUnit(const size_t unit,
                                             uint8_t bindTarget,
                                             Texture& texture) {
+  IGL_PROFILER_FUNCTION();
   if (!desc_.shaderStages) {
     return Result{Result::Code::InvalidOperation, "No shader set\n"};
   }

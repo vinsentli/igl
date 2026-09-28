@@ -9,6 +9,7 @@
 
 #include <Foundation/Foundation.h>
 #include <igl/IGLFolly.h>
+#include <igl/Macros.h>
 #include <igl/metal/BufferSynchronizationManager.h>
 #include <igl/metal/CommandBuffer.h>
 #include <igl/metal/DeviceStatistics.h>
@@ -35,6 +36,7 @@ CommandQueue::CommandQueue(Device& device,
   bufferSyncManager_(syncManager),
   deviceStatistics_(deviceStatistics),
   device_(device) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if constexpr (kIGLMetalNumberCommandBuffersToCapture > 0 &&
                 kIGLMetalBeginCommandBufferToCapture == 0) {
     startCapture(value_);
@@ -43,6 +45,7 @@ CommandQueue::CommandQueue(Device& device,
 
 std::shared_ptr<ICommandBuffer> CommandQueue::createCommandBuffer(const CommandBufferDesc& desc,
                                                                   Result* outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   // If the previous frame ended, perform the triple-buffering wait here -- at the start of the
   // frame, before anything is recorded into the next in-flight buffer slot -- rather than at
   // frame end. The flag keeps this to one wait per frame even when a frame records multiple
@@ -65,7 +68,9 @@ bool CommandQueue::beginFrame() {
   return bufferSyncManager_->manageEndOfFrameSync();
 }
 
-SubmitHandle CommandQueue::submit(const igl::ICommandBuffer& commandBuffer, bool endOfFrame) {
+SubmitHandle CommandQueue::submit(const ICommandBuffer& commandBuffer, bool endOfFrame) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_SUBMIT);
+
   incrementDrawCount(commandBuffer.getCurrentDrawCount());
   deviceStatistics_.incrementDrawCount(commandBuffer.getCurrentDrawCount());
 
@@ -130,6 +135,7 @@ SubmitHandle CommandQueue::submit(const igl::ICommandBuffer& commandBuffer, bool
 }
 
 void CommandQueue::startCapture(id<MTLCommandQueue> queue) {
+  IGL_PROFILER_FUNCTION();
   if (@available(macOS 10.15, iOS 13.0, *)) {
     MTLCaptureManager* captureManager = [MTLCaptureManager sharedCaptureManager];
     MTLCaptureDescriptor* captureDescriptor = [[MTLCaptureDescriptor alloc] init];
@@ -143,6 +149,7 @@ void CommandQueue::startCapture(id<MTLCommandQueue> queue) {
 }
 
 void CommandQueue::stopCapture() {
+  IGL_PROFILER_FUNCTION();
   MTLCaptureManager* captureManager = [MTLCaptureManager sharedCaptureManager];
   [captureManager stopCapture];
 }

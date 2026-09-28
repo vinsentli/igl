@@ -33,6 +33,7 @@ PlatformDevice::PlatformDevice(Device& owner) : opengl::PlatformDevice(owner) {}
 
 std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(Result* outResult) {
   Size requiredSize;
+  // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
   NSView* view = [[NSOpenGLContext currentContext] view];
   if (IGL_DEBUG_VERIFY(view)) {
     const NSRect bounds = view.bounds;
@@ -70,6 +71,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(Result
 
 std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(Result* outResult) {
   NSSize sizeInPixels;
+  // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
   NSView* view = [[NSOpenGLContext currentContext] view];
   if (IGL_DEBUG_VERIFY(view)) {
     const NSRect bounds = view.bounds;
@@ -80,8 +82,10 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(Result* o
   }
 
   GLint depthBits(~0);
+  // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
   NSOpenGLPixelFormat* pixelFormat = [[NSOpenGLContext currentContext] pixelFormat];
   if (IGL_DEBUG_VERIFY(pixelFormat)) {
+    // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
     [pixelFormat getValues:&depthBits forAttribute:NSOpenGLPFADepthSize forVirtualScreen:0];
   } else {
     Result::setResult(outResult, Result::Code::RuntimeError);
@@ -142,6 +146,7 @@ Size PlatformDevice::getNativeDrawableSize(Result* outResult) {
 
 std::unique_ptr<ITexture> PlatformDevice::createTextureFromNativePixelBuffer(
     const CVImageBufferRef& sourceImage,
+    // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
     const CVOpenGLTextureCacheRef& textureCache,
     TextureDesc::TextureUsage usage,
     Result* outResult) {

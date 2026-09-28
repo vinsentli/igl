@@ -25,7 +25,6 @@ namespace igl::tests {
 class ResourcesBinderTest : public ::testing::Test {
  public:
   ResourcesBinderTest() = default;
-  ~ResourcesBinderTest() override = default;
 
   void SetUp() override {
     igl::setDebugBreakEnabled(false);
@@ -34,7 +33,7 @@ class ResourcesBinderTest : public ::testing::Test {
     ASSERT_EQ(iglDev_->getBackendType(), BackendType::Vulkan) << "Test requires Vulkan backend";
 
     Result ret;
-    cmdQueue_ = iglDev_->createCommandQueue(CommandQueueDesc{}, &ret);
+    cmdQueue_ = iglDev_->createCommandQueue({}, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
     ASSERT_NE(cmdQueue_, nullptr);
   }
@@ -47,7 +46,7 @@ class ResourcesBinderTest : public ::testing::Test {
 
   void waitForGpu() {
     Result ret;
-    auto cmdBuf = cmdQueue_->createCommandBuffer(CommandBufferDesc(), &ret);
+    auto cmdBuf = cmdQueue_->createCommandBuffer({}, &ret);
     if (cmdBuf) {
       cmdQueue_->submit(*cmdBuf);
       cmdBuf->waitUntilCompleted();
@@ -58,10 +57,9 @@ class ResourcesBinderTest : public ::testing::Test {
 TEST_F(ResourcesBinderTest, BindBufferAndDraw) {
   Result ret;
 
-  BufferDesc bufDesc;
-  bufDesc.type = BufferDesc::BufferTypeBits::Uniform;
-  bufDesc.storage = ResourceStorage::Shared;
-  bufDesc.length = 256;
+  const BufferDesc bufDesc{.type = BufferDesc::BufferTypeBits::Uniform,
+                           .length = 256,
+                           .storage = ResourceStorage::Shared};
   auto buffer = iglDev_->createBuffer(bufDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(buffer, nullptr);
@@ -78,20 +76,17 @@ TEST_F(ResourcesBinderTest, BindBufferAndDraw) {
   auto colorTex = iglDev_->createTexture(texDesc, &ret);
   ASSERT_TRUE(ret.isOk());
 
-  FramebufferDesc fbDesc;
-  fbDesc.colorAttachments[0].texture = colorTex;
+  const FramebufferDesc fbDesc{.colorAttachments = {{.texture = colorTex}}};
   auto fb = iglDev_->createFramebuffer(fbDesc, &ret);
   ASSERT_TRUE(ret.isOk());
 
-  auto cmdQueue = iglDev_->createCommandQueue(CommandQueueDesc{}, &ret);
+  auto cmdQueue = iglDev_->createCommandQueue({}, &ret);
   ASSERT_TRUE(ret.isOk());
-  auto cmdBuf = cmdQueue->createCommandBuffer(CommandBufferDesc(), &ret);
+  auto cmdBuf = cmdQueue->createCommandBuffer({}, &ret);
   ASSERT_TRUE(ret.isOk());
 
-  RenderPassDesc rpDesc;
-  rpDesc.colorAttachments.resize(1);
-  rpDesc.colorAttachments[0].loadAction = LoadAction::Clear;
-  rpDesc.colorAttachments[0].storeAction = StoreAction::Store;
+  const RenderPassDesc rpDesc{
+      .colorAttachments = {{.loadAction = LoadAction::Clear, .storeAction = StoreAction::Store}}};
 
   auto encoder = cmdBuf->createRenderCommandEncoder(rpDesc, fb, {}, &ret);
   ASSERT_TRUE(ret.isOk());
@@ -116,9 +111,8 @@ TEST_F(ResourcesBinderTest, BindTextureAndSamplerAndDraw) {
   ret = sampledTex->upload(sampledTex->getFullRange(0), pixels.data());
   ASSERT_TRUE(ret.isOk());
 
-  SamplerStateDesc samplerDesc;
-  samplerDesc.minFilter = SamplerMinMagFilter::Linear;
-  samplerDesc.magFilter = SamplerMinMagFilter::Linear;
+  const SamplerStateDesc samplerDesc{.minFilter = SamplerMinMagFilter::Linear,
+                                     .magFilter = SamplerMinMagFilter::Linear};
   auto sampler = iglDev_->createSamplerState(samplerDesc, &ret);
   ASSERT_TRUE(ret.isOk());
   ASSERT_NE(sampler, nullptr);
@@ -131,20 +125,17 @@ TEST_F(ResourcesBinderTest, BindTextureAndSamplerAndDraw) {
   auto colorTex = iglDev_->createTexture(colorTexDesc, &ret);
   ASSERT_TRUE(ret.isOk());
 
-  FramebufferDesc fbDesc;
-  fbDesc.colorAttachments[0].texture = colorTex;
+  const FramebufferDesc fbDesc{.colorAttachments = {{.texture = colorTex}}};
   auto fb = iglDev_->createFramebuffer(fbDesc, &ret);
   ASSERT_TRUE(ret.isOk());
 
-  auto cmdQueue = iglDev_->createCommandQueue(CommandQueueDesc{}, &ret);
+  auto cmdQueue = iglDev_->createCommandQueue({}, &ret);
   ASSERT_TRUE(ret.isOk());
-  auto cmdBuf = cmdQueue->createCommandBuffer(CommandBufferDesc(), &ret);
+  auto cmdBuf = cmdQueue->createCommandBuffer({}, &ret);
   ASSERT_TRUE(ret.isOk());
 
-  RenderPassDesc rpDesc;
-  rpDesc.colorAttachments.resize(1);
-  rpDesc.colorAttachments[0].loadAction = LoadAction::Clear;
-  rpDesc.colorAttachments[0].storeAction = StoreAction::Store;
+  const RenderPassDesc rpDesc{
+      .colorAttachments = {{.loadAction = LoadAction::Clear, .storeAction = StoreAction::Store}}};
 
   auto encoder = cmdBuf->createRenderCommandEncoder(rpDesc, fb, {}, &ret);
   ASSERT_TRUE(ret.isOk());
@@ -183,18 +174,15 @@ TEST_F(ResourcesBinderTest, BindMultipleBuffers) {
   auto colorTex = iglDev_->createTexture(texDesc, &ret);
   ASSERT_TRUE(ret.isOk());
 
-  FramebufferDesc fbDesc;
-  fbDesc.colorAttachments[0].texture = colorTex;
+  const FramebufferDesc fbDesc{.colorAttachments = {{.texture = colorTex}}};
   auto fb = iglDev_->createFramebuffer(fbDesc, &ret);
   ASSERT_TRUE(ret.isOk());
 
-  auto cmdBuf = cmdQueue_->createCommandBuffer(CommandBufferDesc(), &ret);
+  auto cmdBuf = cmdQueue_->createCommandBuffer({}, &ret);
   ASSERT_TRUE(ret.isOk());
 
-  RenderPassDesc rpDesc;
-  rpDesc.colorAttachments.resize(1);
-  rpDesc.colorAttachments[0].loadAction = LoadAction::Clear;
-  rpDesc.colorAttachments[0].storeAction = StoreAction::Store;
+  const RenderPassDesc rpDesc{
+      .colorAttachments = {{.loadAction = LoadAction::Clear, .storeAction = StoreAction::Store}}};
 
   auto encoder = cmdBuf->createRenderCommandEncoder(rpDesc, fb, {}, &ret);
   ASSERT_TRUE(ret.isOk());
@@ -219,19 +207,16 @@ TEST_F(ResourcesBinderTest, CreateEncoderWithClearColor) {
   auto colorTex = iglDev_->createTexture(texDesc, &ret);
   ASSERT_TRUE(ret.isOk());
 
-  FramebufferDesc fbDesc;
-  fbDesc.colorAttachments[0].texture = colorTex;
+  const FramebufferDesc fbDesc{.colorAttachments = {{.texture = colorTex}}};
   auto fb = iglDev_->createFramebuffer(fbDesc, &ret);
   ASSERT_TRUE(ret.isOk());
 
-  auto cmdBuf = cmdQueue_->createCommandBuffer(CommandBufferDesc(), &ret);
+  auto cmdBuf = cmdQueue_->createCommandBuffer({}, &ret);
   ASSERT_TRUE(ret.isOk());
 
-  RenderPassDesc rpDesc;
-  rpDesc.colorAttachments.resize(1);
-  rpDesc.colorAttachments[0].loadAction = LoadAction::Clear;
-  rpDesc.colorAttachments[0].storeAction = StoreAction::Store;
-  rpDesc.colorAttachments[0].clearColor = {1.0f, 0.0f, 0.0f, 1.0f};
+  const RenderPassDesc rpDesc{.colorAttachments = {{.loadAction = LoadAction::Clear,
+                                                    .storeAction = StoreAction::Store,
+                                                    .clearColor = {1.0f, 0.0f, 0.0f, 1.0f}}}};
 
   auto encoder = cmdBuf->createRenderCommandEncoder(rpDesc, fb, {}, &ret);
   ASSERT_TRUE(ret.isOk());

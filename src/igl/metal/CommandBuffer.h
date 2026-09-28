@@ -33,7 +33,7 @@ class CommandBuffer final : public ICommandBuffer,
 
   void present(const std::shared_ptr<ITexture>& surface) const override;
 
-  void pushDebugGroupLabel(const char* label, const igl::Color& color) const override;
+  void pushDebugGroupLabel(const char* label, const Color& color) const override;
 
   void popDebugGroupLabel() const override;
 
@@ -42,6 +42,7 @@ class CommandBuffer final : public ICommandBuffer,
                   uint64_t srcOffset,
                   uint64_t dstOffset,
                   uint64_t size) override;
+  void fillBuffer(IBuffer& buffer, const BufferRange& range, uint8_t value) override;
   void copyTextureToBuffer(ITexture& src,
                            IBuffer& dst,
                            uint64_t dstOffset,

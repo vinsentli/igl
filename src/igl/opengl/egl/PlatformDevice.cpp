@@ -7,6 +7,7 @@
 
 #include <igl/opengl/egl/PlatformDevice.h>
 
+#include <igl/Macros.h>
 #include <igl/opengl/ViewTextureTarget.h>
 #include <igl/opengl/egl/Context.h>
 #include <igl/opengl/egl/Device.h>
@@ -28,6 +29,7 @@ PlatformDevice::PlatformDevice(Device& owner) : opengl::PlatformDevice(owner) {
 std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
     TextureFormat colorTextureFormat,
     Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (drawableTexture_) {
     return drawableTexture_;
   }
@@ -76,6 +78,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
     int height,
     TextureFormat colorTextureFormat,
     Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (drawableTexture_ && drawableTexture_->getWidth() == width &&
       drawableTexture_->getHeight() == height) {
     return drawableTexture_;
@@ -116,6 +119,8 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
 std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(
     TextureFormat depthTextureFormat,
     Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+  
   if (depthTexture_ && depthTexture_->getFormat() == depthTextureFormat) {
     return depthTexture_;
   }
@@ -166,6 +171,8 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(
 std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const TextureDesc& desc,
                                                                         Result* IGL_NULLABLE
                                                                             outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+
   if (!funcTable_) {
     return nullptr;
   }
@@ -198,7 +205,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const Te
 std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(
     AHardwareBuffer* IGL_NONNULL buffer,
     Result* IGL_NULLABLE outResult) const {
-
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (!funcTable_) {
     return nullptr;
   }
@@ -210,7 +217,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(
 
   Result subResult;
 
-  AHardwareBuffer_Desc hwbDesc;
+  AHardwareBuffer_Desc hwbDesc{};
   funcTable_->AHardwareBuffer_describe(buffer, &hwbDesc);
 
   auto texture = std::make_shared<android::NativeHWTextureBuffer>(
@@ -232,6 +239,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(
 void PlatformDevice::updateSurfaces(EGLSurface readSurface,
                                     EGLSurface drawSurface,
                                     Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION();
   auto* context = static_cast<Context*>(getSharedContext().get());
   if (context == nullptr) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "No EGL context found!");
@@ -251,6 +259,7 @@ void PlatformDevice::updateSurfaces(EGLSurface readSurface,
 
 EGLSurface IGL_NULLABLE PlatformDevice::createSurface(NativeWindowType nativeWindow,
                                                       Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   auto* context = static_cast<Context*>(getSharedContext().get());
   if (context == nullptr) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "No EGL context found!");
@@ -260,6 +269,7 @@ EGLSurface IGL_NULLABLE PlatformDevice::createSurface(NativeWindowType nativeWin
 }
 
 EGLSurface IGL_NULLABLE PlatformDevice::getReadSurface(Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION();
   auto* context = static_cast<Context*>(getSharedContext().get());
   if (context == nullptr) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "No EGL context found!");
@@ -270,6 +280,7 @@ EGLSurface IGL_NULLABLE PlatformDevice::getReadSurface(Result* IGL_NULLABLE outR
 
 void PlatformDevice::setPresentationTime(long long presentationTimeNs,
                                          Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION();
   auto* context = static_cast<Context*>(getSharedContext().get());
   if (context == nullptr) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "No EGL context found!");

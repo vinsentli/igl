@@ -35,7 +35,7 @@
 
 namespace igl::tests {
 
-const auto kQuarterPixel = (float)(0.5 / OFFSCREEN_RT_WIDTH);
+const float kQuarterPixel = static_cast<float>(0.5 / OFFSCREEN_RT_WIDTH);
 const float kBackgroundColor = 0.501f;
 const uint32_t kBackgroundColorHex = 0x80808080;
 
@@ -47,7 +47,6 @@ class RenderCommandEncoderTest : public ::testing::Test {
  private:
  public:
   RenderCommandEncoderTest() = default;
-  ~RenderCommandEncoderTest() override = default;
 
   /**
    * @brief This function sets up a render pass and a render pipeline descriptor
@@ -90,11 +89,9 @@ class RenderCommandEncoderTest : public ::testing::Test {
     ASSERT_TRUE(depthStencilTexture_ != nullptr);
 
     // Create framebuffer using the offscreen texture
-    FramebufferDesc framebufferDesc;
-
-    framebufferDesc.colorAttachments[0].texture = offscreenTexture_;
-    framebufferDesc.depthAttachment.texture = depthStencilTexture_;
-    framebufferDesc.stencilAttachment.texture = depthStencilTexture_;
+    const FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = offscreenTexture_}},
+                                          .depthAttachment = {.texture = depthStencilTexture_},
+                                          .stencilAttachment = {.texture = depthStencilTexture_}};
 
     framebuffer_ = iglDev_->createFramebuffer(framebufferDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -121,24 +118,22 @@ class RenderCommandEncoderTest : public ::testing::Test {
     shaderStages_ = std::move(stages);
 
     // Initialize input to vertex shader
-    VertexInputStateDesc inputDesc;
-
-    inputDesc.attributes[0].format = VertexAttributeFormat::Float4;
-    inputDesc.attributes[0].offset = 0;
-    inputDesc.attributes[0].bufferIndex = data::shader::kSimplePosIndex;
-    inputDesc.attributes[0].name = data::shader::kSimplePos;
-    inputDesc.attributes[0].location = 0;
-    inputDesc.inputBindings[0].stride = sizeof(float) * 4;
-
-    inputDesc.attributes[1].format = VertexAttributeFormat::Float2;
-    inputDesc.attributes[1].offset = 0;
-    inputDesc.attributes[1].bufferIndex = data::shader::kSimpleUvIndex;
-    inputDesc.attributes[1].name = data::shader::kSimpleUv;
-    inputDesc.attributes[1].location = 1;
-    inputDesc.inputBindings[1].stride = sizeof(float) * 2;
-
-    // numAttributes has to equal to bindings when using more than 1 buffer
-    inputDesc.numAttributes = inputDesc.numInputBindings = 2;
+    // numAttributes has to equal numInputBindings when using more than one buffer
+    const VertexInputStateDesc inputDesc{
+        .numAttributes = 2,
+        .attributes = {{.bufferIndex = data::shader::kSimplePosIndex,
+                        .format = VertexAttributeFormat::Float4,
+                        .offset = 0,
+                        .name = std::string(data::shader::kSimplePos),
+                        .location = 0},
+                       {.bufferIndex = data::shader::kSimpleUvIndex,
+                        .format = VertexAttributeFormat::Float2,
+                        .offset = 0,
+                        .name = std::string(data::shader::kSimpleUv),
+                        .location = 1}},
+        .numInputBindings = 2,
+        .inputBindings = {{.stride = sizeof(float) * 4}, {.stride = sizeof(float) * 2}},
+    };
 
     vertexInputState_ = iglDev_->createVertexInputState(inputDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -238,16 +233,16 @@ class RenderCommandEncoderTest : public ::testing::Test {
       encoder->bindIndexBuffer(*ib_, IndexFormat::UInt32);
     }
 
-    const igl::Viewport viewport = {.x = 0.0f,
-                                    .y = 0.0f,
-                                    .width = (float)OFFSCREEN_RT_WIDTH,
-                                    .height = (float)OFFSCREEN_RT_HEIGHT,
-                                    .minDepth = 0.0f,
-                                    .maxDepth = +1.0f};
-    const igl::ScissorRect scissor = {.x = 0,
-                                      .y = 0,
-                                      .width = (uint32_t)OFFSCREEN_RT_WIDTH,
-                                      .height = (uint32_t)OFFSCREEN_RT_HEIGHT};
+    const Viewport viewport = {.x = 0.0f,
+                               .y = 0.0f,
+                               .width = static_cast<float>(OFFSCREEN_RT_WIDTH),
+                               .height = static_cast<float>(OFFSCREEN_RT_HEIGHT),
+                               .minDepth = 0.0f,
+                               .maxDepth = +1.0f};
+    const ScissorRect scissor = {.x = 0,
+                                 .y = 0,
+                                 .width = static_cast<uint32_t>(OFFSCREEN_RT_WIDTH),
+                                 .height = static_cast<uint32_t>(OFFSCREEN_RT_HEIGHT)};
     encoder->bindViewport(viewport);
     encoder->bindScissorRect(scissor);
 
@@ -260,6 +255,10 @@ class RenderCommandEncoderTest : public ::testing::Test {
   }
 
   void verifyFrameBuffer(const std::vector<uint32_t>& expectedPixels) {
+    const auto dimensions = framebuffer_->getColorAttachment(0)->getDimensions();
+    ASSERT_EQ(dimensions.width, static_cast<uint32_t>(OFFSCREEN_RT_WIDTH));
+    ASSERT_EQ(dimensions.height, static_cast<uint32_t>(OFFSCREEN_RT_HEIGHT));
+
     auto pixels =
         std::vector<uint32_t>(static_cast<size_t>(OFFSCREEN_RT_WIDTH * OFFSCREEN_RT_WIDTH));
     framebuffer_->copyBytesColorAttachment(
@@ -776,14 +775,14 @@ TEST_F(RenderCommandEncoderTest, shouldDrawTriangleStripCopyTextureToBuffer) {
 
   encoder->bindViewport({.x = 0.0f,
                          .y = 0.0f,
-                         .width = (float)OFFSCREEN_RT_WIDTH,
-                         .height = (float)OFFSCREEN_RT_HEIGHT,
+                         .width = static_cast<float>(OFFSCREEN_RT_WIDTH),
+                         .height = static_cast<float>(OFFSCREEN_RT_HEIGHT),
                          .minDepth = 0.0f,
                          .maxDepth = +1.0f});
   encoder->bindScissorRect({.x = 0,
                             .y = 0,
-                            .width = (uint32_t)OFFSCREEN_RT_WIDTH,
-                            .height = (uint32_t)OFFSCREEN_RT_HEIGHT});
+                            .width = static_cast<uint32_t>(OFFSCREEN_RT_WIDTH),
+                            .height = static_cast<uint32_t>(OFFSCREEN_RT_HEIGHT)});
 
   encoder->insertDebugEventLabel("Rendering a triangle strip...");
   encoder->bindRenderPipelineState(renderPipelineStateTriangleStrip_);

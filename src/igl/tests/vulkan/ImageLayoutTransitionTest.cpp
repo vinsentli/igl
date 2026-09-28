@@ -23,7 +23,6 @@ namespace igl::tests {
 class ImageLayoutTransitionTest : public ::testing::Test {
  public:
   ImageLayoutTransitionTest() = default;
-  ~ImageLayoutTransitionTest() override = default;
 
   void SetUp() override {
     igl::setDebugBreakEnabled(false);
@@ -32,7 +31,7 @@ class ImageLayoutTransitionTest : public ::testing::Test {
     ASSERT_EQ(iglDev_->getBackendType(), BackendType::Vulkan) << "Test requires Vulkan backend";
 
     Result ret;
-    cmdQueue_ = iglDev_->createCommandQueue(CommandQueueDesc{}, &ret);
+    cmdQueue_ = iglDev_->createCommandQueue({}, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
     ASSERT_NE(cmdQueue_, nullptr);
   }
@@ -45,7 +44,7 @@ class ImageLayoutTransitionTest : public ::testing::Test {
 
   void waitForGpu() {
     Result ret;
-    auto cmdBuf = cmdQueue_->createCommandBuffer(CommandBufferDesc(), &ret);
+    auto cmdBuf = cmdQueue_->createCommandBuffer({}, &ret);
     if (cmdBuf) {
       cmdQueue_->submit(*cmdBuf);
       cmdBuf->waitUntilCompleted();
@@ -65,21 +64,18 @@ TEST_F(ImageLayoutTransitionTest, TransitionToColorAttachment) {
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(texture, nullptr);
 
-  FramebufferDesc fbDesc;
-  fbDesc.colorAttachments[0].texture = texture;
+  const FramebufferDesc fbDesc{.colorAttachments = {{.texture = texture}}};
   auto fb = iglDev_->createFramebuffer(fbDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(fb, nullptr);
 
-  auto cmdBuf = cmdQueue_->createCommandBuffer(CommandBufferDesc(), &ret);
+  auto cmdBuf = cmdQueue_->createCommandBuffer({}, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(cmdBuf, nullptr);
 
-  RenderPassDesc rpDesc;
-  rpDesc.colorAttachments.resize(1);
-  rpDesc.colorAttachments[0].loadAction = LoadAction::Clear;
-  rpDesc.colorAttachments[0].storeAction = StoreAction::Store;
-  rpDesc.colorAttachments[0].clearColor = {0, 0, 0, 1};
+  const RenderPassDesc rpDesc{.colorAttachments = {{.loadAction = LoadAction::Clear,
+                                                    .storeAction = StoreAction::Store,
+                                                    .clearColor = {0, 0, 0, 1}}}};
 
   auto encoder = cmdBuf->createRenderCommandEncoder(rpDesc, fb, {}, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -115,24 +111,20 @@ TEST_F(ImageLayoutTransitionTest, TransitionToDepthStencilAttachment) {
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(depthTex, nullptr);
 
-  FramebufferDesc fbDesc;
-  fbDesc.colorAttachments[0].texture = colorTex;
-  fbDesc.depthAttachment.texture = depthTex;
+  const FramebufferDesc fbDesc{.colorAttachments = {{.texture = colorTex}},
+                               .depthAttachment = {.texture = depthTex}};
   auto fb = iglDev_->createFramebuffer(fbDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(fb, nullptr);
 
-  auto cmdBuf = cmdQueue_->createCommandBuffer(CommandBufferDesc(), &ret);
+  auto cmdBuf = cmdQueue_->createCommandBuffer({}, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(cmdBuf, nullptr);
 
-  RenderPassDesc rpDesc;
-  rpDesc.colorAttachments.resize(1);
-  rpDesc.colorAttachments[0].loadAction = LoadAction::Clear;
-  rpDesc.colorAttachments[0].storeAction = StoreAction::Store;
-  rpDesc.depthAttachment.loadAction = LoadAction::Clear;
-  rpDesc.depthAttachment.storeAction = StoreAction::Store;
-  rpDesc.depthAttachment.clearDepth = 1.0f;
+  const RenderPassDesc rpDesc{
+      .colorAttachments = {{.loadAction = LoadAction::Clear, .storeAction = StoreAction::Store}},
+      .depthAttachment = {
+          .loadAction = LoadAction::Clear, .storeAction = StoreAction::Store, .clearDepth = 1.0f}};
 
   auto encoder = cmdBuf->createRenderCommandEncoder(rpDesc, fb, {}, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -190,20 +182,17 @@ TEST_F(ImageLayoutTransitionTest, UploadThenRenderPass) {
   ret = texture->upload(texture->getFullRange(0), pixels.data());
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
 
-  FramebufferDesc fbDesc;
-  fbDesc.colorAttachments[0].texture = texture;
+  const FramebufferDesc fbDesc{.colorAttachments = {{.texture = texture}}};
   auto fb = iglDev_->createFramebuffer(fbDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(fb, nullptr);
 
-  auto cmdBuf = cmdQueue_->createCommandBuffer(CommandBufferDesc(), &ret);
+  auto cmdBuf = cmdQueue_->createCommandBuffer({}, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(cmdBuf, nullptr);
 
-  RenderPassDesc rpDesc;
-  rpDesc.colorAttachments.resize(1);
-  rpDesc.colorAttachments[0].loadAction = LoadAction::Load;
-  rpDesc.colorAttachments[0].storeAction = StoreAction::Store;
+  const RenderPassDesc rpDesc{
+      .colorAttachments = {{.loadAction = LoadAction::Load, .storeAction = StoreAction::Store}}};
 
   auto encoder = cmdBuf->createRenderCommandEncoder(rpDesc, fb, {}, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -226,22 +215,20 @@ TEST_F(ImageLayoutTransitionTest, MultipleRenderPassesOnSameTexture) {
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(texture, nullptr);
 
-  FramebufferDesc fbDesc;
-  fbDesc.colorAttachments[0].texture = texture;
+  const FramebufferDesc fbDesc{.colorAttachments = {{.texture = texture}}};
   auto fb = iglDev_->createFramebuffer(fbDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(fb, nullptr);
 
   for (int i = 0; i < 3; ++i) {
-    auto cmdBuf = cmdQueue_->createCommandBuffer(CommandBufferDesc(), &ret);
+    auto cmdBuf = cmdQueue_->createCommandBuffer({}, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
     ASSERT_NE(cmdBuf, nullptr);
 
-    RenderPassDesc rpDesc;
-    rpDesc.colorAttachments.resize(1);
-    rpDesc.colorAttachments[0].loadAction = (i == 0) ? LoadAction::Clear : LoadAction::Load;
-    rpDesc.colorAttachments[0].storeAction = StoreAction::Store;
-    rpDesc.colorAttachments[0].clearColor = {0, 0, 0, 1};
+    const RenderPassDesc rpDesc{
+        .colorAttachments = {{.loadAction = (i == 0) ? LoadAction::Clear : LoadAction::Load,
+                              .storeAction = StoreAction::Store,
+                              .clearColor = {0, 0, 0, 1}}}};
 
     auto encoder = cmdBuf->createRenderCommandEncoder(rpDesc, fb, {}, &ret);
     ASSERT_TRUE(ret.isOk()) << "Failed on pass " << i;

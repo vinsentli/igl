@@ -8,6 +8,8 @@
 #include <igl/d3d12/Texture.h>
 
 #include <algorithm>
+#include <cstring>
+#include <igl/Macros.h>
 #include <igl/d3d12/D3D12FenceWaiter.h>
 #include <igl/d3d12/DXCCompiler.h>
 #include <igl/d3d12/Device.h>
@@ -31,6 +33,7 @@ std::shared_ptr<Texture> Texture::createFromResource(ID3D12Resource* resource,
                                                      ID3D12CommandQueue* queue,
                                                      D3D12_RESOURCE_STATES initialState,
                                                      Device* iglDevice) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (!resource) {
     IGL_LOG_ERROR("Texture::createFromResource - resource is NULL!\n");
     return nullptr;
@@ -58,13 +61,14 @@ std::shared_ptr<Texture> Texture::createFromResource(ID3D12Resource* resource,
   IGL_D3D12_LOG_VERBOSE("Texture::createFromResource - SUCCESS: %dx%d format=%d\n",
                         desc.width,
                         desc.height,
-                        (int)format);
+                        static_cast<int>(format));
 
   return texture;
 }
 
 std::shared_ptr<Texture> Texture::createTextureView(std::shared_ptr<Texture> parent,
                                                     const TextureViewDesc& desc) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (!parent) {
     IGL_LOG_ERROR("Texture::createTextureView - parent is NULL!\n");
     return nullptr;
@@ -155,6 +159,7 @@ std::shared_ptr<Texture> Texture::createTextureView(std::shared_ptr<Texture> par
 }
 
 Texture::~Texture() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
   // Texture views share the parent's resource, so they don't own descriptors.
   // Only free descriptors for non-view textures.
   if (isView_) {
@@ -175,6 +180,7 @@ Texture::~Texture() {
 }
 
 Result Texture::upload(const TextureRangeDesc& range, const void* data, size_t bytesPerRow) const {
+  IGL_PROFILER_FUNCTION();
   IGL_D3D12_LOG_VERBOSE("Texture::upload() - START: %dx%d\n", range.width, range.height);
 
   if (!device_ || !queue_ || !resource_.Get()) {
@@ -230,7 +236,7 @@ Result Texture::upload(const TextureRangeDesc& range, const void* data, size_t b
   IGL_D3D12_LOG_VERBOSE(
       "Texture::upload - type=%d, baseSlice=%u, numSlicesToUpload=%u, baseMip=%u, "
       "numMipsToUpload=%u\n",
-      (int)type_,
+      static_cast<int>(type_),
       baseSlice,
       numSlicesToUpload,
       baseMip,
@@ -388,7 +394,7 @@ Result Texture::upload(const TextureRangeDesc& range, const void* data, size_t b
         for (UINT row = 0; row < rowsToCopy; ++row) {
           const uint8_t* srcRow = srcSlice + row * mipBytesPerRow;
           uint8_t* dstRow = dstSlice + row * layout.Footprint.RowPitch;
-          memcpy(dstRow, srcRow, copyBytes);
+          std::memcpy(dstRow, srcRow, copyBytes);
         }
       }
 
@@ -565,6 +571,7 @@ Result Texture::uploadCube(const TextureRangeDesc& range,
                            TextureCubeFace face,
                            const void* data,
                            size_t bytesPerRow) const {
+  IGL_PROFILER_FUNCTION();
   // Cube textures are stored as texture arrays with 6 slices (one per face).
   // The upload() method already handles cube textures correctly when face/numFaces are set.
 
@@ -587,6 +594,7 @@ Result Texture::uploadInternal(TextureType type,
                                const void* data,
                                size_t bytesPerRow,
                                const uint32_t* mipLevelBytes) const {
+  IGL_PROFILER_FUNCTION();
   if (!(type == TextureType::TwoD || type == TextureType::TwoDArray ||
         type == TextureType::ThreeD || type == TextureType::Cube)) {
     return Result(Result::Code::Unimplemented, "Upload not implemented for this texture type");
@@ -633,6 +641,7 @@ bool Texture::isRequiredGenerateMipmap() const {
 }
 
 void Texture::generateMipmap(ICommandQueue& /*cmdQueue*/, const TextureRangeDesc* /*range*/) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_D3D12_LOG_VERBOSE("Texture::generateMipmap(cmdQueue) - START: numMips=%u\n", numMipLevels_);
 
   if (!device_ || !queue_ || !resource_.Get() || numMipLevels_ < 2) {
@@ -651,14 +660,14 @@ void Texture::generateMipmap(ICommandQueue& /*cmdQueue*/, const TextureRangeDesc
   if (resourceDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D) {
     IGL_D3D12_LOG_VERBOSE(
         "Texture::generateMipmap() - Skipping: only 2D textures supported (dimension=%d)\n",
-        (int)resourceDesc.Dimension);
+        static_cast<int>(resourceDesc.Dimension));
     return;
   }
 
   // Skip depth/stencil textures entirely. The current D3D12 mipmap path only
   // supports color render-target textures; attempting to add ALLOW_RENDER_TARGET
   // to a depth/stencil resource would violate D3D12's flag rules.
-  if (resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
+  if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0) {
     IGL_D3D12_LOG_VERBOSE(
         "Texture::generateMipmap() - Skipping: depth/stencil textures are not "
         "handled by this mipmap path (Flags=0x%08X)\n",
@@ -673,7 +682,7 @@ void Texture::generateMipmap(ICommandQueue& /*cmdQueue*/, const TextureRangeDesc
   // Note: Device::createTexture() automatically sets ALLOW_RENDER_TARGET for
   // mipmapped color textures, so this should only trigger for externally
   // created resources missing the flag.
-  if (!(resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)) {
+  if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) == 0) {
     IGL_D3D12_LOG_VERBOSE(
         "Texture::generateMipmap() - Skipping: texture does not have "
         "ALLOW_RENDER_TARGET flag (Flags=0x%08X)\n",
@@ -848,10 +857,10 @@ void Texture::generateMipmap(ICommandQueue& /*cmdQueue*/, const TextureRangeDesc
         list.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, mip + 1, 0);
 
     list->OMSetRenderTargets(1, &rtvCpu, FALSE, nullptr);
-    const UINT w = std::max<UINT>(1u, (UINT)(resourceDesc.Width >> (mip + 1)));
-    const UINT h = std::max<UINT>(1u, (UINT)(resourceDesc.Height >> (mip + 1)));
-    D3D12_VIEWPORT vp{0.0f, 0.0f, (FLOAT)w, (FLOAT)h, 0.0f, 1.0f};
-    D3D12_RECT sc{0, 0, (LONG)w, (LONG)h};
+    const UINT w = std::max<UINT>(1u, static_cast<UINT>(resourceDesc.Width >> (mip + 1)));
+    const UINT h = std::max<UINT>(1u, static_cast<UINT>(resourceDesc.Height >> (mip + 1)));
+    D3D12_VIEWPORT vp{0.0f, 0.0f, static_cast<FLOAT>(w), static_cast<FLOAT>(h), 0.0f, 1.0f};
+    D3D12_RECT sc{0, 0, static_cast<LONG>(w), static_cast<LONG>(h)};
     list->RSSetViewports(1, &vp);
     list->RSSetScissorRects(1, &sc);
 
@@ -884,6 +893,7 @@ void Texture::generateMipmap(ICommandQueue& /*cmdQueue*/, const TextureRangeDesc
 
 void Texture::generateMipmap(ICommandBuffer& /*cmdBuffer*/,
                              const TextureRangeDesc* /*range*/) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_D3D12_LOG_VERBOSE("Texture::generateMipmap(cmdBuffer) - START: numMips=%u\n", numMipLevels_);
 
   if (!device_ || !queue_ || !resource_.Get() || numMipLevels_ < 2) {
@@ -907,7 +917,7 @@ void Texture::generateMipmap(ICommandBuffer& /*cmdBuffer*/,
   }
 
   // Check if texture was created with RENDER_TARGET flag (required for mipmap generation)
-  if (!(resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)) {
+  if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) == 0) {
     IGL_D3D12_LOG_VERBOSE(
         "Texture::generateMipmap(cmdBuffer) - Skipping: texture not created with RENDER_TARGET "
         "usage\n");
@@ -1077,10 +1087,10 @@ void Texture::generateMipmap(ICommandBuffer& /*cmdBuffer*/,
         list.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, mip + 1, 0);
 
     list->OMSetRenderTargets(1, &rtvCpu, FALSE, nullptr);
-    const UINT w = std::max<UINT>(1u, (UINT)(resourceDesc.Width >> (mip + 1)));
-    const UINT h = std::max<UINT>(1u, (UINT)(resourceDesc.Height >> (mip + 1)));
-    D3D12_VIEWPORT vp{0.0f, 0.0f, (FLOAT)w, (FLOAT)h, 0.0f, 1.0f};
-    D3D12_RECT sc{0, 0, (LONG)w, (LONG)h};
+    const UINT w = std::max<UINT>(1u, static_cast<UINT>(resourceDesc.Width >> (mip + 1)));
+    const UINT h = std::max<UINT>(1u, static_cast<UINT>(resourceDesc.Height >> (mip + 1)));
+    D3D12_VIEWPORT vp{0.0f, 0.0f, static_cast<FLOAT>(w), static_cast<FLOAT>(h), 0.0f, 1.0f};
+    D3D12_RECT sc{0, 0, static_cast<LONG>(w), static_cast<LONG>(h)};
     list->RSSetViewports(1, &vp);
     list->RSSetScissorRects(1, &sc);
     list->SetGraphicsRootDescriptorTable(0, srvGpu);
@@ -1109,6 +1119,7 @@ void Texture::generateMipmap(ICommandBuffer& /*cmdBuffer*/,
 }
 
 void Texture::initializeStateTracking(D3D12_RESOURCE_STATES initialState) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   // Simplified per-subresource state tracking: always use a vector (no dual-mode).
   if (!resource_.Get()) {
     subresourceStates_.clear();
@@ -1116,7 +1127,7 @@ void Texture::initializeStateTracking(D3D12_RESOURCE_STATES initialState) {
   }
 
   const uint32_t mipLevels = static_cast<uint32_t>(std::max<size_t>(numMipLevels_, 1));
-  uint32_t arraySize;
+  uint32_t arraySize = 0;
   if (type_ == TextureType::ThreeD) {
     arraySize = 1u;
   } else if (type_ == TextureType::Cube) {
@@ -1139,7 +1150,7 @@ uint32_t Texture::calcSubresourceIndex(uint32_t mipLevel, uint32_t layer) const 
   const Texture* owner = getStateOwner();
   IGL_DEBUG_ASSERT(owner != nullptr, "State owner must not be null");
   const uint32_t mipLevels = static_cast<uint32_t>(std::max<size_t>(owner->numMipLevels_, 1));
-  uint32_t arraySize;
+  uint32_t arraySize = 0;
   if (owner->type_ == TextureType::ThreeD) {
     arraySize = 1u;
   } else if (owner->type_ == TextureType::Cube) {
@@ -1158,7 +1169,7 @@ uint32_t Texture::calcSubresourceIndex(uint32_t mipLevel, uint32_t layer) const 
     IGL_D3D12_LOG_VERBOSE(
         "calcSubresourceIndex (view): type=%d, mip=%u, layer=%u -> resource mip=%u, layer=%u -> "
         "subresource=%u\n",
-        (int)type_,
+        static_cast<int>(type_),
         mipLevel,
         layer,
         resourceMip,
@@ -1173,6 +1184,7 @@ void Texture::transitionTo(ID3D12GraphicsCommandList* commandList,
                            D3D12_RESOURCE_STATES newState,
                            uint32_t mipLevel,
                            uint32_t layer) {
+  IGL_PROFILER_FUNCTION();
   // Simplified per-subresource state tracking.
   Texture* owner = getStateOwner();
   if (!commandList || !owner || !owner->resource_.Get() || owner->subresourceStates_.empty()) {
@@ -1250,6 +1262,7 @@ void Texture::transitionTo(ID3D12GraphicsCommandList* commandList,
 
 void Texture::transitionAll(ID3D12GraphicsCommandList* commandList,
                             D3D12_RESOURCE_STATES newState) {
+  IGL_PROFILER_FUNCTION();
   // Simplified per-subresource state tracking.
   Texture* owner = getStateOwner();
   if (!commandList || !owner || !owner->resource_.Get() || owner->subresourceStates_.empty()) {

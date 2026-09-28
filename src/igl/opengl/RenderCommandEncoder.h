@@ -43,8 +43,8 @@ class RenderCommandEncoder final : public IRenderCommandEncoder, public WithCont
  public:
   void endEncoding() override;
 
-  void pushDebugGroupLabel(const char* label, const igl::Color& color) const override;
-  void insertDebugEventLabel(const char* label, const igl::Color& color) const override;
+  void pushDebugGroupLabel(const char* label, const Color& color) const override;
+  void insertDebugEventLabel(const char* label, const Color& color) const override;
   void popDebugGroupLabel() const override;
 
   void bindViewport(const Viewport& viewport) override;
@@ -103,8 +103,8 @@ class RenderCommandEncoder final : public IRenderCommandEncoder, public WithCont
   void setStencilReferenceValue(uint32_t value) override;
   void setBlendColor(const Color& color) override;
   void setCullMode(CullMode cullMode) override;
-  void setFrontFacingWinding(WindingMode mode) override;
   void setDepthBias(float depthBias, float slopeScale, float clamp) override;
+  void setFrontFacingWinding(WindingMode frontFaceWinding) override;
 
  private:
   std::unique_ptr<RenderCommandAdapter> adapter_;

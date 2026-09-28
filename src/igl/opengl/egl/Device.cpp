@@ -9,6 +9,7 @@
 
 #include <EGL/eglplatform.h>
 #include <cstring>
+#include <igl/Macros.h>
 #include <igl/opengl/egl/Context.h>
 
 namespace igl::opengl::egl {
@@ -22,8 +23,9 @@ const PlatformDevice& Device::getPlatformDevice() const noexcept {
 }
 
 void Device::updateSurface(void* nativeWindowType) {
+  IGL_PROFILER_FUNCTION();
   std::static_pointer_cast<Context>(getSharedContext())
-      ->updateSurface((NativeWindowType)nativeWindowType);
+      ->updateSurface(reinterpret_cast<NativeWindowType>(nativeWindowType));
 }
 
 } // namespace igl::opengl::egl

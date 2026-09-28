@@ -11,6 +11,7 @@
 #include <cstring>
 #include <string>
 #include <igl/DeviceFeatures.h>
+#include <igl/Macros.h>
 #include <igl/opengl/DeviceFeatureSet.h>
 
 #if IGL_SHADER_DUMP
@@ -24,6 +25,7 @@ ShaderStages::ShaderStages(const ShaderStagesDesc& desc, IContext& context) :
   IShaderStages(desc), WithContext(context) {}
 
 ShaderStages::~ShaderStages() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
   if (programID_ != 0) {
     getContext().deleteProgram(programID_);
     programID_ = 0;
@@ -31,6 +33,7 @@ ShaderStages::~ShaderStages() {
 }
 
 void ShaderStages::createRenderProgram(Result* result) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);   
   // check support program binary
   GLint numProgramBinayFormats = 0;
   getContext().getIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &numProgramBinayFormats);
@@ -162,6 +165,7 @@ void ShaderStages::createRenderProgram(Result* result) {
 }
 
 void ShaderStages::createComputeProgram(Result* result) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (!IGL_DEBUG_VERIFY(getComputeModule())) {
     // we need a vertex shader and a fragment shader in order to link the program
     Result::setResult(result, Result::Code::ArgumentInvalid, "Missing required compute shader");
@@ -217,6 +221,7 @@ void ShaderStages::createComputeProgram(Result* result) {
 
 // link the given shaders into this shader program
 Result ShaderStages::create(const ShaderStagesDesc& /*desc*/) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   Result result;
   if (getType() == ShaderStagesType::Render) {
     createRenderProgram(&result);
@@ -230,6 +235,7 @@ Result ShaderStages::create(const ShaderStagesDesc& /*desc*/) {
 }
 
 Result ShaderStages::validate() const {
+  IGL_PROFILER_FUNCTION();
   getContext().validateProgram(programID_);
   GLint status = 0;
   getContext().getProgramiv(programID_, GL_VALIDATE_STATUS, &status);
@@ -243,10 +249,12 @@ Result ShaderStages::validate() const {
 }
 
 void ShaderStages::bind() const {
+  IGL_PROFILER_FUNCTION();
   getContext().useProgram(programID_);
 }
 
 void ShaderStages::unbind() const {
+  IGL_PROFILER_FUNCTION();
   getContext().useProgram(0);
 }
 
@@ -254,6 +262,7 @@ ShaderModule::ShaderModule(IContext& context, ShaderModuleInfo info) :
   WithContext(context), IShaderModule(std::move(info)) {}
 
 ShaderModule::~ShaderModule() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
   if (getContext().isDestructionAllowed() && shaderID_ != 0) {
     getContext().deleteShader(shaderID_);
     shaderID_ = 0;
@@ -262,6 +271,7 @@ ShaderModule::~ShaderModule() {
 
 // compile the shader from the given src shader code
 Result ShaderModule::create(const ShaderModuleDesc& desc) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (desc.input.type == ShaderInputType::Binary) {
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
     return Result(Result::Code::Unimplemented);
@@ -272,6 +282,7 @@ Result ShaderModule::create(const ShaderModuleDesc& desc) {
     return result;
   }
 
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (desc.info.stage) {
   case ShaderStage::Vertex:
     shaderType_ = GL_VERTEX_SHADER;
@@ -306,7 +317,8 @@ Result ShaderModule::create(const ShaderModuleDesc& desc) {
                                   InternalRequirement::DebugLabelExtEnumsReq)
                                   ? GL_SHADER_OBJECT_EXT
                                   : GL_SHADER;
-    getContext().objectLabel(identifier, shaderID, desc.debugName.size(), desc.debugName.c_str());
+    getContext().objectLabel(
+        identifier, shaderID, static_cast<GLsizei>(desc.debugName.size()), desc.debugName.c_str());
   }
 
   // compile the shader
@@ -334,7 +346,7 @@ Result ShaderModule::create(const ShaderModuleDesc& desc) {
   if (!std::filesystem::exists(filename)) {
     std::ofstream glslFile;
     glslFile.open(filename, std::ios::out);
-    glslFile.write(src, (strlen(src)));
+    glslFile.write(src, (std::strlen(src)));
     glslFile.close();
     IGL_LOG_INFO("Shader dumped to file %s", filename.c_str());
   }
@@ -375,13 +387,14 @@ Result ShaderModule::create(const ShaderModuleDesc& desc) {
   }
   shaderID_ = shaderID;
 
-  hash_ =
-      std::hash<std::string_view>()(std::string_view(desc.input.source, strlen(desc.input.source)));
+  hash_ = std::hash<std::string_view>()(
+      std::string_view(desc.input.source, std::strlen(desc.input.source)));
 
   return Result();
 }
 
 std::string ShaderStages::getProgramInfoLog(GLuint programID) const {
+  IGL_PROFILER_FUNCTION();
   // Get the size of log
   GLsizei logSize = 0;
   getContext().getProgramiv(programID, GL_INFO_LOG_LENGTH, &logSize);

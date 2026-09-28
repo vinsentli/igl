@@ -8,19 +8,15 @@
 #pragma once
 
 #include <cstdint>
-#include <igl/CommandBuffer.h>
 #include <igl/Common.h>
-
-namespace igl {
-
-class IComputeCommandEncoder;
-} // namespace igl
+#include <igl/ComputeCommandEncoder.h>
+#include <igl/RenderCommandEncoder.h>
 
 namespace iglu::uniform {
 
 struct Descriptor;
 
-// Encoder submits an uniform described by Descriptor.
+// Encoder submits a uniform described by Descriptor.
 //
 // It handles backend-specific details:
 // * For Metal, it calls igl::IRenderCommandEncoder::bindBytes() or

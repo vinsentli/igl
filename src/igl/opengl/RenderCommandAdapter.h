@@ -11,7 +11,7 @@
 #include <bitset>
 #include <functional>
 #include <igl/Common.h>
-#include <igl/opengl/GLIncludes.h>
+#include <igl/opengl/GLIncludes.h> // IWYU pragma: keep
 #include <igl/opengl/UnbindPolicy.h>
 #include <igl/opengl/UniformAdapter.h>
 #include <igl/opengl/WithContext.h>
@@ -36,7 +36,7 @@ class RenderCommandAdapter final : public WithContext {
     PIPELINE = 1 << 1,
     DepthStencil = 1 << 2,
     CullMode = 1 << 3,
-    FrontFace = 1 << 4,
+    FrontFaceWinding = 1 << 4,
   };
 
  private:
@@ -141,7 +141,7 @@ class RenderCommandAdapter final : public WithContext {
                   const std::shared_ptr<IFramebuffer>& framebuffer,
                   Result* IGL_NULLABLE outResult);
 
-  [[nodiscard]] const igl::IRenderPipelineState& pipelineState() const {
+  [[nodiscard]] const IRenderPipelineState& pipelineState() const {
     IGL_DEBUG_ASSERT(pipelineState_, "No rendering pipeline is bound");
     return *pipelineState_;
   }
@@ -188,6 +188,8 @@ class RenderCommandAdapter final : public WithContext {
   std::shared_ptr<VertexArrayObject> activeVAO_ = nullptr;
   uint32_t frontStencilReferenceValue_ = 0xFF;
   uint32_t backStencilReferenceValue_ = 0xFF;
+  CullMode cullMode_ = CullMode::Disabled;
+  WindingMode windingMode_ = WindingMode::CounterClockwise;
 
   // Effective cull mode for the next draw call. Written by both setCullMode()
   // (explicit user override) and setPipelineState() (falls back to the pipeline

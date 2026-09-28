@@ -13,6 +13,7 @@
 #include "util/Common.h"
 
 #include <array>
+#include <cstring>
 #include <memory>
 #include <vector>
 #include <igl/Buffer.h>
@@ -35,7 +36,6 @@ class ComputeCommandEncoderTest : public ::testing::Test {
  private:
  public:
   ComputeCommandEncoderTest() = default;
-  ~ComputeCommandEncoderTest() override = default;
 
   /**
    * @brief This function sets up compute buffers and compiles the compute shader.
@@ -107,12 +107,13 @@ class ComputeCommandEncoderTest : public ::testing::Test {
                      const std::shared_ptr<IBuffer>& bufferOut,
                      std::shared_ptr<IComputePipelineState>& ret) {
     ASSERT_TRUE(computeStages_ != nullptr);
-    ComputePipelineDesc computeDesc;
-    computeDesc.shaderStages = computeStages_;
-    computeDesc.buffersMap[igl::tests::data::shader::kSimpleComputeInputIndex] =
-        IGL_NAMEHANDLE(igl::tests::data::shader::kSimpleComputeInput);
-    computeDesc.buffersMap[igl::tests::data::shader::kSimpleComputeOutputIndex] =
-        IGL_NAMEHANDLE(igl::tests::data::shader::kSimpleComputeOutput);
+    const ComputePipelineDesc computeDesc{
+        .buffersMap = {{igl::tests::data::shader::kSimpleComputeInputIndex,
+                        IGL_NAMEHANDLE(igl::tests::data::shader::kSimpleComputeInput)},
+                       {igl::tests::data::shader::kSimpleComputeOutputIndex,
+                        IGL_NAMEHANDLE(igl::tests::data::shader::kSimpleComputeOutput)}},
+        .shaderStages = computeStages_,
+    };
     auto computePipelineState = iglDev_->createComputePipeline(computeDesc, nullptr);
     ASSERT_TRUE(computePipelineState != nullptr);
 
@@ -173,9 +174,9 @@ TEST_F(ComputeCommandEncoderTest, canEncodeBasicBufferOperation) {
   auto* data = bufferOut0_->map(range, &ret);
   ASSERT_TRUE(data != nullptr);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
-  memcpy(bytes.data(), data, sizeof(float) * kDataIn.size());
-  ASSERT_EQ(kDataIn.size() > 0, true);
-  for (int i = 0; i < kDataIn.size(); i++) {
+  std::memcpy(bytes.data(), data, sizeof(float) * kDataIn.size());
+  ASSERT_FALSE(kDataIn.empty());
+  for (size_t i = 0; i < kDataIn.size(); i++) {
     ASSERT_EQ(kDataIn[i] * 2.0f, bytes[i]);
   }
   bufferOut0_->unmap();
@@ -241,9 +242,9 @@ TEST_F(ComputeCommandEncoderTest, canUseOutputBufferFromOnePassAsInputToNext) {
   auto* data = bufferOut2_->map(range, &ret);
   ASSERT_TRUE(data != nullptr);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
-  memcpy(bytes.data(), data, sizeof(float) * kDataIn.size());
-  ASSERT_EQ(kDataIn.size() > 0, true);
-  for (int i = 0; i < kDataIn.size(); i++) {
+  std::memcpy(bytes.data(), data, sizeof(float) * kDataIn.size());
+  ASSERT_FALSE(kDataIn.empty());
+  for (size_t i = 0; i < kDataIn.size(); i++) {
     // Compute pass ran 3 times
     ASSERT_EQ(kDataIn[i] * 2.0f * 2.0f * 2.0f, bytes[i]);
   }
@@ -308,7 +309,7 @@ TEST_F(ComputeCommandEncoderTest, copyBuffer) {
       static_cast<const uint8_t*>(bufferDst->map(BufferRange(dataIn2.size(), 0), &ret));
   ASSERT_TRUE(dataOut != nullptr);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
-  for (int i = 0; i < dataIn2.size(); i++) {
+  for (size_t i = 0; i < dataIn2.size(); i++) {
     ASSERT_EQ(dataIn2[i], dataOut[i]);
   }
   bufferDst->unmap();

@@ -24,7 +24,6 @@ namespace igl::tests {
 class RenderCommandEncoderVulkanTest : public ::testing::Test {
  public:
   RenderCommandEncoderVulkanTest() = default;
-  ~RenderCommandEncoderVulkanTest() override = default;
 
   void SetUp() override {
     igl::setDebugBreakEnabled(false);
@@ -33,7 +32,7 @@ class RenderCommandEncoderVulkanTest : public ::testing::Test {
     ASSERT_EQ(iglDev_->getBackendType(), BackendType::Vulkan) << "Test requires Vulkan backend";
 
     Result ret;
-    cmdQueue_ = iglDev_->createCommandQueue(CommandQueueDesc{}, &ret);
+    cmdQueue_ = iglDev_->createCommandQueue({}, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
     ASSERT_NE(cmdQueue_, nullptr);
 
@@ -46,8 +45,7 @@ class RenderCommandEncoderVulkanTest : public ::testing::Test {
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
     ASSERT_NE(colorTex_, nullptr);
 
-    FramebufferDesc fbDesc;
-    fbDesc.colorAttachments[0].texture = colorTex_;
+    const FramebufferDesc fbDesc{.colorAttachments = {{.texture = colorTex_}}};
     fb_ = iglDev_->createFramebuffer(fbDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
     ASSERT_NE(fb_, nullptr);
@@ -63,15 +61,15 @@ class RenderCommandEncoderVulkanTest : public ::testing::Test {
 
   std::unique_ptr<IRenderCommandEncoder> createEncoder(std::shared_ptr<ICommandBuffer>& cmdBuf) {
     Result ret;
-    cmdBuf = cmdQueue_->createCommandBuffer(CommandBufferDesc(), &ret);
+    cmdBuf = cmdQueue_->createCommandBuffer({}, &ret);
     if (!ret.isOk() || !cmdBuf) {
       return nullptr;
     }
 
     RenderPassDesc rpDesc;
-    rpDesc.colorAttachments.resize(1);
-    rpDesc.colorAttachments[0].loadAction = LoadAction::Clear;
-    rpDesc.colorAttachments[0].storeAction = StoreAction::Store;
+    rpDesc = {
+        .colorAttachments = {{.loadAction = LoadAction::Clear, .storeAction = StoreAction::Store}},
+    };
 
     auto encoder = cmdBuf->createRenderCommandEncoder(rpDesc, fb_, {}, &ret);
     if (!ret.isOk()) {
@@ -139,6 +137,18 @@ TEST_F(RenderCommandEncoderVulkanTest, SetDepthBias) {
   cmdQueue_->submit(*cmdBuf);
 }
 
+TEST_F(RenderCommandEncoderVulkanTest, SetFrontFacingWinding) {
+  std::shared_ptr<ICommandBuffer> cmdBuf;
+  auto encoder = createEncoder(cmdBuf);
+  ASSERT_NE(encoder, nullptr);
+
+  encoder->setFrontFacingWinding(WindingMode::Clockwise);
+  encoder->setFrontFacingWinding(WindingMode::CounterClockwise);
+
+  encoder->endEncoding();
+  cmdQueue_->submit(*cmdBuf);
+}
+
 TEST_F(RenderCommandEncoderVulkanTest, DebugGroupLabels) {
   std::shared_ptr<ICommandBuffer> cmdBuf;
   auto encoder = createEncoder(cmdBuf);
@@ -167,14 +177,12 @@ TEST_F(RenderCommandEncoderVulkanTest, MultipleEncodersSequentially) {
 
 TEST_F(RenderCommandEncoderVulkanTest, ClearColorRenderPass) {
   Result ret;
-  const auto cmdBuf = cmdQueue_->createCommandBuffer(CommandBufferDesc(), &ret);
+  const auto cmdBuf = cmdQueue_->createCommandBuffer({}, &ret);
   ASSERT_TRUE(ret.isOk());
 
-  RenderPassDesc rpDesc;
-  rpDesc.colorAttachments.resize(1);
-  rpDesc.colorAttachments[0].loadAction = LoadAction::Clear;
-  rpDesc.colorAttachments[0].storeAction = StoreAction::Store;
-  rpDesc.colorAttachments[0].clearColor = {1.0f, 0.0f, 0.0f, 1.0f};
+  const RenderPassDesc rpDesc{.colorAttachments = {{.loadAction = LoadAction::Clear,
+                                                    .storeAction = StoreAction::Store,
+                                                    .clearColor = {1.0f, 0.0f, 0.0f, 1.0f}}}};
 
   auto encoder = cmdBuf->createRenderCommandEncoder(rpDesc, fb_, {}, &ret);
   ASSERT_TRUE(ret.isOk());

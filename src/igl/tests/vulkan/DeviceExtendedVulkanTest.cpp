@@ -22,7 +22,6 @@ namespace igl::tests {
 class DeviceExtendedVulkanTest : public ::testing::Test {
  public:
   DeviceExtendedVulkanTest() = default;
-  ~DeviceExtendedVulkanTest() override = default;
 
   void SetUp() override {
     igl::setDebugBreakEnabled(false);
@@ -40,9 +39,8 @@ class DeviceExtendedVulkanTest : public ::testing::Test {
 TEST_F(DeviceExtendedVulkanTest, CreateDepthStencilState) {
   Result ret;
 
-  DepthStencilStateDesc desc;
-  desc.isDepthWriteEnabled = true;
-  desc.compareFunction = CompareFunction::Less;
+  const DepthStencilStateDesc desc{.compareFunction = CompareFunction::Less,
+                                   .isDepthWriteEnabled = true};
 
   auto state = iglDev_->createDepthStencilState(desc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -52,14 +50,14 @@ TEST_F(DeviceExtendedVulkanTest, CreateDepthStencilState) {
 TEST_F(DeviceExtendedVulkanTest, CreateDepthStencilStateWithStencil) {
   Result ret;
 
-  DepthStencilStateDesc desc;
-  desc.isDepthWriteEnabled = true;
-  desc.compareFunction = CompareFunction::LessEqual;
-  desc.frontFaceStencil.stencilCompareFunction = CompareFunction::AlwaysPass;
-  desc.frontFaceStencil.stencilFailureOperation = StencilOperation::Keep;
-  desc.frontFaceStencil.depthFailureOperation = StencilOperation::Keep;
-  desc.frontFaceStencil.depthStencilPassOperation = StencilOperation::Replace;
-  desc.backFaceStencil = desc.frontFaceStencil;
+  constexpr StencilStateDesc kStencil{.stencilFailureOperation = StencilOperation::Keep,
+                                      .depthFailureOperation = StencilOperation::Keep,
+                                      .depthStencilPassOperation = StencilOperation::Replace,
+                                      .stencilCompareFunction = CompareFunction::AlwaysPass};
+  const DepthStencilStateDesc desc{.compareFunction = CompareFunction::LessEqual,
+                                   .isDepthWriteEnabled = true,
+                                   .backFaceStencil = kStencil,
+                                   .frontFaceStencil = kStencil};
 
   auto state = iglDev_->createDepthStencilState(desc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -97,12 +95,10 @@ TEST_F(DeviceExtendedVulkanTest, GetFeatureLimitsMaxTextureDimension) {
 }
 
 TEST_F(DeviceExtendedVulkanTest, CreateShaderModuleNullBinaryDataReturnsArgumentInvalid) {
-  ShaderModuleDesc desc;
-  desc.info = {.stage = ShaderStage::Vertex, .entryPoint = "main"};
-  desc.input.type = ShaderInputType::Binary;
-  desc.input.data = nullptr;
-  desc.input.length = 16;
-  desc.debugName = "nullData";
+  const ShaderModuleDesc desc{
+      .info = {.stage = ShaderStage::Vertex, .entryPoint = "main"},
+      .input = {.data = nullptr, .length = 16, .type = ShaderInputType::Binary},
+      .debugName = "nullData"};
 
   Result ret;
   auto module = iglDev_->createShaderModule(desc, &ret);
@@ -112,12 +108,10 @@ TEST_F(DeviceExtendedVulkanTest, CreateShaderModuleNullBinaryDataReturnsArgument
 
 TEST_F(DeviceExtendedVulkanTest, CreateShaderModuleZeroLengthBinaryDataReturnsArgumentInvalid) {
   const uint32_t dummy = 0;
-  ShaderModuleDesc desc;
-  desc.info = {.stage = ShaderStage::Vertex, .entryPoint = "main"};
-  desc.input.type = ShaderInputType::Binary;
-  desc.input.data = &dummy;
-  desc.input.length = 0;
-  desc.debugName = "zeroLength";
+  const ShaderModuleDesc desc{
+      .info = {.stage = ShaderStage::Vertex, .entryPoint = "main"},
+      .input = {.data = &dummy, .length = 0, .type = ShaderInputType::Binary},
+      .debugName = "zeroLength"};
 
   Result ret;
   auto module = iglDev_->createShaderModule(desc, &ret);
@@ -139,6 +133,15 @@ TEST_F(DeviceExtendedVulkanTest, HasFeatureMultiview) {
 
 TEST_F(DeviceExtendedVulkanTest, HasFeatureExplicitBinding) {
   EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::ExplicitBinding));
+}
+
+TEST_F(DeviceExtendedVulkanTest, HasFeatureDynamicVertexBufferStride) {
+  // DynamicVertexBufferStride is gated on both vkCmdBindVertexBuffers2 availability and the
+  // enableDynamicVertexBufferStride config flag (disabled by default), so the device may report
+  // either value. Verify only that the query executes without crashing.
+  const bool hasDynamicVertexBufferStride =
+      iglDev_->hasFeature(DeviceFeatures::DynamicVertexBufferStride);
+  (void)hasDynamicVertexBufferStride;
 }
 
 TEST_F(DeviceExtendedVulkanTest, TextureFormatCapabilitiesRGBA) {

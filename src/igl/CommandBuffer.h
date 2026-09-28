@@ -22,13 +22,19 @@ class ITimer;
 class ITimestampQueries;
 struct RenderPassDesc;
 
-/**
- * Currently a no-op structure.
- */
 struct CommandBufferDesc {
   std::string debugName;
   std::shared_ptr<ITimer> timer;
   std::shared_ptr<ITimestampQueries> timestampQueries;
+
+  /**
+   * Optional correlation tag forwarded to the GPU submission for tracing. A value of 0 means
+   * "untagged" and is ignored. Backends that support submission-level tracing attach this value to
+   * their submit so driver-side trace events can be correlated back to the app-level workload/frame
+   * that produced the work. All other backends ignore it.
+   // @fb-only
+   */
+  uint64_t submitTag = 0;
 };
 
 /**
@@ -133,7 +139,7 @@ class ICommandBuffer {
    * to pop the label off the stack.
    */
   virtual void pushDebugGroupLabel(const char* IGL_NONNULL label,
-                                   const igl::Color& color = Color(1, 1, 1, 1)) const = 0;
+                                   const Color& color = Color(1, 1, 1, 1)) const = 0;
 
   /**
    * @brief Pops a most recent debug label off a stack of debug string labels.
@@ -150,6 +156,16 @@ class ICommandBuffer {
                           uint64_t srcOffset,
                           uint64_t dstOffset,
                           uint64_t size) = 0;
+
+  /**
+   * @brief Fill a buffer range with a repeated byte value.
+   *
+   * The offset and size must be multiples of four for portability across backends.
+   */
+  virtual void fillBuffer(IBuffer& /*buffer*/, const BufferRange& /*range*/, uint8_t /*value*/) {
+    IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
+  }
+
   /**
    * @brief Copy texture data into a buffer.
    *

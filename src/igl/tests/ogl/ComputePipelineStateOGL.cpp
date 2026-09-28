@@ -26,7 +26,6 @@ namespace igl::tests {
 class ComputePipelineStateOGLTest : public ::testing::Test {
  public:
   ComputePipelineStateOGLTest() = default;
-  ~ComputePipelineStateOGLTest() override = default;
 
   void SetUp() override {
     igl::setDebugBreakEnabled(false);
@@ -70,8 +69,7 @@ TEST_F(ComputePipelineStateOGLTest, CreateAndBind) {
   auto stages = iglDev_->createShaderStages(shaderStages, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
 
-  ComputePipelineDesc computeDesc;
-  computeDesc.shaderStages = std::move(stages);
+  const ComputePipelineDesc computeDesc{.shaderStages = std::move(stages)};
   auto computePipeline = iglDev_->createComputePipeline(computeDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(computePipeline, nullptr);
@@ -112,8 +110,7 @@ TEST_F(ComputePipelineStateOGLTest, GetIndexByName) {
   auto stages = iglDev_->createShaderStages(shaderStages, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
 
-  ComputePipelineDesc computeDesc;
-  computeDesc.shaderStages = std::move(stages);
+  const ComputePipelineDesc computeDesc{.shaderStages = std::move(stages)};
   auto computePipeline = iglDev_->createComputePipeline(computeDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(computePipeline, nullptr);
@@ -153,8 +150,7 @@ TEST_F(ComputePipelineStateOGLTest, SSBODetection) {
   auto stages = iglDev_->createShaderStages(shaderStages, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
 
-  ComputePipelineDesc computeDesc;
-  computeDesc.shaderStages = std::move(stages);
+  const ComputePipelineDesc computeDesc{.shaderStages = std::move(stages)};
   auto computePipeline = iglDev_->createComputePipeline(computeDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(computePipeline, nullptr);

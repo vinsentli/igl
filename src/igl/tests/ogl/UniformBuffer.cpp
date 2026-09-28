@@ -377,7 +377,6 @@ class UniformBufferTest : public ::testing::Test {
  private:
  public:
   UniformBufferTest() = default;
-  ~UniformBufferTest() override = default;
 
   //
   // SetUp()
@@ -419,38 +418,35 @@ class UniformBufferTest : public ::testing::Test {
     ASSERT_TRUE(inputTexture_ != nullptr);
 
     // Create framebuffer using the offscreen texture
-    FramebufferDesc framebufferDesc;
-
-    framebufferDesc.colorAttachments[0].texture = offscreenTexture_;
+    const FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = offscreenTexture_}}};
     framebuffer_ = iglDev_->createFramebuffer(framebufferDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
     ASSERT_TRUE(framebuffer_ != nullptr);
 
     // Initialize render pass descriptor
-    renderPass_.colorAttachments.resize(1);
-    renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
-    renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-    renderPass_.colorAttachments[0].clearColor = {0.0, 0.0, 0.0, 1.0};
+    renderPass_ = {
+        .colorAttachments = {{.loadAction = LoadAction::Clear,
+                              .storeAction = StoreAction::Store,
+                              .clearColor = {0.0, 0.0, 0.0, 1.0}}},
+    };
 
     // Initialize input to vertex shader
-    VertexInputStateDesc inputDesc;
-
-    inputDesc.attributes[0].format = VertexAttributeFormat::Float4;
-    inputDesc.attributes[0].offset = 0;
-    inputDesc.attributes[0].bufferIndex = data::shader::kSimplePosIndex;
-    inputDesc.attributes[0].name = data::shader::kSimplePos;
-    inputDesc.attributes[0].location = 0;
-    inputDesc.inputBindings[0].stride = sizeof(float) * 4;
-
-    inputDesc.attributes[1].format = VertexAttributeFormat::Float2;
-    inputDesc.attributes[1].offset = 0;
-    inputDesc.attributes[1].bufferIndex = data::shader::kSimpleUvIndex;
-    inputDesc.attributes[1].name = data::shader::kSimpleUv;
-    inputDesc.attributes[1].location = 1;
-    inputDesc.inputBindings[1].stride = sizeof(float) * 2;
-
-    // numAttributes has to equal to bindings when using more than 1 buffer
-    inputDesc.numAttributes = inputDesc.numInputBindings = 2;
+    // numAttributes has to equal numInputBindings when using more than one buffer
+    const VertexInputStateDesc inputDesc{
+        .numAttributes = 2,
+        .attributes = {{.bufferIndex = data::shader::kSimplePosIndex,
+                        .format = VertexAttributeFormat::Float4,
+                        .offset = 0,
+                        .name = std::string(data::shader::kSimplePos),
+                        .location = 0},
+                       {.bufferIndex = data::shader::kSimpleUvIndex,
+                        .format = VertexAttributeFormat::Float2,
+                        .offset = 0,
+                        .name = std::string(data::shader::kSimpleUv),
+                        .location = 1}},
+        .numInputBindings = 2,
+        .inputBindings = {{.stride = sizeof(float) * 4}, {.stride = sizeof(float) * 2}},
+    };
 
     vertexInputState_ = iglDev_->createVertexInputState(inputDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -492,13 +488,12 @@ class UniformBufferTest : public ::testing::Test {
 
     // Initialize Render Pipeline Descriptor, but leave the creation
     // to the individual tests in case further customization is required
-    renderPipelineDesc_.vertexInputState = vertexInputState_;
-    renderPipelineDesc_.targetDesc.colorAttachments.resize(1);
-    renderPipelineDesc_.targetDesc.colorAttachments[0].textureFormat =
-        offscreenTexture_->getFormat();
-    renderPipelineDesc_.fragmentUnitSamplerMap[textureUnit_] =
-        IGL_NAMEHANDLE(data::shader::kSimpleSampler);
-    renderPipelineDesc_.cullMode = igl::CullMode::Disabled;
+    renderPipelineDesc_ = {
+        .vertexInputState = vertexInputState_,
+        .targetDesc = {.colorAttachments = {{.textureFormat = offscreenTexture_->getFormat()}}},
+        .cullMode = igl::CullMode::Disabled,
+        .fragmentUnitSamplerMap = {{textureUnit_, IGL_NAMEHANDLE(data::shader::kSimpleSampler)}},
+    };
   }
 
   void TearDown() override {}
@@ -597,11 +592,10 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
   // Make sure there are more texture pixels than our test cases
   ASSERT_TRUE(uniformTypesCount_ + failureCasesCount_ <= kOffscreenTexWidth * kOffscreenTexHeight);
 
-  BufferDesc fpDesc;
-  fpDesc.type = BufferDesc::BufferTypeBits::Uniform;
-  fpDesc.data = &fragmentParameters;
-  fpDesc.length = sizeof(fragmentParameters);
-  fpDesc.storage = ResourceStorage::Shared;
+  const BufferDesc fpDesc{.type = BufferDesc::BufferTypeBits::Uniform,
+                          .data = &fragmentParameters,
+                          .length = sizeof(fragmentParameters),
+                          .storage = ResourceStorage::Shared};
 
   std::vector<UniformDesc> fragmentUniformDescriptors;
 
@@ -766,6 +760,10 @@ TEST_F(UniformBufferTest, UniformBufferBinding) {
   //----------------------
   // Read back framebuffer
   //----------------------
+  const auto dimensions = framebuffer_->getColorAttachment(0)->getDimensions();
+  ASSERT_EQ(dimensions.width, static_cast<uint32_t>(kOffscreenTexWidth));
+  ASSERT_EQ(dimensions.height, static_cast<uint32_t>(kOffscreenTexHeight));
+
   auto pixels = std::vector<uint32_t>(kOffscreenTexWidth * kOffscreenTexHeight);
 
   framebuffer_->copyBytesColorAttachment(*cmdQueue_, 0, pixels.data(), rangeDesc);
@@ -878,8 +876,8 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   };
 
   struct BooleanUnpackedData {
-    bool data;
-    bool padding[3];
+    bool data = false;
+    bool padding[3] = {};
     simd::float3 morePadding;
   };
 
@@ -939,11 +937,10 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   // Make sure there are more texture pixels than our test cases
   ASSERT_TRUE(uniformTypesCount_ + failureCasesCount_ <= kOffscreenTexWidth * kOffscreenTexHeight);
 
-  BufferDesc fpDesc;
-  fpDesc.type = BufferDesc::BufferTypeBits::Uniform;
-  fpDesc.data = &fragmentParameters;
-  fpDesc.length = sizeof(fragmentParameters);
-  fpDesc.storage = ResourceStorage::Shared;
+  const BufferDesc fpDesc{.type = BufferDesc::BufferTypeBits::Uniform,
+                          .data = &fragmentParameters,
+                          .length = sizeof(fragmentParameters),
+                          .storage = ResourceStorage::Shared};
 
   std::vector<UniformDesc> fragmentUniformDescriptors;
 
@@ -955,9 +952,13 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testFloat);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(Float1UnpackedData);
-  fragmentParameters.testFloat[0] = {0.0f, {true, false, true}};
-  fragmentParameters.testFloat[1] = {0.1f, {true, true, true}};
-  fragmentParameters.testFloat[2] = {0.0f, {false, false, false}};
+  // NOLINTBEGIN(modernize-use-designated-initializers)
+  // simd::float1 is a scalar on Apple but an aggregate in simdstub.h, so the value has to be
+  // written as an explicit cast rather than a braced initializer.
+  fragmentParameters.testFloat[0] = {.float1 = simd::float1{0.0f}, .padding = {true, false, true}};
+  fragmentParameters.testFloat[1] = {.float1 = simd::float1{0.1f}, .padding = {true, true, true}};
+  fragmentParameters.testFloat[2] = {.float1 = simd::float1{0.0f},
+                                     .padding = {false, false, false}};
 
   // "testVec2"
   fragmentUniformDescriptors.emplace_back();
@@ -967,9 +968,9 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testVec2);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(Float2UnpackedData);
-  fragmentParameters.testVec2[0] = {{0.0f, 0.0f}, {true, false, true}};
-  fragmentParameters.testVec2[1] = {{0.2f, 0.2f}, {true, true, true}};
-  fragmentParameters.testVec2[2] = {{0.0f, 0.0f}, {false, false, false}};
+  fragmentParameters.testVec2[0] = {.float2 = {0.0f, 0.0f}, .padding = {true, false, true}};
+  fragmentParameters.testVec2[1] = {.float2 = {0.2f, 0.2f}, .padding = {true, true, true}};
+  fragmentParameters.testVec2[2] = {.float2 = {0.0f, 0.0f}, .padding = {false, false, false}};
 
   // "testVec3"
   fragmentUniformDescriptors.emplace_back();
@@ -992,9 +993,12 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testVec4);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(Float4UnpackedData);
-  fragmentParameters.testVec4[0] = {{0.0f, 0.0f, 0.0f, 0.0f}, {true, false, true}};
-  fragmentParameters.testVec4[1] = {{0.4f, 0.4f, 0.4f, 0.4f}, {true, true, true}};
-  fragmentParameters.testVec4[2] = {{0.0f, 0.0f, 0.0f, 0.0f}, {false, false, false}};
+  fragmentParameters.testVec4[0] = {.float4 = {0.0f, 0.0f, 0.0f, 0.0f},
+                                    .padding = {true, false, true}};
+  fragmentParameters.testVec4[1] = {.float4 = {0.4f, 0.4f, 0.4f, 0.4f},
+                                    .padding = {true, true, true}};
+  fragmentParameters.testVec4[2] = {.float4 = {0.0f, 0.0f, 0.0f, 0.0f},
+                                    .padding = {false, false, false}};
 
   // "testBool"
   fragmentUniformDescriptors.emplace_back();
@@ -1004,9 +1008,12 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testBool);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(BooleanUnpackedData);
-  fragmentParameters.testBool[0] = {false, {false, false, true}, {0.0f, 0.1f, 0.2f}};
-  fragmentParameters.testBool[1] = {true, {false, false, true}, {0.3f, 0.4f, 0.5f}};
-  fragmentParameters.testBool[2] = {false, {true, true, true}, {0.6f, 0.7f, 0.8f}};
+  fragmentParameters.testBool[0] = {
+      .data = false, .padding = {false, false, true}, .morePadding = {0.0f, 0.1f, 0.2f}};
+  fragmentParameters.testBool[1] = {
+      .data = true, .padding = {false, false, true}, .morePadding = {0.3f, 0.4f, 0.5f}};
+  fragmentParameters.testBool[2] = {
+      .data = false, .padding = {true, true, true}, .morePadding = {0.6f, 0.7f, 0.8f}};
 
   // "testInt"
   fragmentUniformDescriptors.emplace_back();
@@ -1016,9 +1023,9 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testInt);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(Int1UnpackedData);
-  fragmentParameters.testInt[0] = {0, {true, false, true}};
-  fragmentParameters.testInt[1] = {42, {true, true, true}};
-  fragmentParameters.testInt[2] = {0, {false, false, false}};
+  fragmentParameters.testInt[0] = {.int1 = simd::int1{0}, .padding = {true, false, true}};
+  fragmentParameters.testInt[1] = {.int1 = simd::int1{42}, .padding = {true, true, true}};
+  fragmentParameters.testInt[2] = {.int1 = simd::int1{0}, .padding = {false, false, false}};
 
   // "testiVec2"
   fragmentUniformDescriptors.emplace_back();
@@ -1028,9 +1035,9 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testiVec2);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(Int2UnpackedData);
-  fragmentParameters.testiVec2[0] = {{0, 0}, {true, false, true}};
-  fragmentParameters.testiVec2[1] = {{2, 2}, {true, true, true}};
-  fragmentParameters.testiVec2[2] = {{0, 0}, {false, false, false}};
+  fragmentParameters.testiVec2[0] = {.int2 = {0, 0}, .padding = {true, false, true}};
+  fragmentParameters.testiVec2[1] = {.int2 = {2, 2}, .padding = {true, true, true}};
+  fragmentParameters.testiVec2[2] = {.int2 = {0, 0}, .padding = {false, false, false}};
 
   // "testiVec3"
   fragmentUniformDescriptors.emplace_back();
@@ -1052,9 +1059,10 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   fragmentUniformDescriptors.back().offset = offsetof(FragmentParameters, testiVec4);
   fragmentUniformDescriptors.back().numElements = 3;
   fragmentUniformDescriptors.back().elementStride = sizeof(Int4UnpackedData);
-  fragmentParameters.testiVec4[0] = {{0, 0, 0, 0}, {true, false, true}};
-  fragmentParameters.testiVec4[1] = {{4, 4, 4, 4}, {true, true, true}};
-  fragmentParameters.testiVec4[2] = {{0, 0, 0, 0}, {false, false, false}};
+  fragmentParameters.testiVec4[0] = {.int4 = {0, 0, 0, 0}, .padding = {true, false, true}};
+  fragmentParameters.testiVec4[1] = {.int4 = {4, 4, 4, 4}, .padding = {true, true, true}};
+  fragmentParameters.testiVec4[2] = {.int4 = {0, 0, 0, 0}, .padding = {false, false, false}};
+  // NOLINTEND(modernize-use-designated-initializers)
 
   // "testMat2"
   fragmentUniformDescriptors.emplace_back();
@@ -1168,6 +1176,10 @@ TEST_F(UniformBufferTest, UniformArrayBinding) {
   //----------------------
   // Read back framebuffer
   //----------------------
+  const auto dimensions = framebuffer_->getColorAttachment(0)->getDimensions();
+  ASSERT_EQ(dimensions.width, static_cast<uint32_t>(kOffscreenTexWidth));
+  ASSERT_EQ(dimensions.height, static_cast<uint32_t>(kOffscreenTexHeight));
+
   auto pixels = std::vector<uint32_t>(kOffscreenTexWidth * kOffscreenTexHeight);
 
   framebuffer_->copyBytesColorAttachment(*cmdQueue_, 0, pixels.data(), rangeDesc);

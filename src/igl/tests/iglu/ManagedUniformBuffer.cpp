@@ -8,6 +8,7 @@
 #include <IGLU/managedUniformBuffer/ManagedUniformBuffer.h>
 
 #include "../util/Common.h"
+#include "RecordingDevice.h"
 
 namespace igl::tests {
 
@@ -20,7 +21,6 @@ namespace igl::tests {
 class ManagedUniformBufferTest : public ::testing::Test {
  public:
   ManagedUniformBufferTest() = default;
-  ~ManagedUniformBufferTest() override = default;
 
   // Set up common resources. This will create a device and a command queue
   void SetUp() override {
@@ -41,6 +41,60 @@ class ManagedUniformBufferTest : public ::testing::Test {
 TEST_F(ManagedUniformBufferTest, Construction) {
   iglu::ManagedUniformBuffer buffer(*iglDev_, {.index = 0, .length = 10});
   EXPECT_TRUE(buffer.getData() != nullptr);
+}
+
+TEST_F(ManagedUniformBufferTest, ConstructionWithBlockName) {
+  // When a block name is supplied, the uniforms are backed by an interface block. Construction must
+  // succeed on every backend and expose writable data; on OpenGL it also allocates a uniform-block
+  // buffer used by the native-UBO bind path (GLSL ES 3.x).
+  iglu::ManagedUniformBuffer buffer(*iglDev_,
+                                    {.index = 12,
+                                     .length = 16,
+                                     .uniforms = {{.name = "params.color",
+                                                   .location = 0,
+                                                   .type = UniformType::Float4,
+                                                   .numElements = 1,
+                                                   .offset = 0,
+                                                   .elementStride = 0}},
+                                     .blockName = "params"});
+  EXPECT_TRUE(buffer.result.isOk());
+  EXPECT_TRUE(buffer.getData() != nullptr);
+  EXPECT_EQ(buffer.uniformInfo.blockName, "params");
+}
+
+TEST_F(ManagedUniformBufferTest, RequestsAPlainUniformBuffer) {
+  RecordingDevice device;
+  const iglu::ManagedUniformBuffer buffer(device, {.index = 0, .length = 256});
+
+  ASSERT_EQ(device.createBufferCount, 1u);
+  // BufferAPIHintBits::NoCopy and BufferTypeBits::Command are both bit 5, so an API hint ORed into
+  // desc.type lands in the type mask: it is dropped as a hint and misreports the uniforms as a
+  // command buffer (Uniform|Command == 0x24).
+  EXPECT_EQ(device.recordedType, BufferDesc::BufferTypeBits::Uniform);
+  // NoCopy would alias the allocation this object frees in its destructor; see the comment in
+  // ManagedUniformBuffer's constructor.
+  EXPECT_EQ(device.recordedHint & BufferDesc::BufferAPIHintBits::NoCopy, 0);
+}
+
+TEST_F(ManagedUniformBufferTest, RequestsARingBufferWhenTheDeviceReportsOne) {
+  RecordingDevice device;
+  device.reportsBufferRing = true;
+  const iglu::ManagedUniformBuffer buffer(device, {.index = 0, .length = 256});
+
+  ASSERT_EQ(device.createBufferCount, 1u);
+  EXPECT_NE(device.recordedHint & BufferDesc::BufferAPIHintBits::Ring, 0);
+  EXPECT_EQ(device.recordedType, BufferDesc::BufferTypeBits::Uniform);
+}
+
+TEST_F(ManagedUniformBufferTest, AsksForNoRingBufferWithoutTheCapability) {
+  RecordingDevice device;
+  ASSERT_FALSE(device.hasFeature(DeviceFeatures::BufferRing));
+  const iglu::ManagedUniformBuffer buffer(device, {.index = 0, .length = 256});
+
+  // A device that does not implement the hint keeps the single-slot descriptor it got before.
+  ASSERT_EQ(device.createBufferCount, 1u);
+  EXPECT_EQ(device.recordedHint & BufferDesc::BufferAPIHintBits::Ring, 0);
+  EXPECT_EQ(device.recordedType, BufferDesc::BufferTypeBits::Uniform);
 }
 
 TEST_F(ManagedUniformBufferTest, UpdateData) {

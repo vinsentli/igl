@@ -22,16 +22,17 @@
 
 namespace igl::tests {
 
+namespace {
 // Minimal shader with various uniform types to exercise bindUniform/bindUniformArray
 // clang-format off
-static const char kVertShader[] =
+const char kVertShader[] =
     IGL_TO_STRING(LEGACY_VERSION
                attribute vec4 position_in;
                void main() {
                  gl_Position = position_in;
                });
 
-static const char kFragShaderWithUniforms[] =
+const char kFragShaderWithUniforms[] =
     IGL_TO_STRING(LEGACY_VERSION PROLOG
                uniform float uFloat;
                uniform vec2 uVec2;
@@ -54,7 +55,7 @@ static const char kFragShaderWithUniforms[] =
                  gl_FragColor = vec4(f, 0.0, 0.0, 1.0);
                });
 
-static const char kFragShaderWithUniformArrays[] =
+const char kFragShaderWithUniformArrays[] =
     IGL_TO_STRING(LEGACY_VERSION PROLOG
                uniform float uFloatArr[2];
                uniform int uIntArr[2];
@@ -71,6 +72,7 @@ static const char kFragShaderWithUniformArrays[] =
                  gl_FragColor = vec4(f, 0.0, 0.0, 1.0);
                });
 // clang-format on
+} // namespace
 
 ///
 /// UniformBufferBindTest
@@ -299,8 +301,8 @@ TEST_F(UniformBufferBindTest, BindUniformArrayStridedPacking) {
     const GLint loc = getLocation(pipeline, "uFloatArr");
     ASSERT_GE(loc, 0);
     struct PaddedFloat {
-      float val;
-      float padding;
+      float val = 0.0f;
+      float padding = 0.0f;
     };
     const std::array<PaddedFloat, 2> data = {
         PaddedFloat{.val = 1.0f, .padding = 0.0f},
@@ -319,8 +321,8 @@ TEST_F(UniformBufferBindTest, BindUniformArrayStridedPacking) {
     const GLint loc = getLocation(pipeline, "uIntArr");
     ASSERT_GE(loc, 0);
     struct PaddedInt {
-      int val;
-      int padding;
+      int val = 0;
+      int padding = 0;
     };
     const std::array<PaddedInt, 2> data = {
         PaddedInt{.val = 10, .padding = 0},
@@ -344,8 +346,8 @@ TEST_F(UniformBufferBindTest, BindUniformArrayStridedPacking) {
     const GLint loc = getLocation(pipeline, "uBoolArr");
     ASSERT_GE(loc, 0);
     struct PaddedBool {
-      uint8_t val;
-      uint8_t padding[7];
+      uint8_t val = 0;
+      uint8_t padding[7] = {};
     };
     const std::array<PaddedBool, 2> data = {
         PaddedBool{.val = 1, .padding = {}},

@@ -8,17 +8,6 @@
 #include <IGLU/shaderCross/ShaderCrossUniformBuffer.h>
 
 namespace iglu {
-namespace {
-[[nodiscard]] ManagedUniformBufferInfo getSpirvCrossCompatibleManagedUniformBufferInfo(
-    const std::string& uboBlockName,
-    ManagedUniformBufferInfo info) noexcept {
-  for (auto& uniform : info.uniforms) {
-    uniform.name = uboBlockName + "." + uniform.name;
-  }
-  return info;
-}
-} // namespace
-
 ShaderCrossUniformBuffer::ShaderCrossUniformBuffer(igl::IDevice& device,
                                                    const std::string& uboBlockName,
                                                    ManagedUniformBufferInfo info) :

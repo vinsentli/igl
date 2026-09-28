@@ -114,8 +114,8 @@ class RenderCommandEncoder : public IRenderCommandEncoder {
   void setStencilReferenceValue(uint32_t value) override;
   void setBlendColor(const Color& color) override;
   void setCullMode(CullMode cullMode) override;
-  void setFrontFacingWinding(WindingMode mode) override;
   void setDepthBias(float depthBias, float slopeScale, float clamp) override;
+  void setFrontFacingWinding(WindingMode frontFaceWinding) override;
 
   [[nodiscard]] VkCommandBuffer getVkCommandBuffer() const {
     return cmdBuffer_;

@@ -7,6 +7,7 @@
 
 #include <igl/vulkan/VulkanStagingDevice.h>
 
+#include <algorithm>
 #include <igl/IGLSafeC.h>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanBuffer.h>
@@ -55,7 +56,7 @@ void VulkanStagingDevice::bufferSubData(VulkanBuffer& buffer,
   // This avoids staging buffer allocation and an extra memcpy for small uploads.
   constexpr size_t kMaxUpdateBufferSize = 65536;
   if (data && size <= kMaxUpdateBufferSize && (dstOffset % 4 == 0) && (size % 4 == 0)) {
-    IGL_DEBUG_ASSERT(buffer.getBufferUsageFlags() & VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    IGL_DEBUG_ASSERT((buffer.getBufferUsageFlags() & VK_BUFFER_USAGE_TRANSFER_DST_BIT) != 0);
     const auto& wrapper = immediate->acquire();
     ctx_.vf_.vkCmdUpdateBuffer(wrapper.cmdBuf,
                                buffer.getVkBuffer(),
@@ -164,7 +165,7 @@ void VulkanStagingDevice::mergeRegionsAndFreeBuffers() {
       regions_.erase(regions_.begin() + regionIndex);
 
       // remove trailing empty staging buffers
-      while (!stagingBuffers_.empty() && stagingBuffers_.back().get() == nullptr) {
+      while (!stagingBuffers_.empty() && !stagingBuffers_.back()) {
         stagingBuffers_.pop_back();
       }
       continue;
@@ -201,7 +202,7 @@ VulkanStagingDevice::MemoryRegion VulkanStagingDevice::nextFreeBlock(VkDeviceSiz
   // returns the allocated block. Any remainder is written back into `regions_` so it can be reused,
   // and a fully-consumed region is erased. This is the single point at which a region is handed
   // out, so a returned block is never also left in `regions_` as a free region.
-  const auto splitAndReturn = [this](std::deque<MemoryRegion>::iterator regionItr,
+  const auto splitAndReturn = [this](const std::deque<MemoryRegion>::iterator& regionItr,
                                      VkDeviceSize allocatedSize) -> MemoryRegion {
     const VkDeviceSize newSize = regionItr->size - allocatedSize;
     const VkDeviceSize newOffset = regionItr->offset + allocatedSize;

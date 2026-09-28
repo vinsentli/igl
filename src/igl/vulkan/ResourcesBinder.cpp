@@ -7,6 +7,7 @@
 
 #include <igl/vulkan/ResourcesBinder.h>
 
+#include <type_traits>
 #include <igl/vulkan/Buffer.h>
 #include <igl/vulkan/PipelineState.h>
 #include <igl/vulkan/SamplerState.h>
@@ -18,6 +19,10 @@
 #include <igl/vulkan/VulkanTexture.h>
 
 namespace igl::vulkan {
+
+static_assert(std::is_trivially_copyable_v<BindingsBuffers>);
+static_assert(std::is_trivially_copyable_v<BindingsTextures>);
+static_assert(std::is_trivially_copyable_v<BindingsStorageImages>);
 
 ResourcesBinder::ResourcesBinder(const CommandBuffer* commandBuffer,
                                  VulkanContext& ctx,
@@ -67,7 +72,7 @@ void ResourcesBinder::bindBuffer(uint32_t index,
     }
   }
 
-  VkBuffer buf = buffer ? buffer->getVkBuffer() : ctx_.dummyUniformBuffer_->getVkBuffer();
+  const VkBuffer buf = buffer ? buffer->getVkBuffer() : ctx_.dummyUniformBuffer_->getVkBuffer();
   VkDescriptorBufferInfo& slot = bindingsBuffers_.buffers[index];
 
   if (slot.buffer != buf || slot.offset != bufferOffset) {
@@ -97,9 +102,10 @@ void ResourcesBinder::bindSamplerState(uint32_t index, SamplerState* samplerStat
     return;
   }
 
-  VulkanSampler* newSampler = samplerState ? ctx_.samplers_.get(samplerState->sampler_) : nullptr;
+  const VulkanSampler* newSampler = samplerState ? ctx_.samplers_.get(samplerState->sampler_)
+                                                 : nullptr;
 
-  VkSampler sampler = newSampler ? newSampler->vkSampler : VK_NULL_HANDLE;
+  const VkSampler sampler = newSampler ? newSampler->vkSampler : VK_NULL_HANDLE;
 
   if (bindingsTextures_.samplers[index] != sampler) {
     bindingsTextures_.samplers[index] = sampler;
@@ -129,7 +135,7 @@ void ResourcesBinder::bindTexture(uint32_t index, Texture* tex) {
     }
   }
 
-  VulkanTexture* newTexture = tex ? &tex->getVulkanTexture() : nullptr;
+  const VulkanTexture* newTexture = tex ? &tex->getVulkanTexture() : nullptr;
 
 #if IGL_DEBUG_ABORT_ENABLED
   if (newTexture) {
@@ -155,7 +161,8 @@ void ResourcesBinder::bindTexture(uint32_t index, Texture* tex) {
       ((newTexture->image.samples_ & VK_SAMPLE_COUNT_1_BIT) == VK_SAMPLE_COUNT_1_BIT);
   const bool isSampledImage = isTextureAvailable && newTexture->image.isSampledImage();
 
-  VkImageView imageView = isSampledImage ? newTexture->imageView_.vkImageView : VK_NULL_HANDLE;
+  const VkImageView imageView = isSampledImage ? newTexture->imageView_.vkImageView
+                                               : VK_NULL_HANDLE;
 
   if (bindingsTextures_.textures[index] != imageView) {
     bindingsTextures_.textures[index] = imageView;
@@ -180,7 +187,7 @@ void ResourcesBinder::bindStorageImage(uint32_t index, Texture* tex) {
     }
   }
 
-  VulkanTexture* newTexture = tex ? &tex->getVulkanTexture() : nullptr;
+  const VulkanTexture* newTexture = tex ? &tex->getVulkanTexture() : nullptr;
 
 #if IGL_DEBUG_ABORT_ENABLED
   if (newTexture) {
@@ -201,7 +208,8 @@ void ResourcesBinder::bindStorageImage(uint32_t index, Texture* tex) {
       ((newTexture->image.samples_ & VK_SAMPLE_COUNT_1_BIT) == VK_SAMPLE_COUNT_1_BIT);
   const bool isStorageImage = isTextureAvailable && newTexture->image.isStorageImage();
 
-  VkImageView imageView = isStorageImage ? newTexture->imageView_.vkImageView : VK_NULL_HANDLE;
+  const VkImageView imageView = isStorageImage ? newTexture->imageView_.vkImageView
+                                               : VK_NULL_HANDLE;
 
   if (bindingsStorageImages_.images[index] != imageView) {
     bindingsStorageImages_.images[index] = imageView;
@@ -220,7 +228,7 @@ void ResourcesBinder::updateBindingsByDescriptorBuffer(VkPipelineLayout layout,
 
   IGL_DEBUG_ASSERT(layout != VK_NULL_HANDLE);
 
-  if (isDirtyFlags_ & DirtyFlagBits_Textures) {
+  if ((isDirtyFlags_ & DirtyFlagBits_Textures) != 0) {
     ctx_.updateBindingsTexturesByDescriptorBuffer(cmdBuffer_,
                                                   layout,
                                                   bindPoint_,
@@ -229,7 +237,7 @@ void ResourcesBinder::updateBindingsByDescriptorBuffer(VkPipelineLayout layout,
                                                   *state.dslCombinedImageSamplers,
                                                   state.info);
   }
-  if (isDirtyFlags_ & DirtyFlagBits_Buffers) {
+  if ((isDirtyFlags_ & DirtyFlagBits_Buffers) != 0) {
     if (!hasBindGlobalBuffers_) {
       hasBindGlobalBuffers_ = true;
       ctx_.updateBindingsBuffersByDescriptorBuffer(cmdBuffer_,
@@ -251,7 +259,7 @@ void ResourcesBinder::updateBindingsByDescriptorBuffer(VkPipelineLayout layout,
                                                  *state.dslBuffers,
                                                  state.info.buffers);
   }
-  if (isDirtyFlags_ & DirtyFlagBits_StorageImages) {
+  if ((isDirtyFlags_ & DirtyFlagBits_StorageImages) != 0) {
     ctx_.updateBindingsStorageImagesByDescriptorBuffer(cmdBuffer_,
                                                        layout,
                                                        bindPoint_,
@@ -270,7 +278,7 @@ void ResourcesBinder::updateBindingsByDescriptorSet(VkPipelineLayout layout,
 
   IGL_DEBUG_ASSERT(layout != VK_NULL_HANDLE);
 
-  if (isDirtyFlags_ & DirtyFlagBits_Textures) {
+  if ((isDirtyFlags_ & DirtyFlagBits_Textures) != 0) {
     ctx_.updateBindingsTextures(cmdBuffer_,
                                 layout,
                                 bindPoint_,
@@ -279,7 +287,7 @@ void ResourcesBinder::updateBindingsByDescriptorSet(VkPipelineLayout layout,
                                 *state.dslCombinedImageSamplers,
                                 state.info);
   }
-  if (isDirtyFlags_ & DirtyFlagBits_Buffers) {
+  if ((isDirtyFlags_ & DirtyFlagBits_Buffers) != 0) {
     if (!hasBindGlobalBuffers_) {
       hasBindGlobalBuffers_ = true;
       ctx_.updateBindingsBuffers(cmdBuffer_,
@@ -300,7 +308,7 @@ void ResourcesBinder::updateBindingsByDescriptorSet(VkPipelineLayout layout,
                                *state.dslBuffers,
                                state.info.buffers);
   }
-  if (isDirtyFlags_ & DirtyFlagBits_StorageImages) {
+  if ((isDirtyFlags_ & DirtyFlagBits_StorageImages) != 0) {
     ctx_.updateBindingsStorageImages(cmdBuffer_,
                                      layout,
                                      bindPoint_,

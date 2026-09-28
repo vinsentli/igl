@@ -115,7 +115,8 @@ void ComputeCommandEncoder::processDependencies(const Dependencies& dependencies
     const Dependencies* deps = &dependencies;
 
     while (deps) {
-      for (IBuffer* buf : deps->buffers) {
+      for (uint32_t index = 0; index < Dependencies::kIglMaxBufferDependencies; ++index) {
+        IBuffer* const buf = deps->buffers[index];
         if (!buf) {
           break;
         }
@@ -128,17 +129,16 @@ void ComputeCommandEncoder::processDependencies(const Dependencies& dependencies
         // barrier must cover that stage too, otherwise the dispatch races
         // against the producing write and reads stale (typically zero)
         // group counts. Mirrors RenderCommandEncoder::processDependencies().
-        if (flags & VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT) {
+        if ((flags & VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT) != 0) {
           dstStageFlags |= VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
         }
-        ivkBufferBarrier(&ctx_.vf_,
-                         cmdBuffer_,
-                         vkBuf->getVkBuffer(),
-                         flags,
-                         VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
-                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         dstStageFlags);
+        const VkPipelineStageFlags srcStageFlags =
+            (deps->hostWriteBufferMask & (uint32_t{1} << index)) != 0
+                ? VK_PIPELINE_STAGE_HOST_BIT
+                : VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+                      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        ivkBufferBarrier(
+            &ctx_.vf_, cmdBuffer_, vkBuf->getVkBuffer(), flags, srcStageFlags, dstStageFlags);
       }
       deps = deps->next;
     }
@@ -194,13 +194,13 @@ void ComputeCommandEncoder::dispatchThreadGroupsIndirect(IBuffer& indirectBuffer
 }
 
 void ComputeCommandEncoder::pushDebugGroupLabel(const char* label, const igl::Color& color) const {
-  IGL_DEBUG_ASSERT(label != nullptr && *label);
+  IGL_DEBUG_ASSERT(label && *label);
   ivkCmdBeginDebugUtilsLabel(&ctx_.vf_, cmdBuffer_, label, color.toFloatPtr());
 }
 
 void ComputeCommandEncoder::insertDebugEventLabel(const char* label,
                                                   const igl::Color& color) const {
-  IGL_DEBUG_ASSERT(label != nullptr && *label);
+  IGL_DEBUG_ASSERT(label && *label);
   ivkCmdInsertDebugUtilsLabel(&ctx_.vf_, cmdBuffer_, label, color.toFloatPtr());
 }
 
@@ -326,7 +326,7 @@ void ComputeCommandEncoder::bindBuffer(uint32_t index,
                                        size_t bufferSize) {
   IGL_PROFILER_FUNCTION();
 
-  if (!IGL_DEBUG_VERIFY(buffer != nullptr)) {
+  if (!IGL_DEBUG_VERIFY(buffer)) {
     return;
   }
 

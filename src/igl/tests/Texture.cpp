@@ -369,6 +369,8 @@ constexpr std::array<std::pair<const void*, uint32_t>, 4> kPixelAlignments = {
 TEST_F(TextureTest, RepackData) {
   const auto properties = TextureFormatProperties::fromTextureFormat(TextureFormat::RGBA_UNorm8);
   const auto range = TextureRangeDesc::new2D(0, 0, kAlignedPixelsWidth, kAlignedPixelsHeight);
+  EXPECT_EQ(range.width, kAlignedPixelsWidth);
+  EXPECT_EQ(range.height, kAlignedPixelsHeight);
 
   for (const auto& [data, bytesPerRow] : kPixelAlignments) {
     const size_t alignedSize =
@@ -513,8 +515,7 @@ TEST_F(TextureTest, UploadAlignment) {
   ASSERT_EQ(ret.code, Result::Code::Ok);
   ASSERT_TRUE(customOffscreenTexture != nullptr);
 
-  FramebufferDesc framebufferDesc;
-  framebufferDesc.colorAttachments[0].texture = customOffscreenTexture;
+  const FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = customOffscreenTexture}}};
   auto customFramebuffer = iglDev_->createFramebuffer(framebufferDesc, &ret);
   ASSERT_EQ(ret.code, Result::Code::Ok);
   ASSERT_TRUE(customFramebuffer != nullptr);
@@ -624,9 +625,7 @@ TEST_F(TextureTest, Resize) {
   ASSERT_TRUE(outputTex != nullptr);
 
   // Create framebuffer using the output texture
-  FramebufferDesc framebufferDesc;
-
-  framebufferDesc.colorAttachments[0].texture = outputTex;
+  const FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = outputTex}}};
   auto fb = iglDev_->createFramebuffer(framebufferDesc, &ret);
   ASSERT_EQ(ret.code, Result::Code::Ok);
   ASSERT_TRUE(fb != nullptr);
@@ -731,9 +730,7 @@ TEST_F(TextureTest, ResizeTextureView) {
   ASSERT_TRUE(outputTex != nullptr);
 
   // Create framebuffer using the output texture
-  FramebufferDesc framebufferDesc;
-
-  framebufferDesc.colorAttachments[0].texture = outputTex;
+  const FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = outputTex}}};
   auto fb = iglDev_->createFramebuffer(framebufferDesc, &ret);
   ASSERT_EQ(ret.code, Result::Code::Ok);
   ASSERT_TRUE(fb != nullptr);
@@ -1085,6 +1082,38 @@ TEST(TextureDescTest, AsRange) {
     const auto range = desc.asRange();
     EXPECT_EQ(range.numFaces, 6u);
   }
+}
+
+TEST(TextureUsageBitsTest, BitsAreDistinct) {
+  EXPECT_EQ(TextureDesc::TextureUsageBits::Sampled, 1u << 0);
+  EXPECT_EQ(TextureDesc::TextureUsageBits::Storage, 1u << 1);
+  EXPECT_EQ(TextureDesc::TextureUsageBits::Attachment, 1u << 2);
+}
+
+TEST(TextureUsageBitsTest, BitsCanBeCombined) {
+  const auto combined =
+      TextureDesc::TextureUsageBits::Sampled | TextureDesc::TextureUsageBits::Attachment;
+  EXPECT_TRUE(combined & TextureDesc::TextureUsageBits::Sampled);
+  EXPECT_TRUE(combined & TextureDesc::TextureUsageBits::Attachment);
+  EXPECT_FALSE(combined & TextureDesc::TextureUsageBits::Storage);
+}
+
+TEST(TextureDescTest, New3DFactory) {
+  const auto desc = TextureDesc::new3D(
+      TextureFormat::RGBA_F16, 4, 8, 16, TextureDesc::TextureUsageBits::Storage, "vol");
+  EXPECT_EQ(desc.type, TextureType::ThreeD);
+  EXPECT_EQ(desc.format, TextureFormat::RGBA_F16);
+  EXPECT_EQ(desc.width, 4u);
+  EXPECT_EQ(desc.height, 8u);
+  EXPECT_EQ(desc.depth, 16u);
+  EXPECT_EQ(desc.usage, TextureDesc::TextureUsageBits::Storage);
+  EXPECT_EQ(desc.debugName, "vol");
+}
+
+TEST(TextureDescTest, EqualityReflexive) {
+  const auto desc = TextureDesc::new2D(
+      TextureFormat::RGBA_UNorm8, 64, 64, TextureDesc::TextureUsageBits::Sampled);
+  EXPECT_EQ(desc, desc);
 }
 
 } // namespace igl::tests

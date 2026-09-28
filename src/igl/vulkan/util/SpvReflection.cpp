@@ -9,11 +9,20 @@
 
 #include <algorithm>
 #include <spirv/unified1/spirv.h>
+#include <type_traits>
 
 #define IGL_COMMON_SKIP_CHECK
 #include <igl/Macros.h>
 
 namespace igl::vulkan::util {
+
+static_assert(sizeof(TextureDescription) == 12);
+static_assert(std::is_trivially_copyable_v<TextureDescription>);
+static_assert(sizeof(ImageDescription) == 16);
+static_assert(std::is_trivially_copyable_v<ImageDescription>);
+static_assert(sizeof(BufferDescription) == 12);
+static_assert(std::is_trivially_copyable_v<BufferDescription>);
+
 namespace {
 
 struct SpirvId {
@@ -61,6 +70,7 @@ TextureType getIGLTextureType(uint32_t dim, bool isArrayed) {
 } // namespace
 
 SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
+  IGL_PROFILER_FUNCTION();
   if (!IGL_DEBUG_VERIFY(spirv)) {
     return {};
   }
@@ -99,8 +109,8 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
   const uint32_t* words = spirv + kSpvHeaderSize;
 
   while (words < spirv + size) {
-    const uint16_t instructionSize = uint16_t(words[0] >> SpvWordCountShift);
-    const uint16_t opCode = uint16_t(words[0] & SpvOpCodeMask);
+    const uint16_t instructionSize = static_cast<uint16_t>(words[0] >> SpvWordCountShift);
+    const uint16_t opCode = static_cast<uint16_t>(words[0] & SpvOpCodeMask);
 
     switch (opCode) {
     case SpvOpDecorate: {
@@ -215,7 +225,7 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
     words += instructionSize;
   }
 
-  for (auto& id : ids) {
+  for (const auto& id : ids) {
     const bool isStorage = id.storageClass == SpvStorageClassStorageBuffer;
     const bool isUniform = id.storageClass == SpvStorageClassUniform ||
                            id.storageClass == SpvStorageClassUniformConstant;
@@ -225,6 +235,7 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
 
       const uint32_t opCode = ids[ids[id.typeId].typeId].opCode;
 
+      // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
       switch (SpvOp(opCode)) {
       case SpvOpTypeStruct:
         info.buffers.push_back(
@@ -268,12 +279,12 @@ SpvModuleInfo getReflectionData(const uint32_t* spirv, size_t numBytes) {
 
   for (const auto& desc : info.buffers) {
     if (desc.bindingLocation != kNoBindingLocation) {
-      info.usageMaskBuffers |= 1ul << desc.bindingLocation;
+      info.usageMaskBuffers |= 1UL << desc.bindingLocation;
     }
   }
   for (const auto& desc : info.textures) {
     if (desc.bindingLocation != kNoBindingLocation) {
-      info.usageMaskTextures |= 1ul << desc.bindingLocation;
+      info.usageMaskTextures |= 1UL << desc.bindingLocation;
     }
   }
 
@@ -301,6 +312,7 @@ void combineDescriptions(std::vector<T>& out, const std::vector<T>& c1, const st
 } // namespace
 
 SpvModuleInfo mergeReflectionData(const SpvModuleInfo& info1, const SpvModuleInfo& info2) {
+  IGL_PROFILER_FUNCTION();
   SpvModuleInfo result;
 
   combineDescriptions(result.buffers, info1.buffers, info2.buffers);

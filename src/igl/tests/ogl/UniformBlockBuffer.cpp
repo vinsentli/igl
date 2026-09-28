@@ -23,7 +23,6 @@ namespace igl::tests {
 class UniformBlockBufferOGLTest : public ::testing::Test {
  public:
   UniformBlockBufferOGLTest() = default;
-  ~UniformBlockBufferOGLTest() override = default;
 
   void SetUp() override {
     igl::setDebugBreakEnabled(false);
@@ -56,10 +55,9 @@ TEST_F(UniformBlockBufferOGLTest, SetBlockBinding) {
 
   // Create a uniform buffer
   const float uniformData[4] = {1.0f, 0.0f, 0.0f, 0.0f};
-  BufferDesc bufDesc;
-  bufDesc.type = BufferDesc::BufferTypeBits::Uniform;
-  bufDesc.data = uniformData;
-  bufDesc.length = sizeof(uniformData);
+  const BufferDesc bufDesc{.type = BufferDesc::BufferTypeBits::Uniform,
+                           .data = uniformData,
+                           .length = sizeof(uniformData)};
 
   auto uniformBuffer = iglDev_->createBuffer(bufDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -81,10 +79,9 @@ TEST_F(UniformBlockBufferOGLTest, BindBase) {
   Result ret;
 
   const float uniformData[4] = {1.0f, 2.0f, 3.0f, 4.0f};
-  BufferDesc bufDesc;
-  bufDesc.type = BufferDesc::BufferTypeBits::Uniform;
-  bufDesc.data = uniformData;
-  bufDesc.length = sizeof(uniformData);
+  const BufferDesc bufDesc{.type = BufferDesc::BufferTypeBits::Uniform,
+                           .data = uniformData,
+                           .length = sizeof(uniformData)};
 
   auto uniformBuffer = iglDev_->createBuffer(bufDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -123,10 +120,9 @@ TEST_F(UniformBlockBufferOGLTest, BindRange) {
                                  14.0f,
                                  15.0f,
                                  16.0f};
-  BufferDesc bufDesc;
-  bufDesc.type = BufferDesc::BufferTypeBits::Uniform;
-  bufDesc.data = uniformData;
-  bufDesc.length = sizeof(uniformData);
+  const BufferDesc bufDesc{.type = BufferDesc::BufferTypeBits::Uniform,
+                           .data = uniformData,
+                           .length = sizeof(uniformData)};
 
   auto uniformBuffer = iglDev_->createBuffer(bufDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();

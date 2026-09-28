@@ -7,12 +7,15 @@
 
 #include <igl/opengl/UniformAdapter.h>
 
+#include <algorithm>
+#include <igl/Macros.h>
 #include <igl/opengl/Buffer.h>
 #include <igl/opengl/UniformBuffer.h>
 
 namespace igl::opengl {
 
 UniformAdapter::UniformAdapter(const IContext& context, PipelineType type) : pipelineType_(type) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   // NOTE: 32 "feels" right and yielded good results in MobileLab. Goal here is to minimize
   // number of resize's in the vector but not be unreasonably large.
   constexpr size_t kLikelyMaximumNumUniforms = 32;
@@ -34,6 +37,7 @@ UniformAdapter::UniformAdapter(const IContext& context, PipelineType type) : pip
 }
 
 void UniformAdapter::shrinkUniformUsage() {
+  IGL_PROFILER_FUNCTION();
   static constexpr uint32_t kMaxUniformBytes = 32 * 1024;
   static constexpr uint32_t kMaxShrinkUniformCounter = 1000;
   if (uniformData_.size() > kMaxUniformBytes && usedUniformDataBytes_ < uniformData_.size() / 2) {
@@ -48,6 +52,7 @@ void UniformAdapter::shrinkUniformUsage() {
 }
 
 void UniformAdapter::clearUniformBuffers() {
+  IGL_PROFILER_FUNCTION();
   usedUniformDataBytes_ = 0;
   uniforms_.clear();
   uniformBuffersDirtyMask_ = 0;
@@ -60,11 +65,12 @@ void UniformAdapter::clearUniformBuffers() {
 void UniformAdapter::setUniform(const UniformDesc& uniformDesc,
                                 const void* data,
                                 Result* outResult) {
+  IGL_PROFILER_FUNCTION();
   auto location = uniformDesc.location;
   IGL_DEBUG_ASSERT(location >= 0, "Invalid uniformDesc->location passed to setUniform");
 
   // Early out if any of the parameters are invalid.
-  if (location < 0 || location >= maxUniforms_ || !data) {
+  if (location < 0 || static_cast<uint32_t>(location) >= maxUniforms_ || !data) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid);
     IGL_LOG_INFO_ONCE("IGL WARNING: Invalid parameters found for setUniform. Location (%d) \n",
                       location);
@@ -107,7 +113,9 @@ void UniformAdapter::setUniform(const UniformDesc& uniformDesc,
     uniformData_.resize(usedUniformDataBytes_);
   }
 
-  optimizedMemcpy(uniformData_.data() + dataOffset, (uint8_t*)data + uniformDesc.offset, length);
+  optimizedMemcpy(uniformData_.data() + dataOffset,
+                  static_cast<const uint8_t*>(data) + uniformDesc.offset,
+                  length);
 
 #if IGL_DEBUG
   // We don't catch duplicate uniforms set on a given location in production.
@@ -132,6 +140,7 @@ void UniformAdapter::setUniformBuffer(IBuffer* buffer,
                                       size_t size,
                                       uint32_t bindingIndex,
                                       Result* outResult) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(bindingIndex <= IGL_UNIFORM_BLOCKS_BINDING_MAX,
                    "Uniform buffer index %u is beyond max %u",
                    bindingIndex,
@@ -147,6 +156,7 @@ void UniformAdapter::setUniformBuffer(IBuffer* buffer,
 }
 
 void UniformAdapter::bindToPipeline(IContext& context) {
+  IGL_PROFILER_FUNCTION();
   // bind uniforms
   for (const auto& uniform : uniforms_) {
     const auto& uniformDesc = uniform.desc;

@@ -12,6 +12,7 @@
 #import <Metal/MTLRenderCommandEncoder.h>
 #import <Metal/MTLRenderPass.h>
 #import <Metal/MTLTypes.h>
+#include <igl/Macros.h>
 #include <igl/RenderPass.h>
 #include <igl/metal/Buffer.h>
 #include <igl/metal/DepthStencilState.h>
@@ -51,6 +52,7 @@ void RenderCommandEncoder::initialize(const std::shared_ptr<CommandBuffer>& comm
                                       const RenderPassDesc& renderPass,
                                       const std::shared_ptr<IFramebuffer>& framebuffer,
                                       Result* outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   Result::setOk(outResult);
   if (!IGL_DEBUG_VERIFY(framebuffer)) {
     Result::setResult(outResult, Result::Code::ArgumentNull);
@@ -194,6 +196,7 @@ std::unique_ptr<RenderCommandEncoder> RenderCommandEncoder::create(
     const RenderPassDesc& renderPass,
     const std::shared_ptr<IFramebuffer>& framebuffer,
     Result* outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
   std::unique_ptr<RenderCommandEncoder> encoder(new RenderCommandEncoder(commandBuffer));
   encoder->initialize(commandBuffer, renderPass, framebuffer, outResult);
@@ -201,21 +204,20 @@ std::unique_ptr<RenderCommandEncoder> RenderCommandEncoder::create(
 }
 
 void RenderCommandEncoder::endEncoding() {
+  IGL_PROFILER_FUNCTION();
   // @fb-only
   // @fb-only
   [encoder_ endEncoding];
   encoder_ = nil;
 }
 
-void RenderCommandEncoder::pushDebugGroupLabel(const char* label,
-                                               const igl::Color& /*color*/) const {
+void RenderCommandEncoder::pushDebugGroupLabel(const char* label, const Color& /*color*/) const {
   IGL_DEBUG_ASSERT(encoder_);
   IGL_DEBUG_ASSERT(label != nullptr && *label);
   [encoder_ pushDebugGroup:[NSString stringWithUTF8String:label] ?: @""];
 }
 
-void RenderCommandEncoder::insertDebugEventLabel(const char* label,
-                                                 const igl::Color& /*color*/) const {
+void RenderCommandEncoder::insertDebugEventLabel(const char* label, const Color& /*color*/) const {
   IGL_DEBUG_ASSERT(encoder_);
   IGL_DEBUG_ASSERT(label != nullptr && *label);
   [encoder_ insertDebugSignpost:[NSString stringWithUTF8String:label] ?: @""];
@@ -228,18 +230,19 @@ void RenderCommandEncoder::popDebugGroupLabel() const {
 
 void RenderCommandEncoder::bindViewport(const Viewport& viewport) {
   IGL_DEBUG_ASSERT(encoder_);
-  const MTLViewport metalViewport = {viewport.x,
-                                     viewport.y,
-                                     viewport.width,
-                                     viewport.height,
-                                     viewport.minDepth,
-                                     viewport.maxDepth};
+  const MTLViewport metalViewport = {.originX = viewport.x,
+                                     .originY = viewport.y,
+                                     .width = viewport.width,
+                                     .height = viewport.height,
+                                     .znear = viewport.minDepth,
+                                     .zfar = viewport.maxDepth};
   [encoder_ setViewport:metalViewport];
 }
 
 void RenderCommandEncoder::bindScissorRect(const ScissorRect& rect) {
   IGL_DEBUG_ASSERT(encoder_);
-  const MTLScissorRect scissorRect = {rect.x, rect.y, rect.width, rect.height};
+  const MTLScissorRect scissorRect = {
+      .x = rect.x, .y = rect.y, .width = rect.width, .height = rect.height};
   [encoder_ setScissorRect:scissorRect];
 }
 
@@ -282,6 +285,7 @@ void RenderCommandEncoder::bindPolygonFillMode(const PolygonFillMode& polygonFil
 
 void RenderCommandEncoder::bindRenderPipelineState(
     const std::shared_ptr<IRenderPipelineState>& pipelineState) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(encoder_);
   IGL_DEBUG_ASSERT(pipelineState);
   if (!pipelineState) {
@@ -331,6 +335,7 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
                                       IBuffer* buffer,
                                       size_t offset,
                                       size_t bufferSize) {
+  IGL_PROFILER_FUNCTION();
   (void)bufferSize;
 
   IGL_DEBUG_ASSERT(encoder_);
@@ -361,6 +366,7 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
                                       IBuffer* buffer,
                                       size_t offset,
                                       size_t bufferSize) {
+  IGL_PROFILER_FUNCTION();
   (void)bufferSize;
 
   IGL_DEBUG_ASSERT(encoder_);
@@ -382,6 +388,10 @@ void RenderCommandEncoder::bindVertexBuffer(uint32_t index,
                                             size_t attributeStride) {
   IGL_DEBUG_ASSERT(encoder_);
   IGL_DEBUG_ASSERT(index < IGL_BUFFER_BINDINGS_MAX);
+  if (index >= IGL_BUFFER_BINDINGS_MAX) {
+    IGL_LOG_ERROR("bindVertexBuffer: index %u exceeds max %u\n", index, IGL_BUFFER_BINDINGS_MAX);
+    return;
+  }
 
   auto& metalBuffer = static_cast<Buffer&>(buffer);
 
@@ -395,7 +405,7 @@ void RenderCommandEncoder::bindVertexBuffer(uint32_t index,
                   attributeStride:attributeStride
                           atIndex:index];
       }
-    }else {
+    } else {
       IGL_DEBUG_ASSERT_NOT_REACHED();
     }
   }
@@ -415,6 +425,7 @@ void RenderCommandEncoder::bindBytes(size_t index,
                                      uint8_t bindTarget,
                                      const void* data,
                                      size_t length) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(encoder_);
   IGL_DEBUG_ASSERT(bindTarget == BindTarget::kVertex || bindTarget == BindTarget::kFragment ||
                        bindTarget == BindTarget::kTask || bindTarget == BindTarget::kMesh ||
@@ -453,6 +464,7 @@ void RenderCommandEncoder::bindPushConstants(const void* /*data*/,
 }
 
 void RenderCommandEncoder::bindTexture(size_t index, uint8_t bindTarget, ITexture* texture) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(encoder_);
   IGL_DEBUG_ASSERT(bindTarget == BindTarget::kVertex || bindTarget == BindTarget::kFragment ||
                        bindTarget == BindTarget::kTask || bindTarget == BindTarget::kMesh ||
@@ -494,6 +506,7 @@ void RenderCommandEncoder::bindUniform(const UniformDesc& /*uniformDesc*/, const
 void RenderCommandEncoder::bindSamplerState(size_t index,
                                             uint8_t bindTarget,
                                             ISamplerState* samplerState) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(encoder_);
   IGL_DEBUG_ASSERT(bindTarget == BindTarget::kVertex || bindTarget == BindTarget::kFragment ||
                        bindTarget == BindTarget::kTask || bindTarget == BindTarget::kMesh ||
@@ -526,6 +539,7 @@ void RenderCommandEncoder::draw(size_t vertexCount,
                                 uint32_t instanceCount,
                                 uint32_t firstVertex,
                                 uint32_t baseInstance) {
+  IGL_PROFILER_FUNCTION();
   getCommandBuffer().incrementCurrentDrawCount();
   IGL_DEBUG_ASSERT(encoder_);
 #if IGL_PLATFORM_IOS
@@ -557,6 +571,7 @@ void RenderCommandEncoder::drawIndexed(size_t indexCount,
                                        uint32_t firstIndex,
                                        int32_t vertexOffset,
                                        uint32_t baseInstance) {
+  IGL_PROFILER_FUNCTION();
   getCommandBuffer().incrementCurrentDrawCount();
   IGL_DEBUG_ASSERT(encoder_);
   IGL_DEBUG_ASSERT(indexBuffer_, "No index buffer bound");
@@ -606,6 +621,7 @@ void RenderCommandEncoder::drawIndexed(size_t indexCount,
 void RenderCommandEncoder::drawMeshTasks(const Dimensions& threadgroupsPerGrid,
                                          const Dimensions& threadsPerTaskThreadgroup,
                                          const Dimensions& threadsPerMeshThreadgroup) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(encoder_);
 
   if (!device_.hasFeature(DeviceFeatures::MeshShaders)) {
@@ -639,9 +655,10 @@ void RenderCommandEncoder::multiDrawIndirect(IBuffer& indirectBuffer,
                                              size_t indirectBufferOffset,
                                              uint32_t drawCount,
                                              uint32_t stride) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(encoder_);
   stride = stride ? stride : sizeof(MTLDrawPrimitivesIndirectArguments);
-  auto& indirectBufferRef = (Buffer&)(indirectBuffer);
+  auto& indirectBufferRef = static_cast<Buffer&>(indirectBuffer);
 
   for (uint32_t drawIndex = 0; drawIndex < drawCount; drawIndex++) {
     getCommandBuffer().incrementCurrentDrawCount();
@@ -657,13 +674,14 @@ void RenderCommandEncoder::multiDrawIndexedIndirect(IBuffer& indirectBuffer,
                                                     size_t indirectBufferOffset,
                                                     uint32_t drawCount,
                                                     uint32_t stride) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(encoder_);
   IGL_DEBUG_ASSERT(indexBuffer_, "No index buffer bound");
   if (!IGL_DEBUG_VERIFY(encoder_ && indexBuffer_)) {
     return;
   }
   stride = stride ? stride : sizeof(MTLDrawIndexedPrimitivesIndirectArguments);
-  auto& indirectBufferRef = (Buffer&)(indirectBuffer);
+  auto& indirectBufferRef = static_cast<Buffer&>(indirectBuffer);
 
   for (uint32_t drawIndex = 0; drawIndex < drawCount; drawIndex++) {
     getCommandBuffer().incrementCurrentDrawCount();
@@ -750,6 +768,7 @@ MTLClearColor RenderCommandEncoder::convertClearColor(Color value) {
 }
 
 void RenderCommandEncoder::bindBindGroup(BindGroupTextureHandle handle) {
+  IGL_PROFILER_FUNCTION();
   if (handle.empty()) {
     return;
   }
@@ -768,6 +787,7 @@ void RenderCommandEncoder::bindBindGroup(BindGroupTextureHandle handle) {
 void RenderCommandEncoder::bindBindGroup(BindGroupBufferHandle handle,
                                          uint32_t numDynamicOffsets,
                                          const uint32_t* dynamicOffsets) {
+  IGL_PROFILER_FUNCTION();
   if (handle.empty()) {
     return;
   }

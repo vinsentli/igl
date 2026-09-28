@@ -7,6 +7,7 @@
 
 #include "VulkanSwapchain.h"
 
+#include <algorithm>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanContext.h>
 #include <igl/vulkan/VulkanSemaphore.h>
@@ -46,19 +47,29 @@ bool isNativeSwapChainBGR(const std::vector<VkSurfaceFormatKHR>& formats) {
   return false;
 }
 
+// invertRedAndBlue() asserts on anything outside the RGB/BGR pairs it knows about. Formats without
+// a counterpart report VK_FORMAT_UNDEFINED, which never matches an exposed surface format.
+VkFormat invertRedAndBlueOrUndefined(VkFormat format) {
+  if (igl::vulkan::isTextureFormatRGB(format) || igl::vulkan::isTextureFormatBGR(format)) {
+    return igl::vulkan::invertRedAndBlue(format);
+  }
+  return VK_FORMAT_UNDEFINED;
+}
+
 VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats,
                                            igl::TextureFormat textureFormat,
                                            igl::ColorSpace colorSpace) {
   IGL_DEBUG_ASSERT(!formats.empty());
 
   const bool isNativeSwapchainBGR = isNativeSwapChainBGR(formats);
-  auto vulkanTextureFormat = igl::vulkan::textureFormatToVkFormat(textureFormat);
+  VkFormat vulkanTextureFormat = igl::vulkan::textureFormatToVkFormat(textureFormat);
   const bool isRequestedFormatBGR = igl::vulkan::isTextureFormatBGR(vulkanTextureFormat);
   if (isNativeSwapchainBGR != isRequestedFormatBGR) {
     vulkanTextureFormat = igl::vulkan::invertRedAndBlue(vulkanTextureFormat);
   }
   const auto preferred =
-      VkSurfaceFormatKHR{vulkanTextureFormat, igl::vulkan::colorSpaceToVkColorSpace(colorSpace)};
+      VkSurfaceFormatKHR{.format = vulkanTextureFormat,
+                         .colorSpace = igl::vulkan::colorSpaceToVkColorSpace(colorSpace)};
 
   for (const auto& curFormat : formats) {
     if (curFormat.format == preferred.format && curFormat.colorSpace == preferred.colorSpace) {
@@ -66,9 +77,18 @@ VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>
     }
   }
 
+  // a packed 10-bit format can have the opposite channel order from the swapchain's dominant 8-bit
+  // format, so try the other order before giving up on the requested color space
+  const VkFormat swapped = invertRedAndBlueOrUndefined(preferred.format);
+  for (const auto& curFormat : formats) {
+    if (curFormat.format == swapped && curFormat.colorSpace == preferred.colorSpace) {
+      return curFormat;
+    }
+  }
+
   // if we can't find a matching format and color space, fallback on matching only format
   for (const auto& curFormat : formats) {
-    if (curFormat.format == preferred.format) {
+    if (curFormat.format == preferred.format || curFormat.format == swapped) {
       return curFormat;
     }
   }
@@ -174,6 +194,14 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& ctx, uint32_t width, uint32_t he
                                  height,
                                  &swapchain_));
   }
+  // The result is deliberately unchecked: on Android the swapchain belongs to the platform's WSI
+  // loader rather than to the ICD, so the driver rejects the handle with `VK_ERROR_UNKNOWN`. An
+  // unnamed swapchain only costs a label in RenderDoc, so it must not be fatal.
+  ivkSetDebugObjectName(&ctx_.vf_,
+                        ctx.getVkDevice(),
+                        VK_OBJECT_TYPE_SWAPCHAIN_KHR,
+                        (uint64_t)swapchain_,
+                        "Swapchain: VulkanSwapchain");
   VK_ASSERT(ctx.vf_.vkGetSwapchainImagesKHR(
       ctx.getVkDevice(), swapchain_, &numSwapchainImages_, nullptr));
   IGL_LOG_INFO("vkGetSwapchainImagesKHR, request min:%d, actual:%d", requestedSwapchainImageCount, numSwapchainImages_);
@@ -261,7 +289,7 @@ void VulkanSwapchain::lazyAllocateDepthBuffer() const {
 #endif
 
   auto depthImage = VulkanImage(ctx_,
-                                VkExtent3D{width_, height_, 1},
+                                VkExtent3D{.width = width_, .height = height_, .depth = 1},
                                 VK_IMAGE_TYPE_2D,
                                 depthFormat,
                                 1,
@@ -305,6 +333,15 @@ Result VulkanSwapchain::acquireNextImage() {
     VK_ASSERT(ctx_.vf_.vkWaitSemaphoresKHR(ctx_.getVkDevice(), &waitInfo, UINT64_MAX));
 
     const VkSemaphore acquireSemaphore = acquireSemaphores[currentImageIndex_].getVkSemaphore();
+    // Reserve the acquire wait before acquiring the image. waitSemaphore() only records the handle
+    // (the GPU wait is applied at submit), so on injected-queue overflow we fail here without
+    // having acquired an image or left `acquireSemaphore` signalled-but-unconsumed -- which would
+    // otherwise trip VUID-vkAcquireNextImageKHR-semaphore-01779 on the next acquire.
+    if (!ctx_.immediate_->waitSemaphore(acquireSemaphore)) {
+      return Result(Result::Code::RuntimeError,
+                    "Too many semaphores pending for the next Vulkan submission");
+    }
+
     // when timeout is set to UINT64_MAX, we wait until the next image has been acquired
     acquireResult = ctx_.vf_.vkAcquireNextImageKHR(ctx_.getVkDevice(),
                                                    swapchain_,
@@ -318,8 +355,6 @@ Result VulkanSwapchain::acquireNextImage() {
                             // (use `currentImageIndex_` instead)
 
     getNextImage_ = false;
-
-    ctx_.immediate_->waitSemaphore(acquireSemaphore);
   } else {
     // this entire branch can be removed once we switch to timeline semaphores
 
@@ -349,6 +384,12 @@ Result VulkanSwapchain::acquireNextImage() {
         "vkAcquireNextImageKHR returned VK_SUBOPTIMAL_KHR. The Vulkan swapchain is no longer "
         "compatible with the surface");
   } else {
+    if (acquireResult != VK_SUCCESS && ctx_.timelineSemaphore_) {
+      // A failed acquire (e.g. VK_ERROR_OUT_OF_DATE_KHR) does not signal the acquire semaphore, but
+      // the timeline path already reserved a wait on it above. Drop that wait so the next
+      // submission does not block forever on a semaphore that will never be signaled.
+      ctx_.immediate_->cancelLastWaitSemaphore();
+    }
     VK_ASSERT_RETURN(acquireResult);
   }
 

@@ -46,7 +46,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(uint32_t 
 
   std::shared_ptr<VulkanTexture> vkTex = swapChain->getCurrentDepthTexture();
 
-  if (!IGL_DEBUG_VERIFY(vkTex != nullptr)) {
+  if (!IGL_DEBUG_VERIFY(vkTex)) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "Swapchain has no valid texture");
     return nullptr;
   }
@@ -95,7 +95,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(
 #if USE_DEFAULT_SWAPCHAIN
   auto vkTex = swapChain->getCurrentVulkanTexture();
 
-  if (vkTex == nullptr) {
+  if (!IGL_DEBUG_VERIFY(vkTex)) {
     Result::setResult(outResult, Result::Code::InvalidOperation, "Swapchain has no valid texture");
     return nullptr;
   }
@@ -181,13 +181,19 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const Te
 std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(
     struct AHardwareBuffer* buffer,
     Result* IGL_NULLABLE outResult) const {
+  if (!buffer) {
+    IGL_LOG_ERROR("PlatformDevice::createTextureWithSharedMemory(): null AHardwareBuffer");
+    Result::setResult(outResult, Result::Code::ArgumentNull, "AHardwareBuffer is null");
+    return nullptr;
+  }
+
   if (!funcTable_){
     return nullptr;
   }      
-  
+
   Result subResult;
 
-  AHardwareBuffer_Desc hwbDesc;
+  AHardwareBuffer_Desc hwbDesc{};
   funcTable_->AHardwareBuffer_describe(buffer, &hwbDesc);
 
   // Vendor-specific YCbCr AHB formats are valid Vulkan imports but may not map to IGL formats.

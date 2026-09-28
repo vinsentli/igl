@@ -29,6 +29,7 @@
 // NOLINTNEXTLINE(facebook-unused-include-check)
 #include <GLFW/glfw3native.h>
 #include <cstdio>
+#include <cstring>
 #include <stb/stb_image_write.h>
 #include <igl/IGL.h>
 
@@ -82,6 +83,7 @@ static const uint32_t kNumColorAttachments = 1;
 #endif // __cpp_lib_format
 // NOLINTEND(facebook-unused-include-check)
 
+// NOLINTNEXTLINE(facebook-static-object-destructor-check,misc-use-anonymous-namespace)
 static std::string codeVS = R"(
 #version 460
 layout (location=0) out vec3 color;
@@ -114,6 +116,7 @@ void main() {
 };
 )";
 #else
+// NOLINTNEXTLINE(misc-use-anonymous-namespace)
 const static char* codeFS = R"(
 #version 460
 layout (location=0) in vec3 color;
@@ -126,6 +129,7 @@ void main() {
 
 using namespace igl;
 
+// NOLINTBEGIN(facebook-static-object-destructor-check,misc-use-anonymous-namespace)
 static int width = 1024;
 static int height = 768;
 
@@ -133,11 +137,13 @@ static std::unique_ptr<IDevice> device;
 static std::shared_ptr<ICommandQueue> commandQueue;
 static RenderPassDesc renderPass;
 static std::shared_ptr<IFramebuffer> framebuffer;
+// NOLINTNEXTLINE(facebook-static-object-destructor-check)
 static std::shared_ptr<IRenderPipelineState> renderPipelineStateTriangle;
+// NOLINTEND(facebook-static-object-destructor-check,misc-use-anonymous-namespace)
 
 static GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationLayers) {
   if (!glfwInit()) {
-    printf("glfwInit() failed");
+    std::printf("glfwInit() failed");
     return nullptr;
   }
 
@@ -165,7 +171,7 @@ static GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanVali
 
   if (window) {
     glfwSetErrorCallback([](int error, const char* description) {
-      printf("GLFW Error (%i): %s\n", error, description);
+      std::printf("GLFW Error (%i): %s\n", error, description);
     });
 
     glfwSetKeyCallback(window, [](GLFWwindow* window, int key, int, int action, int) {
@@ -178,7 +184,7 @@ static GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanVali
     glfwSetWindowSizeCallback(window, [](GLFWwindow* /*window*/, int w, int h) {
       width = w;
       height = h;
-      printf("Window resized! width=%d, height=%d\n", width, height);
+      std::printf("Window resized! width=%d, height=%d\n", width, height);
 #if !USE_OPENGL_BACKEND
       auto* vulkanDevice = static_cast<vulkan::Device*>(device.get());
       auto& ctx = vulkanDevice->getVulkanContext();
@@ -389,9 +395,9 @@ int main(int argc, char* argv[]) {
   bool enableVulkanValidationLayers = true;
 
   for (int i = 1; i < argc; i++) {
-    if (!strcmp(argv[i], "--headless")) {
+    if (!std::strcmp(argv[i], "--headless")) {
       isHeadless = true;
-    } else if (!strcmp(argv[i], "--disable-vulkan-validation-layers")) {
+    } else if (!std::strcmp(argv[i], "--disable-vulkan-validation-layers")) {
       enableVulkanValidationLayers = false;
     }
   }
@@ -407,7 +413,7 @@ int main(int argc, char* argv[]) {
     if (window) {
       glfwPollEvents();
     } else {
-      printf("We are running headless - breaking after 1 frame\n");
+      std::printf("We are running headless - breaking after 1 frame\n");
       std::shared_ptr<ITexture> texture = framebuffer->getColorAttachment(0);
       const Dimensions dim = texture->getDimensions();
       std::vector<uint8_t> pixelsRGBA(dim.width * dim.height * 4);

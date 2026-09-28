@@ -11,12 +11,14 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstring>
 #include <filesystem>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/random.hpp>
 #include <shell/shared/platform/DisplayContext.h>
+#include <igl/CommandBuffer.h>
 #include <igl/FPSCounter.h>
 
 #if IGL_BACKEND_OPENGL
@@ -42,7 +44,7 @@ namespace {
                                                          const char* searchString,
                                                          const char* replaceString) {
   std::string s(input);
-  const size_t len = strlen(searchString);
+  const size_t len = std::strlen(searchString);
   size_t pos = 0;
   while ((pos = s.find(searchString, pos)) != std::string::npos) {
     s.replace(pos, len, replaceString);
@@ -217,6 +219,7 @@ void main() {
 }
 
 [[nodiscard]] std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
     IGL_DEBUG_ASSERT_NOT_REACHED();
@@ -299,7 +302,7 @@ void TinyMeshSession::initialize() noexcept {
                                           .storage = ResourceStorage::Private,
                                           .debugName = "Buffer: index"},
                                nullptr);
-  // create an Uniform buffers to store uniforms for 2 objects
+  // create Uniform buffers to store uniforms for 2 objects
   for (uint32_t i = 0; i != kNumBufferedFrames; i++) {
     ubPerFrame_.push_back(
         device_->createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Uniform,
@@ -506,24 +509,25 @@ void TinyMeshSession::update(SurfaceTextures surfaceTextures) noexcept {
   framebuffer_->updateDrawable(surfaceTextures.color);
 
   // from igl/shell/renderSessions/Textured3DCubeSession.cpp
-  const float fov = float(45.0f * (M_PI / 180.0f));
+  const float fov = static_cast<float>(45.0f * (M_PI / 180.0f));
   const float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
   perFrame.proj = glm::perspectiveLH(fov, aspectRatio, 0.1f, 500.0f);
   // place a "camera" behind the cubes, the distance depends on the total number of cubes
-  perFrame.view = glm::translate(glm::mat4(1.0f),
-                                 glm::vec3(0.0f, 0.0f, sqrtf(kNumCubes / 16.0f) * 20.0f * kHalf));
+  perFrame.view = glm::translate(
+      glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, std::sqrt(kNumCubes / 16.0f) * 20.0f * kHalf));
   ubPerFrame_[frameIndex_]->upload(&perFrame, BufferRange(sizeof(perFrame)));
 
   // rotate cubes around random axes
   for (uint32_t i = 0; i != kNumCubes; i++) {
-    const float direction = powf(-1, static_cast<float>(i + 1));
-    const uint32_t cubesInLine = static_cast<uint32_t>(sqrt(kNumCubes));
-    const glm::vec3 offset =
-        glm::vec3(-1.5f * sqrt(kNumCubes) + 4.0f * static_cast<float>(i % cubesInLine),
-                  -1.5f * sqrt(kNumCubes) + 4.0f * std::floor(static_cast<float>(i) / cubesInLine),
-                  0);
-    perObject[i].model = glm::rotate(
-        glm::translate(glm::mat4(1.0f), offset), float(direction * currentTime_), axis[i]);
+    const float direction = std::pow(-1, static_cast<float>(i + 1));
+    const uint32_t cubesInLine = static_cast<uint32_t>(std::sqrt(kNumCubes));
+    const glm::vec3 offset = glm::vec3(
+        -1.5f * std::sqrt(kNumCubes) + 4.0f * static_cast<float>(i % cubesInLine),
+        -1.5f * std::sqrt(kNumCubes) + 4.0f * std::floor(static_cast<float>(i) / cubesInLine),
+        0);
+    perObject[i].model = glm::rotate(glm::translate(glm::mat4(1.0f), offset),
+                                     static_cast<float>(direction * currentTime_),
+                                     axis[i]);
   }
 
   ubPerObject_[frameIndex_]->upload(&perObject, BufferRange(sizeof(perObject)));
@@ -531,16 +535,16 @@ void TinyMeshSession::update(SurfaceTextures surfaceTextures) noexcept {
   // Command buffers (1-N per thread): create, submit and forget
   const std::shared_ptr<ICommandBuffer> buffer = commandQueue_->createCommandBuffer({}, nullptr);
 
-  const igl::Viewport viewport = {.x = 0.0f,
-                                  .y = 0.0f,
-                                  .width = static_cast<float>(width),
-                                  .height = static_cast<float>(height),
-                                  .minDepth = 0.0f,
-                                  .maxDepth = +1.0f};
-  const igl::ScissorRect scissor = {.x = 0,
-                                    .y = 0,
-                                    .width = static_cast<uint32_t>(width),
-                                    .height = static_cast<uint32_t>(height)};
+  const Viewport viewport = {.x = 0.0f,
+                             .y = 0.0f,
+                             .width = static_cast<float>(width),
+                             .height = static_cast<float>(height),
+                             .minDepth = 0.0f,
+                             .maxDepth = +1.0f};
+  const ScissorRect scissor = {.x = 0,
+                               .y = 0,
+                               .width = static_cast<uint32_t>(width),
+                               .height = static_cast<uint32_t>(height)};
 
   // This will clear the framebuffer
   const auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer_);

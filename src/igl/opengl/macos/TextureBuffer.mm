@@ -32,6 +32,7 @@ TextureFormat convertToTextureFormat(OSType pixelFormat) {
 } // namespace
 TextureBuffer::TextureBuffer(IContext& context,
                              CVPixelBufferRef pixelBuffer,
+                             // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
                              CVOpenGLTextureCacheRef textureCache,
                              TextureDesc::TextureUsage usage) :
   Super(context, convertToTextureFormat(CVPixelBufferGetPixelFormatType(pixelBuffer))),
@@ -76,6 +77,7 @@ Result TextureBuffer::create() {
     return Result(Result::Code::ArgumentInvalid, "Invalid texture format");
   }
 
+  // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
   const auto error = CVOpenGLTextureCacheCreateTextureFromImage(
       kCFAllocatorDefault, textureCache_, pixelBuffer_, nullptr, &cvTexture_);
   if (error != noErr) {
@@ -87,8 +89,10 @@ Result TextureBuffer::create() {
 
   // Note that CVOpenGLTextureGetTarget(cvTexture_) returns GL_TEXTURE_RECTANGLE
   // which is not something IGL explicitly supports.
+  // NOLINTBEGIN(clang-diagnostic-deprecated-declarations)
   setTextureBufferProperties(CVOpenGLTextureGetName(cvTexture_),
                              CVOpenGLTextureGetTarget(cvTexture_));
+  // NOLINTEND(clang-diagnostic-deprecated-declarations)
 
   return Result();
 }

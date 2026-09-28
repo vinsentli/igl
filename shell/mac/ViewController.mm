@@ -9,7 +9,7 @@
 
 #import "ViewController.h"
 
-#import "GLView.h"
+#import "GLView.h" // IWYU pragma: keep
 #import "HeadlessView.h"
 #import "MetalView.h"
 // @fb-only
@@ -34,6 +34,10 @@
 #include <igl/opengl/macos/HWDevice.h>
 #include <igl/opengl/macos/PlatformDevice.h>
 #endif
+#import "DisplayLinkRatePacing.h"
+
+#include <shell/shared/platform/PresentationRateController.h>
+#include <shell/shared/platform/apple/PresentationRateApple.h>
 #include <shell/shared/platform/mac/PlatformMac.h>
 #include <shell/shared/renderSession/AppParams.h>
 #include <shell/shared/renderSession/RenderSession.h>
@@ -54,6 +58,7 @@
 #import <simd/simd.h>
 #include <thread>
 
+// NOLINTNEXTLINE(google-build-using-namespace)
 using namespace igl;
 
 @interface ViewController () {
@@ -62,6 +67,7 @@ using namespace igl;
   igl::shell::ShellParams _shellParams;
   CGRect _frame;
   CVDisplayLinkRef _displayLink; // For OpenGL (via GLView) and opt-in Metal timer rendering
+  std::unique_ptr<igl::shell::DisplayLinkRatePacing> _displayLinkRatePacing;
   id<CAMetalDrawable> _currentDrawable;
   id<MTLTexture> _depthStencilTexture;
   std::shared_ptr<igl::shell::Platform> _shellPlatform;
@@ -247,6 +253,7 @@ using namespace igl;
 #endif
 
 #if IGL_BACKEND_OPENGL
+  // NOLINTBEGIN(clang-diagnostic-deprecated-declarations)
   case igl::BackendFlavor::OpenGL: {
     const bool enableStencilBuffer =
         _config.depthTextureFormat == igl::TextureFormat::S8_UInt_Z24_UNorm ||
@@ -338,6 +345,7 @@ using namespace igl;
     self.view = openGLView;
     break;
   }
+  // NOLINTEND(clang-diagnostic-deprecated-declarations)
 #endif
 
 #if IGL_BACKEND_VULKAN
@@ -383,6 +391,17 @@ using namespace igl;
     // @fb-only
         // @fb-only
 
+    // Set panel apps to full screen in the reprojection buffer. @fb-only
+    // @fb-only
+    // @fb-only
+    // @fb-only
+
+    // @fb-only
+    // @fb-only
+    // @fb-only
+    // @fb-only
+    // @fb-only
+
     // @fb-only
     // @fb-only
         // @fb-only
@@ -391,6 +410,14 @@ using namespace igl;
         // @fb-only
             // @fb-only
         // @fb-only
+        // @fb-only
+        // @fb-only
+        // @fb-only
+        // @fb-only
+        // @fb-only
+        // @fb-only
+        // @fb-only
+    // @fb-only
 
     // @fb-only
 
@@ -428,15 +455,22 @@ using namespace igl;
   _session->initialize();
 }
 
+// NOLINTNEXTLINE(misc-use-anonymous-namespace)
 static CVReturn metalDisplayLinkCallback(CVDisplayLinkRef /*displayLink*/,
                                          const CVTimeStamp* /*now*/,
                                          const CVTimeStamp* /*outputTime*/,
                                          CVOptionFlags /*flagsIn*/,
                                          CVOptionFlags* /*flagsOut*/,
                                          void* userdata) {
-  [(__bridge ViewController*)userdata performSelectorOnMainThread:@selector(triggerMetalRender)
-                                                       withObject:nil
-                                                    waitUntilDone:NO];
+  auto controller = (__bridge ViewController*)userdata;
+  // A CVDisplayLink cannot be slowed down, so a capped rate is reached by returning early
+  // from the callbacks in between. Called exactly once per callback: it advances the counter.
+  if (controller->_displayLinkRatePacing && !controller->_displayLinkRatePacing->shouldRender()) {
+    return kCVReturnSuccess;
+  }
+  [controller performSelectorOnMainThread:@selector(triggerMetalRender)
+                               withObject:nil
+                            waitUntilDone:NO];
   return kCVReturnSuccess;
 }
 
@@ -468,10 +502,21 @@ static CVReturn metalDisplayLinkCallback(CVDisplayLinkRef /*displayLink*/,
       // (e.g., when launched from automated tools for screenshot capture).
       CVDisplayLinkCreateWithActiveCGDisplays(&_displayLink);
       CVDisplayLinkSetOutputCallback(_displayLink, &metalDisplayLinkCallback, (__bridge void*)self);
+      if (_shellPlatform) {
+        // Publish before CVDisplayLinkStart: the callback reads this handle on the link thread,
+        // so assigning it after the link is firing races the write (the null check does not
+        // cure a non-atomic read/write). Teardown keeps the mirror order via detach()-then-reset.
+        _displayLinkRatePacing =
+            std::make_unique<igl::shell::DisplayLinkRatePacing>(*_shellPlatform, _displayLink);
+      }
       CVDisplayLinkStart(_displayLink);
     } else {
       MetalView* v = (MetalView*)self.view;
       v.paused = NO;
+      if (_shellPlatform) {
+        _shellPlatform->getPresentationRateController().setBackend(
+            igl::shell::createMTKViewPresentationRateBackend(v));
+      }
     }
   } else if ([self.view isKindOfClass:[GLView class]]) {
     GLView* v = (GLView*)self.view;
@@ -490,12 +535,25 @@ static CVReturn metalDisplayLinkCallback(CVDisplayLinkRef /*displayLink*/,
   }
   if ([self.view isKindOfClass:[MetalView class]]) {
     if (_shellParams.useTimerRendering) {
+      if (_displayLinkRatePacing) {
+        // Detach before the reset, not through it. reset() stores null before it runs the
+        // destructor, so the callback above would be reading _displayLinkRatePacing while
+        // this thread writes it, with the link still firing. detach() leaves the handle
+        // alone and stops the link, and CVDisplayLinkStop() does not return while a
+        // callback is running — so once it has, nothing else reads the handle or the link.
+        _displayLinkRatePacing->detach();
+      }
+      _displayLinkRatePacing.reset();
       CVDisplayLinkStop(_displayLink);
       CVDisplayLinkRelease(_displayLink);
       _displayLink = nullptr;
     } else {
       MetalView* v = (MetalView*)self.view;
       v.paused = YES;
+      if (_shellPlatform) {
+        // Whatever rate was in effect belonged to the link this view just stopped.
+        _shellPlatform->getPresentationRateController().setBackend(nullptr);
+      }
     }
   } else if ([self.view isKindOfClass:[GLView class]]) {
     GLView* v = (GLView*)self.view;
@@ -560,6 +618,7 @@ static CVReturn metalDisplayLinkCallback(CVDisplayLinkRef /*displayLink*/,
     // @fb-only
         // @fb-only
     // @fb-only
+                             // @fb-only
     // @fb-only
     // @fb-only
   // @fb-only
@@ -634,6 +693,7 @@ static CVReturn metalDisplayLinkCallback(CVDisplayLinkRef /*displayLink*/,
   return NSMakePoint(pos.x, contentRect.size.height - pos.y);
 }
 
+// NOLINTNEXTLINE(misc-use-anonymous-namespace)
 static uint32_t getModifiers(NSEvent* event) {
   uint32_t modifiers = igl::shell::kKeyEventModifierNone;
   const NSUInteger flags = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
@@ -667,6 +727,7 @@ static uint32_t getModifiers(NSEvent* event) {
 - (void)keyDown:(NSEvent*)event {
   _shellPlatform->getInputDispatcher().queueEvent(
       igl::shell::KeyEvent(true, event.keyCode, getModifiers(event)));
+  // NOLINTNEXTLINE(clang-analyzer-nullability.NullablePassedToNonnull)
   std::string characters([event.characters UTF8String]);
   for (const auto& c : characters) {
     _shellPlatform->getInputDispatcher().queueEvent(igl::shell::CharEvent{.character = c});

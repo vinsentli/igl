@@ -19,7 +19,6 @@ namespace igl::tests {
 class VertexInputStateOGLTest : public ::testing::Test {
  public:
   VertexInputStateOGLTest() = default;
-  ~VertexInputStateOGLTest() override = default;
 
   // Set up VertexInputStateDesc for the different test cases
   void SetUp() override {
@@ -48,8 +47,7 @@ TEST_F(VertexInputStateOGLTest, DefaultCreate) {
   Result ret;
   std::shared_ptr<IVertexInputState> vertexInputState;
 
-  VertexInputStateDesc inputDesc;
-  inputDesc.numAttributes = 0;
+  const VertexInputStateDesc inputDesc{.numAttributes = 0};
 
   vertexInputState = iglDev_->createVertexInputState(inputDesc, &ret);
   ASSERT_EQ(ret.code, Result::Code::Ok);

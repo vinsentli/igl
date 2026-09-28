@@ -7,7 +7,9 @@
 
 #include <igl/metal/DeviceFeatureSet.h>
 
+#import <TargetConditionals.h>
 #include <vector>
+#include <igl/Macros.h>
 
 namespace {
 
@@ -40,7 +42,22 @@ size_t getGPUFamily(id<MTLDevice> device) {
     using FeatureSetPair = std::pair<MTLFeatureSet, size_t>;
     std::vector<FeatureSetPair> featureSets;
 
-#if IGL_PLATFORM_IOS
+#if TARGET_OS_TV
+    if (@available(tvOS 12, *)) {
+      featureSets.emplace_back(MTLFeatureSet_tvOS_GPUFamily2_v2, 2);
+      featureSets.emplace_back(MTLFeatureSet_tvOS_GPUFamily1_v4, 1);
+    } else if (@available(tvOS 11, *)) {
+      featureSets.emplace_back(MTLFeatureSet_tvOS_GPUFamily2_v1, 2);
+      featureSets.emplace_back(MTLFeatureSet_tvOS_GPUFamily1_v3, 1);
+    } else if (@available(tvOS 10, *)) {
+      featureSets.emplace_back(MTLFeatureSet_tvOS_GPUFamily1_v2, 1);
+    } else if (@available(tvOS 9, *)) {
+      featureSets.emplace_back(MTLFeatureSet_tvOS_GPUFamily1_v1, 1);
+    } else {
+      IGL_DEBUG_ABORT("IGL tvOS deployment target is 9.0+");
+      return 0;
+    }
+#elif IGL_PLATFORM_IOS
     if (@available(iOS 12, *)) {
       featureSets.emplace_back(MTLFeatureSet_iOS_GPUFamily5_v1, 5);
       featureSets.emplace_back(MTLFeatureSet_iOS_GPUFamily4_v2, 4);
@@ -97,6 +114,7 @@ size_t getGPUFamily(id<MTLDevice> device) {
 namespace igl::metal {
 
 DeviceFeatureSet::DeviceFeatureSet(id<MTLDevice> device) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   gpuFamily_ = getGPUFamily(device);
 
   // Get the supported MSAA
@@ -180,6 +198,7 @@ bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
   case DeviceFeatures::SRGBSwapchain:
   case DeviceFeatures::DrawFirstIndexFirstVertex:
   case DeviceFeatures::DrawIndexedIndirect:
+  case DeviceFeatures::FillBuffer:
     return true;
   case DeviceFeatures::MeshShaders:
     if (@available(iOS 16, macOS 13, *)) {
@@ -451,6 +470,7 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getTextureFormatCapab
   case TextureFormat::BGRA_UNorm8:
   case TextureFormat::RGB10_A2_UNorm_Rev:
   case TextureFormat::BGR10_A2_Unorm:
+  case TextureFormat::B10G11R11_UFloat:
   case TextureFormat::RGBA_SRGB:
   case TextureFormat::BGRA_SRGB:
     return all;

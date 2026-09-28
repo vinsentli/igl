@@ -8,15 +8,16 @@
 #include <igl/metal/Texture.h>
 
 #include <utility>
+#include <igl/Macros.h>
 #include <igl/metal/CommandBuffer.h>
 #include <igl/metal/CommandQueue.h>
 
 namespace {
 
 void bgrToRgb(unsigned char* dstImg, size_t width, size_t height, size_t bytesPerPixel) {
-  for (int i = 0; i < height; ++i) {
-    for (int j = 0; j < width; ++j) {
-      auto pixelIndex = i * width + j;
+  for (size_t i = 0; i < height; ++i) {
+    for (size_t j = 0; j < width; ++j) {
+      const size_t pixelIndex = i * width + j;
       std::swap(dstImg[pixelIndex * bytesPerPixel + 0], dstImg[pixelIndex * bytesPerPixel + 2]);
     }
   }
@@ -44,6 +45,7 @@ Texture::Texture(id<CAMetalDrawable> drawable,
   mipmapGeneration_(mipmapGeneration) {}
 
 Texture::~Texture() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
   value_ = nil;
   if (iosurface_) {
     CFRelease(iosurface_);
@@ -52,6 +54,7 @@ Texture::~Texture() {
 }
 
 bool Texture::needsRepacking(const TextureRangeDesc& range, size_t bytesPerRow) const {
+  IGL_PROFILER_FUNCTION();
   if (bytesPerRow == 0) {
     return false;
   }
@@ -76,6 +79,7 @@ Result Texture::uploadInternal(TextureType type,
                                const void* IGL_NULLABLE data,
                                size_t bytesPerRow,
                                const uint32_t* IGL_NULLABLE /*mipLevelBytes*/) const {
+  IGL_PROFILER_FUNCTION();
   if (data == nullptr) {
     return Result(Result::Code::Ok);
   }
@@ -130,7 +134,7 @@ Result Texture::uploadInternal(TextureType type,
       return Result{Result::Code::InvalidOperation,
                     "AutoGenerateOnUpload requires mipLevel to be uploaded to be 0"};
     }
-    const auto* device = static_cast<const igl::metal::Device*>(&capabilities_);
+    const auto* device = static_cast<const Device*>(&capabilities_);
     if (device) {
       auto cmdQueue = const_cast<Device*>(device)->getMostRecentCommandQueue();
       if (!cmdQueue) {
@@ -152,6 +156,7 @@ Result Texture::uploadInternal(TextureType type,
 }
 
 Result Texture::getBytes(const TextureRangeDesc& range, void* outData, size_t bytesPerRow) const {
+  IGL_PROFILER_FUNCTION();
   if (!outData) {
     return Result(Result::Code::ArgumentNull, "Need a valid output buffer");
   }
@@ -185,7 +190,7 @@ Result Texture::getBytes(const TextureRangeDesc& range, void* outData, size_t by
   repackData(
       properties, range, tmpBuffer.get(), 0, static_cast<uint8_t*>(outData), bytesPerRow, true);
 
-  const igl::TextureFormat f = getFormat();
+  const TextureFormat f = getFormat();
   const TextureFormatProperties props = TextureFormatProperties::fromTextureFormat(f);
   auto bytesPerPixel = props.bytesPerBlock;
   if (f == TextureFormat::BGRA_SRGB || f == TextureFormat::BGRA_UNorm8) {
@@ -254,6 +259,7 @@ uint32_t Texture::getNumMipLevels() const {
 }
 
 void Texture::generateMipmap(ICommandQueue& cmdQueue, const TextureRangeDesc* IGL_NULLABLE range) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (range) {
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   }
@@ -270,6 +276,7 @@ void Texture::generateMipmap(ICommandQueue& cmdQueue, const TextureRangeDesc* IG
 }
 
 void Texture::generateMipmap(ICommandBuffer& cmdBuffer, const TextureRangeDesc* IGL_NULLABLE range) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (range) {
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   }
@@ -281,6 +288,7 @@ void Texture::generateMipmap(ICommandBuffer& cmdBuffer, const TextureRangeDesc* 
 }
 
 void Texture::generateMipmap(id<MTLCommandBuffer> cmdBuffer) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   // we can only generate mipmaps for filterable texture formats via the blit encoder
   const bool isFilterable = (capabilities_.getTextureFormatCapabilities(getFormat()) &
                              ICapabilities::TextureFormatCapabilityBits::SampledFiltered) != 0;
@@ -463,6 +471,8 @@ MTLPixelFormat Texture::textureFormatToMTLPixelFormat(TextureFormat value) {
     return MTLPixelFormatRGB10A2Uint;
   case TextureFormat::BGR10_A2_Unorm:
     return MTLPixelFormatBGR10A2Unorm;
+  case TextureFormat::B10G11R11_UFloat:
+    return MTLPixelFormatRG11B10Float;
 
   case TextureFormat::R_F32:
     return MTLPixelFormatR32Float;
@@ -878,6 +888,8 @@ TextureFormat Texture::mtlPixelFormatToTextureFormat(MTLPixelFormat value) {
     return TextureFormat::RGB10_A2_Uint_Rev;
   case MTLPixelFormatBGR10A2Unorm:
     return TextureFormat::BGR10_A2_Unorm;
+  case MTLPixelFormatRG11B10Float:
+    return TextureFormat::B10G11R11_UFloat;
 
   case MTLPixelFormatRGBA16Float:
     return TextureFormat::RGBA_F16;
@@ -1018,6 +1030,7 @@ void* Texture::getNativeImageView() const {
 }
 
 const base::AttachmentInteropDesc& Texture::getDesc() const {
+  IGL_PROFILER_FUNCTION();
   id<MTLTexture> tex = get();
   // Update cached attachment descriptor
   attachmentDesc_.width = static_cast<uint32_t>(tex.width);

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <string>
+#include <igl/Macros.h>
 #include <igl/RenderPass.h>
 #include <igl/opengl/DeviceFeatureSet.h>
 #include <igl/opengl/DummyTexture.h>
@@ -181,6 +182,7 @@ Texture::AttachmentParams toReadAttachmentParams(const TextureRangeDesc& range,
 }
 
 FramebufferBindingGuard::FramebufferBindingGuard(IContext& context) : context_(context) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   context_.getIntegerv(GL_RENDERBUFFER_BINDING, reinterpret_cast<GLint*>(&currentRenderbuffer_));
 
   // Only restore currently bound framebuffer if it's valid
@@ -201,6 +203,7 @@ FramebufferBindingGuard::FramebufferBindingGuard(IContext& context) : context_(c
 }
 
 FramebufferBindingGuard::~FramebufferBindingGuard() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
   if (context_.deviceFeatures().hasFeature(DeviceFeatures::ReadWriteFramebuffer)) {
     context_.bindFramebuffer(GL_READ_FRAMEBUFFER, currentReadFramebuffer_);
     context_.bindFramebuffer(GL_DRAW_FRAMEBUFFER, currentDrawFramebuffer_);
@@ -223,6 +226,7 @@ bool Framebuffer::isSwapchainBound() const {
 void Framebuffer::attachAsColor(ITexture& texture,
                                 uint32_t index,
                                 const Texture::AttachmentParams& params) const {
+  IGL_PROFILER_FUNCTION();
   static_cast<Texture&>(texture).attachAsColor(index, params);
   IGL_DEBUG_ASSERT(index >= 0 && index < kNumCachedStates);//NOCA:CONSTANT_EXPRESSION_RESULT(设计如此)
   colorCachedState_[index].updateCache(params.stereo ? FramebufferMode::Stereo
@@ -233,6 +237,7 @@ void Framebuffer::attachAsColor(ITexture& texture,
 }
 
 void Framebuffer::attachAsDepth(ITexture& texture, const Texture::AttachmentParams& params) const {
+  IGL_PROFILER_FUNCTION();
   static_cast<Texture&>(texture).attachAsDepth(params);
   depthCachedState_.updateCache(params.stereo ? FramebufferMode::Stereo : FramebufferMode::Mono,
                                 params.layer,
@@ -242,6 +247,7 @@ void Framebuffer::attachAsDepth(ITexture& texture, const Texture::AttachmentPara
 
 void Framebuffer::attachAsStencil(ITexture& texture,
                                   const Texture::AttachmentParams& params) const {
+  IGL_PROFILER_FUNCTION();
   static_cast<Texture&>(texture).attachAsStencil(params);
   stencilCachedState_.updateCache(params.stereo ? FramebufferMode::Stereo : FramebufferMode::Mono,
                                   params.layer,
@@ -254,6 +260,7 @@ void Framebuffer::bindBuffer() const {
 }
 
 void Framebuffer::bindBufferForRead() const {
+  IGL_PROFILER_FUNCTION();
   // TODO: enable optimization path
   if (getContext().deviceFeatures().hasFeature(DeviceFeatures::ReadWriteFramebuffer)) {
     getContext().bindFramebuffer(GL_READ_FRAMEBUFFER, frameBufferID_);
@@ -267,6 +274,7 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* unused */,
                                            void* pixelBytes,
                                            const TextureRangeDesc& range,
                                            size_t bytesPerRow) const {
+  IGL_PROFILER_FUNCTION();
   // Only support attachment 0 because that's what glReadPixels supports
   if (index != 0) {
     IGL_DEBUG_ABORT("Invalid index: %d", index);
@@ -314,8 +322,8 @@ void Framebuffer::copyBytesColorAttachment(ICommandQueue& /* unused */,
     getContext().pixelStorei(GL_PACK_ROW_LENGTH, packRowLength);
     getContext().pixelStorei(GL_PACK_ALIGNMENT, 1);
   } else {
-    const int finalBytesPerRow = bytesPerRow == 0 ? itexture->getProperties().getBytesPerRow(range)
-                                                  : bytesPerRow;
+    const int finalBytesPerRow = static_cast<int>(
+        bytesPerRow == 0 ? itexture->getProperties().getBytesPerRow(range) : bytesPerRow);
     if (packRowLengthSupported) {
       getContext().pixelStorei(GL_PACK_ROW_LENGTH, 0);
     }
@@ -380,6 +388,7 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& /*cmdQueue*/,
                                              size_t index,
                                              std::shared_ptr<ITexture> destTexture,
                                              const TextureRangeDesc& range) const {
+  IGL_PROFILER_FUNCTION();
   // Only support attachment 0 because that's what glCopyTexImage2D supports
   if (index != 0 || getColorAttachment(index) == nullptr) {
     IGL_DEBUG_ABORT("Invalid index: %d", index);
@@ -428,6 +437,7 @@ void Framebuffer::CachedState::updateCache(FramebufferMode newMode,
 /// MARK: - CustomFramebuffer
 
 CustomFramebuffer::~CustomFramebuffer() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
   if (frameBufferID_ != 0) {
     getContext().deleteFramebuffers(1, &frameBufferID_);
     frameBufferID_ = 0;
@@ -435,6 +445,7 @@ CustomFramebuffer::~CustomFramebuffer() {
 }
 
 std::vector<size_t> CustomFramebuffer::getColorAttachmentIndices() const {
+  IGL_PROFILER_FUNCTION();
   std::vector<size_t> indices;
 
   for (size_t i = 0; i != IGL_COLOR_ATTACHMENTS_MAX; i++) {
@@ -489,6 +500,7 @@ void CustomFramebuffer::updateResolveAttachment(std::shared_ptr<ITexture> textur
 
 void CustomFramebuffer::updateDrawableInternal(SurfaceTextures surfaceTextures,
                                                bool updateDepthStencil) {
+  IGL_PROFILER_FUNCTION();
   auto colorAttachment0 = getColorAttachment(0);
   auto depthAttachment = updateDepthStencil ? getDepthAttachment() : nullptr;
   auto stencilAttachment = updateDepthStencil ? getStencilAttachment() : nullptr;
@@ -544,6 +556,7 @@ bool CustomFramebuffer::isInitialized() const {
 }
 
 bool CustomFramebuffer::hasImplicitColorAttachment() const {
+  IGL_PROFILER_FUNCTION();
   if (frameBufferID_ != 0) {
     return false;
   }
@@ -556,6 +569,7 @@ bool CustomFramebuffer::hasImplicitColorAttachment() const {
 
 // NOLINTNEXTLINE(misc-no-recursion)
 void CustomFramebuffer::initialize(const FramebufferDesc& desc, Result* outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (IGL_DEBUG_VERIFY_NOT(isInitialized())) {
     Result::setResult(outResult, Result::Code::RuntimeError, "Framebuffer already initialized.");
     return;
@@ -576,6 +590,7 @@ void CustomFramebuffer::initialize(const FramebufferDesc& desc, Result* outResul
 
 // NOLINTNEXTLINE(misc-no-recursion)
 void CustomFramebuffer::prepareResource(const std::string& debugName, Result* outResult) {
+  IGL_PROFILER_FUNCTION();
   // create a new frame buffer if we don't already have one
   getContext().genFramebuffers(1, &frameBufferID_);
   if (IGL_DEBUG_VERIFY_NOT(frameBufferID_ == 0)) {
@@ -587,7 +602,8 @@ void CustomFramebuffer::prepareResource(const std::string& debugName, Result* ou
 
   if (!debugName.empty() &&
       getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DebugLabel)) {
-    getContext().objectLabel(GL_FRAMEBUFFER, frameBufferID_, debugName.size(), debugName.c_str());
+    getContext().objectLabel(
+        GL_FRAMEBUFFER, frameBufferID_, static_cast<GLsizei>(debugName.size()), debugName.c_str());
   }
 
   std::vector<GLenum> drawBuffers;
@@ -637,6 +653,7 @@ void CustomFramebuffer::prepareResource(const std::string& debugName, Result* ou
 
 // NOLINTNEXTLINE(misc-no-recursion)
 void CustomFramebuffer::setupResolveFramebuffer(Result* outResult) {
+  IGL_PROFILER_FUNCTION();
   // Check if resolve framebuffer is needed
   FramebufferDesc resolveDesc;
   auto createResolveFramebuffer = false;
@@ -686,6 +703,7 @@ void CustomFramebuffer::setupResolveFramebuffer(Result* outResult) {
 }
 
 Viewport CustomFramebuffer::getViewport() const {
+  IGL_PROFILER_FUNCTION();
   auto texture = getColorAttachment(0);
 
   if (texture == nullptr) {
@@ -703,6 +721,7 @@ Viewport CustomFramebuffer::getViewport() const {
 }
 
 void CustomFramebuffer::applyClearMask(int targetCount) const {
+  IGL_PROFILER_FUNCTION();
   // clear the buffers if we're not loading previous contents
   GLbitfield clearMask = 0;
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::ClearBufferfv) &&
@@ -714,7 +733,7 @@ void CustomFramebuffer::applyClearMask(int targetCount) const {
           renderPass_.colorAttachments[index].loadAction == LoadAction::Clear) {
         auto clearColor = renderPass_.colorAttachments[index].clearColor;
         getContext().colorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-        getContext().clearBufferfv(GL_COLOR, (GLint)index, clearColor.toFloatPtr());
+        getContext().clearBufferfv(GL_COLOR, static_cast<GLint>(index), clearColor.toFloatPtr());
       }
     }
   } else {
@@ -751,6 +770,7 @@ void CustomFramebuffer::applyClearMask(int targetCount) const {
 }
 
 void CustomFramebuffer::bind(const RenderPassDesc& renderPass) const {
+  IGL_PROFILER_FUNCTION();
   // Cache renderPass for unbind
   renderPass_ = renderPass;
   IGL_DEBUG_ASSERT(renderTarget_.mode != FramebufferMode::Multiview,
@@ -776,7 +796,8 @@ void CustomFramebuffer::bind(const RenderPassDesc& renderPass) const {
     }
 #endif
     const size_t index = i;
-    IGL_DEBUG_ASSERT(index >= 0 && index < renderPass.colorAttachments.size());//NOCA:CONSTANT_EXPRESSION_RESULT(设计如此)
+    IGL_DEBUG_ASSERT(index >= 0 && index < renderPass.colorAttachments.size());
+    // NOLINTNEXTLINE(facebook-hte-ParameterUncheckedArrayBounds)
     const auto& renderPassAttachment = renderPass.colorAttachments[index];
     // When setting up a framebuffer, we attach textures as though they were a non-array
     // texture with and set layer, mip-level and face equal to 0.
@@ -815,6 +836,7 @@ void CustomFramebuffer::bind(const RenderPassDesc& renderPass) const {
 }
 
 void CustomFramebuffer::unbind() const {
+  IGL_PROFILER_FUNCTION();
   // Discard attachments whose store action is not Store. For MRT, iterate all
   // color attachments so any of them tagged DontCare/Invalidate get released
   // (otherwise the driver must preserve their contents, costing bandwidth on
@@ -853,6 +875,7 @@ void CustomFramebuffer::unbind() const {
 /// MARK: - CurrentFramebuffer
 
 CurrentFramebuffer::CurrentFramebuffer(IContext& context) : Super(context) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   getContext().getIntegerv(GL_FRAMEBUFFER_BINDING, reinterpret_cast<GLint*>(&frameBufferID_));
 
   GLint viewport[4];
@@ -916,6 +939,7 @@ Viewport CurrentFramebuffer::getViewport() const {
 }
 
 void CurrentFramebuffer::bind(const RenderPassDesc& renderPass) const {
+  IGL_PROFILER_FUNCTION();
   bindBuffer();
     
   if (renderTarget_.depthAttachment.texture) {
@@ -953,6 +977,7 @@ void CurrentFramebuffer::bind(const RenderPassDesc& renderPass) const {
 
   // clear the buffers if we're not loading previous contents
   GLbitfield clearMask = 0;
+  // NOLINTNEXTLINE(facebook-hte-ParameterUncheckedArrayBounds)
   if (renderPass.colorAttachments[0].loadAction == LoadAction::Clear) {
     clearMask |= GL_COLOR_BUFFER_BIT;
     auto clearColor = renderPass.colorAttachments[0].clearColor;

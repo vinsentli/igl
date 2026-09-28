@@ -14,6 +14,7 @@
 #endif
 #include <string>
 #include <igl/DeviceFeatures.h>
+#include <igl/Macros.h>
 #include <igl/opengl/GLFunc.h>
 #include <igl/opengl/GLIncludes.h>
 
@@ -797,6 +798,7 @@ Result::Code GLerrorToCode(GLenum error) {
 
 // NOLINTNEXTLINE(modernize-use-equals-default)
 IContext::IContext() : deviceFeatureSet_(*this) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 #if IGL_DEBUG
   // In debug mode, we default to always checking errors after each OGL call
   alwaysCheckError_ = true;
@@ -807,7 +809,9 @@ IContext::IContext() : deviceFeatureSet_(*this) {
 }
 
 IContext::~IContext() {
-  IGL_SOFT_ASSERT(refCount_ == 0, "Dangling IContext reference left behind."
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
+  IGL_SOFT_ASSERT(refCount_ == 0,
+                  "Dangling IContext reference left behind."
                   // @fb-only
   );
   // Clear the zombie guard explicitly so our "secret" stays secret.
@@ -1194,14 +1198,15 @@ std::string IContext::identifierLabel(GLuint identifier, GLuint name) const {
   return ss.str();
 }
 
-// Helper: append `text` to `ss`, prefixed by a space separator after the first entry.
-static void appendWithSep(std::stringstream& ss, bool& first, const std::string& text) {
+namespace {
+void appendWithSep(std::stringstream& ss, bool& first, const std::string& text) {
   if (!first) {
     ss << " ";
   }
   ss << text;
   first = false;
 }
+} // namespace
 
 std::string IContext::boundPixelBufferObjects() const {
   std::stringstream ss;
@@ -1268,7 +1273,7 @@ void IContext::addProgramUniform(GLuint program,
                                  GLsizei* length,
                                  GLenum* type,
                                  GLchar* name) const {
-  std::string nameStr(std::string_view(name, length == nullptr ? strlen(name) : *length));
+  std::string nameStr(std::string_view(name, length == nullptr ? std::strlen(name) : *length));
   auto& programUniforms = programUniforms_[program];
   auto uniformIt = programUniforms.find(nameStr);
   if (uniformIt == programUniforms.end()) {
@@ -1446,6 +1451,7 @@ std::unordered_map<void* IGL_NULLABLE, IContext*>& IContext::getExistingContexts
 // any of these, so suppress the signal for the whole forwarding section.
 // NOLINTBEGIN(facebook-hte-NullableDereference)
 void IContext::registerContext(void* IGL_NULLABLE glContext, IContext* context) {
+  IGL_PROFILER_FUNCTION();
 #if IGL_DEBUG
   std::lock_guard<std::mutex> lock(getMutex());
   auto result = IContext::getExistingContexts().find(glContext);
@@ -1467,6 +1473,7 @@ void IContext::registerContext(void* IGL_NULLABLE glContext, IContext* context) 
 }
 
 void IContext::willDestroy(void* IGL_NULLABLE glContext) {
+  IGL_PROFILER_FUNCTION();
   // Clear pool explicitly, since it might have reference back to IContext.
   getAdapterPool().clear();
   getComputeAdapterPool().clear();
@@ -1850,6 +1857,26 @@ void IContext::clearStencil(GLint s) {
   APILOG("glClearStencil(%d)\n", s);
   GLCALL(ClearStencil)(s);
   GLCHECK_ERRORS();
+}
+
+GLenum IContext::clientWaitSync(GLsync sync, GLbitfield flags, GLuint64 timeoutNs) {
+  if (clientWaitSyncProc_ == nullptr) {
+    if (deviceFeatureSet_.hasInternalFeature(InternalFeatures::Sync)) {
+      clientWaitSyncProc_ = iglClientWaitSync;
+    }
+    IGL_DEBUG_ASSERT(clientWaitSyncProc_, "No supported function for glClientWaitSync\n");
+  }
+
+  GLenum ret = GL_WAIT_FAILED;
+  GLCALL_PROC_WITH_RETURN(ret, clientWaitSyncProc_, GL_WAIT_FAILED, sync, flags, timeoutNs);
+  APILOG("glClientWaitSync(%p, %u, %llu) = %s (sync: %p)\n",
+         sync,
+         flags,
+         timeoutNs,
+         GL_ENUM_TO_STRING(ret),
+         sync);
+  GLCHECK_ERRORS();
+  return ret;
 }
 
 void IContext::colorMask(GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha) {
@@ -2648,12 +2675,14 @@ GLsync IContext::fenceSync(GLenum condition, GLbitfield flags) {
 }
 
 void IContext::finish() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_WAIT);
   APILOG("glFinish\n");
   GLCALL(Finish)();
   GLCHECK_ERRORS();
 }
 
 void IContext::flush() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_WAIT);
   APILOG("glFlush\n");
   GLCALL(Flush)();
   GLCHECK_ERRORS();
@@ -4414,6 +4443,19 @@ void IContext::viewport(GLint x, GLint y, GLsizei width, GLsizei height) {
   GLCHECK_ERRORS();
 }
 
+void IContext::waitSync(GLsync sync, GLbitfield flags, GLuint64 timeoutNs) {
+  if (waitSyncProc_ == nullptr) {
+    if (deviceFeatureSet_.hasInternalFeature(InternalFeatures::Sync)) {
+      waitSyncProc_ = iglWaitSync;
+    }
+    IGL_DEBUG_ASSERT(waitSyncProc_, "No supported function for glWaitSync\n");
+  }
+
+  APILOG("glWaitSync(%p, %u, %llu) (sync: %p)\n", sync, flags, timeoutNs, sync);
+  GLCALL_PROC(waitSyncProc_, sync, flags, timeoutNs);
+  GLCHECK_ERRORS();
+}
+
 GLuint64 IContext::getTextureHandle(GLuint texture) {
   if (getTextureHandleProc_ == nullptr) {
     if (deviceFeatureSet_.hasExtension(Extensions::BindlessTextureArb)) {
@@ -4664,6 +4706,7 @@ void IContext::setUnbindPolicy(UnbindPolicy newValue) {
  *        the GL version.
  */
 GLVersion IContext::initializeGLVersion(Result* result) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   const char* version = reinterpret_cast<const char*>(getString(GL_VERSION));
   if (version == nullptr) {
     IGL_LOG_ERROR("Unable to get GL version string\n");
@@ -4680,6 +4723,7 @@ GLVersion IContext::initializeGLVersion(Result* result) {
 
 void IContext::loadExtensions(std::string& extensions,
                               std::unordered_set<std::string>& supportedExtensions) {
+  IGL_PROFILER_FUNCTION();
   if (!deviceFeatureSet_.hasInternalFeature(InternalFeatures::GetStringi)) {
     const GLubyte* extensionStr = getString(GL_EXTENSIONS);
     // If setCurrent() fails, then extensions may be nullptr.
@@ -4701,6 +4745,7 @@ void IContext::loadExtensions(std::string& extensions,
 }
 
 void IContext::initialize(Result* result) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   setCurrent();
   if (!isCurrentContext()) {
     Result::setResult(result, Result::Code::ArgumentInvalid, "Invalid context, setCurrent failed.");
@@ -4781,6 +4826,7 @@ bool IContext::shouldValidateShaders() const {
 }
 
 void IContext::SynchronizedDeletionQueues::flushDeletionQueue(IContext& context) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_WAIT);
   if (IGL_DEBUG_VERIFY(context.isCurrentContext() || context.isCurrentSharegroup())) {
     swapScratchDeletionQueues();
 

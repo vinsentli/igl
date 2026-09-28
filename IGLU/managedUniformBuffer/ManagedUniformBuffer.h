@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <string>
 #include <vector>
 #include <igl/IGL.h>
 
@@ -15,7 +16,23 @@ struct ManagedUniformBufferInfo {
   int index = -1;
   size_t length = 0;
   std::vector<igl::UniformDesc> uniforms;
+  // Name of the GLSL uniform block these uniforms belong to, when they are backed by an interface
+  // block (`uniform <blockName> { ... }`). On the OpenGL backend this lets bind() upload + bind the
+  // block as a UBO when the linked program keeps it as a native block (GLSL ES 3.x), whose members
+  // are not addressable via glGetUniformLocation(). Empty for plain (non-block) uniforms, in which
+  // case bind() resolves each uniform individually as before.
+  std::string blockName;
 };
+
+/// Rewrites `info` into the flattened form SPIRV-Cross produces for the OpenGL
+/// backend: every member is renamed to `<uboBlockName>.<member>` and the block
+/// name is recorded for the native-UBO bind fallback. Single owner of this
+/// naming contract -- both ShaderCrossUniformBuffer and FilterNode's param
+/// buffer route through here so the host names always agree byte-for-byte
+/// with what glGetUniformLocation() resolves on the flattened GL path.
+[[nodiscard]] ManagedUniformBufferInfo getSpirvCrossCompatibleManagedUniformBufferInfo(
+    const std::string& uboBlockName,
+    ManagedUniformBufferInfo info) noexcept;
 
 class ManagedUniformBuffer {
  public:
@@ -49,6 +66,11 @@ class ManagedUniformBuffer {
   int getIndex(const char* name) const;
 
  private:
+  // OpenGL only. When `uniformInfo.blockName` names a native uniform block in the linked program
+  // (blockBindingPoint >= 0), uploads the packed block data to buffer_ and returns true so the
+  // caller binds it as a UBO at blockBindingPoint. Returns false when there is no native block
+  // (SPIRV-Cross flattened it to plain uniforms), in which case the caller binds per-uniform.
+  bool bindOpenGLUniformBlock(int blockBindingPoint);
   size_t getUniformDataSizeInternal(igl::UniformDesc& uniform);
   void* data_ = nullptr;
   int length_ = 0;

@@ -65,12 +65,27 @@ namespace {
                 color = vec3(1.0, 1.0, 0.0);
               })";
 }
+
+[[nodiscard]] const char* getVulkanSubgroupArithmeticComputeShaderSource() {
+  return R"(#version 450
+              #extension GL_KHR_shader_subgroup_arithmetic : require
+
+              layout(local_size_x = 64) in;
+
+              layout(set = 0, binding = 0, std430) buffer Values {
+                uint values[];
+              } data;
+
+              void main() {
+                const uint index = gl_GlobalInvocationID.x;
+                data.values[index] = subgroupExclusiveAdd(data.values[index]);
+              })";
+}
 } // namespace
 
 class ShaderCrossTest : public ::testing::Test {
  public:
   ShaderCrossTest() = default;
-  ~ShaderCrossTest() override = default;
 
   // Set up common resources. This will create a device and a command queue
   void SetUp() override {
@@ -130,6 +145,23 @@ TEST_F(ShaderCrossTest, CrossCompile) {
   }
 }
 
+TEST_F(ShaderCrossTest, CrossCompileSubgroupArithmetic) {
+  if (iglDev_->getBackendType() != igl::BackendType::Metal) {
+    GTEST_SKIP() << "Subgroup arithmetic cross-compilation is only gated on the Metal path";
+  }
+
+  // subgroupExclusiveAdd() has no quadgroup equivalent, so SPIRV-Cross rejects it on iOS unless
+  // the target is MSL 2.3+ *and* SIMD-group functions are enabled. Both halves are required; the
+  // error text only mentions the version.
+  const iglu::ShaderCross shaderCross(*iglDev_, {.iosUseSimdgroupFunctions = true});
+
+  Result res;
+  const auto cs = shaderCross.crossCompileFromVulkanSource(
+      getVulkanSubgroupArithmeticComputeShaderSource(), igl::ShaderStage::Compute, &res);
+  EXPECT_TRUE(res.isOk()) << res.message;
+  EXPECT_TRUE(!cs.empty());
+}
+
 TEST_F(ShaderCrossTest, ShaderCrossUniformBuffer) {
   iglu::ShaderCrossUniformBuffer buffer(*iglDev_,
                                         "perFrame",
@@ -143,6 +175,10 @@ TEST_F(ShaderCrossTest, ShaderCrossUniformBuffer) {
                                                        .elementStride = 0}}});
   EXPECT_EQ(buffer.uniformInfo.uniforms.size(), 1);
   EXPECT_EQ(buffer.uniformInfo.uniforms[0].name, "perFrame.myUniform");
+  // The block name is recorded so the OpenGL bind path can fall back to a real UBO buffer binding
+  // when the program keeps the block native (GLSL ES 3.x) instead of flattening it to the
+  // "perFrame.myUniform" plain uniform above.
+  EXPECT_EQ(buffer.uniformInfo.blockName, "perFrame");
 }
 
 } // namespace igl::tests

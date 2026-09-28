@@ -70,11 +70,35 @@ class VulkanFeatures final {
   VkPhysicalDeviceVulkanMemoryModelFeaturesKHR featuresVulkanMemoryModel{};
   VkPhysicalDevice8BitStorageFeaturesKHR features8BitStorage{};
   VkPhysicalDeviceUniformBufferStandardLayoutFeaturesKHR featuresUniformBufferStandardLayout{};
+  VkPhysicalDeviceScalarBlockLayoutFeaturesEXT featuresScalarBlockLayout{};
   VkPhysicalDeviceMultiviewPerViewViewportsFeaturesQCOM featuresMultiviewPerViewViewports{};
   VkPhysicalDeviceMeshShaderFeaturesEXT featuresMeshShader{};
   VkPhysicalDeviceFragmentShadingRateFeaturesKHR featuresFragmentShadingRate{};
 
   VkPhysicalDeviceDescriptorBufferFeaturesEXT featuresDescriptorBuffer{};
+  VkPhysicalDeviceTextureCompressionASTCHDRFeaturesEXT featuresTextureCompressionAstcHdr{};
+
+  // VK_KHR_shader_integer_dot_product (promoted to Vulkan 1.3). Opt-in: it defaults to
+  // VK_FALSE and is chained into the feature list only when a caller has set it, so device
+  // creation is unchanged for everyone who does not ask for it. Enabling this feature is what
+  // makes the DotProduct SPIR-V capabilities legal to declare, so a caller that emits
+  // dotPacked4x8EXT() (or any other OpSDot/OpUDot form) must set it.
+  //
+  // SET IT AFTER populateWithAvailablePhysicalDeviceFeatures(), and only for a device that
+  // reports the feature. Ordering matters and neither half is enforced here: populate()
+  // overwrites every CHAINED struct with the device's reported values, so a request made
+  // before it is silently replaced by whatever the driver answers -- and this struct is not
+  // chained until requested, so it is not even queried then. A request made after populate()
+  // does reach vkCreateDevice(), where an unsupported one fails whole-device creation.
+  // checkSelectedFeatures() does not cover this struct, so neither mistake is reported: the
+  // first silently disables the feature and the second loses the device. Query the physical
+  // device yourself and request only what it reports.
+  VkPhysicalDeviceShaderIntegerDotProductFeatures featuresShaderIntegerDotProduct{};
+
+  // VK_EXT_extended_dynamic_state (promoted to Vulkan 1.3)
+  VkPhysicalDeviceExtendedDynamicStateFeaturesEXT featuresExtendedDynamicState{};
+  // VK_EXT_extended_dynamic_state2 (promoted to Vulkan 1.3)
+  VkPhysicalDeviceExtendedDynamicState2FeaturesEXT featuresExtendedDynamicState2{};
 
   // VK_EXT_extended_dynamic_state (promoted to Vulkan 1.3)
   VkPhysicalDeviceExtendedDynamicStateFeaturesEXT featuresExtendedDynamicState{};
@@ -134,8 +158,10 @@ class VulkanFeatures final {
   bool has_VK_EXT_index_type_uint8 = false; // promoted to Vulkan 1.4
   bool has_VK_EXT_mesh_shader = false;
   bool has_VK_EXT_queue_family_foreign = false;
+  bool has_VK_EXT_scalar_block_layout = false; // promoted to Vulkan 1.2
   bool has_VK_KHR_8bit_storage = false; // promoted to Vulkan 1.2
   bool has_VK_KHR_buffer_device_address = false; // promoted to Vulkan 1.2
+  bool has_VK_KHR_create_renderpass2 = false; // promoted to Vulkan 1.2
   bool has_VK_KHR_get_surface_capabilities2 = false;
   bool has_VK_KHR_portability_enumeration = false;
   bool has_VK_KHR_shader_non_semantic_info = false; // promoted to Vulkan 1.3

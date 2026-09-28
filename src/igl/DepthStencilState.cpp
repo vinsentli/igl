@@ -7,8 +7,12 @@
 
 #include <igl/DepthStencilState.h>
 
-#include <cstring>
-#include <unordered_map>
+#include <functional>
+#include <type_traits>
+
+static_assert(sizeof(igl::StencilStateDesc) == 12);
+static_assert(std::is_trivially_copyable_v<igl::StencilStateDesc>);
+static_assert(std::is_standard_layout_v<igl::StencilStateDesc>);
 
 using namespace igl;
 
@@ -26,8 +30,8 @@ bool StencilStateDesc::operator==(const StencilStateDesc& other) const {
 
 size_t std::hash<igl::StencilStateDesc>::operator()(const igl::StencilStateDesc& key) const {
   size_t hash = std::hash<int>()(static_cast<int>(EnumToValue(key.stencilCompareFunction)));
-  hash ^= std::hash<int>()(static_cast<int>(key.writeMask));
-  hash ^= std::hash<int>()(static_cast<int>(key.readMask));
+  hash ^= std::hash<uint32_t>()(key.writeMask);
+  hash ^= std::hash<uint32_t>()(key.readMask);
   hash ^= std::hash<int>()(static_cast<int>(EnumToValue(key.depthStencilPassOperation)));
   hash ^= std::hash<int>()(static_cast<int>(EnumToValue(key.depthFailureOperation)));
   hash ^= std::hash<int>()(static_cast<int>(EnumToValue(key.stencilFailureOperation)));

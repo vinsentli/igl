@@ -23,19 +23,21 @@
 
 namespace igl::shell {
 
+namespace {
+
 struct VertexPosUv {
   iglu::simdtypes::float3 position; // SIMD 128b aligned
   iglu::simdtypes::float2 uv; // SIMD 128b aligned
 };
 
-static const VertexPosUv kVertexData[] = {
+const VertexPosUv kVertexData[] = {
     {.position = {-1.0f, 1.0f, 0.0}, .uv = {0.0, 1.0}},
     {.position = {1.0f, 1.0f, 0.0}, .uv = {1.0, 1.0}},
     {.position = {-1.0f, -1.0f, 0.0}, .uv = {0.0, 0.0}},
     {.position = {1.0f, -1.0f, 0.0}, .uv = {1.0, 0.0}},
 };
 
-static const uint16_t kIndexData[] = {
+const uint16_t kIndexData[] = {
     0,
     1,
     2,
@@ -44,7 +46,6 @@ static const uint16_t kIndexData[] = {
     2,
 };
 
-namespace {
 bool isDeviceCompatible(IDevice& device) noexcept {
   return device.hasFeature(DeviceFeatures::Compute);
 }
@@ -143,7 +144,7 @@ void ComputeSession::initialize() noexcept {
   outTex_ = device.createTexture(desc, nullptr);
   IGL_DEBUG_ASSERT(outTex_ != nullptr);
 
-  const igl::Result result;
+  const Result result;
 
   {
     const auto vertProvider = ComputeSessionVertShaderProvider();
@@ -181,7 +182,7 @@ void ComputeSession::initialize() noexcept {
   };
 }
 
-void ComputeSession::createOrUpdateDefaultFramebuffer(const igl::SurfaceTextures& surfaceTextures) {
+void ComputeSession::createOrUpdateDefaultFramebuffer(const SurfaceTextures& surfaceTextures) {
   if (framebuffer_) {
     framebuffer_->updateDrawable(surfaceTextures.color);
     return;

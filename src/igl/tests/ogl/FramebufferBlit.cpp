@@ -32,7 +32,6 @@ namespace igl::tests {
 class FramebufferBlitOGLTest : public ::testing::Test {
  public:
   FramebufferBlitOGLTest() = default;
-  ~FramebufferBlitOGLTest() override = default;
 
   void SetUp() override {
     igl::setDebugBreakEnabled(false);
@@ -73,8 +72,7 @@ TEST_F(FramebufferBlitOGLTest, ColorBlit) {
   ASSERT_EQ(ret.code, Result::Code::Ok);
   ASSERT_NE(srcTexture, nullptr);
 
-  FramebufferDesc srcFbDesc;
-  srcFbDesc.colorAttachments[0].texture = srcTexture;
+  const FramebufferDesc srcFbDesc{.colorAttachments = {{.texture = srcTexture}}};
   auto srcFramebuffer = iglDev_->createFramebuffer(srcFbDesc, &ret);
   ASSERT_EQ(ret.code, Result::Code::Ok);
   ASSERT_NE(srcFramebuffer, nullptr);
@@ -89,18 +87,18 @@ TEST_F(FramebufferBlitOGLTest, ColorBlit) {
   ASSERT_EQ(ret.code, Result::Code::Ok);
   ASSERT_NE(dstTexture, nullptr);
 
-  FramebufferDesc dstFbDesc;
-  dstFbDesc.colorAttachments[0].texture = dstTexture;
+  const FramebufferDesc dstFbDesc{.colorAttachments = {{.texture = dstTexture}}};
   auto dstFramebuffer = iglDev_->createFramebuffer(dstFbDesc, &ret);
   ASSERT_EQ(ret.code, Result::Code::Ok);
   ASSERT_NE(dstFramebuffer, nullptr);
 
   // Clear source framebuffer to red
   RenderPassDesc renderPass;
-  renderPass.colorAttachments.resize(1);
-  renderPass.colorAttachments[0].loadAction = LoadAction::Clear;
-  renderPass.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPass.colorAttachments[0].clearColor = {1.0, 0.0, 0.0, 1.0}; // Red
+  renderPass = {
+      .colorAttachments = {{.loadAction = LoadAction::Clear,
+                            .storeAction = StoreAction::Store,
+                            .clearColor = {1.0, 0.0, 0.0, 1.0}}}, // Red
+  };
 
   CommandBufferDesc cbDesc;
   auto cmdBuf = cmdQueue_->createCommandBuffer(cbDesc, &ret);
@@ -113,10 +111,11 @@ TEST_F(FramebufferBlitOGLTest, ColorBlit) {
 
   // Clear destination framebuffer to black
   RenderPassDesc dstRenderPass;
-  dstRenderPass.colorAttachments.resize(1);
-  dstRenderPass.colorAttachments[0].loadAction = LoadAction::Clear;
-  dstRenderPass.colorAttachments[0].storeAction = StoreAction::Store;
-  dstRenderPass.colorAttachments[0].clearColor = {0.0, 0.0, 0.0, 1.0}; // Black
+  dstRenderPass = {
+      .colorAttachments = {{.loadAction = LoadAction::Clear,
+                            .storeAction = StoreAction::Store,
+                            .clearColor = {0.0, 0.0, 0.0, 1.0}}}, // Black
+  };
 
   auto cmdBuf2 = cmdQueue_->createCommandBuffer(cbDesc, &ret);
   ASSERT_EQ(ret.code, Result::Code::Ok);

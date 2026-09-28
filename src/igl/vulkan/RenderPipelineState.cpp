@@ -7,6 +7,7 @@
 
 #include <igl/vulkan/RenderPipelineState.h>
 
+#include <algorithm>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/ShaderModule.h>
@@ -262,16 +263,16 @@ VkBlendFactor blendFactorToVkBlendFactor(BlendFactor value) {
 
 VkColorComponentFlags colorWriteMaskToVkColorComponentFlags(ColorWriteMask value) {
   VkColorComponentFlags result = 0;
-  if (value & igl::kColorWriteBitsRed) {
+  if ((value & igl::kColorWriteBitsRed) != 0) {
     result |= VK_COLOR_COMPONENT_R_BIT;
   }
-  if (value & igl::kColorWriteBitsGreen) {
+  if ((value & igl::kColorWriteBitsGreen) != 0) {
     result |= VK_COLOR_COMPONENT_G_BIT;
   }
-  if (value & igl::kColorWriteBitsBlue) {
+  if ((value & igl::kColorWriteBitsBlue) != 0) {
     result |= VK_COLOR_COMPONENT_B_BIT;
   }
-  if (value & igl::kColorWriteBitsAlpha) {
+  if ((value & igl::kColorWriteBitsAlpha) != 0) {
     result |= VK_COLOR_COMPONENT_A_BIT;
   }
   return result;
@@ -398,7 +399,8 @@ VkPipeline RenderPipelineState::getVkPipeline(
 
   // Normalize renderPassIndex so that format-compatible render passes
   // (same formats/samples, different load/store/layout) share one PSO.
-  // Per Vulkan spec:https://docs.vulkan.org/spec/latest/chapters/renderpass.html#renderpass-compatibility
+  // Per Vulkan
+  // spec:https://docs.vulkan.org/spec/latest/chapters/renderpass.html#renderpass-compatibility
   // render pass compatibility only depends on format, samples,
   // and flags -- NOT on loadOp/storeOp/initialLayout/finalLayout.
   // This is safe because desc_.targetDesc already pins the format expectations
@@ -433,7 +435,7 @@ VkPipeline RenderPipelineState::getVkPipeline(
         .pPushConstantRanges = &pushConstantRange,
     };
 
-    VkDevice device = ctx.getVkDevice();
+    const VkDevice device = ctx.getVkDevice();
     VK_ASSERT(ctx.vf_.vkCreatePipelineLayout(device, &ci, nullptr, &pipelineLayout));
     VK_ASSERT(
         ivkSetDebugObjectName(&ctx.vf_,
@@ -578,7 +580,9 @@ VkPipeline RenderPipelineState::getVkPipeline(
     dynamicStates.push_back(VK_DYNAMIC_STATE_DEPTH_COMPARE_OP);
     dynamicStates.push_back(VK_DYNAMIC_STATE_STENCIL_TEST_ENABLE);
     dynamicStates.push_back(VK_DYNAMIC_STATE_STENCIL_OP);
-    dynamicStates.push_back(VK_DYNAMIC_STATE_VERTEX_INPUT_BINDING_STRIDE);
+    if (ctx.config_.enableDynamicVertexBufferStride) {
+      dynamicStates.push_back(VK_DYNAMIC_STATE_VERTEX_INPUT_BINDING_STRIDE);
+    }
   }
   if (useEDS2) {
     // VK_EXT_extended_dynamic_state2 (promoted to Vulkan 1.3)

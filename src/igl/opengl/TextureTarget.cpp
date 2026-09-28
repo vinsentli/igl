@@ -7,9 +7,12 @@
 
 #include <igl/opengl/TextureTarget.h>
 
+#include <igl/Macros.h>
+
 namespace igl::opengl {
 
 TextureTarget::~TextureTarget() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
   if (renderBufferID_ != 0) {
     getContext().deleteRenderbuffers(1, &renderBufferID_);
   }
@@ -29,6 +32,7 @@ bool TextureTarget::canPresent() const noexcept {
 
 // create a 2D texture given the specified dimensions and format
 Result TextureTarget::create(const TextureDesc& desc, bool hasStorageAlready) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   Result result = Super::create(desc, hasStorageAlready);
   if (result.isOk()) {
     if (desc.usage & TextureDesc::TextureUsageBits::Attachment) {
@@ -42,6 +46,7 @@ Result TextureTarget::create(const TextureDesc& desc, bool hasStorageAlready) {
 
 // create a render buffer for render target usages
 Result TextureTarget::createRenderBuffer(const TextureDesc& desc, bool hasStorageAlready) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (desc.type != TextureType::TwoD) {
     // Renderbuffers only support 2D textures
     return Result{Result::Code::Unsupported, "Texture type must be TwoD."};
@@ -65,13 +70,17 @@ Result TextureTarget::createRenderBuffer(const TextureDesc& desc, bool hasStorag
       getContext().renderbufferStorageMultisample(
           GL_RENDERBUFFER, desc.numSamples, glInternalFormat_, getWidth(), getHeight());
     } else {
-      getContext().renderbufferStorage(
-          GL_RENDERBUFFER, glInternalFormat_, (GLsizei)getWidth(), (GLsizei)getHeight());
+      getContext().renderbufferStorage(GL_RENDERBUFFER,
+                                       glInternalFormat_,
+                                       static_cast<GLsizei>(getWidth()),
+                                       static_cast<GLsizei>(getHeight()));
     }
     if (!desc.debugName.empty() &&
         getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DebugLabel)) {
-      getContext().objectLabel(
-          GL_RENDERBUFFER, renderBufferID_, desc.debugName.size(), desc.debugName.c_str());
+      getContext().objectLabel(GL_RENDERBUFFER,
+                               renderBufferID_,
+                               static_cast<GLsizei>(desc.debugName.size()),
+                               desc.debugName.c_str());
     }
 
     getContext().bindRenderbuffer(GL_RENDERBUFFER, 0);
@@ -81,10 +90,12 @@ Result TextureTarget::createRenderBuffer(const TextureDesc& desc, bool hasStorag
 }
 
 void TextureTarget::bind() {
+  IGL_PROFILER_FUNCTION();
   getContext().bindRenderbuffer(GL_RENDERBUFFER, renderBufferID_);
 }
 
 void TextureTarget::unbind() {
+  IGL_PROFILER_FUNCTION();
   getContext().bindRenderbuffer(GL_RENDERBUFFER, 0);
 }
 
@@ -93,6 +104,7 @@ void TextureTarget::bindImage(size_t /*unit*/) {
 }
 
 void TextureTarget::attachAsColor(uint32_t index, const AttachmentParams& params) {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(renderBufferID_)) {
     attach(GL_COLOR_ATTACHMENT0 + index, params, renderBufferID_);
   }
@@ -101,7 +113,8 @@ void TextureTarget::attachAsColor(uint32_t index, const AttachmentParams& params
 void TextureTarget::attach(GLenum attachment,
                            const AttachmentParams& params,
                            GLuint renderBufferId) {
-  IGL_DEBUG_ASSERT(params.stereo == false);
+  IGL_PROFILER_FUNCTION();
+  IGL_DEBUG_ASSERT(!params.stereo);
   IGL_DEBUG_ASSERT(params.face == 0);
   IGL_DEBUG_ASSERT(params.layer == 0);
   IGL_DEBUG_ASSERT(params.mipLevel == 0);
@@ -120,30 +133,35 @@ void TextureTarget::attach(GLenum attachment,
 }
 
 void TextureTarget::detachAsColor(uint32_t index, bool read) {
+  IGL_PROFILER_FUNCTION();
   AttachmentParams params{};
   params.read = read;
   attach(GL_COLOR_ATTACHMENT0 + index, params, 0);
 }
 
 void TextureTarget::attachAsDepth(const AttachmentParams& params) {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(renderBufferID_)) {
     attach(GL_DEPTH_ATTACHMENT, params, renderBufferID_);
   }
 }
 
 void TextureTarget::detachAsDepth(bool read) {
+  IGL_PROFILER_FUNCTION();
   AttachmentParams params{};
   params.read = read;
   attach(GL_DEPTH_ATTACHMENT, params, 0);
 }
 
 void TextureTarget::attachAsStencil(const AttachmentParams& params) {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(renderBufferID_)) {
     attach(GL_STENCIL_ATTACHMENT, params, renderBufferID_);
   }
 }
 
 void TextureTarget::detachAsStencil(bool read) {
+  IGL_PROFILER_FUNCTION();
   AttachmentParams params{};
   params.read = read;
   attach(GL_STENCIL_ATTACHMENT, params, 0);

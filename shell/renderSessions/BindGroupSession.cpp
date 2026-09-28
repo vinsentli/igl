@@ -14,6 +14,7 @@
 #include <shell/shared/imageLoader/ImageLoader.h>
 #include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/ShellParams.h>
+#include <igl/CommandBuffer.h>
 #include <igl/NameHandle.h>
 #include <igl/RenderCommandEncoder.h>
 #include <igl/ShaderCreator.h>
@@ -284,7 +285,7 @@ std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevice& devi
 
 namespace igl::shell {
 
-void BindGroupSession::createSamplerAndTextures(const igl::IDevice& device) {
+void BindGroupSession::createSamplerAndTextures(const IDevice& device) {
   // Sampler & Texture
   const auto sampler = device.createSamplerState(SamplerStateDesc::newLinearMipmapped(), nullptr);
 

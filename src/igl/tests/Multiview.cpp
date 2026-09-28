@@ -33,7 +33,6 @@ class MultiviewTest : public ::testing::Test {
  private:
  public:
   MultiviewTest() = default;
-  ~MultiviewTest() override = default;
 
   std::shared_ptr<iglu::ManagedUniformBuffer> createVertexUniformBuffer(IDevice& device,
                                                                         Result* /*result*/) {
@@ -141,7 +140,7 @@ class MultiviewTest : public ::testing::Test {
     inputDesc.attributes[0].format = VertexAttributeFormat::Float4;
     inputDesc.attributes[0].offset = 0;
     inputDesc.attributes[0].bufferIndex = data::shader::kSimplePosIndex;
-    inputDesc.attributes[0].name = data::shader::kSimplePos;
+    inputDesc.attributes[0].name = std::string(data::shader::kSimplePos);
     inputDesc.attributes[0].location = 0;
     inputDesc.inputBindings[0].stride = sizeof(float) * 4;
 
@@ -174,13 +173,13 @@ class MultiviewTest : public ::testing::Test {
 
     // Initialize Render Pipeline Descriptor, but leave the creation
     // to the individual tests in case further customization is required
-    renderPipelineDesc_.vertexInputState = vertexInputState_;
-    renderPipelineDesc_.targetDesc.colorAttachments.resize(1);
-    renderPipelineDesc_.targetDesc.colorAttachments[0].textureFormat =
-        offscreenTexture_->getFormat();
-    renderPipelineDesc_.targetDesc.depthAttachmentFormat = depthStencilTexture_->getFormat();
-    renderPipelineDesc_.targetDesc.stencilAttachmentFormat = depthStencilTexture_->getFormat();
-    renderPipelineDesc_.cullMode = igl::CullMode::Disabled;
+    renderPipelineDesc_ = {
+        .vertexInputState = vertexInputState_,
+        .targetDesc = {.colorAttachments = {{.textureFormat = offscreenTexture_->getFormat()}},
+                       .depthAttachmentFormat = depthStencilTexture_->getFormat(),
+                       .stencilAttachmentFormat = depthStencilTexture_->getFormat()},
+        .cullMode = igl::CullMode::Disabled,
+    };
   }
 
   void TearDown() override {}
@@ -279,8 +278,7 @@ TEST_F(MultiviewTest, SinglePassStereo) {
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(pipelineState, nullptr);
 
-  DepthStencilStateDesc desc;
-  desc.isDepthWriteEnabled = true;
+  const DepthStencilStateDesc desc{.isDepthWriteEnabled = true};
   const auto depthStencilState = iglDev_->createDepthStencilState(desc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(depthStencilState, nullptr);
@@ -307,6 +305,10 @@ TEST_F(MultiviewTest, SinglePassStereo) {
   //----------------------
   // Read back framebuffer
   //----------------------
+  const auto dimensions = framebuffer_->getColorAttachment(0)->getDimensions();
+  EXPECT_EQ(dimensions.width, static_cast<uint32_t>(kOffScreenWidth));
+  EXPECT_EQ(dimensions.height, static_cast<uint32_t>(kOffScreenHeight));
+
   auto pixels = std::vector<uint32_t>(kOffScreenWidth * kOffScreenHeight);
   auto rangeDesc = TextureRangeDesc::new2D(0, 0, kOffScreenWidth, kOffScreenHeight);
 

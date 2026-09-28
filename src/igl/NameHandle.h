@@ -8,12 +8,15 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
-#include <igl/Common.h>
+#include <igl/Config.h>
 
 namespace igl {
 // Constexpr as constexpr. In most cases all hashes from string would be generated in compile-time
@@ -69,7 +72,7 @@ constexpr CRC_TABLE;
 constexpr uint32_t iglCrc32ConstExpr(const char* p) {
   uint32_t crc = ~0u;
   for (; *p; ++p) {
-    uint8_t v = (uint8_t)*p;
+    const uint8_t v = static_cast<uint8_t>(*p);
     crc = (crc >> 8) ^ kCrcTable[(crc & 0xFF) ^ v];
   }
   return ~crc;
@@ -78,7 +81,7 @@ constexpr uint32_t iglCrc32ConstExpr(const char* p) {
 constexpr uint32_t iglCrc32ConstExpr(std::string_view sv) {
   uint32_t crc = ~0u;
   for (auto p : sv) {
-    uint8_t v = (uint8_t)p;
+    const uint8_t v = static_cast<uint8_t>(p);
     crc = (crc >> 8) ^ kCrcTable[(crc & 0xFF) ^ v];
   }
   return ~crc;
@@ -262,14 +265,14 @@ struct hash<igl::NameHandle> {
 
 template<>
 struct hash<pair<igl::NameHandle, igl::NameHandle>> {
-  size_t operator()(const std::pair<igl::NameHandle, igl::NameHandle>& key) const {
+  size_t operator()(const pair<igl::NameHandle, igl::NameHandle>& key) const {
     return hash<uint32_t>()(key.first.getCrc32()) ^ hash<uint32_t>()(key.second.getCrc32());
   }
 };
 
 template<>
 struct hash<vector<igl::NameHandle>> {
-  size_t operator()(const std::vector<igl::NameHandle>& key) const;
+  size_t operator()(const vector<igl::NameHandle>& key) const;
 };
 
 } // namespace std

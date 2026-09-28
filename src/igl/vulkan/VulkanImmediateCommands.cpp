@@ -7,10 +7,13 @@
 
 #include "VulkanImmediateCommands.h"
 
+#include <type_traits>
 #include <utility>
 #include <igl/vulkan/Common.h>
 
 namespace igl::vulkan {
+
+static_assert(std::is_trivially_copyable_v<VulkanImmediateCommands::SubmitHandle>);
 
 VulkanImmediateCommands::VulkanImmediateCommands(const VulkanFunctionTable& vf,
                                                  VkDevice device,
@@ -24,23 +27,9 @@ VulkanImmediateCommands::VulkanImmediateCommands(const VulkanFunctionTable& vf,
   lastSubmitSemaphore_({
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
       .semaphore = VK_NULL_HANDLE,
-      .value = 0ull,
+      .value = 0ULL,
       .stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-      .deviceIndex = 0ul,
-  }),
-  waitSemaphore_({
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-      .semaphore = VK_NULL_HANDLE,
-      .value = 0ull,
-      .stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-      .deviceIndex = 0ul,
-  }),
-  signalSemaphore_({
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-      .semaphore = VK_NULL_HANDLE,
-      .value = 0ull,
-      .stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-      .deviceIndex = 0ul,
+      .deviceIndex = 0UL,
   }),
   useTimelineSemaphoreAndSynchronization2_(useTimelineSemaphoreAndSynchronization2) {
   IGL_PROFILER_FUNCTION();
@@ -72,6 +61,11 @@ VulkanImmediateCommands::VulkanImmediateCommands(const VulkanFunctionTable& vf,
         VulkanSemaphore(
             vf_, device_, false, IGL_FORMAT("Semaphore: {} ({})", debugName, i).c_str()));
     VK_ASSERT(ivkAllocateCommandBuffer(&vf_, device_, commandPool_, &buffers_[i].cmdBufAllocated));
+    ivkSetDebugObjectName(&vf_,
+                          device_,
+                          VK_OBJECT_TYPE_COMMAND_BUFFER,
+                          (uint64_t)buffers_[i].cmdBufAllocated,
+                          IGL_FORMAT("Command Buffer: {} ({})", debugName, i).c_str());
     buffers_[i].handle.bufferIndex = i;
   }
 }
@@ -187,8 +181,7 @@ VkResult VulkanImmediateCommands::wait(const SubmitHandle handle, uint64_t timeo
 void VulkanImmediateCommands::waitAll() {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_WAIT);
 
-  // @lint-ignore CLANGTIDY
-  VkFence fences[kMaxCommandBuffers];
+  VkFence fences[kMaxCommandBuffers] = {};
 
   uint32_t numFences = 0;
 
@@ -247,24 +240,28 @@ VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
   IGL_DEBUG_ASSERT(wrapper.isEncoding);
   VK_ASSERT(vf_.vkEndCommandBuffer(wrapper.cmdBuf));
 
+  // Reserve one backend-owned wait/signal slot in addition to injected semaphores.
+  constexpr size_t kSubmitSemaphoreCapacity = kMaxInjectedSemaphores + 1;
   if (useTimelineSemaphoreAndSynchronization2_) {
     // @lint-ignore CLANGTIDY
-    VkSemaphoreSubmitInfo waitSemaphores[] = {{}, {}};
-    uint32_t numWaitSemaphores = 0;
-    if (waitSemaphore_.semaphore) {
-      waitSemaphores[numWaitSemaphores++] = waitSemaphore_;
+    VkSemaphoreSubmitInfo waitSemaphores[kSubmitSemaphoreCapacity] = {};
+    for (uint32_t i = 0; i < numWaitSemaphores_; ++i) {
+      waitSemaphores[i] = waitSemaphores_[i];
     }
+    uint32_t numWaitSemaphores = numWaitSemaphores_;
     if (lastSubmitSemaphore_.semaphore) {
       waitSemaphores[numWaitSemaphores++] = lastSubmitSemaphore_;
     }
     // @lint-ignore CLANGTIDY
-    const VkSemaphoreSubmitInfo signalSemaphores[] = {
-        VkSemaphoreSubmitInfo{
-            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-            .semaphore = wrapper.semaphore.getVkSemaphore(),
-            .stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        },
-        signalSemaphore_,
+    VkSemaphoreSubmitInfo signalSemaphores[kSubmitSemaphoreCapacity] = {};
+    for (uint32_t i = 0; i < numSignalSemaphores_; ++i) {
+      signalSemaphores[i] = signalSemaphores_[i];
+    }
+    uint32_t numSignalSemaphores = numSignalSemaphores_;
+    signalSemaphores[numSignalSemaphores++] = VkSemaphoreSubmitInfo{
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+        .semaphore = wrapper.semaphore.getVkSemaphore(),
+        .stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
     };
 
     const VkCommandBufferSubmitInfo bufferSI = {
@@ -277,7 +274,7 @@ VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
         .pWaitSemaphoreInfos = waitSemaphores,
         .commandBufferInfoCount = 1u,
         .pCommandBufferInfos = &bufferSI,
-        .signalSemaphoreInfoCount = signalSemaphore_.semaphore ? 2u : 1u,
+        .signalSemaphoreInfoCount = numSignalSemaphores,
         .pSignalSemaphoreInfos = signalSemaphores,
     };
 
@@ -289,18 +286,26 @@ VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
     IGL_PROFILER_ZONE_END();
   } else {
     // @lint-ignore CLANGTIDY
-    const VkPipelineStageFlags waitStageMasks[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                                                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
+    VkPipelineStageFlags waitStageMasks[kSubmitSemaphoreCapacity] = {};
     // @lint-ignore CLANGTIDY
-    VkSemaphore waitSemaphores[] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
-    uint32_t numWaitSemaphores = 0;
-    if (waitSemaphore_.semaphore) {
-      waitSemaphores[numWaitSemaphores++] = waitSemaphore_.semaphore;
+    VkSemaphore waitSemaphores[kSubmitSemaphoreCapacity] = {};
+    uint32_t numWaitSemaphores = numWaitSemaphores_;
+    for (uint32_t i = 0; i < numWaitSemaphores_; ++i) {
+      waitStageMasks[i] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+      waitSemaphores[i] = waitSemaphores_[i].semaphore;
     }
     if (lastSubmitSemaphore_.semaphore) {
+      waitStageMasks[numWaitSemaphores] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
       waitSemaphores[numWaitSemaphores++] = lastSubmitSemaphore_.semaphore;
     }
 
+    // @lint-ignore CLANGTIDY
+    VkSemaphore signalSemaphores[kSubmitSemaphoreCapacity] = {};
+    for (uint32_t i = 0; i < numSignalSemaphores_; ++i) {
+      signalSemaphores[i] = signalSemaphores_[i].semaphore;
+    }
+    uint32_t numSignalSemaphores = numSignalSemaphores_;
+    signalSemaphores[numSignalSemaphores++] = wrapper.semaphore.vkSemaphore_;
     const VkSubmitInfo si = {
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .waitSemaphoreCount = numWaitSemaphores,
@@ -308,8 +313,8 @@ VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
         .pWaitDstStageMask = waitStageMasks,
         .commandBufferCount = 1,
         .pCommandBuffers = &wrapper.cmdBuf,
-        .signalSemaphoreCount = 1u,
-        .pSignalSemaphores = signalSemaphore ? &signalSemaphore :  &wrapper.semaphore.vkSemaphore_,
+        .signalSemaphoreCount = numSignalSemaphores,
+        .pSignalSemaphores = signalSemaphores,
     };
     // @lint-ignore CLANGTIDY
     const VkFence vkFence = wrapper.fence.vkFence_;
@@ -323,8 +328,8 @@ VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
 
   lastSubmitSemaphore_.semaphore = signalSemaphore ? VK_NULL_HANDLE : wrapper.semaphore.vkSemaphore_;
   lastSubmitHandle_ = wrapper.handle;
-  waitSemaphore_.semaphore = VK_NULL_HANDLE;
-  signalSemaphore_.semaphore = VK_NULL_HANDLE;
+  numWaitSemaphores_ = 0;
+  numSignalSemaphores_ = 0;
 
   // reset
   const_cast<CommandBufferWrapper&>(wrapper).isEncoding = false;
@@ -340,18 +345,56 @@ VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
   return lastSubmitHandle_;
 }
 
-void VulkanImmediateCommands::waitSemaphore(VkSemaphore semaphore) {
-  IGL_DEBUG_ASSERT(waitSemaphore_.semaphore == VK_NULL_HANDLE);
-
-  waitSemaphore_.semaphore = semaphore;
+void VulkanImmediateCommands::discard(const CommandBufferWrapper& wrapper) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_SUBMIT);
+  IGL_DEBUG_ASSERT(wrapper.isEncoding);
+  if (!IGL_DEBUG_VERIFY(wrapper.handle == nextSubmitHandle_,
+                        "Only the current command buffer can be discarded")) {
+    return;
+  }
+  auto& mutableWrapper = const_cast<CommandBufferWrapper&>(wrapper);
+  VK_ASSERT(vf_.vkResetCommandBuffer(mutableWrapper.cmdBuf, VkCommandBufferResetFlags{0}));
+  mutableWrapper.cmdBuf = VK_NULL_HANDLE;
+  mutableWrapper.isEncoding = false;
+  numAvailableCommandBuffers_++;
+  numWaitSemaphores_ = 0;
+  numSignalSemaphores_ = 0;
+  nextSubmitHandle_ = {};
 }
 
-void VulkanImmediateCommands::signalSemaphore(VkSemaphore semaphore, uint64_t signalValue) {
-  IGL_DEBUG_ASSERT(signalSemaphore_.semaphore == VK_NULL_HANDLE);
-  signalSemaphore_.semaphore = semaphore;
-  signalSemaphore_.value = signalValue;
+bool VulkanImmediateCommands::waitSemaphore(VkSemaphore semaphore, uint64_t waitValue) {
+  if (numWaitSemaphores_ >= kMaxInjectedSemaphores) {
+    IGL_LOG_ERROR("VulkanImmediateCommands::waitSemaphore(): too many injected semaphores\n");
+    return false;
+  }
+  waitSemaphores_[numWaitSemaphores_++] = VkSemaphoreSubmitInfo{
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+      .semaphore = semaphore,
+      .value = waitValue,
+      .stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+  };
+  return true;
 }
 
+bool VulkanImmediateCommands::signalSemaphore(VkSemaphore semaphore, uint64_t signalValue) {
+  if (numSignalSemaphores_ >= kMaxInjectedSemaphores) {
+    IGL_LOG_ERROR("VulkanImmediateCommands::signalSemaphore(): too many injected semaphores\n");
+    return false;
+  }
+  signalSemaphores_[numSignalSemaphores_++] = VkSemaphoreSubmitInfo{
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+      .semaphore = semaphore,
+      .value = signalValue,
+      .stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+  };
+  return true;
+}
+
+// The returned handle may be VK_NULL_HANDLE (std::exchange yields the prior value),
+// but VkSemaphore is a Vulkan non-dispatchable handle typedef that resolves to a
+// non-pointer uint64_t on 32-bit targets, so a _Nullable/IGL_NULLABLE annotation
+// cannot be applied portably. Suppress instead.
+// @fb-only
 VkSemaphore VulkanImmediateCommands::acquireLastSubmitSemaphore() {
   return std::exchange(lastSubmitSemaphore_.semaphore, VK_NULL_HANDLE);
 }
@@ -364,6 +407,7 @@ VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::getNextSubmitHand
   return nextSubmitHandle_.empty() ? lastSubmitHandle_ : nextSubmitHandle_;
 }
 
+// @fb-only
 VkFence VulkanImmediateCommands::getVkFenceFromSubmitHandle(SubmitHandle handle) {
   IGL_DEBUG_ASSERT(handle.bufferIndex < buffers_.size());
 

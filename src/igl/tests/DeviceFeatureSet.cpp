@@ -21,7 +21,6 @@ namespace igl::tests {
 class DeviceFeatureSetTest : public ::testing::Test {
  public:
   DeviceFeatureSetTest() = default;
-  ~DeviceFeatureSetTest() override = default;
 
   // Set up common resources. This will create a device and a command queue
   void SetUp() override {
@@ -171,6 +170,10 @@ TEST_F(DeviceFeatureSetTest, hasFeatureForMacOSOrWinOrAndroidTest) {
     EXPECT_EQ(iglDev_->hasFeature(DeviceFeatures::ExternalMemoryObjects), externalMemoryObjects);
 
     EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::PushConstants));
+    EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::FillBuffer));
+
+    EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::DynamicCullMode));
+    EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::DynamicFrontFacingWinding));
 #endif // IGL_BACKEND_OPENGL
   } else {
     // non OpenGL backends
@@ -188,7 +191,7 @@ TEST_F(DeviceFeatureSetTest, hasFeatureForMacOSOrWinOrAndroidTest) {
       EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::Multiview));
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::BindUniform));
       EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::TexturePartialMipChain));
-      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::BufferRing));
+      EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::BufferRing));
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::BufferNoCopy));
       EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::ShaderLibrary));
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::BindBytes));
@@ -210,6 +213,12 @@ TEST_F(DeviceFeatureSetTest, hasFeatureForMacOSOrWinOrAndroidTest) {
 #endif // IGL_PLATFORM_ANDROID
       EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::ExternalMemoryObjects));
       EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::PushConstants));
+      EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::FillBuffer));
+      // vkCmdSetCullMode and vkCmdSetFrontFace are provided together (core in
+      // Vulkan 1.3 / VK_EXT_extended_dynamic_state), so both dynamic-state
+      // features must report the same availability.
+      EXPECT_EQ(iglDev_->hasFeature(DeviceFeatures::DynamicCullMode),
+                iglDev_->hasFeature(DeviceFeatures::DynamicFrontFacingWinding));
     } else if (iglDev_->getBackendType() == igl::BackendType::Metal) {
       EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::Texture2DArray));
       EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::Texture3D));
@@ -235,6 +244,9 @@ TEST_F(DeviceFeatureSetTest, hasFeatureForMacOSOrWinOrAndroidTest) {
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ValidationLayersEnabled));
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ExternalMemoryObjects));
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::PushConstants));
+      EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::FillBuffer));
+      EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::DynamicCullMode));
+      EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::DynamicFrontFacingWinding));
     } else if (iglDev_->getBackendType() == igl::BackendType::D3D12) {
       // D3D12 backend
       EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::Texture2DArray));
@@ -263,6 +275,7 @@ TEST_F(DeviceFeatureSetTest, hasFeatureForMacOSOrWinOrAndroidTest) {
       EXPECT_TRUE(iglDev_->hasFeature(
           DeviceFeatures::PushConstants)); // D3D12 supports push constants via root constants
                                            // (shader register b2)
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::FillBuffer));
     } else {
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::Texture2DArray));
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::Texture3D));
@@ -288,6 +301,7 @@ TEST_F(DeviceFeatureSetTest, hasFeatureForMacOSOrWinOrAndroidTest) {
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ValidationLayersEnabled));
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ExternalMemoryObjects));
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::PushConstants));
+      EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::FillBuffer));
     }
   }
 

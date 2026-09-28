@@ -97,7 +97,8 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
 
   const FramebufferDesc& desc = static_cast<const Framebuffer&>((*framebuffer)).getDesc();
 
-  std::vector<VkClearValue> clearValues;
+  std::array<VkClearValue, 2 * IGL_COLOR_ATTACHMENTS_MAX + 2> clearValues{};
+  uint32_t numClearValues = 0;
   uint32_t mipLevel = 0;
   uint32_t layer = 0;
 
@@ -253,10 +254,13 @@ void RenderCommandEncoder::initialize(const RenderPassDesc& renderPass,
   }
 
   if (renderPass.timestampQuery.queries) {
-    timestampQueries_ = renderPass.timestampQuery.queries;
-    timestampQuerySlotIndex_ = renderPass.timestampQuery.slotIndex;
-    static_cast<TimestampQueries&>(*timestampQueries_)
-        .beginElapsedQuery(cmdBuffer_, timestampQuerySlotIndex_, NULL);
+    const uint32_t slot =
+        static_cast<TimestampQueries&>(*renderPass.timestampQuery.queries)
+            .beginElapsedQuery(cmdBuffer_, renderPass.timestampQuery.slotIndex, NULL);
+    if (slot != TimestampQueries::kInvalidSlot) {
+      timestampQueries_ = renderPass.timestampQuery.queries;
+      timestampQuerySlotIndex_ = slot;
+    }
   }
 
   ctx_.vf_.vkCmdBeginRenderPass(cmdBuffer_, &bi, VK_SUBPASS_CONTENTS_INLINE);
@@ -313,13 +317,13 @@ void RenderCommandEncoder::endEncoding() {
       // If the texture has not been marked as a depth/stencil attachment
       // (TextureDesc::TextureUsageBits::Attachment), don't transition it to a depth/stencil
       // attchment
-      if (img.usageFlags_ & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+      if ((img.usageFlags_ & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0) {
         transitionToDepthStencilAttachment(cmdBuffer_, tex);
       }
     } else {
       // If the texture has not been marked as a color attachment
       // (TextureDesc::TextureUsageBits::Attachment), don't transition it to a color attchment
-      if (img.usageFlags_ & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) {
+      if ((img.usageFlags_ & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) != 0) {
         transitionToColorAttachment(cmdBuffer_, tex);
       }
     }
@@ -359,12 +363,12 @@ void RenderCommandEncoder::endEncoding() {
 }
 
 void RenderCommandEncoder::pushDebugGroupLabel(const char* label, const igl::Color& color) const {
-  IGL_DEBUG_ASSERT(label != nullptr && *label);
+  IGL_DEBUG_ASSERT(label && *label);
   ivkCmdBeginDebugUtilsLabel(&ctx_.vf_, cmdBuffer_, label, color.toFloatPtr());
 }
 
 void RenderCommandEncoder::insertDebugEventLabel(const char* label, const igl::Color& color) const {
-  IGL_DEBUG_ASSERT(label != nullptr && *label);
+  IGL_DEBUG_ASSERT(label && *label);
   ivkCmdInsertDebugUtilsLabel(&ctx_.vf_, cmdBuffer_, label, color.toFloatPtr());
 }
 
@@ -407,7 +411,7 @@ void RenderCommandEncoder::bindRenderPipelineState(
     const std::shared_ptr<IRenderPipelineState>& pipelineState) {
   IGL_PROFILER_FUNCTION();
 
-  if (!IGL_DEBUG_VERIFY(pipelineState != nullptr)) {
+  if (!IGL_DEBUG_VERIFY(pipelineState)) {
     return;
   }
 
@@ -454,7 +458,7 @@ void RenderCommandEncoder::bindDepthStencilState(
     const std::shared_ptr<IDepthStencilState>& depthStencilState) {
   IGL_PROFILER_FUNCTION();
 
-  if (!IGL_DEBUG_VERIFY(depthStencilState != nullptr)) {
+  if (!IGL_DEBUG_VERIFY(depthStencilState)) {
     return;
   }
   const igl::vulkan::DepthStencilState* state =
@@ -505,7 +509,7 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
   IGL_LOG_INFO("%p  bindBuffer(%u, %u)\n", cmdBuffer_, index, static_cast<uint32_t>(bufferOffset));
 #endif // IGL_VULKAN_PRINT_COMMANDS
 
-  if (!IGL_DEBUG_VERIFY(buffer != nullptr)) {
+  if (!IGL_DEBUG_VERIFY(buffer)) {
     return;
   }
 
@@ -551,6 +555,17 @@ void RenderCommandEncoder::bindVertexBuffer(uint32_t index,
   if (attributeStride == 0) {
     ctx_.vf_.vkCmdBindVertexBuffers(cmdBuffer_, index, 1, &vkBuf, &offset);
   } else {
+    if (!ctx_.vf_.vkCmdBindVertexBuffers2) {
+      IGL_LOG_ERROR_ONCE(
+          "RenderCommandEncoder::bindVertexBuffer(attributeStride): vkCmdBindVertexBuffers2(EXT) "
+          "not available; "
+          "attributeStride ignored. Enable VK_EXT_extended_dynamic_state or Vulkan 1.3.");
+      return;
+    }
+
+    IGL_DEBUG_ASSERT(ctx_.config_.enableDynamicVertexBufferStride,
+                     "Must enable DynamicVertexBufferStride first!");
+
     const VkDeviceSize size = buffer.getSizeInBytes() - bufferOffset;
     const VkDeviceSize stride = attributeStride;
     ctx_.vf_.vkCmdBindVertexBuffers2(cmdBuffer_, index, 1, &vkBuf, &offset, &size, &stride);
@@ -839,25 +854,14 @@ void RenderCommandEncoder::setBlendColor(const Color& color) {
 void RenderCommandEncoder::setCullMode(CullMode cullMode) {
   IGL_PROFILER_FUNCTION();
 
-  if (ctx_.vf_.vkCmdSetCullMode) {
-    ctx_.vf_.vkCmdSetCullMode(cmdBuffer_, cullModeToVkCullMode(cullMode));
-  } else {
+  if (!ctx_.vf_.vkCmdSetCullMode) {
     IGL_LOG_ERROR_ONCE(
         "RenderCommandEncoder::setCullMode: vkCmdSetCullMode(EXT) not available; "
         "cull mode change ignored. Enable VK_EXT_extended_dynamic_state or Vulkan 1.3.");
+    return;
   }
-}
 
-void RenderCommandEncoder::setFrontFacingWinding(WindingMode mode) {
-  IGL_PROFILER_FUNCTION();
-
-  if (ctx_.vf_.vkCmdSetFrontFace) {
-    ctx_.vf_.vkCmdSetFrontFace(cmdBuffer_, windingModeToVkFrontFace(mode));
-  } else {
-    IGL_LOG_ERROR_ONCE(
-        "RenderCommandEncoder::setFrontFacingWinding: vkCmdSetFrontFace(EXT) not available; "
-        "front face change ignored. Enable VK_EXT_extended_dynamic_state or Vulkan 1.3.");
-  }
+  ctx_.vf_.vkCmdSetCullMode(cmdBuffer_, cullModeToVkCullMode(cullMode));
 }
 
 void RenderCommandEncoder::setDepthBias(float depthBias, float slopeScale, float clamp) {
@@ -865,6 +869,19 @@ void RenderCommandEncoder::setDepthBias(float depthBias, float slopeScale, float
 
   dynamicState_.depthBiasEnable = true;
   ctx_.vf_.vkCmdSetDepthBias(cmdBuffer_, depthBias, clamp, slopeScale);
+}
+
+void RenderCommandEncoder::setFrontFacingWinding(WindingMode frontFaceWinding) {
+  IGL_PROFILER_FUNCTION();
+
+  if (!ctx_.vf_.vkCmdSetFrontFace) {
+    IGL_LOG_ERROR_ONCE(
+        "RenderCommandEncoder::setFrontFacingWinding: vkCmdSetFrontFace(EXT) not available; "
+        "front face change ignored. Enable VK_EXT_extended_dynamic_state or Vulkan 1.3.");
+    return;
+  }
+
+  ctx_.vf_.vkCmdSetFrontFace(cmdBuffer_, windingModeToVkFrontFace(frontFaceWinding));
 }
 
 bool RenderCommandEncoder::setDrawCallCountEnabled(bool value) {
@@ -1143,7 +1160,8 @@ void RenderCommandEncoder::processDependencies(const Dependencies& dependencies)
     const Dependencies* deps = &dependencies;
 
     while (deps) {
-      for (IBuffer* IGL_NULLABLE buf : deps->buffers) {
+      for (uint32_t index = 0; index < Dependencies::kIglMaxBufferDependencies; ++index) {
+        IBuffer* IGL_NULLABLE const buf = deps->buffers[index];
         if (!buf) {
           break;
         }
@@ -1151,19 +1169,22 @@ void RenderCommandEncoder::processDependencies(const Dependencies& dependencies)
             VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         const auto* vkBuf = static_cast<const igl::vulkan::Buffer*>(buf);
         const VkBufferUsageFlags flags = vkBuf->getBufferUsageFlags();
-        if ((flags & VK_BUFFER_USAGE_INDEX_BUFFER_BIT) ||
-            (flags & VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)) {
+        if ((flags & VK_BUFFER_USAGE_INDEX_BUFFER_BIT) != 0 ||
+            (flags & VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) != 0) {
           dstStageFlags |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
         }
-        if (flags & VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT) {
+        if ((flags & VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT) != 0) {
           dstStageFlags |= VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
         }
-        // compute-to-graphics barrier
+        const VkPipelineStageFlags srcStageFlags =
+            (deps->hostWriteBufferMask & (uint32_t{1} << index)) != 0
+                ? VK_PIPELINE_STAGE_HOST_BIT
+                : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
         ivkBufferBarrier(&ctx_.vf_,
                          cmdBuffer_,
                          vkBuf->getVkBuffer(),
                          vkBuf->getBufferUsageFlags(),
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         srcStageFlags,
                          dstStageFlags);
       }
       deps = deps->next;

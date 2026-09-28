@@ -42,20 +42,23 @@ std::vector<const char*> XrAppImplVulkan::getXrOptionalExtensions() const {
 
 std::unique_ptr<IDevice> XrAppImplVulkan::initIGL(XrInstance instance, XrSystemId systemId) {
   // Get the API requirements.
-  // XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING is returned on calls to xrCreateSession
-  // if this function has not been called for the instance and systemId before xrCreateSession.
+  // XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING is returned on calls to xrCreateSession()
+  // if this function has not been called for the instance and systemId before
+  // xrCreateSession().
   PFN_xrGetVulkanGraphicsRequirementsKHR pfnGetVulkanGraphicsRequirementsKHR = nullptr;
-  XR_CHECK(xrGetInstanceProcAddr(instance,
-                                 "xrGetVulkanGraphicsRequirementsKHR",
-                                 (PFN_xrVoidFunction*)(&pfnGetVulkanGraphicsRequirementsKHR)));
+  XR_CHECK(xrGetInstanceProcAddr(
+      instance,
+      "xrGetVulkanGraphicsRequirementsKHR",
+      reinterpret_cast<PFN_xrVoidFunction*>(&pfnGetVulkanGraphicsRequirementsKHR)));
 
   XR_CHECK(pfnGetVulkanGraphicsRequirementsKHR(instance, systemId, &graphicsRequirements_));
 
   // Get required instance extensions
   PFN_xrGetVulkanInstanceExtensionsKHR pfnGetVulkanInstanceExtensionsKHR = nullptr;
-  XR_CHECK(xrGetInstanceProcAddr(instance,
-                                 "xrGetVulkanInstanceExtensionsKHR",
-                                 (PFN_xrVoidFunction*)(&pfnGetVulkanInstanceExtensionsKHR)));
+  XR_CHECK(xrGetInstanceProcAddr(
+      instance,
+      "xrGetVulkanInstanceExtensionsKHR",
+      reinterpret_cast<PFN_xrVoidFunction*>(&pfnGetVulkanInstanceExtensionsKHR)));
 
   uint32_t bufferSize = 0;
   XR_CHECK(pfnGetVulkanInstanceExtensionsKHR(instance, systemId, 0, &bufferSize, nullptr));
@@ -70,9 +73,10 @@ std::unique_ptr<IDevice> XrAppImplVulkan::initIGL(XrInstance instance, XrSystemI
   // Get the required device extensions.
   bufferSize = 0;
   PFN_xrGetVulkanDeviceExtensionsKHR pfnGetVulkanDeviceExtensionsKHR = nullptr;
-  XR_CHECK(xrGetInstanceProcAddr(instance,
-                                 "xrGetVulkanDeviceExtensionsKHR",
-                                 (PFN_xrVoidFunction*)(&pfnGetVulkanDeviceExtensionsKHR)));
+  XR_CHECK(xrGetInstanceProcAddr(
+      instance,
+      "xrGetVulkanDeviceExtensionsKHR",
+      reinterpret_cast<PFN_xrVoidFunction*>(&pfnGetVulkanDeviceExtensionsKHR)));
 
   XR_CHECK(pfnGetVulkanDeviceExtensionsKHR(instance, systemId, 0, &bufferSize, nullptr));
 
@@ -90,9 +94,10 @@ std::unique_ptr<IDevice> XrAppImplVulkan::initIGL(XrInstance instance, XrSystemI
   auto context = igl::vulkan::HWDevice::createContext(cfg, nullptr);
 
   PFN_xrGetVulkanGraphicsDeviceKHR pfnGetVulkanGraphicsDeviceKHR = nullptr;
-  XR_CHECK(xrGetInstanceProcAddr(instance,
-                                 "xrGetVulkanGraphicsDeviceKHR",
-                                 (PFN_xrVoidFunction*)(&pfnGetVulkanGraphicsDeviceKHR)));
+  XR_CHECK(
+      xrGetInstanceProcAddr(instance,
+                            "xrGetVulkanGraphicsDeviceKHR",
+                            reinterpret_cast<PFN_xrVoidFunction*>(&pfnGetVulkanGraphicsDeviceKHR)));
 
   const std::vector<HWDeviceDesc> devices =
       vulkan::HWDevice::queryDevices(*context, HWDeviceQueryDesc(HWDeviceType::Unknown), nullptr);
@@ -178,7 +183,7 @@ std::unique_ptr<impl::XrSwapchainProviderImpl> XrAppImplVulkan::createSwapchainP
 
 std::vector<const char*> XrAppImplVulkan::processExtensionsBuffer(std::vector<char>& buffer) {
   std::vector<const char*> extensions;
-  auto skip = false;
+  bool skip = false;
   for (auto& ch : buffer) {
     if (skip) {
       if (ch == ' ') {

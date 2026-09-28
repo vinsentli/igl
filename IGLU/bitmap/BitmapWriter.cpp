@@ -10,6 +10,7 @@
 #include <IGLU/texture_accessor/TextureAccessorFactory.h>
 #include <ostream>
 #include <igl/Common.h>
+#include <igl/Macros.h>
 
 namespace igl::iglu {
 namespace {
@@ -49,12 +50,13 @@ __attribute__((packed))
 #endif
 
 struct BufferOffsets {
-  size_t r;
-  size_t g;
-  size_t b;
+  size_t r = 0;
+  size_t g = 0;
+  size_t b = 0;
 };
 
 BufferOffsets getBufferOffsets(TextureFormat format) {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (format) {
   case igl::TextureFormat::RGBA_UNorm8:
   case igl::TextureFormat::RGBX_UNorm8:
@@ -76,6 +78,7 @@ BufferOffsets getBufferOffsets(TextureFormat format) {
 } // namespace
 
 bool isSupportedBitmapTextureFormat(TextureFormat format) {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (format) {
   case igl::TextureFormat::RGBA_UNorm8:
   case igl::TextureFormat::RGBX_UNorm8:
@@ -93,6 +96,7 @@ void writeBitmap(std::ostream& stream,
                  std::shared_ptr<ITexture> texture,
                  IDevice& device,
                  bool flipY) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(texture);
   IGL_DEBUG_ASSERT(texture->getType() == igl::TextureType::TwoD);
   IGL_DEBUG_ASSERT(isSupportedBitmapTextureFormat(texture->getFormat()));
@@ -101,7 +105,11 @@ void writeBitmap(std::ostream& stream,
       ::iglu::textureaccessor::TextureAccessorFactory::createTextureAccessor(
           device.getBackendType(), texture, device);
 
-  const igl::CommandQueueDesc desc{};
+  if (!IGL_DEBUG_VERIFY(textureAccessor)) {
+    return;
+  }
+
+  const CommandQueueDesc desc{};
   Result result;
   const auto commandQueue = device.createCommandQueue(desc, &result);
   if (!IGL_DEBUG_VERIFY(result.isOk()) || !IGL_DEBUG_VERIFY(commandQueue)) {
@@ -142,6 +150,7 @@ void writeBitmap(std::ostream& stream,
 }
 
 void writeBitmap(std::ostream& stream, const uint8_t* imageData, uint32_t width, uint32_t height) {
+  IGL_PROFILER_FUNCTION();
   const uint32_t imageSize = width * height * 3;
 
   BMPHeader header{

@@ -17,7 +17,7 @@
 #endif
 
 #if IGL_PLATFORM_MACOSX
-#include <igl/vulkan/moltenvk/MoltenVKHelpers.h>
+#include <igl/vulkan/moltenvk/MoltenVkHelpers.h>
 #endif
 
 namespace igl::tests::util::device::vulkan {
@@ -53,6 +53,12 @@ igl::vulkan::VulkanContextConfig getContextConfig(bool enableValidation) {
 
 std::unique_ptr<igl::vulkan::Device> createTestDevice(
     const igl::vulkan::VulkanContextConfig& config) {
+  return createTestDevice(config, {});
+}
+
+std::unique_ptr<igl::vulkan::Device> createTestDevice(
+    const igl::vulkan::VulkanContextConfig& config,
+    const std::function<void(igl::vulkan::VulkanFeatures&)>& configureFeatures) {
 #if IGL_PLATFORM_MACOSX && !defined(IGL_USE_STATIC_KOSMICKRISP)
   // KosmicKrisp is statically linked; there is no Vulkan loader to point at a MoltenVK ICD.
   ::igl::vulkan::setupMoltenVKEnvironment();
@@ -72,7 +78,11 @@ std::unique_ptr<igl::vulkan::Device> createTestDevice(
 
     igl::vulkan::VulkanFeatures features(config);
     features.populateWithAvailablePhysicalDeviceFeatures(
-        *ctx, (VkPhysicalDevice)devices[0].guid); // NOLINT(performance-no-int-to-ptr)
+        *ctx,
+        reinterpret_cast<VkPhysicalDevice>(devices[0].guid)); // NOLINT(performance-no-int-to-ptr)
+    if (configureFeatures) {
+      configureFeatures(features);
+    }
 
     iglDev = igl::vulkan::HWDevice::create(std::move(ctx),
                                            devices[0],

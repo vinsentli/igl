@@ -7,6 +7,8 @@
 
 #include <igl/NameHandle.h>
 
+#include <igl/Core.h>
+
 namespace igl {
 namespace {
 
@@ -52,7 +54,7 @@ uint32_t iglCrc32ImplARM8(const char* s, size_t length) {
 #include <sys/auxv.h>
 bool detectCrc32() {
   uint64_t hwcaps = getauxval(AT_HWCAP);
-  return hwcaps & HWCAP_CRC32 ? true : false;
+  return (hwcaps & HWCAP_CRC32) != 0;
 }
 #elif IGL_PLATFORM_APPLE || IGL_PLATFORM_IOS || IGL_PLATFORM_MACOSX
 bool detectCrc32() {

@@ -81,7 +81,7 @@ class RenderSession {
     framebuffer_ = nullptr;
   }
 
-  void setPreferredClearColor(const igl::Color& color) noexcept;
+  void setPreferredClearColor(const Color& color) noexcept;
   Color getPreferredClearColor() noexcept;
 
   /// @brief Initializes the benchmark tracker based on shell params
@@ -117,6 +117,13 @@ class RenderSession {
   [[nodiscard]] const Platform& getPlatform() const noexcept;
 
   [[nodiscard]] const std::shared_ptr<Platform>& platform() const noexcept;
+
+  /// @brief Structured submission tracing tag for the current frame, for backends that support
+  /// submission-level tracing. Encodes a shell workflow id in the high 16 bits and the frame
+  /// number (>= 1) in the low 48 bits. Pass into CommandBufferDesc::submitTag when creating a
+  /// command buffer so driver-side trace events can be correlated back to the shell frame. A
+  /// backend that does not support submission tracing ignores the tag.
+  [[nodiscard]] uint64_t currentFrameSubmitTag() const noexcept;
 
   std::shared_ptr<IFramebuffer> framebuffer_;
   std::shared_ptr<ICommandQueue> commandQueue_;

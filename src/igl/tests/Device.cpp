@@ -73,18 +73,17 @@ class DeviceTest : public ::testing::Test {
     ASSERT_TRUE(offscreenTexture_ != nullptr);
 
     // Create framebuffer using the offscreen texture
-    FramebufferDesc framebufferDesc;
-
-    framebufferDesc.colorAttachments[0].texture = offscreenTexture_;
+    const FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = offscreenTexture_}}};
     framebuffer_ = iglDev_->createFramebuffer(framebufferDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
     ASSERT_TRUE(framebuffer_ != nullptr);
 
     // Initialize render pass descriptor
-    renderPass_.colorAttachments.resize(1);
-    renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
-    renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-    renderPass_.colorAttachments[0].clearColor = {0.0, 0.0, 0.0, 1.0};
+    renderPass_ = {
+        .colorAttachments = {{.loadAction = LoadAction::Clear,
+                              .storeAction = StoreAction::Store,
+                              .clearColor = {0.0, 0.0, 0.0, 1.0}}},
+    };
 
     // Initialize shader stages
     std::unique_ptr<IShaderStages> stages;
@@ -92,35 +91,31 @@ class DeviceTest : public ::testing::Test {
     shaderStages_ = std::move(stages);
 
     // Initialize input to vertex shader
-    VertexInputStateDesc inputDesc;
-
-    inputDesc.attributes[0].format = VertexAttributeFormat::Float4;
-    inputDesc.attributes[0].offset = 0;
-    inputDesc.attributes[0].bufferIndex = data::shader::kSimplePosIndex;
-    inputDesc.attributes[0].name = data::shader::kSimplePos;
-    inputDesc.attributes[0].location = 0;
-    inputDesc.inputBindings[0].stride = sizeof(float) * 4;
-
-    inputDesc.attributes[1].format = VertexAttributeFormat::Float2;
-    inputDesc.attributes[1].offset = 0;
-    inputDesc.attributes[1].bufferIndex = data::shader::kSimpleUvIndex;
-    inputDesc.attributes[1].name = data::shader::kSimpleUv;
-    inputDesc.attributes[1].location = 1;
-    inputDesc.inputBindings[1].stride = sizeof(float) * 2;
-
-    // numAttributes has to equal to bindings when using more than 1 buffer
-    inputDesc.numAttributes = inputDesc.numInputBindings = 2;
+    // numAttributes has to equal numInputBindings when using more than one buffer
+    const VertexInputStateDesc inputDesc{
+        .numAttributes = 2,
+        .attributes = {{.bufferIndex = data::shader::kSimplePosIndex,
+                        .format = VertexAttributeFormat::Float4,
+                        .offset = 0,
+                        .name = std::string(data::shader::kSimplePos),
+                        .location = 0},
+                       {.bufferIndex = data::shader::kSimpleUvIndex,
+                        .format = VertexAttributeFormat::Float2,
+                        .offset = 0,
+                        .name = std::string(data::shader::kSimpleUv),
+                        .location = 1}},
+        .numInputBindings = 2,
+        .inputBindings = {{.stride = sizeof(float) * 4}, {.stride = sizeof(float) * 2}},
+    };
 
     vertexInputState_ = iglDev_->createVertexInputState(inputDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
     ASSERT_TRUE(vertexInputState_ != nullptr);
 
     // Initialize index buffer
-    BufferDesc bufDesc;
-
-    bufDesc.type = BufferDesc::BufferTypeBits::Index;
-    bufDesc.data = data::vertex_index::kQuadInd.data();
-    bufDesc.length = sizeof(data::vertex_index::kQuadInd);
+    const BufferDesc bufDesc{.type = BufferDesc::BufferTypeBits::Index,
+                             .data = data::vertex_index::kQuadInd.data(),
+                             .length = sizeof(data::vertex_index::kQuadInd)};
 
     ib_ = iglDev_->createBuffer(bufDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -128,12 +123,12 @@ class DeviceTest : public ::testing::Test {
 
     // Initialize Render Pipeline Descriptor, but leave the creation
     // to the individual tests in case further customization is required
-    renderPipelineDesc_.vertexInputState = vertexInputState_;
-    renderPipelineDesc_.shaderStages = shaderStages_;
-    renderPipelineDesc_.targetDesc.colorAttachments.resize(1);
-    renderPipelineDesc_.targetDesc.colorAttachments[0].textureFormat =
-        offscreenTexture_->getFormat();
-    renderPipelineDesc_.cullMode = igl::CullMode::Disabled;
+    renderPipelineDesc_ = {
+        .vertexInputState = vertexInputState_,
+        .shaderStages = shaderStages_,
+        .targetDesc = {.colorAttachments = {{.textureFormat = offscreenTexture_->getFormat()}}},
+        .cullMode = igl::CullMode::Disabled,
+    };
   }
 
   void TearDown() override {}

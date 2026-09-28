@@ -29,7 +29,6 @@ namespace igl::tests {
 class MetalComputeCommandEncoderTest : public ::testing::Test {
  public:
   MetalComputeCommandEncoderTest() = default;
-  ~MetalComputeCommandEncoderTest() override = default;
 
   void SetUp() override {
     setDebugBreakEnabled(false);
@@ -87,8 +86,7 @@ TEST_F(MetalComputeCommandEncoderTest, DispatchNoError) {
   auto stages = device_->createShaderStages(stagesDesc, &res);
   ASSERT_TRUE(res.isOk()) << res.message;
 
-  ComputePipelineDesc pipelineDesc;
-  pipelineDesc.shaderStages = std::move(stages);
+  const ComputePipelineDesc pipelineDesc{.shaderStages = std::move(stages)};
   auto pipeline = device_->createComputePipeline(pipelineDesc, &res);
   ASSERT_TRUE(res.isOk()) << res.message;
   ASSERT_NE(pipeline, nullptr);
@@ -141,8 +139,7 @@ TEST_F(MetalComputeCommandEncoderTest, DispatchIndirect) {
   auto stages = device_->createShaderStages(stagesDesc, &res);
   ASSERT_TRUE(res.isOk()) << res.message;
 
-  ComputePipelineDesc pipelineDesc;
-  pipelineDesc.shaderStages = std::move(stages);
+  const ComputePipelineDesc pipelineDesc{.shaderStages = std::move(stages)};
   auto pipeline = device_->createComputePipeline(pipelineDesc, &res);
   ASSERT_TRUE(res.isOk()) << res.message;
   ASSERT_NE(pipeline, nullptr);

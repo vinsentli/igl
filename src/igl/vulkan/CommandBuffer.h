@@ -59,6 +59,7 @@ class CommandBuffer final : public ICommandBuffer,
                   uint64_t srcOffset,
                   uint64_t dstOffset,
                   uint64_t size) override;
+  void fillBuffer(IBuffer& buffer, const BufferRange& range, uint8_t value) override;
   void copyTextureToBuffer(ITexture& src,
                            IBuffer& dst,
                            uint64_t dstOffset,
@@ -72,21 +73,21 @@ class CommandBuffer final : public ICommandBuffer,
   /// @brief Not implemented
   void waitUntilScheduled() override;
 
-  VkCommandBuffer getVkCommandBuffer() const {
+  [[nodiscard]] VkCommandBuffer getVkCommandBuffer() const {
     return wrapper_.cmdBuf;
   }
 
-  VulkanImmediateCommands::SubmitHandle getNextSubmitHandle() const {
+  [[nodiscard]] VulkanImmediateCommands::SubmitHandle getNextSubmitHandle() const {
     return wrapper_.handle;
   }
 
-  bool isFromSwapchain() const {
+  [[nodiscard]] bool isFromSwapchain() const {
     return isFromSwapchain_;
   }
 
-  const std::shared_ptr<IFramebuffer>& getFramebuffer() const;
+  [[nodiscard]] const std::shared_ptr<IFramebuffer>& getFramebuffer() const;
 
-  const std::shared_ptr<ITexture>& getPresentedSurface() const;
+  [[nodiscard]] const std::shared_ptr<ITexture>& getPresentedSurface() const;
 
  private:
   friend class CommandQueue;

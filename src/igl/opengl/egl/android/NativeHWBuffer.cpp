@@ -12,6 +12,7 @@
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
 
+#include <igl/Macros.h>
 #include <igl/opengl/Config.h>
 #include <igl/opengl/egl/Context.h>
 
@@ -37,6 +38,7 @@ struct AHardwareBufferContext {
 };
 
 NativeHWTextureBuffer::~NativeHWTextureBuffer() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
   GLuint textureId = getId();
   if (textureId != 0) {
     if (getContext().isLikelyValidObject()) {
@@ -71,11 +73,13 @@ bool NativeHWTextureBuffer::supportsUpload() const {
 }
 
 Result NativeHWTextureBuffer::create(const TextureDesc& desc, bool hasStorageAlready) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   return createHWBuffer(desc, hasStorageAlready, false);
 }
 
 Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* buffer) {
-  AHardwareBuffer_Desc hwbDesc;
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);  
+  AHardwareBuffer_Desc hwbDesc{};
   funcTable_->AHardwareBuffer_describe(buffer, &hwbDesc);
 
   auto desc = TextureDesc::newNativeHWBufferImage(igl::android::getIglFormat(hwbDesc.format),
@@ -90,7 +94,7 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* buffer) {
   EGLClientBuffer clientBuffer = funcTable_->eglGetNativeClientBufferANDROID(buffer);
   EGLint attribs[] = {EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE, EGL_NONE, EGL_NONE};
 
-  EGLDisplay display = ((Context*)&getContext())->getDisplay();
+  EGLDisplay display = static_cast<Context*>(&getContext())->getDisplay();
   // eglCreateImageKHR will add a ref to the AHardwareBuffer
   EGLImageKHR eglImage =
       eglCreateImageKHR(display, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID, clientBuffer, attribs);
@@ -148,6 +152,7 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* buffer) {
 }
 
 void NativeHWTextureBuffer::bind() {
+  IGL_PROFILER_FUNCTION();
   getContext().bindTexture(getTarget(), getId());
   auto* context = static_cast<AHardwareBufferContext*>(hwBufferHelper_.get());
 
@@ -171,9 +176,13 @@ Result NativeHWTextureBuffer::uploadInternal(TextureType /*type*/,
                                              const void* IGL_NULLABLE data,
                                              size_t bytesPerRow,
                                              const uint32_t* IGL_NULLABLE /*mipLevelBytes*/) const {
+  IGL_PROFILER_FUNCTION();
   auto result = uploadToHWBuffer(getProperties(), range, data, bytesPerRow);
   if (!result.isOk()) {
     IGL_DEBUG_ABORT("Cannot upload buffer for HW texture for Native Hardware Buffer Textures.");
+    // Preserve the original error contract: callers historically observe
+    // Result::Code::Unsupported on any upload failure here.
+    return Result{Result::Code::Unsupported, "NativeHWTextureBuffer upload not supported"};
   }
   return result;
 }

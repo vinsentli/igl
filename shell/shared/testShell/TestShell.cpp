@@ -94,8 +94,8 @@ void TestShellBase::setUpInternal(ScreenSize screenSize, bool prefersRGB) {
   if (platform_->getDevice().getBackendType() == igl::BackendType::OpenGL) {
     auto version = platform_->getDevice().getBackendVersion();
     if (version.majorVersion < 2) {
-      GTEST_SKIP() << "OpenGL version " << (int)version.majorVersion << "."
-                   << (int)version.minorVersion << " is too low";
+      GTEST_SKIP() << "OpenGL version " << static_cast<int>(version.majorVersion) << "."
+                   << static_cast<int>(version.minorVersion) << " is too low";
     }
   }
   // Create an offscreen texture to render to
@@ -128,7 +128,7 @@ void TestShell::run(RenderSession& session, size_t numFrames) {
   session.setShellParams(shellParams);
   session.initialize();
   for (size_t i = 0; i < numFrames; ++i) {
-    const igl::DeviceScope scope(platform_->getDevice());
+    const DeviceScope scope(platform_->getDevice());
     session.update({.color = offscreenTexture_, .depth = offscreenDepthTexture_});
   }
   session.teardown();

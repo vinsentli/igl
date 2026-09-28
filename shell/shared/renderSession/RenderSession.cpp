@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <thread>
+#include <type_traits>
 #include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/AppParams.h>
 #include <shell/shared/renderSession/ShellParams.h>
@@ -20,6 +21,9 @@
 #endif
 
 namespace igl::shell {
+
+static_assert(sizeof(DepthParams) == 16);
+static_assert(std::is_trivially_copyable_v<DepthParams>);
 
 RenderSession::RenderSession(std::shared_ptr<Platform> platform) :
   platform_(std::move(platform)), appParams_(std::make_shared<AppParams>()) {}
@@ -64,7 +68,7 @@ const std::shared_ptr<Platform>& RenderSession::platform() const noexcept {
 
 float RenderSession::getDeltaSeconds() noexcept {
   const double newTime = getSeconds();
-  const float deltaSeconds = float(newTime - lastTime_);
+  const float deltaSeconds = static_cast<float>(newTime - lastTime_);
   lastTime_ = newTime;
   return deltaSeconds;
 }
@@ -74,7 +78,7 @@ double RenderSession::getSeconds() noexcept {
       .count();
 }
 
-void RenderSession::setPreferredClearColor(const igl::Color& color) noexcept {
+void RenderSession::setPreferredClearColor(const Color& color) noexcept {
   preferredClearColor_ = color;
 }
 
@@ -272,16 +276,33 @@ void RenderSession::runUpdate(SurfaceTextures surfaceTextures) noexcept {
     const double frameTimeMs = (endTime - startTime) * 1000.0;
     const double targetMs =
         shellParams_->fpsThrottleRandom
-            // NOLINTNEXTLINE(cert-msc50-cpp, clang-analyzer-security.insecureAPI.rand)
+            // NOLINTBEGIN(cert-msc50-cpp, clang-analyzer-security.insecureAPI.rand,
+            // facebook-hte-BadCall-rand)
             ? static_cast<double>(1 + (std::rand() % shellParams_->fpsThrottleMs))
+            // NOLINTEND(cert-msc50-cpp, clang-analyzer-security.insecureAPI.rand,
+            // facebook-hte-BadCall-rand)
             : static_cast<double>(shellParams_->fpsThrottleMs);
     if (frameTimeMs < targetMs) {
+      // NOLINTNEXTLINE(facebook-hte-BadCall-sleep_for)
       std::this_thread::sleep_for(
           std::chrono::milliseconds(static_cast<int>(targetMs - frameTimeMs)));
     }
   }
 
   frameCount_++;
+}
+
+uint64_t RenderSession::currentFrameSubmitTag() const noexcept {
+  // Encoded inline (rather than via a backend-private helper) to keep the public shell free of
+  // backend headers. Layout must match the shared codec: workflow id 2 = IGL at bits 63..48, the
+  // render-target field at bits 47..32 (left 0 here), and the frame number in the low 32 bits.
+  // frameCount_ is 0-based during update(), so + 1 keeps the encoded tag >= 1 (submission tracing
+  // rejects a tag < 1).
+  constexpr uint64_t kIglWorkflowId = 2;
+  constexpr uint32_t kWorkflowShift = 48;
+  constexpr uint64_t kFrameMask = (uint64_t{1} << 32) - 1;
+  return (kIglWorkflowId << kWorkflowShift) |
+         ((static_cast<uint64_t>(frameCount_) + 1) & kFrameMask);
 }
 
 } // namespace igl::shell

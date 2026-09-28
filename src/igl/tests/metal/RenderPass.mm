@@ -30,7 +30,6 @@ namespace igl::tests {
 class MetalRenderPassTest : public ::testing::Test {
  public:
   MetalRenderPassTest() = default;
-  ~MetalRenderPassTest() override = default;
 
   void SetUp() override {
     setDebugBreakEnabled(false);
@@ -71,16 +70,13 @@ class MetalRenderPassTest : public ::testing::Test {
 TEST_F(MetalRenderPassTest, SingleColorAttachment) {
   Result res;
 
-  FramebufferDesc fbDesc;
-  fbDesc.colorAttachments[0].texture = colorTexture_;
+  const FramebufferDesc fbDesc{.colorAttachments = {{.texture = colorTexture_}}};
   auto framebuffer = device_->createFramebuffer(fbDesc, &res);
   ASSERT_TRUE(res.isOk()) << res.message;
 
-  RenderPassDesc rpDesc;
-  rpDesc.colorAttachments.resize(1);
-  rpDesc.colorAttachments[0].loadAction = LoadAction::Clear;
-  rpDesc.colorAttachments[0].storeAction = StoreAction::Store;
-  rpDesc.colorAttachments[0].clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
+  const RenderPassDesc rpDesc{.colorAttachments = {{.loadAction = LoadAction::Clear,
+                                                    .storeAction = StoreAction::Store,
+                                                    .clearColor = {0.0f, 0.0f, 0.0f, 1.0f}}}};
 
   auto encoder = commandBuffer_->createRenderCommandEncoder(rpDesc, framebuffer);
   ASSERT_NE(encoder, nullptr);
@@ -127,19 +123,16 @@ TEST_F(MetalRenderPassTest, ColorAndDepth) {
   auto depthTexture = device_->createTexture(depthDesc, &res);
   ASSERT_TRUE(res.isOk()) << res.message;
 
-  FramebufferDesc fbDesc;
-  fbDesc.colorAttachments[0].texture = colorTexture_;
-  fbDesc.depthAttachment.texture = depthTexture;
+  const FramebufferDesc fbDesc{.colorAttachments = {{.texture = colorTexture_}},
+                               .depthAttachment = {.texture = depthTexture}};
   auto framebuffer = device_->createFramebuffer(fbDesc, &res);
   ASSERT_TRUE(res.isOk()) << res.message;
 
-  RenderPassDesc rpDesc;
-  rpDesc.colorAttachments.resize(1);
-  rpDesc.colorAttachments[0].loadAction = LoadAction::Clear;
-  rpDesc.colorAttachments[0].storeAction = StoreAction::Store;
-  rpDesc.colorAttachments[0].clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
-  rpDesc.depthAttachment.loadAction = LoadAction::Clear;
-  rpDesc.depthAttachment.storeAction = StoreAction::DontCare;
+  const RenderPassDesc rpDesc{
+      .colorAttachments = {{.loadAction = LoadAction::Clear,
+                            .storeAction = StoreAction::Store,
+                            .clearColor = {0.0f, 0.0f, 0.0f, 1.0f}}},
+      .depthAttachment = {.loadAction = LoadAction::Clear, .storeAction = StoreAction::DontCare}};
 
   auto encoder = commandBuffer_->createRenderCommandEncoder(rpDesc, framebuffer);
   ASSERT_NE(encoder, nullptr);
@@ -155,16 +148,14 @@ TEST_F(MetalRenderPassTest, ColorAndDepth) {
 TEST_F(MetalRenderPassTest, ClearColorApplied) {
   Result res;
 
-  FramebufferDesc fbDesc;
-  fbDesc.colorAttachments[0].texture = colorTexture_;
+  const FramebufferDesc fbDesc{.colorAttachments = {{.texture = colorTexture_}}};
   auto framebuffer = device_->createFramebuffer(fbDesc, &res);
   ASSERT_TRUE(res.isOk()) << res.message;
 
-  RenderPassDesc rpDesc;
-  rpDesc.colorAttachments.resize(1);
-  rpDesc.colorAttachments[0].loadAction = LoadAction::Clear;
-  rpDesc.colorAttachments[0].storeAction = StoreAction::Store;
-  rpDesc.colorAttachments[0].clearColor = {1.0f, 0.0f, 0.0f, 1.0f}; // Red
+  const RenderPassDesc rpDesc{
+      .colorAttachments = {{.loadAction = LoadAction::Clear,
+                            .storeAction = StoreAction::Store,
+                            .clearColor = {1.0f, 0.0f, 0.0f, 1.0f}}}}; // Red
 
   auto encoder = commandBuffer_->createRenderCommandEncoder(rpDesc, framebuffer);
   ASSERT_NE(encoder, nullptr);
@@ -175,6 +166,10 @@ TEST_F(MetalRenderPassTest, ClearColorApplied) {
   commandBuffer_->waitUntilCompleted();
 
   // Read back and verify the clear color
+  const auto dimensions = framebuffer->getColorAttachment(0)->getDimensions();
+  ASSERT_EQ(dimensions.width, static_cast<uint32_t>(RP_TEX_WIDTH));
+  ASSERT_EQ(dimensions.height, static_cast<uint32_t>(RP_TEX_HEIGHT));
+
   const size_t bytesPerPixel = 4; // RGBA_UNorm8
   const size_t rowBytes = RP_TEX_WIDTH * bytesPerPixel;
   std::vector<uint8_t> pixels(RP_TEX_WIDTH * RP_TEX_HEIGHT * bytesPerPixel);

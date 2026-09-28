@@ -24,7 +24,6 @@ namespace igl::tests {
 class CopyTexSubImageOGLTest : public ::testing::Test {
  public:
   CopyTexSubImageOGLTest() = default;
-  ~CopyTexSubImageOGLTest() override = default;
 
   void SetUp() override {
     igl::setDebugBreakEnabled(false);
@@ -60,20 +59,19 @@ TEST_F(CopyTexSubImageOGLTest, CopyTexSubImage2D) {
   auto srcTexture = iglDev_->createTexture(srcTexDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
 
-  FramebufferDesc srcFbDesc;
-  srcFbDesc.colorAttachments[0].texture = srcTexture;
+  const FramebufferDesc srcFbDesc{.colorAttachments = {{.texture = srcTexture}}};
   auto srcFramebuffer = iglDev_->createFramebuffer(srcFbDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
 
   // Clear to red
   RenderPassDesc renderPass;
-  renderPass.colorAttachments.resize(1);
-  renderPass.colorAttachments[0].loadAction = LoadAction::Clear;
-  renderPass.colorAttachments[0].storeAction = StoreAction::Store;
-  renderPass.colorAttachments[0].clearColor = {1.0, 0.0, 0.0, 1.0};
+  renderPass = {
+      .colorAttachments = {{.loadAction = LoadAction::Clear,
+                            .storeAction = StoreAction::Store,
+                            .clearColor = {1.0, 0.0, 0.0, 1.0}}},
+  };
 
-  CommandBufferDesc cbDesc;
-  auto cmdBuf = cmdQueue_->createCommandBuffer(cbDesc, &ret);
+  auto cmdBuf = cmdQueue_->createCommandBuffer({}, &ret);
   ASSERT_EQ(ret.code, Result::Code::Ok);
 
   auto cmdEncoder = cmdBuf->createRenderCommandEncoder(renderPass, srcFramebuffer);

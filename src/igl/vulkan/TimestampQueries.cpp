@@ -13,6 +13,15 @@
 
 namespace igl::vulkan {
 
+namespace {
+
+VkPipelineStageFlagBits startTimestampStageForFidelity(TimestampQueryFidelity fidelity) {
+  return fidelity == TimestampQueryFidelity::LowOverhead ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT
+                                                         : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+}
+
+} // namespace
+
 TimestampQueries::TimestampQueries(VulkanContext& ctx, uint32_t maxSlots) :
   ctx_(ctx), maxSlots_(maxSlots) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
@@ -45,6 +54,7 @@ TimestampQueries::TimestampQueries(VulkanContext& ctx, uint32_t maxSlots) :
 
   labels_.resize(maxSlots_);
   elapsedNanos_.resize(maxSlots_, 0);
+  slotWritten_.resize(maxSlots_, false);
   queryResults_.resize(static_cast<size_t>(maxSlots_) * kTimestampsPerTimingSlot);
 }
 
@@ -75,6 +85,7 @@ void TimestampQueries::reset() {
   resultsReady_ = false;
   std::fill(elapsedNanos_.begin(), elapsedNanos_.end(), 0);
   std::fill(labels_.begin(), labels_.end(), std::string());
+  std::fill(slotWritten_.begin(), slotWritten_.end(), false);
 }
 
 bool TimestampQueries::resultsAvailable() const {
@@ -85,14 +96,36 @@ bool TimestampQueries::resultsAvailable() const {
 }
 
 uint64_t TimestampQueries::getElapsedNanos(uint32_t slotIndex) const {
+  const auto result = getElapsedNanosResult(slotIndex);
+  return result.valid ? result.elapsedNanos : 0;
+}
+
+TimestampQueryResult TimestampQueries::getElapsedNanosResult(uint32_t slotIndex) const {
   if (slotIndex >= currentSlot_ || !updateResults()) {
-    return 0;
+    return {};
   }
-  return elapsedNanos_[slotIndex];
+  // Callers may pass arbitrary slot indices to beginElapsedQuery(), so a higher
+  // index can advance currentSlot_ past slots that were never written. Such
+  // slots have unavailable queries; report them as invalid rather than a
+  // spurious elapsed time of 0.
+  const QueryResult& beginQuery = queryResults_[slotIndex * kTimestampsPerTimingSlot];
+  const QueryResult& endQuery = queryResults_[slotIndex * kTimestampsPerTimingSlot + 1];
+  if (beginQuery.available == 0 || endQuery.available == 0) {
+    return {};
+  }
+  return {.elapsedNanos = elapsedNanos_[slotIndex], .valid = true};
 }
 
 bool TimestampQueries::isValid() const {
   return queryPool_ != VK_NULL_HANDLE;
+}
+
+void TimestampQueries::setTimingFidelity(TimestampQueryFidelity fidelity) noexcept {
+  timingFidelity_ = fidelity;
+}
+
+TimestampQueryFidelity TimestampQueries::getTimingFidelity() const {
+  return timingFidelity_;
 }
 
 uint32_t TimestampQueries::beginElapsedQuery(VkCommandBuffer commandBuffer,
@@ -105,10 +138,17 @@ uint32_t TimestampQueries::beginElapsedQuery(VkCommandBuffer commandBuffer,
       (commandBuffer_ != VK_NULL_HANDLE && commandBuffer_ != commandBuffer)) {
     return kInvalidSlot;
   }
+  // Each slot may be written at most once per reset cycle. vkCmdResetQueryPool() is
+  // recorded lazily just once (when resetRecorded_ becomes true), so a second
+  // vkCmdWriteTimestamp() to the same query without an intervening reset() is a
+  // Vulkan validation error / undefined behavior.
+  if (slotWritten_[slotIndex]) {
+    return kInvalidSlot;
+  }
   commandBuffer_ = commandBuffer;
 
   // The pool reset is recorded lazily on the first query of a command buffer.
-  // vkCmdResetQueryPool must NOT be recorded inside an active render pass, so a
+  // vkCmdResetQueryPool() must NOT be recorded inside an active render pass, so a
   // caller timing a render pass must issue the first beginElapsedQuery() before
   // vkCmdBeginRenderPass(). Compute callers (the current consumers) record this
   // outside any encoder, so the reset is always emitted at a legal point.
@@ -123,11 +163,12 @@ uint32_t TimestampQueries::beginElapsedQuery(VkCommandBuffer commandBuffer,
   }
 
   const uint32_t slot = slotIndex;
-  labels_[slot] = label != nullptr ? label : "";
+  slotWritten_[slot] = true;
+  labels_[slot] = label ? label : "";
   resultsReady_ = false;
 
   ctx_.vf_.vkCmdWriteTimestamp(commandBuffer,
-                               VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                               startTimestampStageForFidelity(timingFidelity_),
                                queryPool_,
                                slot * kTimestampsPerTimingSlot);
   return slot;

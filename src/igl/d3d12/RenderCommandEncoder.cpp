@@ -7,7 +7,10 @@
 
 #include <igl/d3d12/RenderCommandEncoder.h>
 
+#include <algorithm>
 #include <cstdlib>
+#include <cstring>
+#include <igl/Macros.h>
 #include <igl/RenderPass.h>
 #include <igl/d3d12/Buffer.h>
 #include <igl/d3d12/CommandBuffer.h>
@@ -27,11 +30,13 @@ RenderCommandEncoder::RenderCommandEncoder(CommandBuffer& commandBuffer,
   commandList_(commandBuffer.getCommandList()),
   resourcesBinder_(commandBuffer, false /* isCompute */),
   framebuffer_(framebuffer) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_D3D12_LOG_VERBOSE(
       "RenderCommandEncoder::RenderCommandEncoder() - Lightweight initialization\n");
 }
 
 void RenderCommandEncoder::begin(const RenderPassDesc& renderPass) {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_) {
     IGL_LOG_ERROR("RenderCommandEncoder::begin() - command list is closed or null\n");
     return;
@@ -114,7 +119,7 @@ void RenderCommandEncoder::begin(const RenderPassDesc& renderPass) {
           continue;
         }
         // Check return value from getHandle.
-        D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle;
+        D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = {};
         if (!heapMgr->getRTVHandle(rtvIdx, &rtvHandle)) {
           IGL_LOG_ERROR("RenderCommandEncoder: Failed to get RTV handle for index %u\n", rtvIdx);
           heapMgr->freeRTV(rtvIdx);
@@ -266,7 +271,7 @@ void RenderCommandEncoder::begin(const RenderPassDesc& renderPass) {
           // check
           int loadActionDbg = -1;
           if (i < renderPass.colorAttachments.size()) {
-            loadActionDbg = (int)renderPass.colorAttachments[i].loadAction;
+            loadActionDbg = static_cast<int>(renderPass.colorAttachments[i].loadAction);
           }
           IGL_D3D12_LOG_VERBOSE(
               "RenderCommandEncoder: NOT clearing MRT attachment %zu (loadAction=%d, "
@@ -535,16 +540,16 @@ void RenderCommandEncoder::begin(const RenderPassDesc& renderPass) {
       D3D12_VIEWPORT vp = {};
       vp.TopLeftX = 0;
       vp.TopLeftY = 0;
-      vp.Width = (float)bbDesc.Width;
-      vp.Height = (float)bbDesc.Height;
+      vp.Width = static_cast<float>(bbDesc.Width);
+      vp.Height = static_cast<float>(bbDesc.Height);
       vp.MinDepth = 0;
       vp.MaxDepth = 1;
       commandList_->RSSetViewports(1, &vp);
       D3D12_RECT scissor = {};
       scissor.left = 0;
       scissor.top = 0;
-      scissor.right = (LONG)bbDesc.Width;
-      scissor.bottom = (LONG)bbDesc.Height;
+      scissor.right = static_cast<LONG>(bbDesc.Width);
+      scissor.bottom = static_cast<LONG>(bbDesc.Height);
       commandList_->RSSetScissorRects(1, &scissor);
       IGL_D3D12_LOG_VERBOSE(
           "RenderCommandEncoder: Set default viewport/scissor to back buffer %llux%u\n",
@@ -598,6 +603,7 @@ void RenderCommandEncoder::begin(const RenderPassDesc& renderPass) {
 }
 
 void RenderCommandEncoder::endEncoding() {
+  IGL_PROFILER_FUNCTION();
   auto& context2 = commandBuffer_.getContext();
 
   // ========== MSAA RESOLVE OPERATION ==========
@@ -743,6 +749,7 @@ void RenderCommandEncoder::endEncoding() {
 }
 
 void RenderCommandEncoder::bindViewport(const Viewport& viewport) {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_) {
     IGL_LOG_ERROR("RenderCommandEncoder::bindViewport called on closed command list\n");
     return;
@@ -763,6 +770,7 @@ void RenderCommandEncoder::bindViewport(const Viewport& viewport) {
 }
 
 void RenderCommandEncoder::bindScissorRect(const ScissorRect& rect) {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_) {
     IGL_LOG_ERROR("RenderCommandEncoder::bindScissorRect called on closed command list\n");
     return;
@@ -777,6 +785,7 @@ void RenderCommandEncoder::bindScissorRect(const ScissorRect& rect) {
 
 void RenderCommandEncoder::bindRenderPipelineState(
     const std::shared_ptr<IRenderPipelineState>& pipelineState) {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_) {
     IGL_LOG_ERROR("RenderCommandEncoder::bindRenderPipelineState called on closed command list\n");
     return;
@@ -811,7 +820,8 @@ void RenderCommandEncoder::bindRenderPipelineState(
 
   // Set primitive topology from the pipeline state
   D3D_PRIMITIVE_TOPOLOGY topology = d3dPipelineState->getPrimitiveTopology();
-  IGL_D3D12_LOG_VERBOSE("bindRenderPipelineState: Setting topology=%d\n", (int)topology);
+  IGL_D3D12_LOG_VERBOSE("bindRenderPipelineState: Setting topology=%d\n",
+                        static_cast<int>(topology));
   commandList_->IASetPrimitiveTopology(topology);
 
   // Cache vertex stride from pipeline (used when binding vertex buffers)
@@ -825,7 +835,11 @@ void RenderCommandEncoder::bindRenderPipelineState(
 void RenderCommandEncoder::bindDepthStencilState(
     const std::shared_ptr<IDepthStencilState>& /*depthStencilState*/) {}
 
-void RenderCommandEncoder::bindVertexBuffer(uint32_t index, IBuffer& buffer, size_t bufferOffset) {
+void RenderCommandEncoder::bindVertexBuffer(uint32_t index,
+                                            IBuffer& buffer,
+                                            size_t bufferOffset,
+                                            size_t /*attributeStride*/) {
+  IGL_PROFILER_FUNCTION();
   IGL_D3D12_LOG_VERBOSE("bindVertexBuffer called: index=%u\n", index);
   if (index >= IGL_BUFFER_BINDINGS_MAX) {
     IGL_LOG_ERROR("bindVertexBuffer: index %u exceeds max %u\n", index, IGL_BUFFER_BINDINGS_MAX);
@@ -842,6 +856,7 @@ void RenderCommandEncoder::bindVertexBuffer(uint32_t index, IBuffer& buffer, siz
 void RenderCommandEncoder::bindIndexBuffer(IBuffer& buffer,
                                            IndexFormat format,
                                            size_t bufferOffset) {
+  IGL_PROFILER_FUNCTION();
   IGL_D3D12_LOG_VERBOSE("bindIndexBuffer called\n");
   auto* d3dBuffer = static_cast<Buffer*>(&buffer);
   cachedIndexBuffer_.bufferLocation = d3dBuffer->gpuAddress(bufferOffset);
@@ -865,6 +880,7 @@ void RenderCommandEncoder::bindBytes(size_t /*index*/,
       "instead.\n");
 }
 void RenderCommandEncoder::bindPushConstants(const void* data, size_t length, size_t offset) {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_) {
     IGL_LOG_ERROR("RenderCommandEncoder::bindPushConstants called on closed command list\n");
     return;
@@ -905,6 +921,7 @@ void RenderCommandEncoder::bindPushConstants(const void* data, size_t length, si
 void RenderCommandEncoder::bindSamplerState(size_t index,
                                             uint8_t /*target*/,
                                             ISamplerState* samplerState) {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_) {
     IGL_LOG_ERROR("RenderCommandEncoder::bindSamplerState called on closed command list\n");
     return;
@@ -919,6 +936,7 @@ void RenderCommandEncoder::bindSamplerState(size_t index,
   usedBindGroup_ = false;
 }
 void RenderCommandEncoder::bindTexture(size_t index, uint8_t /*target*/, ITexture* texture) {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_) {
     IGL_LOG_ERROR("RenderCommandEncoder::bindTexture called on closed command list\n");
     return;
@@ -928,6 +946,7 @@ void RenderCommandEncoder::bindTexture(size_t index, uint8_t /*target*/, ITextur
 }
 
 void RenderCommandEncoder::bindTexture(size_t index, ITexture* texture) {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_) {
     IGL_LOG_ERROR("RenderCommandEncoder::bindTexture called on closed command list\n");
     return;
@@ -947,6 +966,7 @@ void RenderCommandEncoder::draw(size_t vertexCount,
                                 uint32_t instanceCount,
                                 uint32_t firstVertex,
                                 uint32_t baseInstance) {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_) {
     IGL_LOG_ERROR("RenderCommandEncoder::draw called on closed command list\n");
     return;
@@ -1044,6 +1064,7 @@ void RenderCommandEncoder::drawIndexed(size_t indexCount,
                                        uint32_t firstIndex,
                                        int32_t vertexOffset,
                                        uint32_t baseInstance) {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_) {
     IGL_LOG_ERROR("RenderCommandEncoder::drawIndexed called on closed command list\n");
     return;
@@ -1153,12 +1174,12 @@ void RenderCommandEncoder::drawIndexed(size_t indexCount,
           if (FAILED(infoQueue->GetMessage(i, nullptr, &length)) || length == 0) {
             continue;
           }
-          auto* message = static_cast<D3D12_MESSAGE*>(malloc(length));
+          auto* message = static_cast<D3D12_MESSAGE*>(std::malloc(length));
           if (message && SUCCEEDED(infoQueue->GetMessage(i, message, &length))) {
             IGL_LOG_ERROR("[D3D12 Debug] %s\n",
                           message->pDescription ? message->pDescription : "<no description>");
           }
-          free(message);
+          std::free(message);
         }
         infoQueue->ClearStoredMessages();
       }
@@ -1176,6 +1197,7 @@ void RenderCommandEncoder::multiDrawIndirect(IBuffer& indirectBuffer,
                                              size_t indirectBufferOffset,
                                              uint32_t drawCount,
                                              uint32_t stride) {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_) {
     IGL_LOG_ERROR("RenderCommandEncoder::multiDrawIndirect: command list is closed or null\n");
     return;
@@ -1227,6 +1249,7 @@ void RenderCommandEncoder::multiDrawIndexedIndirect(IBuffer& indirectBuffer,
                                                     size_t indirectBufferOffset,
                                                     uint32_t drawCount,
                                                     uint32_t stride) {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_) {
     IGL_LOG_ERROR(
         "RenderCommandEncoder::multiDrawIndexedIndirect: command list is closed or null\n");
@@ -1278,6 +1301,7 @@ void RenderCommandEncoder::multiDrawIndexedIndirect(IBuffer& indirectBuffer,
 }
 
 void RenderCommandEncoder::setStencilReferenceValue(uint32_t value) {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_) {
     return;
   }
@@ -1287,6 +1311,7 @@ void RenderCommandEncoder::setStencilReferenceValue(uint32_t value) {
 }
 
 void RenderCommandEncoder::setBlendColor(const Color& color) {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_) {
     return;
   }
@@ -1301,6 +1326,10 @@ void RenderCommandEncoder::setBlendColor(const Color& color) {
                         color.a);
 }
 
+void RenderCommandEncoder::setCullMode(CullMode /*cullMode*/) {
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
+}
+
 void RenderCommandEncoder::setDepthBias(float /*depthBias*/,
                                         float /*slopeScale*/,
                                         float /*clamp*/) {
@@ -1309,29 +1338,36 @@ void RenderCommandEncoder::setDepthBias(float /*depthBias*/,
   // This would require rebuilding the PSO with different depth bias values
 }
 
+void RenderCommandEncoder::setFrontFacingWinding(WindingMode /*frontFaceWinding*/) {
+  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
+}
+
 void RenderCommandEncoder::pushDebugGroupLabel(const char* label, const Color& /*color*/) const {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_ || !label) {
     return;
   }
-  const size_t len = strlen(label);
+  const size_t len = std::strlen(label);
   std::wstring wlabel(len, L' ');
-  std::mbstowcs(&wlabel[0], label, len);
+  std::mbstowcs(wlabel.data(), label, len);
   commandList_->BeginEvent(
       0, wlabel.c_str(), static_cast<UINT>((wlabel.length() + 1) * sizeof(wchar_t)));
 }
 
 void RenderCommandEncoder::insertDebugEventLabel(const char* label, const Color& /*color*/) const {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_ || !label) {
     return;
   }
-  const size_t len = strlen(label);
+  const size_t len = std::strlen(label);
   std::wstring wlabel(len, L' ');
-  std::mbstowcs(&wlabel[0], label, len);
+  std::mbstowcs(wlabel.data(), label, len);
   commandList_->SetMarker(
       0, wlabel.c_str(), static_cast<UINT>((wlabel.length() + 1) * sizeof(wchar_t)));
 }
 
 void RenderCommandEncoder::popDebugGroupLabel() const {
+  IGL_PROFILER_FUNCTION();
   if (!commandBuffer_.isRecording() || !commandList_) {
     return;
   }
@@ -1351,6 +1387,7 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
                                       IBuffer* buffer,
                                       size_t offset,
                                       size_t bufferSize) {
+  IGL_PROFILER_FUNCTION();
   IGL_D3D12_LOG_VERBOSE("bindBuffer START: index=%u\n", index);
   if (!buffer) {
     IGL_D3D12_LOG_VERBOSE("bindBuffer: null buffer, returning\n");
@@ -1506,6 +1543,7 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
   IGL_D3D12_LOG_VERBOSE("bindBuffer END\n");
 }
 void RenderCommandEncoder::bindBindGroup(BindGroupTextureHandle handle) {
+  IGL_PROFILER_FUNCTION();
   IGL_D3D12_LOG_VERBOSE("bindBindGroup(texture): handle valid=%d\n", !handle.empty());
 
   if (!commandBuffer_.isRecording() || !commandList_) {
@@ -1538,6 +1576,7 @@ void RenderCommandEncoder::bindBindGroup(BindGroupTextureHandle handle) {
 void RenderCommandEncoder::bindBindGroup(BindGroupBufferHandle handle,
                                          uint32_t numDynamicOffsets,
                                          const uint32_t* dynamicOffsets) {
+  IGL_PROFILER_FUNCTION();
   IGL_D3D12_LOG_VERBOSE(
       "bindBindGroup(buffer): handle valid=%d, dynCount=%u\n", !handle.empty(), numDynamicOffsets);
 
@@ -1952,6 +1991,7 @@ void RenderCommandEncoder::bindBindGroup(BindGroupBufferHandle handle,
 
 // G-001: Barrier batching implementation
 void RenderCommandEncoder::flushBarriers() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_WAIT);
   if (pendingBarriers_.empty()) {
     return;
   }
@@ -1975,6 +2015,7 @@ void RenderCommandEncoder::flushBarriers() {
 }
 
 void RenderCommandEncoder::queueBarrier(const D3D12_RESOURCE_BARRIER& barrier) {
+  IGL_PROFILER_FUNCTION();
   pendingBarriers_.push_back(barrier);
   IGL_D3D12_LOG_VERBOSE("RenderCommandEncoder: Queued barrier (total pending: %zu)\n",
                         pendingBarriers_.size());

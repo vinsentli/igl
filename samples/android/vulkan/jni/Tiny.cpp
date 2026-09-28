@@ -152,8 +152,7 @@ void render() {
   framebuffer->updateDrawable(nativeDrawable);
 
   // Command buffers (1-N per thread): create, submit and forget
-  CommandBufferDesc cbDesc;
-  std::shared_ptr<ICommandBuffer> buffer = commandQueue->createCommandBuffer(cbDesc, nullptr);
+  std::shared_ptr<ICommandBuffer> buffer = commandQueue->createCommandBuffer({}, nullptr);
 
   const igl::Viewport viewport = {.x = 0.0f,
                                   .y = 0.0f,
@@ -202,6 +201,7 @@ void initialize(android_app* app) {
 extern "C" {
 void handleCmd(struct android_app* app, int32_t cmd) {}
 static void handleAppCmd(struct android_app* app, int32_t appCmd) {
+  // NOLINTNEXTLINE(bugprone-switch-missing-default-case)
   switch (appCmd) {
   case APP_CMD_SAVE_STATE:
     break;

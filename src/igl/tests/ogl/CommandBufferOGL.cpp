@@ -27,7 +27,6 @@ namespace igl::tests {
 class CommandBufferOGLTest : public ::testing::Test {
  public:
   CommandBufferOGLTest() = default;
-  ~CommandBufferOGLTest() override = default;
 
   void SetUp() override {
     igl::setDebugBreakEnabled(false);
@@ -49,16 +48,16 @@ class CommandBufferOGLTest : public ::testing::Test {
     ASSERT_EQ(ret.code, Result::Code::Ok);
 
     // Create framebuffer
-    FramebufferDesc framebufferDesc;
-    framebufferDesc.colorAttachments[0].texture = offscreenTexture_;
+    const FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = offscreenTexture_}}};
     framebuffer_ = iglDev_->createFramebuffer(framebufferDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
 
     // Initialize render pass
-    renderPass_.colorAttachments.resize(1);
-    renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
-    renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-    renderPass_.colorAttachments[0].clearColor = {0.0, 0.0, 0.0, 1.0};
+    renderPass_ = {
+        .colorAttachments = {{.loadAction = LoadAction::Clear,
+                              .storeAction = StoreAction::Store,
+                              .clearColor = {0.0, 0.0, 0.0, 1.0}}},
+    };
   }
 
   void TearDown() override {}
@@ -80,8 +79,7 @@ class CommandBufferOGLTest : public ::testing::Test {
 //
 TEST_F(CommandBufferOGLTest, CreateFromQueue) {
   Result ret;
-  CommandBufferDesc cbDesc;
-  auto cmdBuf = cmdQueue_->createCommandBuffer(cbDesc, &ret);
+  auto cmdBuf = cmdQueue_->createCommandBuffer({}, &ret);
   ASSERT_EQ(ret.code, Result::Code::Ok);
   ASSERT_NE(cmdBuf, nullptr);
 }
@@ -93,8 +91,7 @@ TEST_F(CommandBufferOGLTest, CreateFromQueue) {
 //
 TEST_F(CommandBufferOGLTest, CreateRenderEncoder) {
   Result ret;
-  CommandBufferDesc cbDesc;
-  auto cmdBuf = cmdQueue_->createCommandBuffer(cbDesc, &ret);
+  auto cmdBuf = cmdQueue_->createCommandBuffer({}, &ret);
   ASSERT_EQ(ret.code, Result::Code::Ok);
   ASSERT_NE(cmdBuf, nullptr);
 
@@ -111,8 +108,7 @@ TEST_F(CommandBufferOGLTest, CreateRenderEncoder) {
 //
 TEST_F(CommandBufferOGLTest, SubmitToQueue) {
   Result ret;
-  CommandBufferDesc cbDesc;
-  auto cmdBuf = cmdQueue_->createCommandBuffer(cbDesc, &ret);
+  auto cmdBuf = cmdQueue_->createCommandBuffer({}, &ret);
   ASSERT_EQ(ret.code, Result::Code::Ok);
   ASSERT_NE(cmdBuf, nullptr);
 

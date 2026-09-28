@@ -7,7 +7,13 @@
 
 #include <igl/VertexInputState.h>
 
+#include <type_traits>
+
+static_assert(std::is_trivially_copyable_v<igl::VertexInputBinding>);
+
 using namespace igl;
+
+static_assert(std::is_standard_layout_v<VertexInputBinding>);
 
 size_t VertexInputStateDesc::sizeForVertexAttributeFormat(VertexAttributeFormat format) {
   switch (format) {
@@ -159,13 +165,13 @@ bool VertexInputStateDesc::operator==(const VertexInputStateDesc& other) const {
     return false;
   }
 
-  for (auto i = 0; i < numAttributes; i++) {
+  for (size_t i = 0; i < numAttributes; i++) {
     if (other.attributes[i] != attributes[i]) {
       return false;
     }
   }
 
-  for (auto i = 0; i < numInputBindings; i++) {
+  for (size_t i = 0; i < numInputBindings; i++) {
     if (other.inputBindings[i] != inputBindings[i]) {
       return false;
     }

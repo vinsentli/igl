@@ -7,6 +7,7 @@
 
 #include <igl/opengl/TimestampQueries.h>
 
+#include <igl/Macros.h>
 #include <igl/opengl/DeviceFeatureSet.h>
 #include <igl/opengl/GLFunc.h>
 
@@ -30,6 +31,7 @@ namespace igl::opengl {
 
 TimestampQueries::TimestampQueries(IContext& context, uint32_t maxSlots) :
   WithContext(context), maxSlots_(maxSlots) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   queryIds_.resize(maxSlots);
   iglGenQueries(maxSlots, queryIds_.data());
 
@@ -49,6 +51,7 @@ TimestampQueries::TimestampQueries(IContext& context, uint32_t maxSlots) :
 }
 
 TimestampQueries::~TimestampQueries() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
   if (!queryIds_.empty()) {
     iglDeleteQueries(static_cast<GLsizei>(queryIds_.size()), queryIds_.data());
   }
@@ -75,6 +78,7 @@ bool TimestampQueries::requiresFramebufferRetention() const {
 }
 
 bool TimestampQueries::resultsAvailable() const {
+  IGL_PROFILER_FUNCTION();
   if (!valid_ || currentIndex_ == 0) {
     return false;
   }
@@ -87,25 +91,32 @@ bool TimestampQueries::resultsAvailable() const {
 }
 
 uint64_t TimestampQueries::getElapsedNanos(uint32_t slotIndex) const {
+  const auto result = getElapsedNanosResult(slotIndex);
+  return result.valid ? result.elapsedNanos : 0;
+}
+
+TimestampQueryResult TimestampQueries::getElapsedNanosResult(uint32_t slotIndex) const {
+  IGL_PROFILER_FUNCTION();
   if (!valid_ || slotIndex >= currentIndex_) {
-    return 0;
+    return {};
   }
   if (queryIds_[slotIndex] == 0) {
-    return 0;
+    return {};
   }
 
   GLint available = 0;
   iglGetQueryObjectiv(queryIds_[slotIndex], GL_QUERY_RESULT_AVAILABLE, &available);
   if (!available) {
-    return 0;
+    return {};
   }
 
   GLuint64 result = 0;
   iglGetQueryObjectui64v(queryIds_[slotIndex], GL_QUERY_RESULT, &result);
-  return result;
+  return {.elapsedNanos = result, .valid = true};
 }
 
 bool TimestampQueries::readAndClearDisjoint() {
+  IGL_PROFILER_FUNCTION();
   if (!getContext().deviceFeatures().hasExtension(Extensions::TimerQuery)) {
     return false;
   }
@@ -115,6 +126,7 @@ bool TimestampQueries::readAndClearDisjoint() {
 }
 
 void TimestampQueries::beginElapsedQuery(uint32_t slotIndex) {
+  IGL_PROFILER_FUNCTION();
   if (!valid_ || slotIndex >= maxSlots_) {
     return;
   }
@@ -128,6 +140,7 @@ void TimestampQueries::beginElapsedQuery(uint32_t slotIndex) {
 }
 
 void TimestampQueries::endElapsedQuery() {
+  IGL_PROFILER_FUNCTION();
   if (!valid_) {
     return;
   }

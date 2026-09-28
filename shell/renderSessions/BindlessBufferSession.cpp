@@ -37,9 +37,9 @@ uint16_t indexData[] = {
 
 // Push constant data: holds a GPU buffer address (uint64_t) plus padding.
 struct PushConstantData {
-  uint64_t vertexBufferAddress;
-  uint32_t pad0;
-  uint32_t pad1;
+  uint64_t vertexBufferAddress = 0;
+  uint32_t pad0 = 0;
+  uint32_t pad1 = 0;
 };
 
 std::string getVersion() {
@@ -277,7 +277,7 @@ void BindlessBufferSession::initialize() noexcept {
     // Log the GPU address of the vertex buffer.
     const uint64_t gpuAddr = vertexBuffer_->gpuAddress(0);
     IGL_LOG_INFO("BindlessBufferSession: Vertex buffer GPU address = 0x%llx\n",
-                 (unsigned long long)gpuAddr);
+                 static_cast<unsigned long long>(gpuAddr));
   }
 
   shaderStages_ = getShaderStagesForBackend(device, isBindlessSupported_);

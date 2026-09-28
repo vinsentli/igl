@@ -7,10 +7,18 @@
 
 #include <gtest/gtest.h>
 
+#include "../iglu/RecordingDevice.h"
 #include "../util/TestDevice.h"
 
+#include <IGLU/managedUniformBuffer/ManagedUniformBuffer.h>
+#include <algorithm>
 #include <array>
+#include <cstdint>
+#include <vector>
 #include <igl/CommandBuffer.h>
+#include <igl/Shader.h>
+#include <igl/glslang/GlslCompiler.h>
+#include <igl/glslang/GlslangHelpers.h>
 #if IGL_PLATFORM_WINDOWS || IGL_PLATFORM_ANDROID || IGL_PLATFORM_MACOSX || IGL_PLATFORM_LINUX
 #include <igl/vulkan/Buffer.h>
 #include <igl/vulkan/Device.h>
@@ -29,7 +37,6 @@ namespace igl::tests {
 class DeviceVulkanTest : public ::testing::Test {
  public:
   DeviceVulkanTest() = default;
-  ~DeviceVulkanTest() override = default;
 
   // Set up common resources. This will create a device
   void SetUp() override {
@@ -52,9 +59,7 @@ class DeviceVulkanTest : public ::testing::Test {
 /// this is just here as a proof of concept.
 TEST_F(DeviceVulkanTest, CreateCommandQueue) {
   Result ret;
-  CommandQueueDesc desc{};
-
-  auto cmdQueue = iglDev_->createCommandQueue(desc, &ret);
+  auto cmdQueue = iglDev_->createCommandQueue({}, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(cmdQueue, nullptr);
 }
@@ -70,12 +75,10 @@ TEST_F(DeviceVulkanTest, PlatformDevice) {
   ASSERT_TRUE(ret.isOk());
   // ASSERT_TRUE(texture != nullptr); // no swapchain so null
 
-  CommandQueueDesc desc{};
-
-  auto cmdQueue = iglDev_->createCommandQueue(desc, &ret);
+  auto cmdQueue = iglDev_->createCommandQueue({}, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(cmdQueue, nullptr);
-  auto cmdBuf = cmdQueue->createCommandBuffer(CommandBufferDesc(), &ret);
+  auto cmdBuf = cmdQueue->createCommandBuffer({}, &ret);
   auto submitHandle = cmdQueue->submit(*cmdBuf);
 
   // NOLINTNEXTLINE(readability-qualified-auto)
@@ -120,20 +123,17 @@ TEST_F(DeviceVulkanTest, PlatformDeviceSampler) {
   auto& innerVulkanTexture = vulkanTexture->getVulkanTexture();
   (void)innerVulkanTexture.imageView_;
   ASSERT_TRUE(innerVulkanTexture.textureId_ != 0);
-  SamplerStateDesc samplerDesc;
-  auto samplerState = iglDev_->createSamplerState(samplerDesc, &ret);
+  auto samplerState = iglDev_->createSamplerState({}, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   auto* vulkanSamplerState = static_cast<vulkan::SamplerState*>(samplerState.get());
   auto samplerId = vulkanSamplerState->getSamplerId();
   ASSERT_EQ(samplerId, 1);
   ASSERT_FALSE(vulkanSamplerState->isYUV());
 
-  CommandQueueDesc cmdQueueDesc{};
-
-  auto cmdQueue = iglDev_->createCommandQueue(cmdQueueDesc, &ret);
+  auto cmdQueue = iglDev_->createCommandQueue({}, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_NE(cmdQueue, nullptr);
-  auto cmdBuf = cmdQueue->createCommandBuffer(CommandBufferDesc(), &ret);
+  auto cmdBuf = cmdQueue->createCommandBuffer({}, &ret);
   cmdQueue->submit(*cmdBuf);
 }
 
@@ -240,33 +240,103 @@ TEST_F(DeviceVulkanTest, UpdateGlslangResource) {
 
   ivkUpdateGlslangResource(&res, &props, nullptr);
 
-  ASSERT_EQ(res.max_vertex_attribs, (int)props.limits.maxVertexInputAttributes);
-  ASSERT_EQ(res.max_clip_distances, (int)props.limits.maxClipDistances);
-  ASSERT_EQ(res.max_compute_work_group_count_x, (int)props.limits.maxComputeWorkGroupCount[0]);
-  ASSERT_EQ(res.max_compute_work_group_count_y, (int)props.limits.maxComputeWorkGroupCount[1]);
-  ASSERT_EQ(res.max_compute_work_group_count_z, (int)props.limits.maxComputeWorkGroupCount[2]);
-  ASSERT_EQ(res.max_compute_work_group_size_x, (int)props.limits.maxComputeWorkGroupSize[0]);
-  ASSERT_EQ(res.max_compute_work_group_size_y, (int)props.limits.maxComputeWorkGroupSize[1]);
-  ASSERT_EQ(res.max_compute_work_group_size_z, (int)props.limits.maxComputeWorkGroupSize[2]);
-  ASSERT_EQ(res.max_vertex_output_components, (int)props.limits.maxVertexOutputComponents);
-  ASSERT_EQ(res.max_geometry_input_components, (int)props.limits.maxGeometryInputComponents);
-  ASSERT_EQ(res.max_geometry_output_components, (int)props.limits.maxGeometryOutputComponents);
-  ASSERT_EQ(res.max_fragment_input_components, (int)props.limits.maxFragmentInputComponents);
-  ASSERT_EQ(res.max_geometry_output_vertices, (int)props.limits.maxGeometryOutputVertices);
+  ASSERT_EQ(res.max_vertex_attribs, static_cast<int>(props.limits.maxVertexInputAttributes));
+  ASSERT_EQ(res.max_clip_distances, static_cast<int>(props.limits.maxClipDistances));
+  ASSERT_EQ(res.max_compute_work_group_count_x,
+            static_cast<int>(props.limits.maxComputeWorkGroupCount[0]));
+  ASSERT_EQ(res.max_compute_work_group_count_y,
+            static_cast<int>(props.limits.maxComputeWorkGroupCount[1]));
+  ASSERT_EQ(res.max_compute_work_group_count_z,
+            static_cast<int>(props.limits.maxComputeWorkGroupCount[2]));
+  ASSERT_EQ(res.max_compute_work_group_size_x,
+            static_cast<int>(props.limits.maxComputeWorkGroupSize[0]));
+  ASSERT_EQ(res.max_compute_work_group_size_y,
+            static_cast<int>(props.limits.maxComputeWorkGroupSize[1]));
+  ASSERT_EQ(res.max_compute_work_group_size_z,
+            static_cast<int>(props.limits.maxComputeWorkGroupSize[2]));
+  ASSERT_EQ(res.max_vertex_output_components,
+            static_cast<int>(props.limits.maxVertexOutputComponents));
+  ASSERT_EQ(res.max_geometry_input_components,
+            static_cast<int>(props.limits.maxGeometryInputComponents));
+  ASSERT_EQ(res.max_geometry_output_components,
+            static_cast<int>(props.limits.maxGeometryOutputComponents));
+  ASSERT_EQ(res.max_fragment_input_components,
+            static_cast<int>(props.limits.maxFragmentInputComponents));
+  ASSERT_EQ(res.max_geometry_output_vertices,
+            static_cast<int>(props.limits.maxGeometryOutputVertices));
   ASSERT_EQ(res.max_geometry_total_output_components,
-            (int)props.limits.maxGeometryTotalOutputComponents);
+            static_cast<int>(props.limits.maxGeometryTotalOutputComponents));
   ASSERT_EQ(res.max_tess_control_input_components,
-            (int)props.limits.maxTessellationControlPerVertexInputComponents);
+            static_cast<int>(props.limits.maxTessellationControlPerVertexInputComponents));
   ASSERT_EQ(res.max_tess_control_output_components,
-            (int)props.limits.maxTessellationControlPerVertexOutputComponents);
+            static_cast<int>(props.limits.maxTessellationControlPerVertexOutputComponents));
   ASSERT_EQ(res.max_tess_evaluation_input_components,
-            (int)props.limits.maxTessellationEvaluationInputComponents);
+            static_cast<int>(props.limits.maxTessellationEvaluationInputComponents));
   ASSERT_EQ(res.max_tess_evaluation_output_components,
-            (int)props.limits.maxTessellationEvaluationOutputComponents);
-  ASSERT_EQ(res.max_viewports, (int)props.limits.maxViewports);
-  ASSERT_EQ(res.max_cull_distances, (int)props.limits.maxCullDistances);
+            static_cast<int>(props.limits.maxTessellationEvaluationOutputComponents));
+  ASSERT_EQ(res.max_viewports, static_cast<int>(props.limits.maxViewports));
+  ASSERT_EQ(res.max_cull_distances, static_cast<int>(props.limits.maxCullDistances));
   ASSERT_EQ(res.max_combined_clip_and_cull_distances,
-            (int)props.limits.maxCombinedClipAndCullDistances);
+            static_cast<int>(props.limits.maxCombinedClipAndCullDistances));
+}
+
+// Diff-2 plumbing (unit): getSpvOptions() maps each ShaderOptimization onto the exact glslang
+// SPIR-V flags from the spec. Default reproduces IGL's historical hardcoded options byte-for-byte
+// (optimizer on, optimize-for-size) so existing clients are unaffected; the debug path disables the
+// optimizer; the release path optimizes for performance (not size). generate_debug_info stays true
+// in every mode, so debug info is retained for both debug and release builds. Pure mapping logic —
+// no glslang process or Vulkan device required.
+GTEST_TEST(GlslCompilerOptimization, SpvOptionsMapping) {
+  const glslang_spv_options_t defaultOpts =
+      glslang::getSpvOptions(ShaderCompilerOptions{.optimization = ShaderOptimization::Default});
+  EXPECT_TRUE(defaultOpts.generate_debug_info);
+  EXPECT_FALSE(defaultOpts.strip_debug_info);
+  EXPECT_FALSE(defaultOpts.disable_optimizer);
+  EXPECT_TRUE(defaultOpts.optimize_size);
+
+  const glslang_spv_options_t noOpt =
+      glslang::getSpvOptions(ShaderCompilerOptions{.optimization = ShaderOptimization::NoOpt});
+  EXPECT_TRUE(noOpt.generate_debug_info); // debug info retained in debug builds
+  EXPECT_TRUE(noOpt.disable_optimizer); // optimizer off for clean stepping + reference numerics
+
+  const glslang_spv_options_t performance = glslang::getSpvOptions(
+      ShaderCompilerOptions{.optimization = ShaderOptimization::Performance});
+  EXPECT_TRUE(performance.generate_debug_info); // debug info retained in release/profiling builds
+  EXPECT_FALSE(performance.disable_optimizer); // optimizer on
+  EXPECT_FALSE(performance.optimize_size); // optimize for performance, not size (PRIMARY goal)
+}
+
+// Diff-2 plumbing (integration): every ShaderOptimization compiles end-to-end through
+// glslang::compileShader() to valid, non-empty SPIR-V via the new options parameter. Whether the
+// SPIRV-Tools optimizer alters the bytes depends on the glslang build + debug-info config; the
+// release-vs-debug GPU perf delta is validated on-device per the diff test plan, not here.
+GTEST_TEST(GlslCompilerOptimization, CompilesValidSpirvForEachOption) {
+  igl::glslang::initializeCompiler();
+
+  glslang_resource_t resource = {};
+  glslangGetDefaultResource(&resource);
+
+  const char* source = R"(#version 460
+layout(location = 0) out vec4 outColor;
+void main() {
+  outColor = vec4(1.0, 0.5, 0.25, 1.0);
+}
+)";
+
+  constexpr uint32_t kSpirvMagic = 0x07230203;
+  for (const ShaderOptimization optimization :
+       {ShaderOptimization::Default, ShaderOptimization::NoOpt, ShaderOptimization::Performance}) {
+    ShaderCompilerOptions options;
+    options.optimization = optimization;
+    std::vector<uint32_t> spirv;
+    const Result result =
+        glslang::compileShader(ShaderStage::Fragment, source, spirv, &resource, options);
+    EXPECT_TRUE(result.isOk()) << result.message.c_str();
+    ASSERT_FALSE(spirv.empty());
+    EXPECT_EQ(spirv.front(), kSpirvMagic);
+  }
+
+  igl::glslang::finalizeCompiler();
 }
 
 TEST_F(DeviceVulkanTest, BufferDeviceAddress) {
@@ -387,6 +457,13 @@ GTEST_TEST(VulkanContext, DescriptorIndexing) {
 }
 
 TEST_F(DeviceVulkanTest, UniformBlockRingBufferTest) {
+  // The rotation below is what the Ring hint buys, so it is only meaningful on a device that
+  // implements it. DeviceFeatureSetTest is where the Vulkan answer itself is pinned; skipping here
+  // keeps this a behavior test rather than a second capability assertion.
+  if (!iglDev_->hasFeature(DeviceFeatures::BufferRing)) {
+    GTEST_SKIP() << "Device does not report DeviceFeatures::BufferRing";
+  }
+
   Result ret;
 
   // Create uniform buffer with ring buffer hint
@@ -404,6 +481,7 @@ TEST_F(DeviceVulkanTest, UniformBlockRingBufferTest) {
   // Upload and verify data
   std::vector<uint32_t> testData(bufferSize / sizeof(uint32_t));
   for (unsigned int& i : testData) {
+    // NOLINTNEXTLINE(cert-msc50-cpp, facebook-hte-BadCall-rand)
     i = rand();
   }
 
@@ -411,15 +489,14 @@ TEST_F(DeviceVulkanTest, UniformBlockRingBufferTest) {
   ASSERT_TRUE(ret.isOk());
 
   // Create and submit multiple command buffers
-  CommandQueueDesc queueDesc{};
-  auto cmdQueue = iglDev_->createCommandQueue(queueDesc, &ret);
+  auto cmdQueue = iglDev_->createCommandQueue({}, &ret);
   ASSERT_TRUE(ret.isOk());
 
   std::vector<VkBuffer> bufferHandles;
   // By default the VulkanContextConfig.maxResourceCount is 3, so we should create at most 3 unique
   // VkBuffers
   for (int i = 0; i < 4; i++) {
-    auto cmdBuf = cmdQueue->createCommandBuffer(CommandBufferDesc(), &ret);
+    auto cmdBuf = cmdQueue->createCommandBuffer({}, &ret);
     ASSERT_TRUE(ret.isOk());
 
     auto* vulkanBufferCast = static_cast<vulkan::Buffer*>(buffer.get());
@@ -430,12 +507,90 @@ TEST_F(DeviceVulkanTest, UniformBlockRingBufferTest) {
     cmdQueue->submit(*cmdBuf);
   }
 
-  // Verify different buffer handles were used for the first 3
-  for (size_t i = 1; i < 3; i++) {
-    ASSERT_NE(bufferHandles[i], bufferHandles[i - 1]);
-  }
+  // Verify the first 3 buffer handles are mutually distinct. Compared pairwise rather than only
+  // consecutively, so a ring that got shallower fails on the distinctness itself instead of only
+  // on the wrap check below.
+  ASSERT_NE(bufferHandles[0], bufferHandles[1]);
+  ASSERT_NE(bufferHandles[0], bufferHandles[2]);
+  ASSERT_NE(bufferHandles[1], bufferHandles[2]);
   // First and last handles should be the same
   ASSERT_EQ(bufferHandles[3], bufferHandles[0]);
+}
+
+// Control for UniformBlockRingBufferTest: the rotation there is what the Ring hint buys, not
+// something every uniform buffer already gets. Without the hint the same VkBuffer is handed out on
+// every frame, which is the single-slot exposure a caller avoids by gating on BufferRing.
+TEST_F(DeviceVulkanTest, UniformBlockWithoutRingHintKeepsOneBuffer) {
+  Result ret;
+
+  const size_t bufferSize = 256;
+  const BufferDesc bufferDesc{
+      .type = BufferDesc::BufferTypeBits::Uniform,
+      .length = bufferSize,
+      .storage = ResourceStorage::Shared,
+      .hint = BufferDesc::BufferAPIHintBits::UniformBlock,
+  };
+  auto buffer = iglDev_->createBuffer(bufferDesc, &ret);
+  ASSERT_TRUE(ret.isOk());
+  ASSERT_NE(buffer, nullptr);
+
+  auto cmdQueue = iglDev_->createCommandQueue({}, &ret);
+  ASSERT_TRUE(ret.isOk());
+
+  auto* vulkanBuffer = static_cast<vulkan::Buffer*>(buffer.get());
+  const VkBuffer firstHandle = vulkanBuffer->currentVulkanBuffer()->getVkBuffer();
+  for (int i = 0; i < 4; i++) {
+    auto cmdBuf = cmdQueue->createCommandBuffer({}, &ret);
+    ASSERT_TRUE(ret.isOk());
+
+    EXPECT_EQ(vulkanBuffer->currentVulkanBuffer()->getVkBuffer(), firstHandle);
+
+    cmdQueue->submit(*cmdBuf);
+  }
+}
+
+// End-to-end version of UniformBlockRingBufferTest: the descriptor is the one ManagedUniformBuffer
+// builds rather than one the test writes, so it also covers the uniform buffer carrying initial
+// data, which is how every IGPrism FilterNode allocates its params block.
+TEST_F(DeviceVulkanTest, ManagedUniformBufferRotatesItsRingBuffer) {
+  // Same gate as UniformBlockRingBufferTest: the rotation below is only meaningful on a device
+  // that implements the hint, and the Vulkan answer itself is pinned by DeviceFeatureSetTest.
+  if (!iglDev_->hasFeature(DeviceFeatures::BufferRing)) {
+    GTEST_SKIP() << "Device does not report DeviceFeatures::BufferRing";
+  }
+
+  // ManagedUniformBuffer keeps its buffer private, so the creation request is routed through a
+  // recording device that forwards to the real one and keeps a handle on what came back.
+  RecordingDevice device(*iglDev_);
+  device.reportsBufferRing = true;
+  const iglu::ManagedUniformBuffer uniforms(device, {.index = 0, .length = 256});
+  ASSERT_TRUE(uniforms.result.isOk());
+  ASSERT_EQ(device.createBufferCount, 1u);
+  ASSERT_NE(device.recordedHint & BufferDesc::BufferAPIHintBits::Ring, 0);
+  ASSERT_NE(device.createdBuffer, nullptr);
+
+  Result ret;
+  auto cmdQueue = iglDev_->createCommandQueue({}, &ret);
+  ASSERT_TRUE(ret.isOk());
+
+  auto* vulkanBuffer = static_cast<vulkan::Buffer*>(device.createdBuffer);
+  std::vector<VkBuffer> bufferHandles;
+  for (int i = 0; i < 4; i++) {
+    auto cmdBuf = cmdQueue->createCommandBuffer({}, &ret);
+    ASSERT_TRUE(ret.isOk());
+
+    bufferHandles.push_back(vulkanBuffer->currentVulkanBuffer()->getVkBuffer());
+
+    cmdQueue->submit(*cmdBuf);
+  }
+
+  // maxResourceCount defaults to 3: the three slots are mutually distinct, then the ring wraps.
+  // Compared pairwise rather than only consecutively, so a ring that got shallower fails on the
+  // distinctness itself instead of only on the wrap check below.
+  EXPECT_NE(bufferHandles[0], bufferHandles[1]);
+  EXPECT_NE(bufferHandles[0], bufferHandles[2]);
+  EXPECT_NE(bufferHandles[1], bufferHandles[2]);
+  EXPECT_EQ(bufferHandles[3], bufferHandles[0]);
 }
 #endif
 

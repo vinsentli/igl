@@ -7,7 +7,8 @@
 
 #pragma once
 
-#include <algorithm>
+#include <memory>
+#include <string>
 #include <igl/CommandQueue.h>
 #include <igl/Common.h>
 #include <igl/ITrackedResource.h>
@@ -944,7 +945,7 @@ class ITexture : public ITrackedResource<ITexture>, public base::IAttachmentInte
    *
    * @return The returned Result indicates whether the range is valid or not.
    */
-  [[nodiscard]] Result validateRange(const igl::TextureRangeDesc& range) const noexcept;
+  [[nodiscard]] Result validateRange(const TextureRangeDesc& range) const noexcept;
   /**
    * @brief Returns a TextureRangeDesc for the texture's full range at the specified mip level.
    *
@@ -1073,6 +1074,9 @@ struct SurfaceTextures {
   std::shared_ptr<ITexture> color;
   /** @brief The surface's depth texture. */
   std::shared_ptr<ITexture> depth;
+  /** @brief Optional single-sample resolve target for an MSAA color texture. When set, the
+   * render pass resolves the multisampled color into this texture. Null when MSAA is disabled. */
+  std::shared_ptr<ITexture> colorResolve;
 };
 
 } // namespace igl

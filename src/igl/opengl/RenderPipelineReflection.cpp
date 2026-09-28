@@ -7,7 +7,9 @@
 
 #include "RenderPipelineReflection.h"
 
+#include <algorithm>
 #include <cstring>
+#include <igl/Macros.h>
 #include <igl/opengl/GLIncludes.h>
 
 namespace {
@@ -83,6 +85,7 @@ igl::TextureType toIGLTextureType(GLenum type) {
 namespace igl::opengl {
 
 RenderPipelineReflection::RenderPipelineReflection(IContext& context, const ShaderStages& stages) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (context.deviceFeatures().hasFeature(DeviceFeatures::UniformBlocks)) {
     generateUniformBlocksDictionary(context, stages.getProgramID());
   }
@@ -95,6 +98,7 @@ RenderPipelineReflection::RenderPipelineReflection(IContext& context, const Shad
 RenderPipelineReflection::~RenderPipelineReflection() = default;
 
 void RenderPipelineReflection::generateUniformDictionary(IContext& context, GLuint pid) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_DEBUG_ASSERT(pid != 0);
   uniformDictionary_.clear();
 
@@ -158,6 +162,7 @@ void RenderPipelineReflection::generateUniformDictionary(IContext& context, GLui
 }
 
 void RenderPipelineReflection::generateUniformBlocksDictionary(IContext& context, GLuint pid) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_DEBUG_ASSERT(pid != 0);
   uniformBlocksDictionary_.clear();
 
@@ -246,6 +251,7 @@ void RenderPipelineReflection::generateUniformBlocksDictionary(IContext& context
 }
 
 void RenderPipelineReflection::generateAttributeDictionary(IContext& context, GLuint pid) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_DEBUG_ASSERT(pid != 0);
 
   attributeDictionary_.clear();
@@ -271,6 +277,7 @@ void RenderPipelineReflection::generateAttributeDictionary(IContext& context, GL
 
 void RenderPipelineReflection::generateShaderStorageBufferObjectDictionary(IContext& context,
                                                                            GLuint pid) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (context.deviceFeatures().hasFeature(DeviceFeatures::Compute)) {
     IGL_DEBUG_ASSERT(pid != 0);
     shaderStorageBufferObjectDictionary_.clear();
@@ -301,6 +308,7 @@ void RenderPipelineReflection::generateShaderStorageBufferObjectDictionary(ICont
 }
 
 int RenderPipelineReflection::getIndexByName(const NameHandle& name) const {
+  IGL_PROFILER_FUNCTION();
   // Search through list of uniforms
   const auto uniformEntry = uniformDictionary_.find(name);
 
@@ -330,17 +338,18 @@ int RenderPipelineReflection::getIndexByName(const NameHandle& name) const {
 }
 
 void RenderPipelineReflection::cacheDescriptors() {
+  IGL_PROFILER_FUNCTION();
   bufferArguments_.clear();
   samplerArguments_.clear();
   textureArguments_.clear();
 
   for (const auto& entry : uniformDictionary_) {
     const UniformDesc& glDesc = entry.second;
-    const igl::TextureType textureType = toIGLTextureType(glDesc.type);
+    const TextureType textureType = toIGLTextureType(glDesc.type);
 
     // buffers
     if (textureType == igl::TextureType::Invalid) {
-      const igl::UniformType uniformType = toIGLUniformType(glDesc.type);
+      const UniformType uniformType = toIGLUniformType(glDesc.type);
 
       BufferArgDesc bufferDesc;
       bufferDesc.name = entry.first;
@@ -353,7 +362,7 @@ void RenderPipelineReflection::cacheDescriptors() {
           .name = entry.first,
           .type = uniformType,
           .offset = 0,
-          .arrayLength = (size_t)glDesc.size,
+          .arrayLength = static_cast<size_t>(glDesc.size),
       };
       bufferDesc.members.push_back(std::move(iglMemberDesc));
 
@@ -391,7 +400,7 @@ void RenderPipelineReflection::cacheDescriptors() {
 
     for (const auto& uniformEntry : blockDesc.members) {
       const auto& uniformDesc = uniformEntry.second;
-      const igl::UniformType uniformType = toIGLUniformType(uniformDesc.type);
+      const UniformType uniformType = toIGLUniformType(uniformDesc.type);
 
       igl::BufferArgDesc::BufferMemberDesc iglMemberDesc{
           .name = uniformEntry.first,

@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <memory>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanHelpers.h>
 #include <igl/vulkan/VulkanImageView.h>
@@ -30,6 +29,7 @@ struct VulkanImageCreateInfo {
   uint32_t arrayLayers = 1;
   VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
   bool isImported = false;
+  bool isSrgbMutableFormat = false;
 };
 
 /**
@@ -53,7 +53,8 @@ class VulkanImage final {
               uint32_t mipLevels = 1,
               uint32_t arrayLayers = 1,
               VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT,
-              bool isImported = false);
+              bool isImported = false,
+              bool isSrgbMutableFormat = false);
 
   /**
    * @brief Constructs a `VulkanImage` object from a `VkImage` object. If a debug name is provided,
@@ -86,7 +87,8 @@ class VulkanImage final {
               VkMemoryPropertyFlags memFlags,
               VkImageCreateFlags createFlags,
               VkSampleCountFlagBits samples,
-              const char* debugName = nullptr);
+              const char* debugName = nullptr,
+              bool isSrgbMutableFormat = false);
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
   /**
@@ -214,24 +216,24 @@ class VulkanImage final {
   }
   VulkanImage& operator=(VulkanImage&& other) noexcept;
 
-  VkImage getVkImage() const {
+  [[nodiscard]] VkImage getVkImage() const {
     return vkImage_;
   }
 
   /**
    * @brief Returns true if the object is valid
    */
-  bool valid() const;
+  [[nodiscard]] bool valid() const;
 
-  VkImageUsageFlags getVkImageUsageFlags() const {
+  [[nodiscard]] VkImageUsageFlags getVkImageUsageFlags() const {
     return usageFlags_;
   }
 
-  bool isSampledImage() const {
+  [[nodiscard]] bool isSampledImage() const {
     return (usageFlags_ & VK_IMAGE_USAGE_SAMPLED_BIT) > 0;
   }
 
-  bool isStorageImage() const {
+  [[nodiscard]] bool isStorageImage() const {
     return (usageFlags_ & VK_IMAGE_USAGE_STORAGE_BIT) > 0;
   }
 
@@ -251,7 +253,8 @@ class VulkanImage final {
                                   const char* debugName = nullptr) const;
   VulkanImageView createImageView(VulkanImageViewCreateInfo createInfo,
                                   const char* debugName = nullptr) const;
-  void generateMipmap(VkCommandBuffer commandBuffer, const TextureRangeDesc& range) const;
+  [[nodiscard]] Result generateMipmap(VkCommandBuffer commandBuffer,
+                                      const TextureRangeDesc& range) const;
 
   /**
    * @brief Transitions the `VkImage`'s layout from the current layout (stored in the object) to the
@@ -270,13 +273,13 @@ class VulkanImage final {
                        const igl::Color& rgba,
                        const VkImageSubresourceRange* subresourceRange = nullptr) const;
 
-  VkImageAspectFlags getImageAspectFlags() const;
+  [[nodiscard]] VkImageAspectFlags getImageAspectFlags() const;
 
-  bool isMappedPtrAccessible() const {
+  [[nodiscard]] bool isMappedPtrAccessible() const {
     return (mappedPtr_ != nullptr) && ((tiling_ & VK_IMAGE_TILING_LINEAR) != 0);
   }
 
-  bool isCoherentMemory() const {
+  [[nodiscard]] bool isCoherentMemory() const {
     return isCoherentMemory_;
   }
 
@@ -307,12 +310,18 @@ class VulkanImage final {
   VkSampleCountFlagBits samples_ = VK_SAMPLE_COUNT_1_BIT;
   bool isDepthFormat_ = false;
   bool isStencilFormat_ = false;
+  // NOLINTNEXTLINE(readability-identifier-naming)
   bool isDepthOrStencilFormat_ = false;
   VkDeviceSize allocatedSize = 0;
   mutable VkImageLayout imageLayout_ = VK_IMAGE_LAYOUT_UNDEFINED; // current image layout
   bool isImported_ = false;
   bool isExported_ = false;
   bool isCubemap_ = false;
+  // True when the VkImage was created UNORM with VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT and a
+  // requested VkImageFormatListCreateInfo constraining views to exactly {UNORM, sRGB}, or when a
+  // wrapped VkImage was explicitly marked as having the same externally-enforced shape.
+  // NOLINTNEXTLINE(readability-identifier-naming)
+  bool isSrgbMutableFormat_ = false;
   void* exportedMemoryHandle_ = nullptr; // windows handle
   int exportedFd_ = -1; // linux fd
   uint32_t extendedFormat_ = 0; // defined by VkAndroidHardwareBufferFormatPropertiesANDROID
@@ -363,6 +372,20 @@ class VulkanImage final {
               VkExternalMemoryHandleTypeFlags compatibleHandleTypes,
               const char* debugName);
 #endif // IGL_PLATFORM_WINDOWS || IGL_PLATFORM_LINUX || IGL_PLATFORM_ANDROID
+
+  // Records the vkCmdBlitImage() mip-generation chain directly on this image. Correct only when the
+  // VkImage's format matches the texture's color space (native UNORM or native sRGB); see
+  // generateMipmapSrgb() for the UNORM-base sRGB case.
+  [[nodiscard]] Result generateMipmapBlit(VkCommandBuffer commandBuffer,
+                                          const TextureRangeDesc& range) const;
+
+  // Gamma-correct mipmap generation for sRGB textures whose backing VkImage is UNORM
+  // (isSrgbMutableFormat_). vkCmdBlitImage() filters in the image's creation-format space and
+  // cannot take a view, so it would average sRGB-encoded texels as if linear. Round-trips the
+  // source mip through a transient native-sRGB scratch image where the normal blit path downsamples
+  // correctly. Color and full layer/face range only.
+  [[nodiscard]] Result generateMipmapSrgb(VkCommandBuffer commandBuffer,
+                                          const TextureRangeDesc& range) const;
 
   // No-op in all builds except DEBUG
   void setName(std::string name) noexcept;

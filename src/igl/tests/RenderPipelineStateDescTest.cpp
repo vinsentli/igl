@@ -201,43 +201,37 @@ TEST(RenderPipelineDescTest, EqualityOpSameValues) {
 
 TEST(RenderPipelineDescTest, InequalityOpDifferentTopology) {
   RenderPipelineDesc a;
-  RenderPipelineDesc b;
-  b.topology = PrimitiveType::Line;
+  const RenderPipelineDesc b{.topology = PrimitiveType::Line};
   EXPECT_NE(a, b);
 }
 
 TEST(RenderPipelineDescTest, InequalityOpDifferentCullMode) {
   RenderPipelineDesc a;
-  RenderPipelineDesc b;
-  b.cullMode = CullMode::Back;
+  const RenderPipelineDesc b{.cullMode = CullMode::Back};
   EXPECT_NE(a, b);
 }
 
 TEST(RenderPipelineDescTest, InequalityOpDifferentFrontFaceWinding) {
   RenderPipelineDesc a;
-  RenderPipelineDesc b;
-  b.frontFaceWinding = WindingMode::Clockwise;
+  const RenderPipelineDesc b{.frontFaceWinding = WindingMode::Clockwise};
   EXPECT_NE(a, b);
 }
 
 TEST(RenderPipelineDescTest, InequalityOpDifferentPolygonFillMode) {
   RenderPipelineDesc a;
-  RenderPipelineDesc b;
-  b.polygonFillMode = PolygonFillMode::Line;
+  const RenderPipelineDesc b{.polygonFillMode = PolygonFillMode::Line};
   EXPECT_NE(a, b);
 }
 
 TEST(RenderPipelineDescTest, InequalityOpDifferentSampleCount) {
   RenderPipelineDesc a;
-  RenderPipelineDesc b;
-  b.sampleCount = 4u;
+  const RenderPipelineDesc b{.sampleCount = 4u};
   EXPECT_NE(a, b);
 }
 
 TEST(RenderPipelineDescTest, InequalityOpDifferentIsDynamicBufferMask) {
   RenderPipelineDesc a;
-  RenderPipelineDesc b;
-  b.isDynamicBufferMask = 1u;
+  const RenderPipelineDesc b{.isDynamicBufferMask = 1u};
   EXPECT_NE(a, b);
 }
 
@@ -250,8 +244,7 @@ TEST(RenderPipelineDescTest, InequalityOpDifferentTargetDesc) {
 
 TEST(RenderPipelineDescTest, InequalityOpDifferentAlphaToCoverageEnabled) {
   RenderPipelineDesc a;
-  RenderPipelineDesc b;
-  b.alphaToCoverageEnabled = true;
+  const RenderPipelineDesc b{.alphaToCoverageEnabled = true};
   EXPECT_NE(a, b);
 }
 
@@ -282,6 +275,32 @@ TEST(RenderPipelineDescTest, DebugNameIncludedInEquality) {
   a.debugName = IGL_NAMEHANDLE("pipeline_a");
   b.debugName = IGL_NAMEHANDLE("pipeline_b");
   EXPECT_NE(a, b);
+}
+
+TEST(RenderPipelineDescTest, AlphaToCoverageDefaultFalse) {
+  const RenderPipelineDesc desc;
+  EXPECT_FALSE(desc.alphaToCoverageEnabled);
+}
+
+TEST(RenderPipelineDescTest, InequalityOpDifferentAlphaToCoverage) {
+  RenderPipelineDesc a;
+  const RenderPipelineDesc b{.alphaToCoverageEnabled = true};
+  EXPECT_NE(a, b);
+}
+
+TEST(RenderPipelineDescTest, ImmutableSamplersDefaultNull) {
+  const RenderPipelineDesc desc;
+  for (const auto& sampler : desc.immutableSamplers) {
+    EXPECT_EQ(sampler, nullptr);
+  }
+}
+
+TEST(RenderPipelineDescTest, DesignatedInitializerTargetDesc) {
+  const RenderPipelineDesc::TargetDesc td{.depthAttachmentFormat = TextureFormat::Z_UNorm16,
+                                          .stencilAttachmentFormat = TextureFormat::S_UInt8};
+  EXPECT_EQ(td.depthAttachmentFormat, TextureFormat::Z_UNorm16);
+  EXPECT_EQ(td.stencilAttachmentFormat, TextureFormat::S_UInt8);
+  EXPECT_TRUE(td.colorAttachments.empty());
 }
 
 TEST(RenderPipelineDescTest, HashConsistency) {
@@ -332,8 +351,7 @@ TEST(ComputePipelineDescTest, InequalityOpDifferentShaderStages) {
 
 TEST(ComputePipelineDescTest, InequalityOpDifferentDebugName) {
   ComputePipelineDesc a;
-  ComputePipelineDesc b;
-  b.debugName = "compute_pass";
+  const ComputePipelineDesc b{.debugName = "compute_pass"};
   EXPECT_NE(a, b);
 }
 

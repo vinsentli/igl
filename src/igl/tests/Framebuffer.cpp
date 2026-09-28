@@ -37,7 +37,6 @@ class FramebufferTest : public ::testing::Test {
  private:
  public:
   FramebufferTest() = default;
-  ~FramebufferTest() override = default;
 
   //
   // SetUp()
@@ -87,12 +86,10 @@ class FramebufferTest : public ::testing::Test {
     ASSERT_TRUE(depthStencilTexture_ != nullptr);
 
     // Create framebuffer using the offscreen texture
-    FramebufferDesc framebufferDesc;
-
-    framebufferDesc.debugName = "test";
-    framebufferDesc.colorAttachments[0].texture = offscreenTexture_;
-    framebufferDesc.depthAttachment.texture = depthStencilTexture_;
-    framebufferDesc.stencilAttachment.texture = depthStencilTexture_;
+    const FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = offscreenTexture_}},
+                                          .depthAttachment = {.texture = depthStencilTexture_},
+                                          .stencilAttachment = {.texture = depthStencilTexture_},
+                                          .debugName = "test"};
 
     framebuffer_ = iglDev_->createFramebuffer(framebufferDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -118,24 +115,22 @@ class FramebufferTest : public ::testing::Test {
     shaderStages_ = std::move(stages);
 
     // Initialize input to vertex shader
-    VertexInputStateDesc inputDesc;
-
-    inputDesc.attributes[0].format = VertexAttributeFormat::Float4;
-    inputDesc.attributes[0].offset = 0;
-    inputDesc.attributes[0].bufferIndex = data::shader::kSimplePosIndex;
-    inputDesc.attributes[0].name = data::shader::kSimplePos;
-    inputDesc.attributes[0].location = 0;
-    inputDesc.inputBindings[0].stride = sizeof(float) * 4;
-
-    inputDesc.attributes[1].format = VertexAttributeFormat::Float2;
-    inputDesc.attributes[1].offset = 0;
-    inputDesc.attributes[1].bufferIndex = data::shader::kSimpleUvIndex;
-    inputDesc.attributes[1].name = data::shader::kSimpleUv;
-    inputDesc.attributes[1].location = 1;
-    inputDesc.inputBindings[1].stride = sizeof(float) * 2;
-
-    // numAttributes has to equal to bindings when using more than 1 buffer
-    inputDesc.numAttributes = inputDesc.numInputBindings = 2;
+    // numAttributes has to equal numInputBindings when using more than one buffer
+    const VertexInputStateDesc inputDesc{
+        .numAttributes = 2,
+        .attributes = {{.bufferIndex = data::shader::kSimplePosIndex,
+                        .format = VertexAttributeFormat::Float4,
+                        .offset = 0,
+                        .name = std::string(data::shader::kSimplePos),
+                        .location = 0},
+                       {.bufferIndex = data::shader::kSimpleUvIndex,
+                        .format = VertexAttributeFormat::Float2,
+                        .offset = 0,
+                        .name = std::string(data::shader::kSimpleUv),
+                        .location = 1}},
+        .numInputBindings = 2,
+        .inputBindings = {{.stride = sizeof(float) * 4}, {.stride = sizeof(float) * 2}},
+    };
 
     vertexInputState_ = iglDev_->createVertexInputState(inputDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -177,14 +172,14 @@ class FramebufferTest : public ::testing::Test {
 
     // Initialize Render Pipeline Descriptor, but leave the creation
     // to the individual tests in case further customization is required
-    renderPipelineDesc_.vertexInputState = vertexInputState_;
-    renderPipelineDesc_.shaderStages = shaderStages_;
-    renderPipelineDesc_.targetDesc.colorAttachments.resize(1);
-    renderPipelineDesc_.targetDesc.colorAttachments[0].textureFormat =
-        offscreenTexture_->getFormat();
-    renderPipelineDesc_.targetDesc.depthAttachmentFormat = depthStencilTexture_->getFormat();
-    renderPipelineDesc_.targetDesc.stencilAttachmentFormat = depthStencilTexture_->getFormat();
-    renderPipelineDesc_.cullMode = igl::CullMode::Disabled;
+    renderPipelineDesc_ = {
+        .vertexInputState = vertexInputState_,
+        .shaderStages = shaderStages_,
+        .targetDesc = {.colorAttachments = {{.textureFormat = offscreenTexture_->getFormat()}},
+                       .depthAttachmentFormat = depthStencilTexture_->getFormat(),
+                       .stencilAttachmentFormat = depthStencilTexture_->getFormat()},
+        .cullMode = igl::CullMode::Disabled,
+    };
 
     //
   }
@@ -227,8 +222,7 @@ TEST_F(FramebufferTest, Clear) {
   std::shared_ptr<IRenderPipelineState> pipelineState;
 
   std::shared_ptr<IDepthStencilState> depthStencilState;
-  DepthStencilStateDesc desc;
-  desc.isDepthWriteEnabled = true;
+  const DepthStencilStateDesc desc{.isDepthWriteEnabled = true};
 
   const auto rangeDesc = TextureRangeDesc::new2D(0, 0, kOffscreenRtWidth, kOffscreenRtHeight);
 
@@ -265,6 +259,10 @@ TEST_F(FramebufferTest, Clear) {
   //----------------------
   // Read back framebuffer
   //----------------------
+  const auto dimensions = framebuffer_->getColorAttachment(0)->getDimensions();
+  ASSERT_EQ(dimensions.width, static_cast<uint32_t>(kOffscreenRtWidth));
+  ASSERT_EQ(dimensions.height, static_cast<uint32_t>(kOffscreenRtHeight));
+
   auto pixels = std::vector<uint32_t>(kOffscreenRtWidth * kOffscreenRtWidth);
   auto pixelsDepth = std::vector<float>(kOffscreenRtWidth * kOffscreenRtWidth);
   auto pixelsStencil = std::vector<uint8_t>(kOffscreenRtWidth * kOffscreenRtWidth);
@@ -415,9 +413,7 @@ TEST_F(FramebufferTest, blitFramebufferColor) {
     //-------------------------------------------------------------
     // Create second IFramebuffer framebuffer2 by offscreenTexture2
     //-------------------------------------------------------------
-    FramebufferDesc framebufferDesc;
-
-    framebufferDesc.colorAttachments[0].texture = offscreenTexture2;
+    const FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = offscreenTexture2}}};
     const std::shared_ptr<IFramebuffer> framebuffer2 =
         iglDev_->createFramebuffer(framebufferDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -444,6 +440,14 @@ TEST_F(FramebufferTest, blitFramebufferColor) {
     //----------------------
     // Read back framebuffer
     //----------------------
+    const auto dimensions = framebuffer_->getColorAttachment(0)->getDimensions();
+    ASSERT_EQ(dimensions.width, static_cast<uint32_t>(kOffscreenRtWidth));
+    ASSERT_EQ(dimensions.height, static_cast<uint32_t>(kOffscreenRtHeight));
+
+    const auto dimensions2 = framebuffer2->getColorAttachment(0)->getDimensions();
+    ASSERT_EQ(dimensions2.width, static_cast<uint32_t>(kOffscreenRtWidth));
+    ASSERT_EQ(dimensions2.height, static_cast<uint32_t>(kOffscreenRtHeight));
+
     auto pixels = std::vector<uint32_t>(kOffscreenRtWidth * kOffscreenRtWidth);
 
     framebuffer_->copyBytesColorAttachment(*cmdQueue_, 0, pixels.data(), rangeDesc);
@@ -671,8 +675,7 @@ TEST_F(FramebufferTest, GetColorAttachmentTest) {
   ASSERT_TRUE(outputTexture != nullptr);
 
   // Create framebuffer using the texture
-  FramebufferDesc framebufferDesc;
-  framebufferDesc.colorAttachments[0].texture = outputTexture;
+  const FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = outputTexture}}};
   framebuffer_ = iglDev_->createFramebuffer(framebufferDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
   ASSERT_TRUE(framebuffer_ != nullptr);
@@ -696,6 +699,10 @@ TEST_F(FramebufferTest, GetColorAttachmentTest) {
   //----------------------
   // Read back framebuffer
   //----------------------
+  const auto dimensions = framebuffer_->getColorAttachment(0)->getDimensions();
+  ASSERT_EQ(dimensions.width, static_cast<uint32_t>(textureWidth));
+  ASSERT_EQ(dimensions.height, static_cast<uint32_t>(textureHeight));
+
   const int outputImageWidth = textureWidth + 2;
   const int outputImageHeight = textureHeight;
   const int outputElementPerRow = outputImageWidth * channelCount;

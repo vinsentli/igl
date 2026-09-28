@@ -15,9 +15,7 @@
 #include <cstdio>
 
 #if IGL_PLATFORM_ANDROID
-#include <android/asset_manager.h>
-// Ignore unused-include-check
-// @lint-ignore CLANGTIDY
+// NOLINTNEXTLINE(facebook-unused-include-check)
 #include <android_native_app_glue.h>
 #endif
 
@@ -101,10 +99,10 @@ XrSession XrApp::session() const {
 
 bool XrApp::checkExtensions() {
   PFN_xrEnumerateInstanceExtensionProperties xrEnumerateInstanceExtensionProperties = nullptr;
-  const XrResult result =
-      xrGetInstanceProcAddr(XR_NULL_HANDLE,
-                            "xrEnumerateInstanceExtensionProperties",
-                            (PFN_xrVoidFunction*)&xrEnumerateInstanceExtensionProperties);
+  const XrResult result = xrGetInstanceProcAddr(
+      XR_NULL_HANDLE,
+      "xrEnumerateInstanceExtensionProperties",
+      reinterpret_cast<PFN_xrVoidFunction*>(&xrEnumerateInstanceExtensionProperties));
   XR_CHECK(result);
   if (result != XR_SUCCESS) {
     IGL_LOG_ERROR("Failed to get xrEnumerateInstanceExtensionProperties function pointer.\n");
@@ -201,9 +199,9 @@ bool XrApp::checkExtensions() {
 
 bool XrApp::createInstance() {
   XrApplicationInfo appInfo = {};
-  snprintf(appInfo.applicationName, sizeof(appInfo.applicationName), "%s", kAppName);
+  std::snprintf(appInfo.applicationName, sizeof(appInfo.applicationName), "%s", kAppName);
   appInfo.applicationVersion = 0;
-  snprintf(appInfo.engineName, sizeof(appInfo.engineName), "%s", kEngineName);
+  std::snprintf(appInfo.engineName, sizeof(appInfo.engineName), "%s", kEngineName);
   appInfo.engineVersion = 0;
   appInfo.apiVersion = XR_MAKE_VERSION(1, 0, 34);
 
@@ -383,8 +381,9 @@ bool XrApp::initialize(const struct android_app* app, const InitParams& params) 
 
 #if IGL_PLATFORM_ANDROID
   PFN_xrInitializeLoaderKHR xrInitializeLoaderKHR = nullptr;
-  XR_CHECK(xrGetInstanceProcAddr(
-      XR_NULL_HANDLE, "xrInitializeLoaderKHR", (PFN_xrVoidFunction*)&xrInitializeLoaderKHR));
+  XR_CHECK(xrGetInstanceProcAddr(XR_NULL_HANDLE,
+                                 "xrInitializeLoaderKHR",
+                                 reinterpret_cast<PFN_xrVoidFunction*>(&xrInitializeLoaderKHR)));
   if (xrInitializeLoaderKHR) {
     XrLoaderInitInfoAndroidKHR loaderInitializeInfoAndroid = {
         XR_TYPE_LOADER_INIT_INFO_ANDROID_KHR,
@@ -393,7 +392,8 @@ bool XrApp::initialize(const struct android_app* app, const InitParams& params) 
         app->activity->clazz,
     };
 
-    XR_CHECK(xrInitializeLoaderKHR((XrLoaderInitInfoBaseHeaderKHR*)&loaderInitializeInfoAndroid));
+    XR_CHECK(xrInitializeLoaderKHR(
+        reinterpret_cast<XrLoaderInitInfoBaseHeaderKHR*>(&loaderInitializeInfoAndroid)));
   }
 
   instanceCreateInfoAndroid_.applicationVM = app->activity->vm;
@@ -617,11 +617,11 @@ void XrApp::createSpaces() {
 void XrApp::createActions() {
   // Create action set
   XrActionSetCreateInfo actionSetInfo = {XR_TYPE_ACTION_SET_CREATE_INFO};
-  snprintf(actionSetInfo.actionSetName, sizeof(actionSetInfo.actionSetName), "%s", "gameplay");
-  snprintf(actionSetInfo.localizedActionSetName,
-           sizeof(actionSetInfo.localizedActionSetName),
-           "%s",
-           "Gameplay");
+  std::snprintf(actionSetInfo.actionSetName, sizeof(actionSetInfo.actionSetName), "%s", "gameplay");
+  std::snprintf(actionSetInfo.localizedActionSetName,
+                sizeof(actionSetInfo.localizedActionSetName),
+                "%s",
+                "Gameplay");
   XrResult res = xrCreateActionSet(instance_, &actionSetInfo, &actionSet_);
   if (res != XR_SUCCESS) {
     IGL_LOG_ERROR("Failed to create action set: %d\n", res);
@@ -692,11 +692,11 @@ void XrApp::createActions() {
   for (const auto& def : buttonDefs) {
     XrActionCreateInfo actionInfo = {XR_TYPE_ACTION_CREATE_INFO};
     actionInfo.actionType = def.type;
-    snprintf(actionInfo.actionName, sizeof(actionInfo.actionName), "%s", def.name);
-    snprintf(actionInfo.localizedActionName,
-             sizeof(actionInfo.localizedActionName),
-             "%s",
-             def.localizedName);
+    std::snprintf(actionInfo.actionName, sizeof(actionInfo.actionName), "%s", def.name);
+    std::snprintf(actionInfo.localizedActionName,
+                  sizeof(actionInfo.localizedActionName),
+                  "%s",
+                  def.localizedName);
     actionInfo.countSubactionPaths = def.subactionCount;
     actionInfo.subactionPaths = def.subactionPaths;
     res = xrCreateAction(actionSet_, &actionInfo, &buttonActions_[static_cast<int>(def.id)]);
@@ -710,11 +710,11 @@ void XrApp::createActions() {
   {
     XrActionCreateInfo actionInfo = {XR_TYPE_ACTION_CREATE_INFO};
     actionInfo.actionType = XR_ACTION_TYPE_VECTOR2F_INPUT;
-    snprintf(actionInfo.actionName, sizeof(actionInfo.actionName), "%s", "right_thumbstick");
-    snprintf(actionInfo.localizedActionName,
-             sizeof(actionInfo.localizedActionName),
-             "%s",
-             "Right Thumbstick");
+    std::snprintf(actionInfo.actionName, sizeof(actionInfo.actionName), "%s", "right_thumbstick");
+    std::snprintf(actionInfo.localizedActionName,
+                  sizeof(actionInfo.localizedActionName),
+                  "%s",
+                  "Right Thumbstick");
     actionInfo.countSubactionPaths = 1;
     actionInfo.subactionPaths = &rightHandPath;
     res = xrCreateAction(actionSet_, &actionInfo, &rightThumbstickAction_);
@@ -789,7 +789,7 @@ void XrApp::handleXrEvents() {
 
   // Poll for events
   for (;;) {
-    auto* baseEventHeader = (XrEventDataBaseHeader*)(&eventDataBuffer);
+    auto* baseEventHeader = reinterpret_cast<XrEventDataBaseHeader*>(&eventDataBuffer);
     baseEventHeader->type = XR_TYPE_EVENT_DATA_BUFFER;
     baseEventHeader->next = nullptr;
     const XrResult res = xrPollEvent(instance_, &eventDataBuffer);
@@ -810,7 +810,7 @@ void XrApp::handleXrEvents() {
       break;
     case XR_TYPE_EVENT_DATA_PERF_SETTINGS_EXT: {
       const XrEventDataPerfSettingsEXT* perfSettingsEvent =
-          (XrEventDataPerfSettingsEXT*)(baseEventHeader);
+          reinterpret_cast<XrEventDataPerfSettingsEXT*>(baseEventHeader);
       (void)perfSettingsEvent; // suppress unused warning
       IGL_LOG_INFO(
           "xrPollEvent: received XR_TYPE_EVENT_DATA_PERF_SETTINGS_EXT event: type %d subdomain %d "
@@ -826,12 +826,12 @@ void XrApp::handleXrEvents() {
       break;
     case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED: {
       const XrEventDataSessionStateChanged* sessionStateChangedEvent =
-          (XrEventDataSessionStateChanged*)(baseEventHeader);
+          reinterpret_cast<XrEventDataSessionStateChanged*>(baseEventHeader);
       IGL_LOG_INFO(
           "xrPollEvent: received XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED: %d for session %p at "
           "time %lld\n",
           sessionStateChangedEvent->state,
-          (void*)sessionStateChangedEvent->session,
+          reinterpret_cast<const void*>(sessionStateChangedEvent->session),
           sessionStateChangedEvent->time);
 
       switch (sessionStateChangedEvent->state) {
@@ -864,7 +864,7 @@ void XrApp::handleSessionStateChanges(XrSessionState state) {
 #if !defined(IGL_CMAKE_BUILD)
     assert(resumed_);
 #endif // IGL_CMAKE_BUILD
-    assert(sessionActive_ == false);
+    assert(!sessionActive_);
 
     const XrSessionBeginInfo sessionBeginInfo{
         XR_TYPE_SESSION_BEGIN_INFO,

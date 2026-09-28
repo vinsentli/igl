@@ -9,6 +9,7 @@
 
 #include <array>
 #include <utility>
+#include <igl/Macros.h>
 
 namespace igl::opengl {
 
@@ -38,6 +39,7 @@ void swapTextureChannelsForFormat(IContext& context, GLuint target, TextureForma
 } // namespace
 
 TextureBuffer::~TextureBuffer() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
   const GLuint textureId = getId();
   if (textureId != 0) {
     if (textureHandle_ != 0) {
@@ -48,6 +50,7 @@ TextureBuffer::~TextureBuffer() {
 }
 
 uint64_t TextureBuffer::getTextureId() const {
+  IGL_PROFILER_FUNCTION();
   if (textureHandle_ == 0) {
     textureHandle_ = getContext().getTextureHandle(getId());
     IGL_DEBUG_ASSERT(textureHandle_);
@@ -58,6 +61,7 @@ uint64_t TextureBuffer::getTextureId() const {
 
 // create a 2D texture given the specified dimensions and format
 Result TextureBuffer::create(const TextureDesc& desc, bool hasStorageAlready) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   Result result = Super::create(desc, hasStorageAlready);
   if (result.isOk()) {
     const auto isSampledOrStorage = (desc.usage & (TextureDesc::TextureUsageBits::Sampled |
@@ -72,6 +76,7 @@ Result TextureBuffer::create(const TextureDesc& desc, bool hasStorageAlready) {
 }
 
 void TextureBuffer::bindImage(size_t unit) {
+  IGL_PROFILER_FUNCTION();
   // The entire codebase used only combined kShaderRead|kShaderWrite access (except tests)
   // @fb-only
   // Here we used to have this condition:
@@ -79,7 +84,7 @@ void TextureBuffer::bindImage(size_t unit) {
   // So it is safe to replace it with GL_READ_WRITE
   IGL_DEBUG_ASSERT(getUsage() & TextureDesc::TextureUsageBits::Storage,
                    "Should be a storage image");
-  getContext().bindImageTexture((GLuint)unit,
+  getContext().bindImageTexture(static_cast<GLuint>(unit),
                                 getId(),
                                 0,
                                 getTarget() == GL_TEXTURE_2D ? GL_TRUE : GL_FALSE,
@@ -90,6 +95,7 @@ void TextureBuffer::bindImage(size_t unit) {
 
 // create a texture for shader read/write usages
 Result TextureBuffer::createTexture(const TextureDesc& desc) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   const auto target = toGLTarget(desc.type);
   if (target == 0) {
     return Result(Result::Code::Unsupported, "Unsupported texture target");
@@ -136,6 +142,7 @@ Result TextureBuffer::createTexture(const TextureDesc& desc) {
 }
 
 Result TextureBuffer::initialize(const std::string& debugName) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   const auto target = getTarget();
   if (target == 0) {
     return Result{Result::Code::InvalidOperation, "Unknown texture type"};
@@ -150,7 +157,8 @@ Result TextureBuffer::initialize(const std::string& debugName) const {
   }
   if (!debugName.empty() &&
       getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DebugLabel)) {
-    getContext().objectLabel(GL_TEXTURE, getId(), debugName.size(), debugName.c_str());
+    getContext().objectLabel(
+        GL_TEXTURE, getId(), static_cast<GLsizei>(debugName.size()), debugName.c_str());
   }
 
   Result result;
@@ -167,38 +175,46 @@ Result TextureBuffer::initialize(const std::string& debugName) const {
 }
 
 Result TextureBuffer::initializeWithUpload() const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   const auto target = getTarget();
   const auto range = getFullMipRange();
   return uploadInternal(target, range, nullptr);
 }
 
 Result TextureBuffer::initializeWithTexStorage() const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   const auto range = getFullMipRange();
   const auto target = getTarget();
   switch (getType()) {
   case TextureType::TwoD:
-    getContext().texStorage2D(
-        target, range.numMipLevels, glInternalFormat_, (GLsizei)range.width, (GLsizei)range.height);
+    getContext().texStorage2D(target,
+                              range.numMipLevels,
+                              glInternalFormat_,
+                              static_cast<GLsizei>(range.width),
+                              static_cast<GLsizei>(range.height));
     break;
   case TextureType::TwoDArray:
     getContext().texStorage3D(target,
                               range.numMipLevels,
                               glInternalFormat_,
-                              (GLsizei)range.width,
-                              (GLsizei)range.height,
-                              (GLsizei)range.numLayers);
+                              static_cast<GLsizei>(range.width),
+                              static_cast<GLsizei>(range.height),
+                              static_cast<GLsizei>(range.numLayers));
     break;
   case TextureType::ThreeD:
     getContext().texStorage3D(target,
                               range.numMipLevels,
                               glInternalFormat_,
-                              (GLsizei)range.width,
-                              (GLsizei)range.height,
-                              (GLsizei)range.depth);
+                              static_cast<GLsizei>(range.width),
+                              static_cast<GLsizei>(range.height),
+                              static_cast<GLsizei>(range.depth));
     break;
   case TextureType::Cube:
-    getContext().texStorage2D(
-        target, range.numMipLevels, glInternalFormat_, (GLsizei)range.width, (GLsizei)range.height);
+    getContext().texStorage2D(target,
+                              range.numMipLevels,
+                              glInternalFormat_,
+                              static_cast<GLsizei>(range.width),
+                              static_cast<GLsizei>(range.height));
     break;
   case TextureType::ExternalImage:
   case TextureType::Invalid:
@@ -213,24 +229,25 @@ Result TextureBuffer::upload2D(GLenum target,
                                const TextureRangeDesc& range,
                                bool texImage,
                                const void* IGL_NULLABLE data) const {
+  IGL_PROFILER_FUNCTION();
   if (data == nullptr || !getProperties().isCompressed()) {
     if (texImage) {
       getContext().texImage2D(target,
-                              (GLsizei)range.mipLevel,
+                              static_cast<GLsizei>(range.mipLevel),
                               formatDescGL_.internalFormat,
-                              (GLsizei)range.width,
-                              (GLsizei)range.height,
+                              static_cast<GLsizei>(range.width),
+                              static_cast<GLsizei>(range.height),
                               0, // border
                               formatDescGL_.format,
                               formatDescGL_.type,
                               data);
     } else {
       getContext().texSubImage2D(target,
-                                 (GLsizei)range.mipLevel,
-                                 (GLsizei)range.x,
-                                 (GLsizei)range.y,
-                                 (GLsizei)range.width,
-                                 (GLsizei)range.height,
+                                 static_cast<GLsizei>(range.mipLevel),
+                                 static_cast<GLsizei>(range.x),
+                                 static_cast<GLsizei>(range.y),
+                                 static_cast<GLsizei>(range.width),
+                                 static_cast<GLsizei>(range.height),
                                  formatDescGL_.format,
                                  formatDescGL_.type,
                                  data);
@@ -240,26 +257,28 @@ Result TextureBuffer::upload2D(GLenum target,
     IGL_DEBUG_ASSERT(numCompressedBytes > 0);
     if (texImage) {
       getContext().compressedTexImage2D(target,
-                                        (GLint)range.mipLevel,
+                                        static_cast<GLint>(range.mipLevel),
                                         formatDescGL_.internalFormat,
-                                        (GLsizei)range.width,
-                                        (GLsizei)range.height,
+                                        static_cast<GLsizei>(range.width),
+                                        static_cast<GLsizei>(range.height),
                                         0, // border
-                                        (GLsizei)numCompressedBytes, // TODO: does not work
-                                                                     // for compressed
-                                                                     // mipmaps
+                                        static_cast<GLsizei>(numCompressedBytes), // TODO: does not
+                                                                                  // work for
+                                                                                  // compressed
+                                                                                  // mipmaps
                                         data);
     } else {
       getContext().compressedTexSubImage2D(getTarget(),
-                                           (GLint)range.mipLevel,
-                                           (GLint)range.x,
-                                           (GLint)range.y,
-                                           (GLsizei)range.width,
-                                           (GLsizei)range.height,
+                                           static_cast<GLint>(range.mipLevel),
+                                           static_cast<GLint>(range.x),
+                                           static_cast<GLint>(range.y),
+                                           static_cast<GLsizei>(range.width),
+                                           static_cast<GLsizei>(range.height),
                                            formatDescGL_.internalFormat,
-                                           (GLsizei)numCompressedBytes, // TODO: does not work
-                                                                        // for compressed
-                                                                        // mipmaps
+                                           static_cast<GLsizei>(numCompressedBytes), // TODO: does
+                                                                                     // not work for
+                                                                                     // compressed
+                                                                                     // mipmaps
                                            data);
     }
   }
@@ -269,27 +288,28 @@ Result TextureBuffer::upload2DArray(GLenum target,
                                     const TextureRangeDesc& range,
                                     bool texImage,
                                     const void* IGL_NULLABLE data) const {
+  IGL_PROFILER_FUNCTION();
   if (data == nullptr || !getProperties().isCompressed()) {
     if (texImage) {
       getContext().texImage3D(target,
-                              (GLint)range.mipLevel,
+                              static_cast<GLint>(range.mipLevel),
                               formatDescGL_.internalFormat,
-                              (GLsizei)range.width,
-                              (GLsizei)range.height,
-                              (GLsizei)range.numLayers,
+                              static_cast<GLsizei>(range.width),
+                              static_cast<GLsizei>(range.height),
+                              static_cast<GLsizei>(range.numLayers),
                               0, // border
                               formatDescGL_.format,
                               formatDescGL_.type,
                               data);
     } else {
       getContext().texSubImage3D(target,
-                                 (GLsizei)range.mipLevel,
-                                 (GLsizei)range.x,
-                                 (GLsizei)range.y,
-                                 (GLsizei)range.layer,
-                                 (GLsizei)range.width,
-                                 (GLsizei)range.height,
-                                 (GLsizei)range.numLayers,
+                                 static_cast<GLsizei>(range.mipLevel),
+                                 static_cast<GLsizei>(range.x),
+                                 static_cast<GLsizei>(range.y),
+                                 static_cast<GLsizei>(range.layer),
+                                 static_cast<GLsizei>(range.width),
+                                 static_cast<GLsizei>(range.height),
+                                 static_cast<GLsizei>(range.numLayers),
                                  formatDescGL_.format,
                                  formatDescGL_.type,
                                  data);
@@ -299,27 +319,28 @@ Result TextureBuffer::upload2DArray(GLenum target,
     IGL_DEBUG_ASSERT(numCompressedBytes > 0);
     if (texImage) {
       getContext().compressedTexImage3D(target,
-                                        (GLint)range.mipLevel,
+                                        static_cast<GLint>(range.mipLevel),
                                         formatDescGL_.internalFormat,
-                                        (GLsizei)range.width,
-                                        (GLsizei)range.height,
-                                        (GLsizei)range.numLayers,
+                                        static_cast<GLsizei>(range.width),
+                                        static_cast<GLsizei>(range.height),
+                                        static_cast<GLsizei>(range.numLayers),
                                         0, // border
-                                        (GLsizei)numCompressedBytes, // TODO: does not work
-                                                                     // for compressed
-                                                                     // mipmaps
+                                        static_cast<GLsizei>(numCompressedBytes), // TODO: does not
+                                                                                  // work for
+                                                                                  // compressed
+                                                                                  // mipmaps
                                         data);
     } else {
       getContext().compressedTexSubImage3D(getTarget(),
-                                           (GLint)range.mipLevel,
-                                           (GLint)range.x,
-                                           (GLint)range.y,
-                                           (GLint)range.layer,
-                                           (GLsizei)range.width,
-                                           (GLsizei)range.height,
-                                           (GLsizei)range.numLayers,
+                                           static_cast<GLint>(range.mipLevel),
+                                           static_cast<GLint>(range.x),
+                                           static_cast<GLint>(range.y),
+                                           static_cast<GLint>(range.layer),
+                                           static_cast<GLsizei>(range.width),
+                                           static_cast<GLsizei>(range.height),
+                                           static_cast<GLsizei>(range.numLayers),
                                            formatDescGL_.internalFormat,
-                                           (GLsizei)numCompressedBytes,
+                                           static_cast<GLsizei>(numCompressedBytes),
                                            data);
     }
   }
@@ -330,27 +351,28 @@ Result TextureBuffer::upload3D(GLenum target,
                                const TextureRangeDesc& range,
                                bool texImage,
                                const void* IGL_NULLABLE data) const {
+  IGL_PROFILER_FUNCTION();
   if (data == nullptr || !getProperties().isCompressed()) {
     if (texImage) {
       getContext().texImage3D(target,
-                              (GLint)range.mipLevel,
+                              static_cast<GLint>(range.mipLevel),
                               formatDescGL_.internalFormat,
-                              (GLsizei)range.width,
-                              (GLsizei)range.height,
-                              (GLsizei)range.depth,
+                              static_cast<GLsizei>(range.width),
+                              static_cast<GLsizei>(range.height),
+                              static_cast<GLsizei>(range.depth),
                               0, // border
                               formatDescGL_.format,
                               formatDescGL_.type,
                               data);
     } else {
       getContext().texSubImage3D(target,
-                                 (GLsizei)range.mipLevel,
-                                 (GLsizei)range.x,
-                                 (GLsizei)range.y,
-                                 (GLsizei)range.z,
-                                 (GLsizei)range.width,
-                                 (GLsizei)range.height,
-                                 (GLsizei)range.depth,
+                                 static_cast<GLsizei>(range.mipLevel),
+                                 static_cast<GLsizei>(range.x),
+                                 static_cast<GLsizei>(range.y),
+                                 static_cast<GLsizei>(range.z),
+                                 static_cast<GLsizei>(range.width),
+                                 static_cast<GLsizei>(range.height),
+                                 static_cast<GLsizei>(range.depth),
                                  formatDescGL_.format,
                                  formatDescGL_.type,
                                  data);
@@ -360,27 +382,28 @@ Result TextureBuffer::upload3D(GLenum target,
     IGL_DEBUG_ASSERT(numCompressedBytes > 0);
     if (texImage) {
       getContext().compressedTexImage3D(target,
-                                        (GLint)range.mipLevel,
+                                        static_cast<GLint>(range.mipLevel),
                                         formatDescGL_.internalFormat,
-                                        (GLsizei)range.width,
-                                        (GLsizei)range.height,
-                                        (GLsizei)range.depth,
+                                        static_cast<GLsizei>(range.width),
+                                        static_cast<GLsizei>(range.height),
+                                        static_cast<GLsizei>(range.depth),
                                         0, // border
-                                        (GLsizei)numCompressedBytes, // TODO: does not work
-                                                                     // for compressed
-                                                                     // mipmaps
+                                        static_cast<GLsizei>(numCompressedBytes), // TODO: does not
+                                                                                  // work for
+                                                                                  // compressed
+                                                                                  // mipmaps
                                         data);
     } else {
       getContext().compressedTexSubImage3D(getTarget(),
-                                           (GLint)range.mipLevel,
-                                           (GLint)range.x,
-                                           (GLint)range.y,
-                                           (GLint)range.z,
-                                           (GLsizei)range.width,
-                                           (GLsizei)range.height,
-                                           (GLsizei)range.depth,
+                                           static_cast<GLint>(range.mipLevel),
+                                           static_cast<GLint>(range.x),
+                                           static_cast<GLint>(range.y),
+                                           static_cast<GLint>(range.z),
+                                           static_cast<GLsizei>(range.width),
+                                           static_cast<GLsizei>(range.height),
+                                           static_cast<GLsizei>(range.depth),
                                            formatDescGL_.internalFormat,
-                                           (GLsizei)numCompressedBytes,
+                                           static_cast<GLsizei>(numCompressedBytes),
                                            data);
     }
   }
@@ -388,6 +411,7 @@ Result TextureBuffer::upload3D(GLenum target,
 }
 
 bool TextureBuffer::needsRepacking(const TextureRangeDesc& range, size_t bytesPerRow) const {
+  IGL_PROFILER_FUNCTION();
   if (bytesPerRow == 0) {
     return false;
   }
@@ -425,6 +449,7 @@ Result TextureBuffer::uploadInternal(TextureType /*type*/,
                                      const void* IGL_NULLABLE data,
                                      size_t bytesPerRow,
                                      const uint32_t* IGL_NULLABLE /*mipLevelBytes*/) const {
+  IGL_PROFILER_FUNCTION();
   if (data == nullptr) {
     return Result{};
   }
@@ -444,6 +469,7 @@ Result TextureBuffer::uploadInternal(GLenum target,
                                      const TextureRangeDesc& range,
                                      const void* IGL_NULLABLE data,
                                      size_t bytesPerRow) const {
+  IGL_PROFILER_FUNCTION();
   // Use TexImage when range covers full texture AND texture was not initialized with TexStorage
   const auto texImage = isValidForTexImage(range) && !supportsTexStorage();
 
@@ -467,8 +493,9 @@ Result TextureBuffer::uploadInternal(GLenum target,
     if (unpackRowLengthSupported) {
       getContext().pixelStorei(GL_UNPACK_ROW_LENGTH, 0);
     }
-    getContext().pixelStorei(GL_UNPACK_ALIGNMENT,
-                             this->getAlignment(bytesPerRow, range.mipLevel, range.width));
+    getContext().pixelStorei(
+        GL_UNPACK_ALIGNMENT,
+        this->getAlignment(static_cast<uint32_t>(bytesPerRow), range.mipLevel, range.width));
   }
     
  auto stateReset = [&](){

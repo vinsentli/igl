@@ -9,6 +9,7 @@
 
 #include <Foundation/Foundation.h>
 #include <igl/Common.h>
+#include <igl/Macros.h>
 #include <igl/metal/Texture.h>
 
 #if !defined(IGL_CMAKE_BUILD)
@@ -58,6 +59,7 @@ igl::UniformType metalDataTypeToIGLUniformType(MTLDataType type) {
 
 namespace igl::metal {
 RenderPipelineReflection::RenderPipelineReflection(MTLRenderPipelineReflection* refl) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (refl != nullptr) {
     // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
     for (MTLArgument* arg = nullptr in refl.vertexArguments) {
@@ -77,11 +79,17 @@ RenderPipelineReflection::RenderPipelineReflection(MTLRenderPipelineReflection* 
 RenderPipelineReflection::~RenderPipelineReflection() = default;
 
 bool RenderPipelineReflection::createArgDesc(MTLArgument* arg, ShaderStage sh) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   size_t loc = 0;
+
+  // MTLArgument.name is declared nullable; guard once so nil never reaches the
+  // std::string construction below (std::string(nullptr) is undefined behavior).
+  const char* argNameCStr = arg.name.UTF8String;
+  const std::string argName = argNameCStr ? argNameCStr : "";
 
   if (arg.type == MTLArgumentTypeBuffer) {
     BufferArgDesc bufferDesc;
-    bufferDesc.name = igl::genNameHandle(arg.name.UTF8String);
+    bufferDesc.name = igl::genNameHandle(argName);
     bufferDesc.bufferAlignment = arg.bufferAlignment;
     bufferDesc.bufferDataSize = arg.bufferDataSize;
     bufferDesc.bufferIndex = static_cast<int>(arg.index);
@@ -93,20 +101,22 @@ bool RenderPipelineReflection::createArgDesc(MTLArgument* arg, ShaderStage sh) {
         if (elementType == MTLDataTypeArray) {
           elementType = uniform.arrayType.elementType;
         }
+        const char* uniformNameCStr = uniform.name.UTF8String;
         igl::BufferArgDesc::BufferMemberDesc iglMemberDesc{
-            .name = igl::genNameHandle(uniform.name.UTF8String),
+            .name = igl::genNameHandle(uniformNameCStr ? uniformNameCStr : ""),
             .type = metalDataTypeToIGLUniformType(elementType),
-            .offset = (size_t)uniform.offset,
-            .arrayLength = uniform.arrayType ? (size_t)uniform.arrayType.arrayLength : 1,
-            .arrayStride = uniform.arrayType ? (size_t)uniform.arrayType.stride : 0};
+            .offset = static_cast<size_t>(uniform.offset),
+            .arrayLength = uniform.arrayType ? static_cast<size_t>(uniform.arrayType.arrayLength)
+                                             : 1,
+            .arrayStride = uniform.arrayType ? static_cast<size_t>(uniform.arrayType.stride) : 0};
         bufferDesc.members.push_back(std::move(iglMemberDesc));
       }
     } else {
       igl::BufferArgDesc::BufferMemberDesc iglMemberDesc{
-          .name = igl::genNameHandle(arg.name.UTF8String),
+          .name = igl::genNameHandle(argName),
           .type = metalDataTypeToIGLUniformType(arg.bufferDataType),
           .offset = 0,
-          .arrayLength = (size_t)arg.arrayLength};
+          .arrayLength = static_cast<size_t>(arg.arrayLength)};
       bufferDesc.members.push_back(std::move(iglMemberDesc));
     }
     bufferArguments_.push_back(std::move(bufferDesc));
@@ -114,7 +124,7 @@ bool RenderPipelineReflection::createArgDesc(MTLArgument* arg, ShaderStage sh) {
     loc = bufferArguments_.size() - 1;
   } else if (arg.type == MTLArgumentTypeTexture) {
     TextureArgDesc textureDesc;
-    textureDesc.name = arg.name.UTF8String;
+    textureDesc.name = argName;
     textureDesc.type = igl::metal::Texture::convertType(arg.textureType);
     textureDesc.textureIndex = static_cast<int>(arg.index);
     textureDesc.shaderStage = sh;
@@ -123,7 +133,7 @@ bool RenderPipelineReflection::createArgDesc(MTLArgument* arg, ShaderStage sh) {
     loc = textureArguments_.size() - 1;
   } else if (arg.type == MTLArgumentTypeSampler) {
     SamplerArgDesc samplerDesc;
-    samplerDesc.name = arg.name.UTF8String;
+    samplerDesc.name = argName;
     samplerDesc.samplerIndex = static_cast<int>(arg.index);
     samplerDesc.shaderStage = sh;
     samplerArguments_.push_back(std::move(samplerDesc));
@@ -137,12 +147,11 @@ bool RenderPipelineReflection::createArgDesc(MTLArgument* arg, ShaderStage sh) {
   }
 
   if (sh == ShaderStage::Vertex) {
-    vertexArgDictionary_.insert(
-        std::make_pair(std::string([arg.name UTF8String]),
-                       ArgIndex(static_cast<int>(arg.index), arg.type, static_cast<int>(loc))));
+    vertexArgDictionary_.insert(std::make_pair(
+        argName, ArgIndex(static_cast<int>(arg.index), arg.type, static_cast<int>(loc))));
   } else {
-    fragmentArgDictionary_.insert(std::make_pair(
-        std::string([arg.name UTF8String]), ArgIndex(static_cast<int>(arg.index), arg.type, loc)));
+    fragmentArgDictionary_.insert(
+        std::make_pair(argName, ArgIndex(static_cast<int>(arg.index), arg.type, loc)));
   }
   return true;
 }

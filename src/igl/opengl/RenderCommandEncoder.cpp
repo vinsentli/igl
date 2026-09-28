@@ -8,6 +8,7 @@
 #include <igl/opengl/RenderCommandEncoder.h>
 
 #include <igl/DepthStencilState.h>
+#include <igl/Macros.h>
 #include <igl/RenderPipelineState.h>
 #include <igl/SamplerState.h>
 #include <igl/opengl/Buffer.h>
@@ -81,6 +82,7 @@ std::unique_ptr<RenderCommandEncoder> RenderCommandEncoder::create(
     const std::shared_ptr<IFramebuffer>& framebuffer,
     const Dependencies& /*dependencies*/,
     Result* outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (!commandBuffer) {
     Result::setResult(outResult, Result::Code::ArgumentNull, "commandBuffer was null");
     return {};
@@ -97,6 +99,7 @@ RenderCommandEncoder::~RenderCommandEncoder() = default;
 void RenderCommandEncoder::beginEncoding(const RenderPassDesc& renderPass,
                                          const std::shared_ptr<IFramebuffer>& framebuffer,
                                          Result* outResult) {
+  IGL_PROFILER_FUNCTION();
   // Save caller state
   auto& context = getContext();
 
@@ -152,6 +155,7 @@ void RenderCommandEncoder::beginEncoding(const RenderPassDesc& renderPass,
  * framebuffer is blitted to it for MSAA resolve.
  */
 void RenderCommandEncoder::endEncoding() {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(adapter_)) {
     // Restore caller state
     getContext().setEnabled(scissorEnabled_, GL_SCISSOR_TEST);
@@ -304,8 +308,8 @@ void RenderCommandEncoder::endEncoding() {
   }
 }
 
-void RenderCommandEncoder::pushDebugGroupLabel(const char* label,
-                                               const igl::Color& /*color*/) const {
+void RenderCommandEncoder::pushDebugGroupLabel(const char* label, const Color& /*color*/) const {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(adapter_);
   IGL_DEBUG_ASSERT(label != nullptr && *label);
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DebugMessage)) {
@@ -316,8 +320,8 @@ void RenderCommandEncoder::pushDebugGroupLabel(const char* label,
   }
 }
 
-void RenderCommandEncoder::insertDebugEventLabel(const char* label,
-                                                 const igl::Color& /*color*/) const {
+void RenderCommandEncoder::insertDebugEventLabel(const char* label, const Color& /*color*/) const {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(adapter_);
   IGL_DEBUG_ASSERT(label != nullptr && *label);
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DebugMessage)) {
@@ -330,6 +334,7 @@ void RenderCommandEncoder::insertDebugEventLabel(const char* label,
 }
 
 void RenderCommandEncoder::popDebugGroupLabel() const {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(adapter_);
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DebugMessage)) {
     getContext().popDebugGroup();
@@ -339,12 +344,14 @@ void RenderCommandEncoder::popDebugGroupLabel() const {
 }
 
 void RenderCommandEncoder::bindViewport(const Viewport& viewport) {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setViewport(viewport);
   }
 }
 
 void RenderCommandEncoder::bindScissorRect(const ScissorRect& rect) {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setScissorRect(rect);
   }
@@ -352,6 +359,7 @@ void RenderCommandEncoder::bindScissorRect(const ScissorRect& rect) {
 
 void RenderCommandEncoder::bindRenderPipelineState(
     const std::shared_ptr<IRenderPipelineState>& pipelineState) {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setPipelineState(pipelineState);
   }
@@ -359,12 +367,14 @@ void RenderCommandEncoder::bindRenderPipelineState(
 
 void RenderCommandEncoder::bindDepthStencilState(
     const std::shared_ptr<IDepthStencilState>& depthStencilState) {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setDepthStencilState(depthStencilState);
   }
 }
 
 void RenderCommandEncoder::bindUniform(const UniformDesc& uniformDesc, const void* data) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(uniformDesc.location >= 0,
                    "Invalid location passed to bindUniformBuffer: %d",
                    uniformDesc.location);
@@ -386,6 +396,7 @@ void RenderCommandEncoder::bindBuffer(uint32_t index,
                                       IBuffer* buffer,
                                       size_t offset,
                                       size_t bufferSize) {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(adapter_) && buffer) {
     auto* glBuffer = static_cast<Buffer*>(buffer);
     auto bufferType = glBuffer->getType();
@@ -404,6 +415,7 @@ void RenderCommandEncoder::bindVertexBuffer(uint32_t index,
                                             IBuffer& buffer,
                                             size_t bufferOffset,
                                             size_t attributeStride) {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(adapter_)) {
     Buffer& glBuffer = static_cast<Buffer&>(buffer);
 
@@ -417,10 +429,11 @@ void RenderCommandEncoder::bindIndexBuffer(IBuffer& buffer,
                                            IndexFormat format,
                                            size_t bufferOffset,
                                            bool bindVAO) {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(adapter_)) {
     indexType_ = toGlType(format);
     indexBufferOffset_ = reinterpret_cast<void*>(bufferOffset); // NOLINT(performance-no-int-to-ptr)
-    adapter_->setIndexBuffer((Buffer&)buffer, bindVAO);
+    adapter_->setIndexBuffer(static_cast<Buffer&>(buffer));
   }
 }
 
@@ -442,6 +455,7 @@ void RenderCommandEncoder::bindSamplerState(size_t index,
                                             uint8_t bindTarget,
                                             ISamplerState* samplerState) {
   // NOLINTEND(bugprone-easily-swappable-parameters)
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(adapter_)) {
     if ((bindTarget & BindTarget::kVertex) != 0) {
       adapter_->setVertexSamplerState(samplerState, index);
@@ -454,6 +468,7 @@ void RenderCommandEncoder::bindSamplerState(size_t index,
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 void RenderCommandEncoder::bindTexture(size_t index, uint8_t bindTarget, ITexture* texture) {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(adapter_)) {
     if ((bindTarget & BindTarget::kVertex) != 0) {
       adapter_->setVertexTexture(texture, index);
@@ -474,6 +489,7 @@ void RenderCommandEncoder::draw(size_t vertexCount,
                                 uint32_t firstVertex,
                                 uint32_t baseInstance) {
   // NOLINTEND(bugprone-easily-swappable-parameters)
+  IGL_PROFILER_FUNCTION();
   (void)baseInstance;
 
   IGL_DEBUG_ASSERT(baseInstance == 0, "Instancing is not implemented");
@@ -482,10 +498,13 @@ void RenderCommandEncoder::draw(size_t vertexCount,
     getCommandBuffer().incrementCurrentDrawCount();
     auto mode = toGlPrimitive(adapter_->pipelineState().getRenderPipelineDesc().topology);
     if (instanceCount > 1) {
-      adapter_->drawArraysInstanced(
-          mode, (GLsizei)firstVertex, (GLsizei)vertexCount, (GLsizei)instanceCount);
+      adapter_->drawArraysInstanced(mode,
+                                    static_cast<GLsizei>(firstVertex),
+                                    static_cast<GLsizei>(vertexCount),
+                                    static_cast<GLsizei>(instanceCount));
     } else {
-      adapter_->drawArrays(mode, (GLsizei)firstVertex, (GLsizei)vertexCount);
+      adapter_->drawArrays(
+          mode, static_cast<GLsizei>(firstVertex), static_cast<GLsizei>(vertexCount));
     }
   }
 }
@@ -497,6 +516,7 @@ void RenderCommandEncoder::drawIndexed(size_t indexCount,
                                        int32_t vertexOffset,
                                        uint32_t baseInstance) {
   // NOLINTEND(bugprone-easily-swappable-parameters)
+  IGL_PROFILER_FUNCTION();
   (void)vertexOffset;
   (void)baseInstance;
 
@@ -511,13 +531,15 @@ void RenderCommandEncoder::drawIndexed(size_t indexCount,
     auto mode = toGlPrimitive(adapter_->pipelineState().getRenderPipelineDesc().topology);
     if (instanceCount > 1) {
       adapter_->drawElementsInstanced(mode,
-                                      (GLsizei)indexCount,
+                                      static_cast<GLsizei>(indexCount),
                                       indexType_,
                                       (uint8_t*)indexBufferOffset_ + indexOffsetBytes,
                                       instanceCount);
     } else {
-      adapter_->drawElements(
-          mode, (GLsizei)indexCount, indexType_, (uint8_t*)indexBufferOffset_ + indexOffsetBytes);
+      adapter_->drawElements(mode,
+                             static_cast<GLsizei>(indexCount),
+                             indexType_,
+                             (uint8_t*)indexBufferOffset_ + indexOffsetBytes);
     }
   }
 }
@@ -538,6 +560,7 @@ void RenderCommandEncoder::multiDrawIndirect(IBuffer& indirectBuffer,
                                              uint32_t drawCount,
                                              uint32_t stride) {
   // NOLINTEND(bugprone-easily-swappable-parameters)
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(adapter_)) {
     getCommandBuffer().incrementCurrentDrawCount();
     const auto mode = toGlPrimitive(adapter_->pipelineState().getRenderPipelineDesc().topology);
@@ -545,11 +568,15 @@ void RenderCommandEncoder::multiDrawIndirect(IBuffer& indirectBuffer,
         reinterpret_cast<uint8_t*>(indirectBufferOffset); // NOLINT(performance-no-int-to-ptr)
     const GLsizei effectiveStride = stride ? stride : 16u; // sizeof(DrawArraysIndirectCommand)
     if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::MultiDrawIndirect)) {
-      adapter_->multiDrawArraysIndirect(
-          mode, (Buffer&)indirectBuffer, indirectBufferOffsetPtr, drawCount, effectiveStride);
+      adapter_->multiDrawArraysIndirect(mode,
+                                        static_cast<Buffer&>(indirectBuffer),
+                                        indirectBufferOffsetPtr,
+                                        drawCount,
+                                        effectiveStride);
     } else {
       for (uint32_t i = 0; i != drawCount; i++) {
-        adapter_->drawArraysIndirect(mode, (Buffer&)indirectBuffer, indirectBufferOffsetPtr);
+        adapter_->drawArraysIndirect(
+            mode, static_cast<Buffer&>(indirectBuffer), indirectBufferOffsetPtr);
         indirectBufferOffsetPtr += effectiveStride;
       }
     }
@@ -562,6 +589,7 @@ void RenderCommandEncoder::multiDrawIndexedIndirect(IBuffer& indirectBuffer,
                                                     uint32_t drawCount,
                                                     uint32_t stride) {
   // NOLINTEND(bugprone-easily-swappable-parameters)
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(indexType_, "No index buffer bound");
 
   if (IGL_DEBUG_VERIFY(adapter_ && indexType_)) {
@@ -573,14 +601,14 @@ void RenderCommandEncoder::multiDrawIndexedIndirect(IBuffer& indirectBuffer,
     if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::MultiDrawIndirect)) {
       adapter_->multiDrawElementsIndirect(mode,
                                           indexType_,
-                                          (Buffer&)indirectBuffer,
+                                          static_cast<Buffer&>(indirectBuffer),
                                           indirectBufferOffsetPtr,
                                           drawCount,
                                           effectiveStride);
     } else {
       for (uint32_t i = 0; i != drawCount; i++) {
         adapter_->drawElementsIndirect(
-            mode, indexType_, (Buffer&)indirectBuffer, indirectBufferOffsetPtr);
+            mode, indexType_, static_cast<Buffer&>(indirectBuffer), indirectBufferOffsetPtr);
         indirectBufferOffsetPtr += effectiveStride;
       }
     }
@@ -588,36 +616,42 @@ void RenderCommandEncoder::multiDrawIndexedIndirect(IBuffer& indirectBuffer,
 }
 
 void RenderCommandEncoder::setStencilReferenceValue(uint32_t value) {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setStencilReferenceValue(value);
   }
 }
 
 void RenderCommandEncoder::setBlendColor(const Color& color) {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setBlendColor(color);
   }
 }
 
 void RenderCommandEncoder::setCullMode(CullMode cullMode) {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setCullMode(cullMode);
   }
 }
 
-void RenderCommandEncoder::setFrontFacingWinding(WindingMode mode) {
-  if (IGL_DEBUG_VERIFY(adapter_)) {
-    adapter_->setFrontFacingWinding(mode);
-  }
-}
-
 void RenderCommandEncoder::setDepthBias(float depthBias, float slopeScale, float clamp) {
+  IGL_PROFILER_FUNCTION();
   if (IGL_DEBUG_VERIFY(adapter_)) {
     adapter_->setDepthBias(depthBias, slopeScale, clamp);
   }
 }
 
+void RenderCommandEncoder::setFrontFacingWinding(WindingMode frontFaceWinding) {
+  IGL_PROFILER_FUNCTION();
+  if (IGL_DEBUG_VERIFY(adapter_)) {
+    adapter_->setFrontFacingWinding(frontFaceWinding);
+  }
+}
+
 void RenderCommandEncoder::bindBindGroup(BindGroupTextureHandle handle) {
+  IGL_PROFILER_FUNCTION();
   if (handle.empty()) {
     return;
   }
@@ -636,6 +670,7 @@ void RenderCommandEncoder::bindBindGroup(BindGroupTextureHandle handle) {
 void RenderCommandEncoder::bindBindGroup(BindGroupBufferHandle handle,
                                          uint32_t numDynamicOffsets,
                                          const uint32_t* dynamicOffsets) {
+  IGL_PROFILER_FUNCTION();
   if (handle.empty()) {
     return;
   }

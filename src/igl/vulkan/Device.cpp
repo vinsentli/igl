@@ -7,6 +7,7 @@
 
 #include <igl/vulkan/Device.h>
 
+#include <algorithm>
 #include <cstring>
 #if IGL_USE_GLSLANG
 #include <igl/glslang/GlslCompiler.h>
@@ -140,7 +141,7 @@ std::unique_ptr<IShaderStages> Device::createShaderStagesInternal(const ShaderSt
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
 
   auto shaderStages = std::make_unique<ShaderStages>(desc);
-  if (shaderStages == nullptr) {
+  if (!shaderStages) {
     Result::setResult(
         outResult, Result::Code::RuntimeError, "Could not instantiate shader stages.");
   } else if (!shaderStages->isValid()) {
@@ -249,7 +250,7 @@ std::shared_ptr<IComputePipelineState> Device::createComputePipelineInternal(
 
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
 
-  if (IGL_DEBUG_VERIFY_NOT(desc.shaderStages == nullptr)) {
+  if (!IGL_DEBUG_VERIFY(desc.shaderStages)) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid, "Missing shader stages");
     return nullptr;
   }
@@ -273,7 +274,7 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipelineInternal(
 
   IGL_ENSURE_VULKAN_CONTEXT_THREAD(ctx_);
 
-  if (IGL_DEBUG_VERIFY_NOT(desc.shaderStages == nullptr)) {
+  if (!IGL_DEBUG_VERIFY(desc.shaderStages)) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid, "Missing shader stages");
     return nullptr;
   }
@@ -324,8 +325,8 @@ std::shared_ptr<IShaderModule> Device::createShaderModuleInternal(const ShaderMo
     vulkanShaderModule =
         createShaderModule(desc.input.data, desc.input.length, desc.debugName, &result);
   } else {
-    vulkanShaderModule =
-        createShaderModule(desc.info.stage, desc.input.source, desc.debugName, &result);
+    vulkanShaderModule = createShaderModule(
+        desc.info.stage, desc.input.source, desc.input.options, desc.debugName, &result);
   }
 
   if (!result.isOk()) {
@@ -377,7 +378,7 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(const void* IGL_N
   uint64_t hash = 0;
   IGL_DEBUG_ASSERT(length % sizeof(uint32_t) == 0);
   auto words = reinterpret_cast<const uint32_t*>(data);
-  for (int i = 0; i < (length / sizeof(uint32_t)); i++) {
+  for (size_t i = 0; i < length / sizeof(uint32_t); i++) {
     hash ^= std::hash<uint32_t>()(words[i]);
   }
   const std::string filename = IGL_FORMAT(
@@ -386,7 +387,7 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(const void* IGL_N
   if (!std::filesystem::exists(filename)) {
     std::ofstream spirvFile;
     spirvFile.open(filename, std::ios::out | std::ios::binary);
-    for (int i = 0; i < length / (int)sizeof(uint32_t); i++) {
+    for (size_t i = 0; i < length / sizeof(uint32_t); i++) {
       spirvFile.write(reinterpret_cast<const char*>(&words[i]), sizeof(uint32_t));
     }
     spirvFile.close();
@@ -438,6 +439,7 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(const void* IGL_N
  * @param[in] stage  Shader stage (Vertex, Fragment,
  *                   Compute, Task, or Mesh).
  * @param[in] source GLSL source code to compile.
+ * @param[in] options Shader compiler options selecting the optimization strategy.
  * @param[in] debugName Label assigned to the Vulkan
  *                      shader module for debug tooling.
  * @param[out] outResult Receives the compilation result.
@@ -446,6 +448,7 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(const void* IGL_N
  */
 std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage,
                                                                const char* IGL_NULLABLE source,
+                                                               const ShaderCompilerOptions& options,
                                                                const std::string& debugName,
                                                                Result* IGL_NULLABLE
                                                                    outResult) const {
@@ -465,7 +468,7 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage
     return nullptr;
   }
 
-  if (strstr(source, "#version ") == nullptr) {
+  if (!std::strstr(source, "#version ")) {
     std::string extraExtensions = ctx_->config_.enableDescriptorIndexing
                                       ? "#extension GL_EXT_nonuniform_qualifier : require\n"
                                       : "";
@@ -509,7 +512,7 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage
       )" + extraExtensions +
                        bindlessTexturesSource;
     }
-    sourcePatched.append(source, strlen(source));
+    sourcePatched.append(source, std::strlen(source));
     source = sourcePatched.c_str();
   }
 
@@ -520,7 +523,7 @@ std::shared_ptr<VulkanShaderModule> Device::createShaderModule(ShaderStage stage
                            &ctx_->getvkPhysicalDeviceMeshShaderPropertiesEXT());
 
   std::vector<uint32_t> spirv;
-  const Result result = glslang::compileShader(stage, source, spirv, &glslangResource);
+  const Result result = glslang::compileShader(stage, source, spirv, &glslangResource, options);
 
   VkShaderModule vkShaderModule = VK_NULL_HANDLE;
   const VkShaderModuleCreateInfo ci = {
@@ -648,8 +651,11 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibraryInternal(const Shader
       return nullptr;
     }
     // NOLINTNEXTLINE(facebook-hte-ParameterUncheckedArrayBounds)
-    vulkanShaderModule = createShaderModule(
-        desc.moduleInfo.front().stage, desc.input.source, desc.debugName, &result);
+    vulkanShaderModule = createShaderModule(desc.moduleInfo.front().stage,
+                                            desc.input.source,
+                                            desc.input.options,
+                                            desc.debugName,
+                                            &result);
   }
 
   if (!result.isOk()) {
@@ -749,6 +755,7 @@ bool Device::hasFeatureInternal(DeviceFeatures feature) const {
   case DeviceFeatures::Compute:
     return true;
   case DeviceFeatures::CopyBuffer:
+  case DeviceFeatures::FillBuffer:
     return true;
   case DeviceFeatures::ExplicitBinding:
     return true;
@@ -773,7 +780,7 @@ bool Device::hasFeatureInternal(DeviceFeatures feature) const {
   case DeviceFeatures::TexturePartialMipChain:
     return true;
   case DeviceFeatures::BufferRing:
-    return false;
+    return true;
   case DeviceFeatures::BufferNoCopy:
     return false;
   case DeviceFeatures::ShaderLibrary:
@@ -800,9 +807,12 @@ bool Device::hasFeatureInternal(DeviceFeatures feature) const {
   case DeviceFeatures::DrawInstanced:
     return true;
   case DeviceFeatures::DynamicCullMode:
+    return ctx_->vf_.vkCmdSetCullMode != nullptr && ctx_->features_.has_VK_EXT_extended_dynamic_state;
   case DeviceFeatures::DynamicFrontFacingWinding:
+    return ctx_->vf_.vkCmdSetFrontFace != nullptr && ctx_->features_.has_VK_EXT_extended_dynamic_state;
   case DeviceFeatures::DynamicVertexBufferStride:
-    return ctx_->features_.has_VK_EXT_extended_dynamic_state;
+    return ctx_->vf_.vkCmdBindVertexBuffers2 != nullptr &&
+           ctx_->config_.enableDynamicVertexBufferStride && ctx_->features_.has_VK_EXT_extended_dynamic_state;
   case DeviceFeatures::Indices8Bit:
     return ctx_->features_.has_VK_EXT_index_type_uint8;
   case DeviceFeatures::ValidationLayersEnabled:
@@ -816,7 +826,7 @@ bool Device::hasFeatureInternal(DeviceFeatures feature) const {
            (deviceProperties.limits.timestampComputeAndGraphics == VK_TRUE);
   }
 
-  IGL_DEBUG_ABORT("DeviceFeatures value not handled: %d", (int)feature);
+  IGL_DEBUG_ABORT("DeviceFeatures value not handled: %d", static_cast<int>(feature));
 
   return false;
 }
@@ -946,7 +956,7 @@ bool Device::getFeatureLimitsInternal(DeviceFeatureLimits featureLimits, size_t&
     return false;
   }
 
-  IGL_DEBUG_ABORT("DeviceFeatureLimits value not handled: %d", (int)featureLimits);
+  IGL_DEBUG_ABORT("DeviceFeatureLimits value not handled: %d", static_cast<int>(featureLimits));
   result = 0;
   return false;
 }
@@ -981,19 +991,19 @@ ICapabilities::TextureFormatCapabilities Device::getTextureFormatCapabilitiesInt
 
   TextureFormatCapabilities caps = TextureFormatCapabilityBits::Unsupported;
 
-  if (features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) {
+  if ((features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) != 0) {
     caps |= TextureFormatCapabilityBits::Sampled;
   }
-  if (features & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) {
+  if ((features & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) != 0) {
     caps |= TextureFormatCapabilityBits::Storage;
   }
-  if (features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) {
+  if ((features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0) {
     caps |= TextureFormatCapabilityBits::SampledFiltered;
   }
-  if (features & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT) {
+  if ((features & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT) != 0) {
     caps |= TextureFormatCapabilityBits::Attachment;
   }
-  if (features & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+  if ((features & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0) {
     caps |= TextureFormatCapabilityBits::Attachment;
   }
 

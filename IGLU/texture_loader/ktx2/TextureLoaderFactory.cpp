@@ -8,8 +8,10 @@
 #include <IGLU/texture_loader/ktx2/TextureLoaderFactory.h>
 
 #include <IGLU/texture_loader/ktx2/Header.h>
+#include <algorithm>
 #include <ktx.h>
 #include <numeric>
+#include <igl/Macros.h>
 #include <igl/vulkan/util/TextureFormat.h>
 
 #if IGL_BACKEND_D3D12 && !IGL_BACKEND_VULKAN
@@ -40,6 +42,7 @@ uint32_t TextureLoaderFactory::minHeaderLength() const noexcept {
 // NOLINTNEXTLINE(bugprone-exception-escape)
 bool TextureLoaderFactory::canCreateInternal(DataReader headerReader,
                                              igl::Result* IGL_NULLABLE outResult) const noexcept {
+  IGL_PROFILER_FUNCTION();
   if (headerReader.data() == nullptr) {
     igl::Result::setResult(
         outResult, igl::Result::Code::ArgumentInvalid, "Reader's data is nullptr.");
@@ -72,6 +75,7 @@ bool TextureLoaderFactory::canCreateInternal(DataReader headerReader,
 }
 
 igl::TextureRangeDesc TextureLoaderFactory::textureRange(DataReader reader) const noexcept {
+  IGL_PROFILER_FUNCTION();
   const Header* header = reader.as<Header>();
 
   const igl::TextureRangeDesc range{
@@ -90,6 +94,7 @@ igl::TextureRangeDesc TextureLoaderFactory::textureRange(DataReader reader) cons
 bool TextureLoaderFactory::validate(DataReader reader,
                                     const igl::TextureRangeDesc& range,
                                     igl::Result* IGL_NULLABLE outResult) const noexcept {
+  IGL_PROFILER_FUNCTION();
   const Header* header = reader.as<Header>();
   const uint32_t length = reader.size();
 
@@ -175,6 +180,29 @@ bool TextureLoaderFactory::validate(DataReader reader,
                              igl::Result::Code::InvalidOperation,
                              "Supercompressed level expansion ratio is implausible.");
       return false;
+    }
+
+    // Each ZLIB-supercompressed level is a zlib stream (RFC 1950); miniz tolerates non-conformant
+    // headers (e.g. CINFO > 7) on which tinfl_decompress can spin, so reject them before decoding.
+    if (header->supercompressionScheme == static_cast<uint32_t>(KTX_SS_ZLIB)) {
+      if (levelByteLength < 2u) {
+        igl::Result::setResult(outResult,
+                               igl::Result::Code::InvalidOperation,
+                               "ZLIB supercompressed level is too short for a zlib header.");
+        return false;
+      }
+      const uint8_t cmf = reader.readAt<uint8_t>(static_cast<uint32_t>(levelByteOffset));
+      const uint8_t flg = reader.readAt<uint8_t>(static_cast<uint32_t>(levelByteOffset) + 1u);
+      const uint32_t compressionMethod = cmf & 0x0Fu;
+      const uint32_t cinfo = cmf >> 4u;
+      const bool hasPresetDictionary = (flg & 0x20u) != 0u;
+      const bool checkBitsValid = (((static_cast<uint32_t>(cmf) << 8u) | flg) % 31u) == 0u;
+      if (compressionMethod != 8u || cinfo > 7u || hasPresetDictionary || !checkBitsValid) {
+        igl::Result::setResult(outResult,
+                               igl::Result::Code::InvalidOperation,
+                               "ZLIB supercompressed level has a non-conformant zlib header.");
+        return false;
+      }
     }
   }
 

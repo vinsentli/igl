@@ -7,6 +7,10 @@
 
 #include <igl/d3d12/D3D12PipelineBuilder.h>
 
+#include <algorithm>
+#include <cstdio>
+#include <cstring>
+#include <igl/Macros.h>
 #include <igl/d3d12/D3D12Context.h>
 
 namespace igl::d3d12 {
@@ -109,6 +113,7 @@ D3D12_BLEND_OP toD3D12BlendOp(BlendOp op) {
 //=============================================================================
 
 D3D12GraphicsPipelineBuilder::D3D12GraphicsPipelineBuilder() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   // Zero-initialize the descriptor
   psoDesc_ = {};
 
@@ -225,16 +230,16 @@ D3D12GraphicsPipelineBuilder& D3D12GraphicsPipelineBuilder::blendStateForAttachm
 
   // Convert IGL color write mask to D3D12
   UINT8 writeMask = 0;
-  if (attachment.colorWriteMask & igl::kColorWriteBitsRed) {
+  if ((attachment.colorWriteMask & igl::kColorWriteBitsRed) != 0) {
     writeMask |= D3D12_COLOR_WRITE_ENABLE_RED;
   }
-  if (attachment.colorWriteMask & igl::kColorWriteBitsGreen) {
+  if ((attachment.colorWriteMask & igl::kColorWriteBitsGreen) != 0) {
     writeMask |= D3D12_COLOR_WRITE_ENABLE_GREEN;
   }
-  if (attachment.colorWriteMask & igl::kColorWriteBitsBlue) {
+  if ((attachment.colorWriteMask & igl::kColorWriteBitsBlue) != 0) {
     writeMask |= D3D12_COLOR_WRITE_ENABLE_BLUE;
   }
-  if (attachment.colorWriteMask & igl::kColorWriteBitsAlpha) {
+  if ((attachment.colorWriteMask & igl::kColorWriteBitsAlpha) != 0) {
     writeMask |= D3D12_COLOR_WRITE_ENABLE_ALPHA;
   }
   rt.RenderTargetWriteMask = writeMask;
@@ -366,6 +371,7 @@ Result D3D12GraphicsPipelineBuilder::build(ID3D12Device* device,
                                            ID3D12RootSignature* rootSignature,
                                            ID3D12PipelineState** outPipelineState,
                                            const char* debugName) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (!device) {
     return Result(Result::Code::ArgumentNull, "Device is null");
   }
@@ -396,16 +402,16 @@ Result D3D12GraphicsPipelineBuilder::build(ID3D12Device* device,
       device->CreateGraphicsPipelineState(&psoDesc_, IID_PPV_ARGS(pipelineState.GetAddressOf()));
   if (FAILED(hr)) {
     char errorMsg[512];
-    snprintf(errorMsg,
-             sizeof(errorMsg),
-             "Failed to create graphics pipeline state. HRESULT: 0x%08X",
-             static_cast<unsigned int>(hr));
+    std::snprintf(errorMsg,
+                  sizeof(errorMsg),
+                  "Failed to create graphics pipeline state. HRESULT: 0x%08X",
+                  static_cast<unsigned int>(hr));
     return Result(Result::Code::RuntimeError, errorMsg);
   }
 
   // Set debug name if provided
   if (debugName && debugName[0] != '\0') {
-    std::wstring wideName(debugName, debugName + strlen(debugName));
+    std::wstring wideName(debugName, debugName + std::strlen(debugName));
     pipelineState->SetName(wideName.c_str());
   }
 
@@ -419,6 +425,7 @@ Result D3D12GraphicsPipelineBuilder::build(ID3D12Device* device,
 //=============================================================================
 
 D3D12ComputePipelineBuilder::D3D12ComputePipelineBuilder() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   // Zero-initialize the descriptor
   psoDesc_ = {};
   psoDesc_.NodeMask = 0;
@@ -439,6 +446,7 @@ Result D3D12ComputePipelineBuilder::build(ID3D12Device* device,
                                           ID3D12RootSignature* rootSignature,
                                           ID3D12PipelineState** outPipelineState,
                                           const char* debugName) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (!device) {
     return Result(Result::Code::ArgumentNull, "Device is null");
   }
@@ -466,16 +474,16 @@ Result D3D12ComputePipelineBuilder::build(ID3D12Device* device,
       device->CreateComputePipelineState(&psoDesc_, IID_PPV_ARGS(pipelineState.GetAddressOf()));
   if (FAILED(hr)) {
     char errorMsg[512];
-    snprintf(errorMsg,
-             sizeof(errorMsg),
-             "Failed to create compute pipeline state. HRESULT: 0x%08X",
-             static_cast<unsigned int>(hr));
+    std::snprintf(errorMsg,
+                  sizeof(errorMsg),
+                  "Failed to create compute pipeline state. HRESULT: 0x%08X",
+                  static_cast<unsigned int>(hr));
     return Result(Result::Code::RuntimeError, errorMsg);
   }
 
   // Set debug name if provided
   if (debugName && debugName[0] != '\0') {
-    std::wstring wideName(debugName, debugName + strlen(debugName));
+    std::wstring wideName(debugName, debugName + std::strlen(debugName));
     pipelineState->SetName(wideName.c_str());
   }
 
@@ -489,6 +497,7 @@ Result D3D12ComputePipelineBuilder::build(ID3D12Device* device,
 //=============================================================================
 
 D3D12RootSignatureBuilder::D3D12RootSignatureBuilder() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   flags_ = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 }
 
@@ -568,6 +577,7 @@ D3D12RootSignatureBuilder& D3D12RootSignatureBuilder::flags(D3D12_ROOT_SIGNATURE
 Result D3D12RootSignatureBuilder::build(ID3D12Device* device,
                                         const D3D12Context* context,
                                         ID3D12RootSignature** outRootSignature) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (!device) {
     return Result(Result::Code::ArgumentNull, "Device is null");
   }
@@ -625,7 +635,7 @@ Result D3D12RootSignatureBuilder::build(ID3D12Device* device,
   const uint32_t size = getRootSignatureDwordSize(rootSigDesc);
   if (size > 64) {
     char errorMsg[256];
-    snprintf(
+    std::snprintf(
         errorMsg, sizeof(errorMsg), "Root signature size exceeds 64 DWORD limit: %u DWORDs", size);
     return Result(Result::Code::ArgumentOutOfRange, errorMsg);
   }
@@ -639,11 +649,11 @@ Result D3D12RootSignatureBuilder::build(ID3D12Device* device,
     const char* errorStr = error.Get() ? static_cast<const char*>(error->GetBufferPointer())
                                        : "Unknown error";
     char errorMsg[512];
-    snprintf(errorMsg,
-             sizeof(errorMsg),
-             "Failed to serialize root signature. HRESULT: 0x%08X, Error: %s",
-             static_cast<unsigned int>(hr),
-             errorStr);
+    std::snprintf(errorMsg,
+                  sizeof(errorMsg),
+                  "Failed to serialize root signature. HRESULT: 0x%08X, Error: %s",
+                  static_cast<unsigned int>(hr),
+                  errorStr);
     return Result(Result::Code::RuntimeError, errorMsg);
   }
 
@@ -655,10 +665,10 @@ Result D3D12RootSignatureBuilder::build(ID3D12Device* device,
                                    IID_PPV_ARGS(rootSignature.GetAddressOf()));
   if (FAILED(hr)) {
     char errorMsg[256];
-    snprintf(errorMsg,
-             sizeof(errorMsg),
-             "Failed to create root signature. HRESULT: 0x%08X",
-             static_cast<unsigned int>(hr));
+    std::snprintf(errorMsg,
+                  sizeof(errorMsg),
+                  "Failed to create root signature. HRESULT: 0x%08X",
+                  static_cast<unsigned int>(hr));
     return Result(Result::Code::RuntimeError, errorMsg);
   }
 
@@ -696,6 +706,7 @@ UINT D3D12RootSignatureBuilder::getMaxDescriptorCount(const D3D12Context* contex
 }
 
 uint32_t D3D12RootSignatureBuilder::getDwordSize() const {
+  IGL_PROFILER_FUNCTION();
   // Build temporary descriptor for cost calculation
   std::vector<D3D12_ROOT_PARAMETER> d3d12Params;
   std::vector<std::vector<D3D12_DESCRIPTOR_RANGE>> allRanges;

@@ -101,7 +101,7 @@ std::shared_ptr<Platform> VulkanShell::createPlatform() noexcept {
     devices =
         vulkan::HWDevice::queryDevices(*ctx, HWDeviceQueryDesc(HWDeviceType::SoftwareGpu), nullptr);
   }
-  IGL_DEBUG_ASSERT(devices.size() > 0, "Could not find Vulkan device with requested capabilities");
+  IGL_DEBUG_ASSERT(!devices.empty(), "Could not find Vulkan device with requested capabilities");
 
   auto vulkanDevice = vulkan::HWDevice::create(std::move(ctx),
                                                devices[0],
@@ -180,8 +180,8 @@ SurfaceTextures VulkanShell::createSurfaceTextures() noexcept {
   swapchainColor_ = std::move(color);
 
   const auto dimensions = swapchainColor_->getDimensions();
-  const auto colorFormat = swapchainColor_->getFormat();
-  const auto depthFormat = depth->getFormat();
+  const TextureFormat colorFormat = swapchainColor_->getFormat();
+  const TextureFormat depthFormat = depth->getFormat();
 
   // Create offscreen 2-layer textures once (reuse across frames)
   if (!offscreenColor_ || offscreenColor_->getDimensions() != dimensions) {

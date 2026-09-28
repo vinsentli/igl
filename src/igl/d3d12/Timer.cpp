@@ -7,12 +7,14 @@
 
 #include <igl/d3d12/Timer.h>
 
+#include <igl/Macros.h>
 #include <igl/d3d12/D3D12Context.h>
 #include <igl/d3d12/Device.h>
 
 namespace igl::d3d12 {
 
 Timer::Timer(const Device& device) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   auto& ctx = device.getD3D12Context();
   auto* d3dDevice = ctx.getDevice();
   auto* commandQueue = ctx.getCommandQueue();
@@ -90,6 +92,7 @@ Timer::~Timer() {
 }
 
 void Timer::begin(ID3D12GraphicsCommandList* commandList) {
+  IGL_PROFILER_FUNCTION();
   if (resourceCreationFailed_ || timestampFrequency_ == 0) {
     // Timer disabled due to resource creation or frequency query failure - silently no-op
     return;
@@ -106,6 +109,7 @@ void Timer::begin(ID3D12GraphicsCommandList* commandList) {
 }
 
 void Timer::end(ID3D12GraphicsCommandList* commandList, ID3D12Fence* fence, uint64_t fenceValue) {
+  IGL_PROFILER_FUNCTION();
   if (resourceCreationFailed_ || timestampFrequency_ == 0) {
     // Timer disabled - silently no-op
     return;
@@ -149,6 +153,7 @@ void Timer::end(ID3D12GraphicsCommandList* commandList, ID3D12Fence* fence, uint
 }
 
 uint64_t Timer::getElapsedTimeNanos() const {
+  IGL_PROFILER_FUNCTION();
   if (!readbackBuffer_.Get() || !ended_.load(std::memory_order_acquire)) {
     return 0;
   }
@@ -169,7 +174,7 @@ uint64_t Timer::getElapsedTimeNanos() const {
   // GPU has completed; it is now safe to read the query results.
   // Map the readback buffer to read timestamp values.
   void* mappedData = nullptr;
-  D3D12_RANGE readRange{0, sizeof(uint64_t) * 2}; // Only read the 2 timestamps
+  D3D12_RANGE readRange{.Begin = 0, .End = sizeof(uint64_t) * 2}; // Only read the 2 timestamps
   HRESULT hr = readbackBuffer_->Map(0, &readRange, &mappedData);
   if (FAILED(hr)) {
     IGL_LOG_ERROR("Timer: Failed to map readback buffer: 0x%08X\n", hr);
@@ -182,7 +187,7 @@ uint64_t Timer::getElapsedTimeNanos() const {
   uint64_t endTime = timestamps[1];
 
   // Unmap buffer
-  D3D12_RANGE writeRange{0, 0}; // No writes
+  D3D12_RANGE writeRange{.Begin = 0, .End = 0}; // No writes
   readbackBuffer_->Unmap(0, &writeRange);
 
   // Validate timestamp data

@@ -9,6 +9,7 @@
 
 #include <codecvt>
 #include <locale>
+#include <igl/Macros.h>
 #include <igl/d3d12/D3D12Headers.h>
 
 // Windows headers for dynamic loading
@@ -28,8 +29,8 @@ using ComPtr = igl::d3d12::ComPtr<T>;
 using DxcCreateInstanceProc = HRESULT(WINAPI*)(REFCLSID rclsid, REFIID riid, LPVOID* ppv);
 
 // Module handle for dxcompiler.dll
-static HMODULE g_dxcompilerModule = nullptr;
-static DxcCreateInstanceProc g_DxcCreateInstance = nullptr;
+HMODULE g_dxcompilerModule = nullptr;
+DxcCreateInstanceProc g_DxcCreateInstance = nullptr;
 
 // Load dxcompiler.dll dynamically
 bool loadDxcLibrary() {
@@ -72,6 +73,7 @@ DXCCompiler::DXCCompiler() = default;
 DXCCompiler::~DXCCompiler() = default;
 
 Result DXCCompiler::initialize() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (initialized_) {
     return Result();
   }
@@ -124,6 +126,7 @@ Result DXCCompiler::compile(const char* source,
                             uint32_t flags,
                             std::vector<uint8_t>& outBytecode,
                             std::string& outErrors) {
+  IGL_PROFILER_FUNCTION();
   if (!initialized_) {
     return Result(Result::Code::InvalidOperation, "DXC compiler not initialized");
   }
@@ -200,7 +203,7 @@ Result DXCCompiler::compile(const char* source,
   }
 
   // Check compilation status
-  HRESULT compileStatus;
+  HRESULT compileStatus = S_OK;
   result->GetStatus(&compileStatus);
 
   // Get errors/warnings
@@ -243,7 +246,7 @@ Result DXCCompiler::compile(const char* source,
         bytecode.Get(), DxcValidatorFlags_InPlaceEdit, validationResult.GetAddressOf());
 
     if (SUCCEEDED(hr)) {
-      HRESULT validationStatus;
+      HRESULT validationStatus = S_OK;
       validationResult->GetStatus(&validationStatus);
       IGL_D3D12_LOG_VERBOSE("DXCCompiler: Validation status: 0x%08X\n",
                             static_cast<unsigned>(validationStatus));

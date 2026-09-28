@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <cstring>
 #include <unordered_map>
 #include <igl/RenderPipelineState.h>
 #include <igl/vulkan/Common.h>
@@ -17,49 +18,44 @@ namespace igl::vulkan {
 
 class Device;
 
-VkPrimitiveTopology primitiveTypeToVkPrimitiveTopology(igl::PrimitiveType t);
-VkCullModeFlags cullModeToVkCullMode(igl::CullMode mode);
-VkFrontFace windingModeToVkFrontFace(igl::WindingMode mode);
+VkPrimitiveTopology primitiveTypeToVkPrimitiveTopology(PrimitiveType t);
+VkPolygonMode polygonFillModeToVkPolygonMode(PolygonFillMode mode);
+VkCullModeFlags cullModeToVkCullMode(CullMode mode);
+VkFrontFace windingModeToVkFrontFace(WindingMode mode);
+VkFormat vertexAttributeFormatToVkFormat(VertexAttributeFormat fmt);
+VkBlendOp blendOpToVkBlendOp(BlendOp value);
+VkBool32 checkDualSrcBlendFactor(BlendFactor value, VkBool32 dualSrcBlendSupported);
+VkBlendFactor blendFactorToVkBlendFactor(BlendFactor value);
+VkColorComponentFlags colorWriteMaskToVkColorComponentFlags(ColorWriteMask value);
 
 /// @brief This class stores all mutable pipeline parameters as member variables and serves as a
 /// hash key for the `RenderPipelineState` class
 class alignas(sizeof(uint64_t)) RenderPipelineDynamicState {
   uint32_t depthCompareOp_ : 3;
 
-  // Ignore modernize-use-default-member-init
-  // @lint-ignore CLANGTIDY
+  // NOLINTNEXTLINE(modernize-use-default-member-init)
   uint32_t stencilFrontFailOp_ : 3;
-  // Ignore modernize-use-default-member-init
-  // @lint-ignore CLANGTIDY
+  // NOLINTNEXTLINE(modernize-use-default-member-init)
   uint32_t stencilFrontPassOp_ : 3;
-  // Ignore modernize-use-default-member-init
-  // @lint-ignore CLANGTIDY
+  // NOLINTNEXTLINE(modernize-use-default-member-init)
   uint32_t stencilFrontDepthFailOp_ : 3;
-  // Ignore modernize-use-default-member-init
-  // @lint-ignore CLANGTIDY
+  // NOLINTNEXTLINE(modernize-use-default-member-init)
   uint32_t stencilFrontCompareOp_ : 3;
-  // Ignore modernize-use-default-member-init
-  // @lint-ignore CLANGTIDY
+  // NOLINTNEXTLINE(modernize-use-default-member-init)
   uint32_t stencilBackFailOp_ : 3;
-  // Ignore modernize-use-default-member-init
-  // @lint-ignore CLANGTIDY
+  // NOLINTNEXTLINE(modernize-use-default-member-init)
   uint32_t stencilBackPassOp_ : 3;
-  // Ignore modernize-use-default-member-init
-  // @lint-ignore CLANGTIDY
+  // NOLINTNEXTLINE(modernize-use-default-member-init)
   uint32_t stencilBackDepthFailOp_ : 3;
-  // Ignore modernize-use-default-member-init
-  // @lint-ignore CLANGTIDY
+  // NOLINTNEXTLINE(modernize-use-default-member-init)
   uint32_t stencilBackCompareOp_ : 3;
 
  public:
-  // Ignore modernize-use-default-member-init
-  // @lint-ignore CLANGTIDY
+  // NOLINTNEXTLINE(modernize-use-default-member-init)
   uint32_t renderPassIndex : 8;
-  // Ignore modernize-use-default-member-init
-  // @lint-ignore CLANGTIDY
+  // NOLINTNEXTLINE(modernize-use-default-member-init)
   uint32_t depthBiasEnable : 1;
-  // Ignore modernize-use-default-member-init
-  // @lint-ignore CLANGTIDY
+  // NOLINTNEXTLINE(modernize-use-default-member-init)
   uint32_t depthWriteEnable : 1;
   // Ignore modernize-use-default-member-init
   // @lint-ignore CLANGTIDY
@@ -134,13 +130,13 @@ class alignas(sizeof(uint64_t)) RenderPipelineDynamicState {
   }
 
   // comparison operator and hash function for std::unordered_map<>
-  bool operator==(const RenderPipelineDynamicState& other) const {
-    return *(uint64_t*)this == *(uint64_t*)&other;
+  [[nodiscard]] bool operator==(const RenderPipelineDynamicState& other) const {
+    return *reinterpret_cast<const uint64_t*>(this) == *reinterpret_cast<const uint64_t*>(&other);
   }
 
   struct HashFunction {
     uint64_t operator()(const RenderPipelineDynamicState& s) const {
-      return *(const uint64_t*)&s;
+      return *reinterpret_cast<const uint64_t*>(&s);
     }
   };
 };
@@ -171,7 +167,7 @@ class RenderPipelineState final : public IRenderPipelineState, public PipelineSt
    * mutable ones provided in the `dynamicState` parameter. If a pipeline layout change is detected,
    * all cached pipelines are discarded.
    */
-  VkPipeline getVkPipeline(const RenderPipelineDynamicState& dynamicState) const;
+  [[nodiscard]] VkPipeline getVkPipeline(const RenderPipelineDynamicState& dynamicState) const;
 
  private:
   friend class Device;

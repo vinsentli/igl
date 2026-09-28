@@ -100,6 +100,7 @@ constexpr uint16_t kIndexData[] = {0, 1, 2, 1, 3, 2, 1, 4, 3, 4, 6, 3, 4, 5, 6, 
     IDevice& device,
     const iglu::ShaderCross& shaderCross,
     bool stereoRendering) noexcept {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (device.getBackendType()) {
   case igl::BackendType::Metal:
     IGL_DEBUG_ABORT("Metal is not supported");
@@ -147,15 +148,15 @@ constexpr uint16_t kIndexData[] = {0, 1, 2, 1, 3, 2, 1, 4, 3, 4, 6, 3, 4, 5, 6, 
   return device.hasFeature(DeviceFeatures::Multiview);
 }
 
-[[nodiscard]] glm::mat4 perspectiveAsymmetricFovRH(const igl::shell::Fov& fov,
+[[nodiscard]] glm::mat4 perspectiveAsymmetricFovRH(const Fov& fov,
                                                    float nearZ,
                                                    float farZ) noexcept {
   glm::mat4 mat;
 
-  const float tanLeft = tanf(fov.angleLeft);
-  const float tanRight = tanf(fov.angleRight);
-  const float tanDown = tanf(fov.angleDown);
-  const float tanUp = tanf(fov.angleUp);
+  const float tanLeft = std::tan(fov.angleLeft);
+  const float tanRight = std::tan(fov.angleRight);
+  const float tanDown = std::tan(fov.angleDown);
+  const float tanUp = std::tan(fov.angleUp);
 
   const float tanWidth = tanRight - tanLeft;
   const float tanHeight = tanUp - tanDown;
@@ -184,7 +185,7 @@ constexpr uint16_t kIndexData[] = {0, 1, 2, 1, 3, 2, 1, 4, 3, 4, 6, 3, 4, 5, 6, 
 }
 } // namespace
 
-void HelloOpenXRSession::createSamplerAndTextures(const igl::IDevice& device) {
+void HelloOpenXRSession::createSamplerAndTextures(const IDevice& device) {
   // Sampler & Texture
   samp0_ = device.createSamplerState(
       SamplerStateDesc{
@@ -277,7 +278,7 @@ void HelloOpenXRSession::updateUniformBlock() {
                            glm::rotate(glm::mat4(1.0f), -0.2f, glm::vec3(1.0f, 0.0f, 0.0f));
   ub_.modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.f, -8.0f)) * rotMat *
                     glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, 1.0f, scaleZ));
-  for (size_t i = 0; i < std::min(shellParams().viewParams.size(), size_t(2)); ++i) {
+  for (size_t i = 0; i < std::min(shellParams().viewParams.size(), static_cast<size_t>(2)); ++i) {
     const auto viewIndex = shellParams().viewParams[i].viewIndex;
 
     ub_.viewProjectionMatrix[viewIndex] =

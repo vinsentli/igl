@@ -19,6 +19,16 @@
 
 namespace igl::vulkan {
 
+namespace {
+// ITexture::generateMipmap() has no Result out-parameter, so this is the only place a caller can
+// learn that mip generation was skipped. Log-once: both overloads can run every frame.
+void logMipmapFailure(const Result& result) {
+  if (!result.isOk()) {
+    IGL_LOG_ERROR_ONCE("Texture::generateMipmap(): %s\n", result.message.c_str());
+  }
+}
+} // namespace
+
 Texture::Texture(Device& device, TextureFormat format) : ITexture(format), device_(device) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
@@ -101,14 +111,14 @@ Result Texture::create(const TextureDesc& desc) {
     desc_.storage = ResourceStorage::Shared;
   }
 
-  if (desc_.usage & TextureDesc::TextureUsageBits::Sampled) {
+  if ((desc_.usage & TextureDesc::TextureUsageBits::Sampled) != 0) {
     usageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
   }
-  if (desc_.usage & TextureDesc::TextureUsageBits::Storage) {
+  if ((desc_.usage & TextureDesc::TextureUsageBits::Storage) != 0) {
     IGL_DEBUG_ASSERT(desc_.numSamples <= 1, "Storage images cannot be multisampled");
     usageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
   }
-  if (desc_.usage & TextureDesc::TextureUsageBits::Attachment) {
+  if ((desc_.usage & TextureDesc::TextureUsageBits::Attachment) != 0) {
     usageFlags |= getProperties().isDepthOrStencil() ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
                                                      : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
@@ -234,19 +244,20 @@ Result Texture::create(const TextureDesc& desc) {
   VulkanImage image;
 
   if (desc_.exportability == TextureDesc::TextureExportability::NoExport) {
-    image = ctx.createImage(
-        imageType,
-        VkExtent3D{(uint32_t)desc_.width, (uint32_t)desc_.height, (uint32_t)desc_.depth},
-        vkFormat,
-        (uint32_t)desc_.numMipLevels,
-        arrayLayerCount,
-        tiling,
-        usageFlags,
-        memFlags,
-        createFlags,
-        samples,
-        &result,
-        debugNameImage.c_str());
+    image = ctx.createImage(imageType,
+                            VkExtent3D{static_cast<uint32_t>(desc_.width),
+                                       static_cast<uint32_t>(desc_.height),
+                                       static_cast<uint32_t>(desc_.depth)},
+                            vkFormat,
+                            static_cast<uint32_t>(desc_.numMipLevels),
+                            arrayLayerCount,
+                            tiling,
+                            usageFlags,
+                            memFlags,
+                            createFlags,
+                            samples,
+                            &result,
+                            debugNameImage.c_str());
     if (!IGL_DEBUG_VERIFY(result.isOk())) {
       return result; // NOLINT(clang-diagnostic-nrvo)
     }
@@ -255,12 +266,12 @@ Result Texture::create(const TextureDesc& desc) {
 
     image = igl::vulkan::VulkanImage::createWithExportMemory(
         ctx,
-        VkExtent3D{.width = (uint32_t)desc_.width,
-                   .height = (uint32_t)desc_.height,
-                   .depth = (uint32_t)desc_.depth},
+        VkExtent3D{.width = static_cast<uint32_t>(desc_.width),
+                   .height = static_cast<uint32_t>(desc_.height),
+                   .depth = static_cast<uint32_t>(desc_.depth)},
         imageType,
         vkFormat,
-        (uint32_t)desc_.numMipLevels,
+        static_cast<uint32_t>(desc_.numMipLevels),
         arrayLayerCount,
         tiling,
         usageFlags,
@@ -363,22 +374,22 @@ Result Texture::createView(const Texture& baseTexture, const TextureViewDesc& de
       return VK_IMAGE_ASPECT_NONE_KHR;
     }
     VkImageAspectFlags aspect = 0;
-    if (flags & ImageAspectBits_Color) {
+    if ((flags & ImageAspectBits_Color) != 0) {
       aspect |= VK_IMAGE_ASPECT_COLOR_BIT;
     }
-    if (flags & ImageAspectBits_Depth) {
+    if ((flags & ImageAspectBits_Depth) != 0) {
       aspect |= VK_IMAGE_ASPECT_DEPTH_BIT;
     }
-    if (flags & ImageAspectBits_Stencil) {
+    if ((flags & ImageAspectBits_Stencil) != 0) {
       aspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
     }
-    if (flags & ImageAspectBits_Plane_0) {
+    if ((flags & ImageAspectBits_Plane_0) != 0) {
       aspect |= VK_IMAGE_ASPECT_PLANE_0_BIT;
     }
-    if (flags & ImageAspectBits_Plane_1) {
+    if ((flags & ImageAspectBits_Plane_1) != 0) {
       aspect |= VK_IMAGE_ASPECT_PLANE_1_BIT;
     }
-    if (flags & ImageAspectBits_Plane_2) {
+    if ((flags & ImageAspectBits_Plane_2) != 0) {
       aspect |= VK_IMAGE_ASPECT_PLANE_2_BIT;
     }
     return aspect;
@@ -455,13 +466,22 @@ Result Texture::uploadInternal(TextureType /*type*/,
   const VkImageAspectFlags imageAspectFlags = texture_->imageView_.getVkImageAspectFlags();
 
   if (vulkanImage.getVkImageUsageFlags() & VK_IMAGE_USAGE_HOST_TRANSFER_BIT) {
-    // NOLINTNEXTLINE(clang-diagnostic-shorten-64-to-32)
     ctx.stagingDevice_->imageDataHostCopy(
-        vulkanImage, desc_.type, range, getProperties(), bytesPerRow, imageAspectFlags, data);
+                                          vulkanImage, 
+                                          desc_.type, 
+                                          range, 
+                                          getProperties(),
+                                           bytesPerRow, 
+                                           imageAspectFlags, 
+                                           data);
   } else {
-    // NOLINTNEXTLINE(clang-diagnostic-shorten-64-to-32)
-    ctx.stagingDevice_->imageData(
-        vulkanImage, desc_.type, range, getProperties(), bytesPerRow, imageAspectFlags, data);
+    ctx.stagingDevice_->imageData(vulkanImage,
+                                  desc_.type,
+                                  range,
+                                  getProperties(),
+                                  static_cast<uint32_t>(bytesPerRow),
+                                  imageAspectFlags,
+                                  data);
   }
 
   // Generate mipmaps if requested by the user
@@ -540,7 +560,10 @@ void Texture::generateMipmap(ICommandQueue& /* unused */,
       return;
     }
     const auto& wrapper = ctx.immediate_->acquire();
-    texture_->image.generateMipmap(wrapper.cmdBuf, range ? *range : desc_.asRange());
+    logMipmapFailure(
+        texture_->image.generateMipmap(wrapper.cmdBuf, range ? *range : desc_.asRange()));
+    // The wrapper owns a command buffer that was handed out by acquire(); submit it even when mip
+    // generation bailed out, otherwise the immediate commands pool never reclaims it.
     ctx.immediate_->submit(wrapper);
   }
 }
@@ -551,8 +574,8 @@ void Texture::generateMipmap(ICommandBuffer& cmdBuffer, const TextureRangeDesc* 
   }
 
   auto& vkCmdBuffer = static_cast<CommandBuffer&>(cmdBuffer);
-  texture_->image.generateMipmap(vkCmdBuffer.getVkCommandBuffer(),
-                                 range ? *range : desc_.asRange());
+  logMipmapFailure(texture_->image.generateMipmap(vkCmdBuffer.getVkCommandBuffer(),
+                                                  range ? *range : desc_.asRange()));
 }
 // NOLINTEND(facebook-hte-NullableDereference)
 
@@ -583,7 +606,7 @@ VkImageView Texture::getVkImageViewForFramebuffer(uint32_t mipLevel,
                                                   uint32_t layer,
                                                   FramebufferMode mode) const {
   const bool isStereo = mode == FramebufferMode::Stereo;
-  const auto index = mipLevel * getNumVkLayers() + layer;
+  const uint32_t index = mipLevel * getNumVkLayers() + layer;
   std::vector<VulkanImageView>& imageViews = isStereo ? imageViewsForFramebufferStereo_
                                                       : imageViewsForFramebufferMono_;
 

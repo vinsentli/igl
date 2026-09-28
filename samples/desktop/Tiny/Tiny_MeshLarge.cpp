@@ -18,6 +18,7 @@
 
 #define GLFW_INCLUDE_NONE
 
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
 #if !defined(_USE_MATH_DEFINES)
 #define _USE_MATH_DEFINES
 #endif // _USE_MATH_DEFINES
@@ -149,10 +150,13 @@ constexpr bool kEnableCompression = true;
 constexpr bool kPreferIntegratedGPU = false;
 #endif // USE_OPENGL_BACKEND
 
+// NOLINTNEXTLINE(facebook-static-object-destructor-check)
 std::string contentRootFolder;
 
 #if IGL_WITH_IGLU
+// NOLINTNEXTLINE(facebook-static-object-destructor-check)
 std::unique_ptr<iglu::imgui::Session> imguiSession;
+// NOLINTNEXTLINE(facebook-static-object-destructor-check)
 igl::shell::InputDispatcher inputDispatcher;
 #endif // IGL_WITH_IGLU
 
@@ -629,6 +633,7 @@ igl::FPSCounter fps_;
 
 constexpr uint32_t kNumBufferedFrames = 3;
 
+// NOLINTBEGIN(facebook-static-object-destructor-check)
 std::unique_ptr<IDevice> device_;
 std::shared_ptr<ICommandQueue> commandQueue_;
 RenderPassDesc renderPassOffscreen_;
@@ -658,10 +663,10 @@ std::shared_ptr<ITexture> textureDummyBlack_;
 #endif // USE_OPENGL_BACKEND
 std::shared_ptr<ITexture> skyboxTextureReference_;
 std::shared_ptr<ITexture> skyboxTextureIrradiance_;
-
 // scene navigation
 CameraPositioner_FirstPerson positioner_(vec3(-100, 40, -47), vec3(0, 35, 0), vec3(0, 1, 0));
 Camera camera(positioner_);
+// NOLINTEND(facebook-static-object-destructor-check)
 glm::vec2 mousePos_ = glm::vec2(0.0f);
 bool mousePressed_ = false;
 bool enableComputePass_ = false;
@@ -676,9 +681,11 @@ struct VertexData {
   uint32_t mtlIndex{};
 };
 
+// NOLINTBEGIN(facebook-static-object-destructor-check)
 std::vector<VertexData> vertexData_;
 std::vector<uint32_t> indexData_;
 std::vector<uint32_t> shapeVertexCnt_;
+// NOLINTEND(facebook-static-object-destructor-check)
 
 struct UniformsPerFrame {
   mat4 proj;
@@ -715,8 +722,10 @@ struct GPUMaterial {
 
 static_assert(sizeof(GPUMaterial) % 16 == 0);
 
+// NOLINTBEGIN(facebook-static-object-destructor-check)
 std::vector<CachedMaterial> cachedMaterials_;
 std::vector<GPUMaterial> materials_;
+// NOLINTEND(facebook-static-object-destructor-check)
 
 struct MaterialTextures {
   std::shared_ptr<ITexture> ambient;
@@ -724,6 +733,7 @@ struct MaterialTextures {
   std::shared_ptr<ITexture> alpha;
 };
 
+// NOLINTNEXTLINE(facebook-static-object-destructor-check)
 std::vector<MaterialTextures> textures_; // same indexing as in materials_
 
 struct LoadedImage {
@@ -743,6 +753,7 @@ struct LoadedMaterial {
 };
 
 // file name -> LoadedImage
+// NOLINTBEGIN(facebook-static-object-destructor-check)
 std::mutex imagesCacheMutex_;
 std::unordered_map<std::string, LoadedImage> imagesCache_; // accessible only from the loader thread
                                                            // pool (multiple threads)
@@ -754,12 +765,13 @@ std::atomic<bool> loaderShouldExit_ = false;
 std::atomic<uint32_t> remainingMaterialsToLoad_ = 0;
 std::unique_ptr<tf::Executor> loaderPool_ =
     std::make_unique<tf::Executor>(std::max(2u, std::thread::hardware_concurrency() / 2));
+// NOLINTEND(facebook-static-object-destructor-check)
 
 std::string convertFileName(std::string fileName) {
   // generate compressed filename
   const std::string compressedPathPrefix = contentRootFolder;
 
-  if (fileName.find(compressedPathPrefix) == 0) {
+  if (fileName.starts_with(compressedPathPrefix)) {
     // remove leading path
     fileName = fileName.substr(compressedPathPrefix.length());
   }
@@ -1113,12 +1125,16 @@ bool loadAndCache(const char* cacheFileName) {
     IGL_DEBUG_ASSERT(m.ambient_texname.length() < MAX_MATERIAL_NAME);
     IGL_DEBUG_ASSERT(m.diffuse_texname.length() < MAX_MATERIAL_NAME);
     IGL_DEBUG_ASSERT(m.alpha_texname.length() < MAX_MATERIAL_NAME);
+    // NOLINTNEXTLINE(clang-analyzer-security.insecureAPI.strcpy)
     strcat(mtl.name, m.name.c_str());
     normalizeName(m.ambient_texname);
     normalizeName(m.diffuse_texname);
     normalizeName(m.alpha_texname);
+    // NOLINTNEXTLINE(clang-analyzer-security.insecureAPI.strcpy)
     strcat(mtl.ambient_texname, m.ambient_texname.c_str());
+    // NOLINTNEXTLINE(clang-analyzer-security.insecureAPI.strcpy)
     strcat(mtl.diffuse_texname, m.diffuse_texname.c_str());
+    // NOLINTNEXTLINE(clang-analyzer-security.insecureAPI.strcpy)
     strcat(mtl.alpha_texname, m.alpha_texname.c_str());
     cachedMaterials_.push_back(mtl);
   }
@@ -1237,7 +1253,7 @@ void initModel(int numSamplesMSAA) {
     const auto bufType = BufferDesc::BufferTypeBits::Uniform;
     const auto hint = 0;
 #endif
-    // create an Uniform buffers to store uniforms for 2 objects
+    // create Uniform buffers to store uniforms for 2 objects
     for (uint32_t i = 0; i != kNumBufferedFrames; i++) {
       ubPerFrame_.push_back(device_->createBuffer(
           BufferDesc{.type = bufType,
@@ -1772,9 +1788,8 @@ std::shared_ptr<ITexture> getNativeDepthDrawable() {
 }
 
 void createFramebuffer(const std::shared_ptr<ITexture>& nativeDrawable) {
-  FramebufferDesc framebufferDesc;
-  framebufferDesc.colorAttachments[0].texture = nativeDrawable;
-  framebufferDesc.depthAttachment.texture = getNativeDepthDrawable();
+  const FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = nativeDrawable}},
+                                        .depthAttachment = {.texture = getNativeDepthDrawable()}};
   fbMain_ = device_->createFramebuffer(framebufferDesc, nullptr);
   IGL_DEBUG_ASSERT(fbMain_);
 }
@@ -2144,11 +2159,11 @@ void generateCompressedTexture(const LoadedImage& img) {
     std::vector<uint8_t> destPixels(w * h * img.channels);
 
     // resize
-    stbir_resize_uint8((const unsigned char*)img.pixels,
+    stbir_resize_uint8(img.pixels,
                        static_cast<int>(img.w),
                        static_cast<int>(img.h),
                        0,
-                       (unsigned char*)destPixels.data(),
+                       destPixels.data(),
                        w,
                        h,
                        0,
@@ -2211,6 +2226,7 @@ LoadedImage loadImage(const char* fileName, int channels) {
 }
 
 void loadMaterial(size_t i) {
+  // NOLINTNEXTLINE(facebook-static-object-destructor-check)
   static const std::string pathPrefix = contentRootFolder + "src/bistro/Exterior/";
 
   IGL_SCOPE_EXIT {
@@ -2436,6 +2452,7 @@ void processCubemap(const std::string& inFilename,
     Bitmap bmp = convertEquirectangularMapToCubeMapFaces(
         Bitmap(sourceWidth, sourceHeight, 3, eBitmapFormat_Float, pxs));
     ktxTexture2* cube = bitmapToCube(bmp);
+    // NOLINTNEXTLINE(facebook-hte-NullableDereference)
     generateMipmaps(outFilenameEnv, cube);
   }
 
@@ -2450,6 +2467,7 @@ void processCubemap(const std::string& inFilename,
     Bitmap bmp = convertEquirectangularMapToCubeMapFaces(
         Bitmap(dstW, dstH, 3, eBitmapFormat_Float, out.data()));
     ktxTexture2* cube = bitmapToCube(bmp);
+    // NOLINTNEXTLINE(facebook-hte-NullableDereference)
     generateMipmaps(outFilenameIrr, cube);
 
     IGL_SCOPE_EXIT {
@@ -2459,16 +2477,20 @@ void processCubemap(const std::string& inFilename,
 }
 
 void loadSkyboxTexture() {
+  // NOLINTBEGIN(facebook-static-object-destructor-check)
   static const std::string skyboxFileName{"immenstadter_horn_2k"};
   static const std::string skyboxSubdir{"src/skybox_hdr/"};
 
+  // NOLINTNEXTLINE(facebook-static-object-destructor-check)
   static const std::string fileNameRefKTX =
       contentRootFolder + skyboxFileName + "_ReferenceMap.ktx2";
   static const std::string fileNameIrrKTX =
       contentRootFolder + skyboxFileName + "_IrradianceMap.ktx2";
+  // NOLINTEND(facebook-static-object-destructor-check)
 
   if (!std::filesystem::exists(fileNameRefKTX) || !std::filesystem::exists(fileNameIrrKTX)) {
     IGL_LOG_INFO("Cubemap in KTX format not found. Extracting from HDR file...\n");
+    // NOLINTNEXTLINE(facebook-static-object-destructor-check)
     static const std::string inFilename =
         contentRootFolder + skyboxSubdir + skyboxFileName + ".hdr";
 
@@ -2656,6 +2678,7 @@ int main(int argc, char* argv[]) {
     printf("Waiting for all textures to load...\n");
     while (remainingMaterialsToLoad_.load(std::memory_order_acquire) > 0) {
       processLoadedMaterials();
+      // NOLINTNEXTLINE(facebook-hte-BadCall-sleep_for)
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     printf("All textures loaded.\n");
@@ -2668,9 +2691,9 @@ int main(int argc, char* argv[]) {
   // Main loop
   while (!window || !glfwWindowShouldClose(window)) {
     {
-      FramebufferDesc framebufferDesc;
-      framebufferDesc.colorAttachments[0].texture = getNativeDrawable();
-      framebufferDesc.depthAttachment.texture = getNativeDepthDrawable();
+      const FramebufferDesc framebufferDesc{
+          .colorAttachments = {{.texture = getNativeDrawable()}},
+          .depthAttachment = {.texture = getNativeDepthDrawable()}};
 #if IGL_WITH_IGLU
       imguiSession->beginFrame(framebufferDesc, 1.0f);
       ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
@@ -2786,6 +2809,7 @@ int main(int argc, char* argv[]) {
   fbOffscreen_ = nullptr;
   device_.reset(nullptr);
 
+  // NOLINTNEXTLINE(facebook-hte-NullableDereference)
   glfwDestroyWindow(window);
   glfwTerminate();
 

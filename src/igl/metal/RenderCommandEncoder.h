@@ -9,7 +9,6 @@
 
 #import <Metal/MTLRenderCommandEncoder.h>
 #import <Metal/MTLRenderPass.h>
-#include <igl/CommandBuffer.h>
 #include <igl/RenderCommandEncoder.h>
 #include <igl/RenderPass.h>
 #include <igl/RenderPipelineState.h>
@@ -30,8 +29,8 @@ class RenderCommandEncoder final : public IRenderCommandEncoder {
 
   void endEncoding() override;
 
-  void pushDebugGroupLabel(const char* label, const igl::Color& color) const override;
-  void insertDebugEventLabel(const char* label, const igl::Color& color) const override;
+  void pushDebugGroupLabel(const char* label, const Color& color) const override;
+  void insertDebugEventLabel(const char* label, const Color& color) const override;
   void popDebugGroupLabel() const override;
 
   void bindViewport(const Viewport& viewport) override;
@@ -89,9 +88,8 @@ class RenderCommandEncoder final : public IRenderCommandEncoder {
   void setStencilReferenceValue(uint32_t value) override;
   void setBlendColor(const Color& color) override;
   void setCullMode(CullMode cullMode) override;
-  void setFrontFacingWinding(WindingMode mode) override;
   void setDepthBias(float depthBias, float slopeScale, float clamp) override;
-    
+  void setFrontFacingWinding(WindingMode frontFaceWinding) override;
   //@tencent only
   void * getImpl() override { return (__bridge void *)encoder_;}
 

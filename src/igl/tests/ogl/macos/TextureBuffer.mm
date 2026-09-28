@@ -21,7 +21,6 @@ namespace igl::tests {
 class TextureBufferMacTest : public util::TextureFormatTestBase {
  public:
   TextureBufferMacTest() = default;
-  ~TextureBufferMacTest() override = default;
 
   std::shared_ptr<ITexture> createCVPixelBufferTextureWithSize(OSType pixelFormat,
                                                                size_t width,
@@ -70,6 +69,7 @@ std::shared_ptr<ITexture> TextureBufferMacTest::createCVPixelBufferTextureWithSi
     return nullptr;
   }
   CVPixelBufferRelease(pixelBuffer);
+  // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
   CVOpenGLTextureCacheRelease(textureCache);
   Result::setOk(&outResult);
   return texture;

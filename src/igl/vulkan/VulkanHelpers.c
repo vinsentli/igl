@@ -24,6 +24,7 @@ const char* ivkGetVulkanResultString(VkResult result) {
 #define RESULT_CASE(res) \
   case res:              \
     return #res
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (result) {
     RESULT_CASE(VK_SUCCESS);
     RESULT_CASE(VK_NOT_READY);
@@ -141,7 +142,8 @@ VkResult ivkAllocateMemory(const struct VulkanFunctionTable* vt,
                            const VkMemoryRequirements* memRequirements,
                            VkMemoryPropertyFlags props,
                            bool enableBufferDeviceAddress,
-                           VkDeviceMemory* outMemory) {
+                           VkDeviceMemory* outMemory,
+                           VkMemoryPropertyFlags* outMemoryPropertyFlags) {
   assert(memRequirements);
 
   const VkMemoryAllocateFlagsInfo memoryAllocateFlagsInfo = {
@@ -152,11 +154,17 @@ VkResult ivkAllocateMemory(const struct VulkanFunctionTable* vt,
   VkPhysicalDeviceMemoryProperties memProperties;
   vt->vkGetPhysicalDeviceMemoryProperties(physDev, &memProperties);
 
+  const uint32_t memoryTypeIndex =
+      ivkFindMemoryType(&memProperties, memRequirements->memoryTypeBits, props);
+  if (outMemoryPropertyFlags) {
+    *outMemoryPropertyFlags = memProperties.memoryTypes[memoryTypeIndex].propertyFlags;
+  }
+
   const VkMemoryAllocateInfo ai = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
       .pNext = &memoryAllocateFlagsInfo,
       .allocationSize = memRequirements->size,
-      .memoryTypeIndex = ivkFindMemoryType(&memProperties, memRequirements->memoryTypeBits, props),
+      .memoryTypeIndex = memoryTypeIndex,
   };
 
   return vt->vkAllocateMemory(device, &ai, NULL, outMemory);
@@ -638,6 +646,9 @@ void ivkBufferBarrier(const struct VulkanFunctionTable* vt,
   }
   if (srcStageMask & VK_PIPELINE_STAGE_TRANSFER_BIT) {
     barrier.srcAccessMask |= VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+  }
+  if (srcStageMask & VK_PIPELINE_STAGE_HOST_BIT) {
+    barrier.srcAccessMask |= VK_ACCESS_HOST_WRITE_BIT;
   }
   if (srcStageMask & kShaderStages) {
     barrier.srcAccessMask |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;

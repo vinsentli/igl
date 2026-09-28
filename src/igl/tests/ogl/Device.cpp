@@ -14,6 +14,7 @@
 #include "../util/TestDevice.h"
 #include "../util/TestErrorGuard.h"
 
+#include <algorithm>
 #include <igl/CommandBuffer.h>
 #include <igl/RenderCommandEncoder.h>
 #include <igl/RenderPass.h>
@@ -36,7 +37,6 @@ std::shared_ptr<IShaderModule> createShaderModule(const std::shared_ptr<IDevice>
 class DeviceOGLTest : public ::testing::Test {
  public:
   DeviceOGLTest() = default;
-  ~DeviceOGLTest() override = default;
 
   // Set up common resources. This will create a device
   void SetUp() override {
@@ -234,8 +234,7 @@ TEST_F(DeviceOGLTest, DeletionTest) {
     ASSERT_EQ(ret.code, Result::Code::Ok);
     ASSERT_TRUE(texture != nullptr);
 
-    FramebufferDesc framebufferDesc;
-    framebufferDesc.colorAttachments[0].texture = texture;
+    const FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = texture}}};
     framebuffer = iglDev_->createFramebuffer(framebufferDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
     ASSERT_TRUE(framebuffer != nullptr);
@@ -253,10 +252,11 @@ TEST_F(DeviceOGLTest, DeletionTest) {
     auto cmd = cq->createCommandBuffer({}, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
     RenderPassDesc renderPassDesc;
-    renderPassDesc.colorAttachments.resize(1);
-    renderPassDesc.colorAttachments[0].loadAction = LoadAction::Clear;
-    renderPassDesc.colorAttachments[0].storeAction = StoreAction::Store;
-    renderPassDesc.colorAttachments[0].clearColor = {0.0, 0.0, 0.0, 1.0};
+    renderPassDesc = {
+        .colorAttachments = {{.loadAction = LoadAction::Clear,
+                              .storeAction = StoreAction::Store,
+                              .clearColor = {0.0, 0.0, 0.0, 1.0}}},
+    };
 
     renderCommandEncoder = cmd->createRenderCommandEncoder(renderPassDesc, framebuffer);
     ASSERT_TRUE(renderCommandEncoder != nullptr);
@@ -305,24 +305,22 @@ std::shared_ptr<IRenderPipelineState> createRenderPipeline(const std::shared_ptr
   renderPipelineDesc.shaderStages = std::move(stages);
 
   // Initialize input to vertex shader
-  VertexInputStateDesc inputDesc;
-
-  inputDesc.attributes[0].format = VertexAttributeFormat::Float4;
-  inputDesc.attributes[0].offset = 0;
-  inputDesc.attributes[0].bufferIndex = data::shader::kSimplePosIndex;
-  inputDesc.attributes[0].name = data::shader::kSimplePos;
-  inputDesc.attributes[0].location = 0;
-  inputDesc.inputBindings[0].stride = sizeof(float) * 4;
-
-  inputDesc.attributes[1].format = VertexAttributeFormat::Float2;
-  inputDesc.attributes[1].offset = 0;
-  inputDesc.attributes[1].bufferIndex = data::shader::kSimpleUvIndex;
-  inputDesc.attributes[1].name = data::shader::kSimpleUv;
-  inputDesc.attributes[1].location = 1;
-  inputDesc.inputBindings[1].stride = sizeof(float) * 2;
-
-  // numAttributes has to equal to bindings when using more than 1 buffer
-  inputDesc.numAttributes = inputDesc.numInputBindings = 2;
+  // numAttributes has to equal numInputBindings when using more than one buffer
+  const VertexInputStateDesc inputDesc{
+      .numAttributes = 2,
+      .attributes = {{.bufferIndex = data::shader::kSimplePosIndex,
+                      .format = VertexAttributeFormat::Float4,
+                      .offset = 0,
+                      .name = std::string(data::shader::kSimplePos),
+                      .location = 0},
+                     {.bufferIndex = data::shader::kSimpleUvIndex,
+                      .format = VertexAttributeFormat::Float2,
+                      .offset = 0,
+                      .name = std::string(data::shader::kSimpleUv),
+                      .location = 1}},
+      .numInputBindings = 2,
+      .inputBindings = {{.stride = sizeof(float) * 4}, {.stride = sizeof(float) * 2}},
+  };
 
   auto vertexInputState = device->createVertexInputState(inputDesc, &ret);
   if (!ret.isOk()) {
@@ -344,7 +342,12 @@ std::shared_ptr<IShaderModule> createShaderModule(const std::shared_ptr<IDevice>
                                                   Result* outResult) {
   Result ret;
   auto vertShader = ShaderModuleCreator::fromStringInput(
-      *device, data::shader::kOglSimpleVertShader.data(), {ShaderStage::Vertex, "main"}, "", &ret);
+      *device,
+      data::shader::kOglSimpleVertShader
+          .data(), // NOLINT(bugprone-suspicious-stringview-data-usage)
+      {.stage = ShaderStage::Vertex, .entryPoint = "main"},
+      "",
+      &ret);
   if (!ret.isOk()) {
     Result::setResult(outResult, ret.code, ret.message);
     return nullptr;
@@ -356,11 +359,14 @@ std::shared_ptr<IShaderModule> createShaderModule(const std::shared_ptr<IDevice>
 
 TEST_F(DeviceOGLTest, CreateShaderModuleUnknownTypeFails) {
   Result ret;
-  auto vertShader = ShaderModuleCreator::fromStringInput(*iglDev_,
-                                                         data::shader::kOglSimpleVertShader.data(),
-                                                         {static_cast<ShaderStage>(99), "main"},
-                                                         "",
-                                                         &ret);
+  auto vertShader = ShaderModuleCreator::fromStringInput(
+      *iglDev_,
+      data::shader::kOglSimpleVertShader
+          .data(), // NOLINT(bugprone-suspicious-stringview-data-usage)
+      // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+      {.stage = static_cast<ShaderStage>(99), .entryPoint = "main"},
+      "",
+      &ret);
   EXPECT_FALSE(ret.isOk()) << "invalid stage to compile should result in failure";
   EXPECT_TRUE(vertShader == nullptr) << "invalid stage to compile should result in null result";
 }

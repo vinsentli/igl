@@ -10,9 +10,11 @@
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurfaceRef.h>
 #include <TargetConditionals.h>
+#include <cstring>
 #include <sstream>
 #include <unordered_set>
 #include <igl/FramebufferWrapper.h>
+#include <igl/Macros.h>
 #include <igl/metal/Buffer.h>
 #include <igl/metal/BufferSynchronizationManager.h>
 #include <igl/metal/CommandQueue.h>
@@ -38,6 +40,7 @@ namespace igl::metal {
 
 Device::Device(id<MTLDevice> device) :
   device_(device), platformDevice_(*this), deviceFeatureSet_(device) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   bufferSyncManager_ =
       std::make_shared<BufferSynchronizationManager>(IGL_METAL_MAX_IN_FLIGHT_BUFFERS);
 }
@@ -47,6 +50,7 @@ Device::~Device() = default;
 std::shared_ptr<ICommandQueue> Device::createCommandQueue( // NOLINT(bugprone-exception-escape)
     const CommandQueueDesc& /*desc*/,
     Result* outResult) noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   id<MTLCommandQueue> metalObject = [device_ newCommandQueue];
   auto resource =
       std::make_shared<CommandQueue>(*this, metalObject, bufferSyncManager_, deviceStatistics_);
@@ -239,6 +243,7 @@ id<MTLTexture> createIOSurfaceBackedTexture(id<MTLDevice> device,
 std::unique_ptr<IBuffer> Device::createBuffer( // NOLINT(bugprone-exception-escape)
     const BufferDesc& desc,
     Result* outResult) const noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (desc.hint & BufferDesc::BufferAPIHintBits::Ring) {
     return createRingBuffer(desc, outResult);
   }
@@ -269,6 +274,7 @@ std::unique_ptr<IBuffer> Device::createBuffer( // NOLINT(bugprone-exception-esca
 std::unique_ptr<IBuffer> Device::createRingBuffer( // NOLINT(bugprone-exception-escape)
     const BufferDesc& desc,
     Result* outResult) const noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   const MTLResourceOptions storage = toMTLResourceStorageMode(desc.storage);
   const MTLResourceOptions options = MTLResourceCPUCacheModeDefaultCache | storage;
 
@@ -290,6 +296,7 @@ std::unique_ptr<IBuffer> Device::createRingBuffer( // NOLINT(bugprone-exception-
 
 std::unique_ptr<IBuffer> Device::createBufferNoCopy(const BufferDesc& desc,
                                                     Result* outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   const MTLResourceOptions storage = toMTLResourceStorageMode(desc.storage);
 
   using Deallocator = void (^)(void*, NSUInteger);
@@ -311,6 +318,7 @@ std::unique_ptr<IBuffer> Device::createBufferNoCopy(const BufferDesc& desc,
 
 std::shared_ptr<ISamplerState> Device::createSamplerState(const SamplerStateDesc& desc,
                                                           Result* outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   return platformDevice_.createSamplerState(desc, outResult);
 }
 
@@ -334,6 +342,7 @@ std::shared_ptr<ISamplerState> Device::createSamplerState(const SamplerStateDesc
 std::shared_ptr<ITexture> Device::createTexture( // NOLINT(bugprone-exception-escape)
     const TextureDesc& desc,
     Result* outResult) const noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   return createTexture(TextureNative::kMetal, desc, outResult);    
 }
 
@@ -441,6 +450,7 @@ std::shared_ptr<ITexture> Device::createTextureView( // NOLINT(bugprone-exceptio
     std::shared_ptr<ITexture> texture,
     const TextureViewDesc& desc,
     Result* IGL_NULLABLE outResult) const noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
 
   Result::setResult(
@@ -450,6 +460,7 @@ std::shared_ptr<ITexture> Device::createTextureView( // NOLINT(bugprone-exceptio
 }
 
 std::shared_ptr<ITimer> Device::createTimer(Result* IGL_NULLABLE outResult) const noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (outResult) {
     Result::setOk(outResult);
   }
@@ -460,6 +471,7 @@ std::shared_ptr<ITimer> Device::createTimer(Result* IGL_NULLABLE outResult) cons
 std::shared_ptr<ITimestampQueries> Device::createTimestampQueries(uint32_t maxTimestamps,
                                                                   Result* IGL_NULLABLE
                                                                       outResult) const noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (@available(macOS 10.15, iOS 14.0, *)) {
     // Find the timestamp counter set
     id<MTLCounterSet> timestampCounterSet = nil;
@@ -523,6 +535,7 @@ std::shared_ptr<ITimestampQueries> Device::createTimestampQueries(uint32_t maxTi
  */
 std::shared_ptr<IVertexInputState> Device::createVertexInputState(const VertexInputStateDesc& desc,
                                                                   Result* outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   // Avoid buffer overrun in numAttributes.
   if (desc.numAttributes > IGL_VERTEX_ATTRIBUTES_MAX) {
     Result::setResult(outResult,
@@ -544,7 +557,7 @@ std::shared_ptr<IVertexInputState> Device::createVertexInputState(const VertexIn
   // Verify that bufferIndex and location are in their respective ranges.
   std::unordered_set<int> bufferIndexSet;
   std::unordered_set<int> attributeLocationSet;
-  for (int i = 0; i < desc.numAttributes; ++i) {
+  for (size_t i = 0; i < desc.numAttributes; ++i) {
     size_t bufferIndex = desc.attributes[i].bufferIndex;
     if (bufferIndex >= IGL_BUFFER_BINDINGS_MAX) {
       Result::setResult(outResult, Result::Code::ArgumentOutOfRange, "bufferIndex out of range");
@@ -595,7 +608,7 @@ std::shared_ptr<IVertexInputState> Device::createVertexInputState(const VertexIn
   }
 
   // Validation completed. Populate the metal vertex descriptor.
-  for (int i = 0; i < desc.numAttributes; ++i) {
+  for (size_t i = 0; i < desc.numAttributes; ++i) {
     const size_t bufferIndex = desc.attributes[i].bufferIndex;
     const size_t dstAttribIndex = desc.attributes[i].location;
 
@@ -619,6 +632,7 @@ std::shared_ptr<IVertexInputState> Device::createVertexInputState(const VertexIn
 std::shared_ptr<IDepthStencilState> Device::createDepthStencilState(
     const DepthStencilStateDesc& desc,
     Result* outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   MTLDepthStencilDescriptor* metalDesc = [MTLDepthStencilDescriptor new];
   metalDesc.label = [NSString stringWithUTF8String:desc.debugName.c_str()];
   metalDesc.depthCompareFunction = DepthStencilState::convertCompareFunction(desc.compareFunction);
@@ -639,6 +653,7 @@ std::shared_ptr<IDepthStencilState> Device::createDepthStencilState(
 std::shared_ptr<IComputePipelineState> Device::createComputePipeline(
     const ComputePipelineDesc& desc,
     Result* outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   NSError* error = nil;
 
   if (IGL_DEBUG_VERIFY_NOT(desc.shaderStages == nullptr)) {
@@ -675,6 +690,7 @@ std::shared_ptr<IComputePipelineState> Device::createComputePipeline(
 
 std::shared_ptr<IRenderPipelineState> Device::createRenderPipeline(const RenderPipelineDesc& desc,
                                                                    Result* outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (!IGL_DEBUG_VERIFY(desc.shaderStages)) {
     Result::setResult(
         outResult, Result::Code::RuntimeError, "RenderPipeline requires shader stages");
@@ -713,6 +729,7 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipeline(const RenderP
 std::shared_ptr<IRenderPipelineState> Device::createTraditionalRenderPipeline(
     const RenderPipelineDesc& desc,
     Result* outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   // TODO
   //  Size drawableSize = IGLNativeDrawableSize(layer_);
   //  graphicsDesc.viewportState.viewportCount = 1;
@@ -778,12 +795,12 @@ std::shared_ptr<IRenderPipelineState> Device::createTraditionalRenderPipeline(
     dst.pixelFormat = Texture::textureFormatToMTLPixelFormat(src.textureFormat);
     dst.writeMask = RenderPipelineState::convertColorWriteMask(src.colorWriteMask);
     dst.blendingEnabled = src.blendEnabled;
-    dst.rgbBlendOperation = MTLBlendOperation(src.rgbBlendOp);
-    dst.alphaBlendOperation = MTLBlendOperation(src.alphaBlendOp);
-    dst.sourceRGBBlendFactor = MTLBlendFactor(src.srcRGBBlendFactor);
-    dst.sourceAlphaBlendFactor = MTLBlendFactor(src.srcAlphaBlendFactor);
-    dst.destinationRGBBlendFactor = MTLBlendFactor(src.dstRGBBlendFactor);
-    dst.destinationAlphaBlendFactor = MTLBlendFactor(src.dstAlphaBlendFactor);
+    dst.rgbBlendOperation = static_cast<MTLBlendOperation>(src.rgbBlendOp);
+    dst.alphaBlendOperation = static_cast<MTLBlendOperation>(src.alphaBlendOp);
+    dst.sourceRGBBlendFactor = static_cast<MTLBlendFactor>(src.srcRGBBlendFactor);
+    dst.sourceAlphaBlendFactor = static_cast<MTLBlendFactor>(src.srcAlphaBlendFactor);
+    dst.destinationRGBBlendFactor = static_cast<MTLBlendFactor>(src.dstRGBBlendFactor);
+    dst.destinationAlphaBlendFactor = static_cast<MTLBlendFactor>(src.dstAlphaBlendFactor);
   }
 
   // Depth and Stencil
@@ -840,6 +857,7 @@ std::shared_ptr<IRenderPipelineState> Device::createTraditionalRenderPipeline(
 std::shared_ptr<IRenderPipelineState> Device::createMeshRenderPipeline(
     const RenderPipelineDesc& desc,
     Result* outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (@available(iOS 16, macOS 13, *)) {
     // Check if the device supports mesh shaders
     // Mesh shaders require Apple GPU Family 7 or higher (A14/M1 and later)
@@ -912,12 +930,12 @@ std::shared_ptr<IRenderPipelineState> Device::createMeshRenderPipeline(
       dst.pixelFormat = Texture::textureFormatToMTLPixelFormat(src.textureFormat);
       dst.writeMask = RenderPipelineState::convertColorWriteMask(src.colorWriteMask);
       dst.blendingEnabled = src.blendEnabled;
-      dst.rgbBlendOperation = MTLBlendOperation(src.rgbBlendOp);
-      dst.alphaBlendOperation = MTLBlendOperation(src.alphaBlendOp);
-      dst.sourceRGBBlendFactor = MTLBlendFactor(src.srcRGBBlendFactor);
-      dst.sourceAlphaBlendFactor = MTLBlendFactor(src.srcAlphaBlendFactor);
-      dst.destinationRGBBlendFactor = MTLBlendFactor(src.dstRGBBlendFactor);
-      dst.destinationAlphaBlendFactor = MTLBlendFactor(src.dstAlphaBlendFactor);
+      dst.rgbBlendOperation = static_cast<MTLBlendOperation>(src.rgbBlendOp);
+      dst.alphaBlendOperation = static_cast<MTLBlendOperation>(src.alphaBlendOp);
+      dst.sourceRGBBlendFactor = static_cast<MTLBlendFactor>(src.srcRGBBlendFactor);
+      dst.sourceAlphaBlendFactor = static_cast<MTLBlendFactor>(src.srcAlphaBlendFactor);
+      dst.destinationRGBBlendFactor = static_cast<MTLBlendFactor>(src.dstRGBBlendFactor);
+      dst.destinationAlphaBlendFactor = static_cast<MTLBlendFactor>(src.dstAlphaBlendFactor);
     }
 
     // Depth and Stencil
@@ -1010,8 +1028,26 @@ MTLDataType convertConstantValueType(ConstantValueType type) {
 }
 } // namespace
 
+bool shouldEnableFastMath(const ShaderCompilerOptions& options) noexcept {
+  // Map IGL's backend-agnostic optimization strategy onto Metal's fast-math lever. There is no true
+  // -O0 at runtime (newLibraryWithSource: exposes only the .default / .size optimization levels),
+  // so on Metal the debug/release lever is fast math, not the optimization level. The historical
+  // default honors the caller's explicit flag, keeping existing clients byte-for-byte unchanged.
+  switch (options.optimization) {
+  case ShaderOptimization::Default:
+    return options.fastMathEnabled; // historical: honor the caller's explicit flag
+  case ShaderOptimization::NoOpt:
+    return false; // debug: reference numerics + clean source-level stepping
+  case ShaderOptimization::Performance:
+    return true; // release/profiling: real optimized GPU numbers
+  default:
+    return options.fastMathEnabled; // safe fallback for future strategies
+  }
+}
+
 std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryDesc& desc,
                                                             Result* outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (IGL_DEBUG_VERIFY_NOT(desc.moduleInfo.empty())) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid);
     return nullptr;
@@ -1034,12 +1070,17 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
 
     metalLibrary = [device_ newLibraryWithData:data error:&error];
   } else {
-    if (!desc.input.source || !strlen(desc.input.source)) {
+    if (!desc.input.source || !std::strlen(desc.input.source)) {
       Result::setResult(outResult, Result::Code::ArgumentNull);
       return nullptr;
     }
     MTLCompileOptions* compileOpts = [MTLCompileOptions new];
-    compileOpts.fastMathEnabled = desc.input.options.fastMathEnabled;
+    // Fast math is the debug/release lever on Metal: runtime newLibraryWithSource: has no true -O0,
+    // and MTLCompileOptions.optimizationLevel already defaults to
+    // MTLLibraryOptimizationLevelDefault (the optimizing level; optimize-for-size is out of scope),
+    // so we leave it untouched — setting it would be a no-op and its setter is only available on
+    // macOS 13 / iOS 16+.
+    compileOpts.fastMathEnabled = shouldEnableFastMath(desc.input.options);
 
     NSString* shaderSource = [NSString stringWithUTF8String:desc.input.source];
     metalLibrary = [device_ newLibraryWithSource:shaderSource options:compileOpts error:&error];
@@ -1064,8 +1105,20 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
     }
 
     const auto& constantValues = info.functionConstantValues.getConstantValues();
-    MTLFunctionConstantValues* metalConstantValues = [MTLFunctionConstantValues new];
-    if (!constantValues.empty()) {
+    id<MTLFunction> metalFunction = nil;
+    if (constantValues.empty()) {
+      metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint];
+    }
+    // A function that declares function constants can only build a pipeline state through its
+    // specialized variant, so fall through to newFunctionWithName:constantValues:error: both when
+    // the plain lookup returned nil (a declared constant has no default) and when it returned a
+    // function that still reports constants (every declared constant has a default).
+    // A function that declares no constants must not go through that call at all: on iOS 16 it
+    // does not return a usable function for a constant-free entry point, and the resulting nil
+    // trips the IGL_DEBUG_ABORT below.
+    // @fb-only
+    if (metalFunction == nil || metalFunction.functionConstantsDictionary.count > 0) {
+      MTLFunctionConstantValues* metalConstantValues = [MTLFunctionConstantValues new];
       const uint8_t* constantsBase = info.functionConstantValues.getData().data();
       for (size_t i = 0; i < constantValues.size(); ++i) {
         const auto& entry = constantValues[i];
@@ -1076,10 +1129,10 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
                                          type:convertConstantValueType(entry.type)
                                       atIndex:i];
       }
+      metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint
+                                         constantValues:metalConstantValues
+                                                  error:&error];
     }
-    id<MTLFunction> metalFunction = [metalLibrary newFunctionWithName:shaderEntrypoint
-                                                       constantValues:metalConstantValues
-                                                                error:&error];
     if (!metalFunction) {
       IGL_DEBUG_ABORT("Could not find function '%s' in library\n", info.entryPoint.c_str());
       Result::setResult(
@@ -1104,6 +1157,7 @@ std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryD
 
 std::shared_ptr<IShaderModule> Device::createShaderModule(const ShaderModuleDesc& desc,
                                                           Result* outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   auto libraryDesc =
       desc.input.type == ShaderInputType::String
           ? ShaderLibraryDesc::fromStringInput(desc.input.source, {desc.info}, desc.debugName)
@@ -1118,6 +1172,7 @@ std::shared_ptr<IShaderModule> Device::createShaderModule(const ShaderModuleDesc
 
 std::unique_ptr<IShaderStages> Device::createShaderStages(const ShaderStagesDesc& desc,
                                                           Result* outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   const Result result;
   auto stages = std::make_unique<ShaderStages>(desc);
   if (auto resourceTracker = getResourceTracker()) {
@@ -1136,6 +1191,7 @@ const PlatformDevice& Device::getPlatformDevice() const noexcept {
 }
 
 bool Device::isAppleGpu() const {
+  IGL_PROFILER_FUNCTION();
 #if IGL_PLATFORM_IOS
   return true;
 #else
@@ -1226,11 +1282,11 @@ BackendVersion Device::getBackendVersion() const {
 #if TARGET_OS_OSX
 #if TARGET_CPU_ARM64
   if (@available(macOS 10.13, iOS 11.0, *)) {
-    return {BackendFlavor::Metal, 2, 0};
+    return {.flavor = BackendFlavor::Metal, .majorVersion = 2, .minorVersion = 0};
   }
 #else
   if (@available(macOS 11.0, iOS 11.0, *)) {
-    return {BackendFlavor::Metal, 2, 0};
+    return {.flavor = BackendFlavor::Metal, .majorVersion = 2, .minorVersion = 0};
   }
 #endif
 #endif
@@ -1308,6 +1364,7 @@ Holder<BindGroupTextureHandle> Device::createBindGroup(
     const BindGroupTextureDesc& desc,
     const IRenderPipelineState* IGL_NULLABLE /*compatiblePipeline*/,
     Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_DEBUG_ASSERT(!desc.debugName.empty(), "Each bind group should have a debug name");
 
   BindGroupTextureDesc description(desc);
@@ -1323,6 +1380,7 @@ Holder<BindGroupTextureHandle> Device::createBindGroup(
 
 Holder<BindGroupBufferHandle> Device::createBindGroup(const BindGroupBufferDesc& desc,
                                                       Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_DEBUG_ASSERT(!desc.debugName.empty(), "Each bind group should have a debug name");
 
   BindGroupBufferDesc description(desc);
@@ -1337,6 +1395,7 @@ Holder<BindGroupBufferHandle> Device::createBindGroup(const BindGroupBufferDesc&
 }
 
 void Device::destroy(BindGroupTextureHandle handle) {
+  IGL_PROFILER_FUNCTION();
   if (handle.empty()) {
     return;
   }
@@ -1345,6 +1404,7 @@ void Device::destroy(BindGroupTextureHandle handle) {
 }
 
 void Device::destroy(BindGroupBufferHandle handle) {
+  IGL_PROFILER_FUNCTION();
   if (handle.empty()) {
     return;
   }
@@ -1359,6 +1419,7 @@ void Device::destroy(SamplerHandle handle) {
 
 base::IFramebufferInterop* IGL_NULLABLE
 Device::createFramebufferInterop(const base::FramebufferInteropDesc& desc) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   auto framebuffer = createFramebufferFromBaseDesc(desc);
   if (!framebuffer) {
     return nullptr;

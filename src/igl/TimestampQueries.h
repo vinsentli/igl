@@ -7,9 +7,33 @@
 
 #pragma once
 
+#include <cstdint>
 #include <igl/ITrackedResource.h>
 
 namespace igl {
+
+enum class TimestampQueryFidelity : uint8_t {
+  // Minimize timestamp-side synchronization. Intended for one bracket that
+  // spans the whole frame; multiple adjacent brackets may report cumulative
+  // durations on backends whose earliest start stage does not wait for prior
+  // work.
+  LowOverhead,
+  // Preserve independent per-bracket durations, even when that requires the
+  // backend to wait for prior work before recording each start timestamp.
+  Accurate,
+};
+
+struct TimestampQueryResult {
+  uint64_t elapsedNanos = 0;
+  bool valid = false;
+};
+
+enum class TimestampIntervalSemantics : uint8_t {
+  /// Each slot is an independently measured duration and aggregates are the sum of valid slots.
+  IndependentElapsed,
+  /// Slot starts can share a frame origin, so aggregates use globally serialized end slices.
+  CommonStartSerializedEnds,
+};
 
 class ITimestampQueries : public ITrackedResource<ITimestampQueries> {
  public:
@@ -24,6 +48,24 @@ class ITimestampQueries : public ITrackedResource<ITimestampQueries> {
   /// Reset the counter to 0 for reuse (does not deallocate)
   virtual void reset() = 0;
 
+  /// Select the synchronization/accuracy trade-off for subsequent timestamp
+  /// writes. Each backend starts in the mode that preserves its historical
+  /// behavior; callers that require a particular fidelity must set it
+  /// explicitly rather than rely on a common default. Backends without an
+  /// equivalent lever accept and ignore this. Non-throwing by contract:
+  /// fidelity switches happen inside noexcept frame paths, and every
+  /// in-tree override stores an enum.
+  virtual void setTimingFidelity(TimestampQueryFidelity /*fidelity*/) noexcept {}
+
+  /// The fidelity governing subsequent timestamp writes: the value last set
+  /// through setTimingFidelity() on backends that implement the lever.
+  /// Backends without an equivalent lever report Accurate, matching their
+  /// independent per-slot query semantics. Lets a caller holding the base
+  /// reference observe which semantics it has instead of assuming a default.
+  [[nodiscard]] virtual TimestampQueryFidelity getTimingFidelity() const {
+    return TimestampQueryFidelity::Accurate;
+  }
+
   /// True if GPU has completed and all recorded results are readable
   [[nodiscard]] virtual bool resultsAvailable() const = 0;
 
@@ -34,6 +76,22 @@ class ITimestampQueries : public ITrackedResource<ITimestampQueries> {
   /// Default returns 0; override in backends that support per-slot elapsed queries.
   [[nodiscard]] virtual uint64_t getElapsedNanos(uint32_t /*slotIndex*/) const {
     return 0;
+  }
+
+  /// Get a timing slot's value together with its semantic validity.
+  /// A valid zero preserves the legacy unsupported/unavailable behavior; `valid == false` means
+  /// the backend identified a timer-query failure and consumers must not aggregate the value.
+  /// The default treats the legacy `getElapsedNanos()` value as valid for compatibility. Backends
+  /// with explicit driver error states override this method.
+  [[nodiscard]] virtual TimestampQueryResult getElapsedNanosResult(uint32_t slotIndex) const {
+    return {.elapsedNanos = getElapsedNanos(slotIndex), .valid = true};
+  }
+
+  /// Describes how per-slot timestamp intervals can be aggregated. Independent intervals can be
+  /// summed directly. Common-start intervals overlap and require global end-ordered serialization
+  /// before attributing an aggregate total. Defaults to independent elapsed intervals.
+  [[nodiscard]] virtual TimestampIntervalSemantics intervalSemantics() const {
+    return TimestampIntervalSemantics::IndependentElapsed;
   }
 
   /// Absolute GPU start timestamp for a timing slot, in nanoseconds.

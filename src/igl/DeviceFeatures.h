@@ -8,8 +8,9 @@
 #pragma once
 
 #include <cstdint>
+#include <type_traits>
 #include <igl/ColorSpace.h> // IWYU pragma: export
-#include <igl/Macros.h>
+// NOLINTNEXTLINE(facebook-unused-include-check)
 #include <igl/Texture.h>
 
 namespace igl {
@@ -26,6 +27,7 @@ namespace igl {
  * BufferRing                 Supports creating ring buffers with memory for each swapchain image
  * Compute                    Supports compute
  * CopyBuffer                 Supports ICommandBuffer::copyBuffer()
+ * FillBuffer                 Supports ICommandBuffer::fillBuffer()
  * DepthCompare               Supports setting depth compare function
  * DepthShaderRead            Supports reading depth texture from a shader
  * DrawFirstIndexFirstVertex  Supports firstIndex/firstVertex parameters in IRenderCommandEncoder::drawIndexed()
@@ -134,6 +136,7 @@ enum class DeviceFeatures {
   Timers,
   UniformBlocks,
   ValidationLayersEnabled,
+  FillBuffer,
 };
 // clang-format on
 
@@ -256,6 +259,8 @@ struct ShaderVersion {
   }
 };
 
+static_assert(std::is_trivially_copyable_v<ShaderVersion>);
+
 /**
  * @brief BackendVersion provides information on the backend flavor and version
  */
@@ -273,6 +278,8 @@ struct BackendVersion {
     return !(*this == other);
   }
 };
+
+static_assert(std::is_trivially_copyable_v<BackendVersion>);
 
 /**
  * @brief ICapabilities defines the capabilities interface. Currently, it is IDevice

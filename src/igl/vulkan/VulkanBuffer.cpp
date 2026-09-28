@@ -7,6 +7,7 @@
 
 #include "VulkanBuffer.h"
 
+#include <cstring>
 #include <igl/IGLSafeC.h>
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanContext.h>
@@ -42,7 +43,7 @@ VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
     };
 
     // Initialize VmaAllocation Info
-    if (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+    if ((memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0) {
       ciAlloc.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
       ciAlloc.preferredFlags =
           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
@@ -69,20 +70,20 @@ VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
                                 nullptr));
     }
 
-    IGL_DEBUG_ASSERT(vmaAllocation_ != nullptr);
+    IGL_DEBUG_ASSERT(vmaAllocation_);
 
     if (vmaAllocation_) {
       vmaSetAllocationName(static_cast<VmaAllocator>(ctx_.getVmaAllocator()),
                            vmaAllocation_,
                            IGL_FORMAT("VMA Allocation: {}", debugName).c_str());
 
-      VkMemoryPropertyFlags allocMemFlags = 0;
-      vmaGetAllocationMemoryProperties(
-          static_cast<VmaAllocator>(ctx_.getVmaAllocator()), vmaAllocation_, &allocMemFlags);
-      isCoherentMemory_ = (allocMemFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
-
       // handle memory-mapped buffers
-      if (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+      if ((memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0) {
+        VkMemoryPropertyFlags allocMemFlags = 0;
+        vmaGetAllocationMemoryProperties(
+            static_cast<VmaAllocator>(ctx_.getVmaAllocator()), vmaAllocation_, &allocMemFlags);
+        isCoherentMemory_ = (allocMemFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
+
         vmaMapMemory(
             static_cast<VmaAllocator>(ctx_.getVmaAllocator()), vmaAllocation_, &mappedPtr_);
       }
@@ -96,23 +97,23 @@ VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
       VkMemoryRequirements requirements = {};
       ctx_.vf_.vkGetBufferMemoryRequirements(device_, vkBuffer_, &requirements);
 
-      VkPhysicalDeviceMemoryProperties memProperties = {};
-      ctx_.vf_.vkGetPhysicalDeviceMemoryProperties(ctx_.getVkPhysicalDevice(), &memProperties);
-      const uint32_t memTypeIndex =
-          ivkFindMemoryType(&memProperties, requirements.memoryTypeBits, memFlags);
-      if (memTypeIndex < memProperties.memoryTypeCount) {
-        isCoherentMemory_ = (memProperties.memoryTypes[memTypeIndex].propertyFlags &
-                             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
-      }
-
+      VkMemoryPropertyFlags allocMemFlags = 0;
       VK_ASSERT(ivkAllocateMemory(&ctx_.vf_,
                                   ctx_.getVkPhysicalDevice(),
                                   device_,
                                   &requirements,
                                   memFlags,
                                   ctx.features().has_VK_KHR_buffer_device_address,
-                                  &vkMemory_));
+                                  &vkMemory_,
+                                  &allocMemFlags));
       VK_ASSERT(ctx_.vf_.vkBindBufferMemory(device_, vkBuffer_, vkMemory_, 0));
+
+      // Derive coherence from the memory type actually used for the allocation above. Only
+      // meaningful for host-visible buffers; DEVICE_LOCAL-only buffers stay non-coherent even when
+      // the chosen memory type happens to also be host-coherent (e.g. on UMA GPUs).
+      if ((memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0) {
+        isCoherentMemory_ = (allocMemFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
+      }
 
       VK_ASSERT(ivkSetDebugObjectName(&ctx_.vf_,
                                       device_,
@@ -122,7 +123,7 @@ VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
     }
 
     // handle memory-mapped buffers
-    if (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+    if ((memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0) {
       VK_ASSERT(ctx_.vf_.vkMapMemory(device_, vkMemory_, 0, bufferSize_, 0, &mappedPtr_));
     }
   }
@@ -134,7 +135,7 @@ VulkanBuffer::VulkanBuffer(const VulkanContext& ctx,
       &ctx_.vf_, device_, VK_OBJECT_TYPE_BUFFER, (uint64_t)vkBuffer_, debugName));
 
   // handle shader access
-  if (usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR) {
+  if ((usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR) != 0) {
     const VkBufferDeviceAddressInfo ai = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR,
         .buffer = vkBuffer_,
@@ -246,7 +247,7 @@ void VulkanBuffer::bufferSubData(size_t offset, size_t size, const void* data) {
   if (data) {
     checked_memcpy(static_cast<uint8_t*>(mappedPtr_) + offset, bufferSize_ - offset, data, size);
   } else {
-    memset(static_cast<uint8_t*>(mappedPtr_) + offset, 0, size);
+    std::memset(static_cast<uint8_t*>(mappedPtr_) + offset, 0, size);
   }
   if (!isCoherentMemory_) {
     flushMappedMemory(offset, size);

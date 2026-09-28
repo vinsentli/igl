@@ -8,7 +8,15 @@
 #include <igl/Shader.h>
 
 #include <cstring>
+#include <type_traits>
 #include <igl/IGLSafeC.h>
+#include <igl/Macros.h>
+
+static_assert(sizeof(igl::ShaderCompilerOptions) == 2);
+static_assert(std::is_trivially_copyable_v<igl::ShaderCompilerOptions>);
+
+static_assert(sizeof(igl::FunctionConstantValues::Entry) == 8);
+static_assert(std::is_trivially_copyable_v<igl::FunctionConstantValues::Entry>);
 
 namespace {
 
@@ -21,10 +29,10 @@ bool safeDataCompare(const void* IGL_NULLABLE a,
   }
   // Handle null pointers;
   if (a == nullptr || b == nullptr) {
-    // If both are null, consider them equal. If only ond is null, they are not equal
+    // If both are null, consider them equal. If only one is null, they are not equal
     return a == b;
   }
-  return (memcmp(a, b, lengthA) == 0);
+  return (std::memcmp(a, b, lengthA) == 0);
 }
 
 size_t safeDataHash(const void* IGL_NULLABLE ptr, size_t length) {
@@ -45,14 +53,14 @@ bool safeCStrCompare(const char* IGL_NULLABLE a, const char* IGL_NULLABLE b) {
   if (a == nullptr || b == nullptr) {
     return false;
   }
-  return (strcmp(a, b) == 0);
+  return (std::strcmp(a, b) == 0);
 }
 
 size_t safeCStrHash(const char* IGL_NULLABLE s) {
   if (s == nullptr) {
     return 0;
   }
-  return std::hash<std::string_view>()(std::string_view(s, strlen(s)));
+  return std::hash<std::string_view>()(std::string_view(s, std::strlen(s)));
 }
 
 } // namespace
@@ -98,7 +106,7 @@ size_t getConstantValueSize(ConstantValueType type) noexcept {
 }
 
 bool ShaderCompilerOptions::operator==(const ShaderCompilerOptions& other) const {
-  return fastMathEnabled == other.fastMathEnabled;
+  return fastMathEnabled == other.fastMathEnabled && optimization == other.optimization;
 }
 
 bool ShaderCompilerOptions::operator!=(const ShaderCompilerOptions& other) const {
@@ -108,6 +116,7 @@ bool ShaderCompilerOptions::operator!=(const ShaderCompilerOptions& other) const
 FunctionConstantValues& FunctionConstantValues::setConstantValue(uint8_t index,
                                                                  ConstantValueType type,
                                                                  const void* IGL_NONNULL value) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(type != ConstantValueType::Invalid);
   IGL_DEBUG_ASSERT(value);
   const size_t dataSize = getConstantValueSize(type);
@@ -146,7 +155,7 @@ bool FunctionConstantValues::operator==(const FunctionConstantValues& other) con
       continue;
     }
     const auto size = getConstantValueSize(a.type);
-    if (memcmp(data_.data() + a.offset, other.data_.data() + b.offset, size) != 0) {
+    if (std::memcmp(data_.data() + a.offset, other.data_.data() + b.offset, size) != 0) {
       return false;
     }
   }
@@ -215,6 +224,7 @@ bool ShaderModuleDesc::operator!=(const ShaderModuleDesc& other) const {
 ShaderLibraryDesc ShaderLibraryDesc::fromStringInput(const char* IGL_NONNULL librarySource,
                                                      std::vector<ShaderModuleInfo> moduleInfo,
                                                      std::string libraryDebugName) {
+  IGL_PROFILER_FUNCTION();
   ShaderLibraryDesc libraryDesc;
   libraryDesc.input.type = ShaderInputType::String;
   libraryDesc.input.source = librarySource;
@@ -231,6 +241,7 @@ ShaderLibraryDesc ShaderLibraryDesc::fromBinaryInput(const void* IGL_NONNULL lib
                                                      size_t libraryDataLength,
                                                      std::vector<ShaderModuleInfo> moduleInfo,
                                                      std::string libraryDebugName) {
+  IGL_PROFILER_FUNCTION();
   ShaderLibraryDesc libraryDesc;
   libraryDesc.input.type = ShaderInputType::Binary;
   libraryDesc.input.data = libraryData;
@@ -262,6 +273,7 @@ IShaderLibrary::IShaderLibrary(std::vector<std::shared_ptr<IShaderModule>> modul
   modules_(std::move(modules)) {}
 
 std::shared_ptr<IShaderModule> IShaderLibrary::getShaderModule(const std::string& entryPoint) {
+  IGL_PROFILER_FUNCTION();
   for (const auto& sm : modules_) {
     if (sm && sm->info().entryPoint == entryPoint) {
       return sm;
@@ -272,6 +284,7 @@ std::shared_ptr<IShaderModule> IShaderLibrary::getShaderModule(const std::string
 
 std::shared_ptr<IShaderModule> IShaderLibrary::getShaderModule(ShaderStage stage,
                                                                const std::string& entryPoint) {
+  IGL_PROFILER_FUNCTION();
   for (const auto& sm : modules_) {
     if (sm) {
       const auto& info = sm->info();
@@ -286,6 +299,7 @@ std::shared_ptr<IShaderModule> IShaderLibrary::getShaderModule(ShaderStage stage
 ShaderStagesDesc ShaderStagesDesc::fromRenderModules(
     std::shared_ptr<IShaderModule> vertexModule,
     std::shared_ptr<IShaderModule> fragmentModule) {
+  IGL_PROFILER_FUNCTION();
   std::string debugName = (vertexModule ? vertexModule->info().debugName : std::string()) + ", " +
                           (fragmentModule ? fragmentModule->info().debugName : std::string());
   return ShaderStagesDesc{
@@ -300,6 +314,7 @@ ShaderStagesDesc ShaderStagesDesc::fromMeshRenderModules(
     std::shared_ptr<IShaderModule> taskModule,
     std::shared_ptr<IShaderModule> meshModule,
     std::shared_ptr<IShaderModule> fragmentModule) {
+  IGL_PROFILER_FUNCTION();
   std::string debugName = (taskModule ? taskModule->info().debugName : std::string()) + ", " +
                           (meshModule ? meshModule->info().debugName : std::string()) + ", " +
                           (fragmentModule ? fragmentModule->info().debugName : std::string());
@@ -313,6 +328,7 @@ ShaderStagesDesc ShaderStagesDesc::fromMeshRenderModules(
 }
 
 ShaderStagesDesc ShaderStagesDesc::fromComputeModule(std::shared_ptr<IShaderModule> computeModule) {
+  IGL_PROFILER_FUNCTION();
   std::string debugName = computeModule ? computeModule->info().debugName : "igl/Shader.cpp";
   return ShaderStagesDesc{
       .computeModule = std::move(computeModule),
@@ -365,7 +381,9 @@ namespace std {
 // @fb-only
 
 size_t hash<igl::ShaderCompilerOptions>::operator()(const igl::ShaderCompilerOptions& key) const {
-  const size_t result = std::hash<bool>()(key.fastMathEnabled);
+  static_assert(std::is_same_v<uint8_t, std::underlying_type_t<igl::ShaderOptimization>>);
+  size_t result = std::hash<bool>()(key.fastMathEnabled);
+  result ^= std::hash<uint8_t>()(static_cast<uint8_t>(key.optimization));
   return result;
 }
 
@@ -392,7 +410,7 @@ size_t hash<igl::FunctionConstantValues>::operator()(const igl::FunctionConstant
 }
 
 size_t hash<igl::ShaderModuleInfo>::operator()(const igl::ShaderModuleInfo& key) const {
-  static_assert(std::is_same_v<uint8_t, std::underlying_type<igl::ShaderStage>::type>);
+  static_assert(std::is_same_v<uint8_t, std::underlying_type_t<igl::ShaderStage>>);
   size_t result = std::hash<uint8_t>()(static_cast<uint8_t>(key.stage));
   result ^= std::hash<string>()(key.entryPoint);
   result ^= std::hash<igl::FunctionConstantValues>()(key.functionConstantValues);
@@ -400,15 +418,19 @@ size_t hash<igl::ShaderModuleInfo>::operator()(const igl::ShaderModuleInfo& key)
 }
 
 size_t hash<igl::ShaderInput>::operator()(const igl::ShaderInput& key) const {
-  static_assert(std::is_same_v<uint8_t, std::underlying_type<igl::ShaderInputType>::type>);
+  static_assert(std::is_same_v<uint8_t, std::underlying_type_t<igl::ShaderInputType>>);
   size_t result = safeCStrHash(key.source);
   result ^= safeDataHash(key.data, key.length);
   result ^= std::hash<uint8_t>()(EnumToValue(key.type));
+  // Mix in the compiler options so the hash stays consistent with ShaderInput::operator==,
+  // which compares `options`. Without this, ShaderModuleDesc/ShaderLibraryDesc cache keys do
+  // not change when only ShaderOptimization changes, so debug/release shaders would collide.
+  result ^= std::hash<igl::ShaderCompilerOptions>()(key.options);
   return result;
 }
 
 size_t hash<igl::ShaderModuleDesc>::operator()(const igl::ShaderModuleDesc& key) const {
-  static_assert(std::is_same_v<uint8_t, std::underlying_type<igl::ShaderInputType>::type>);
+  static_assert(std::is_same_v<uint8_t, std::underlying_type_t<igl::ShaderInputType>>);
   size_t result = std::hash<igl::ShaderModuleInfo>()(key.info);
   result ^= std::hash<igl::ShaderInput>()(key.input);
   result ^= std::hash<string>()(key.debugName);
@@ -416,7 +438,7 @@ size_t hash<igl::ShaderModuleDesc>::operator()(const igl::ShaderModuleDesc& key)
 }
 
 size_t hash<igl::ShaderLibraryDesc>::operator()(const igl::ShaderLibraryDesc& key) const {
-  static_assert(std::is_same_v<uint8_t, std::underlying_type<igl::ShaderInputType>::type>);
+  static_assert(std::is_same_v<uint8_t, std::underlying_type_t<igl::ShaderInputType>>);
   size_t result = std::hash<size_t>()(key.moduleInfo.size());
   for (const auto& info : key.moduleInfo) {
     result ^= std::hash<igl::ShaderModuleInfo>()(info);

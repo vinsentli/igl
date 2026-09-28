@@ -133,10 +133,11 @@ void TinyRenderer::init() {
   }
 
   { // Set up our render pass descriptor
-    renderPassDesc_.colorAttachments.resize(1);
-    renderPassDesc_.colorAttachments[0].loadAction = LoadAction::Clear;
-    renderPassDesc_.colorAttachments[0].storeAction = StoreAction::Store;
-    renderPassDesc_.colorAttachments[0].clearColor = {0.0, 0.0, 0.5, 1.0};
+    renderPassDesc_ = {
+        .colorAttachments = {{.loadAction = LoadAction::Clear,
+                              .storeAction = StoreAction::Store,
+                              .clearColor = {0.0, 0.0, 0.5, 1.0}}},
+    };
   }
 }
 
@@ -150,8 +151,7 @@ void TinyRenderer::render() {
   throwOnBadResult(result);
 
   if (framebuffer_ == nullptr) {
-    FramebufferDesc framebufferDesc;
-    framebufferDesc.colorAttachments[0].texture = viewTexture;
+    const FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = viewTexture}}};
     framebuffer_ = device_->createFramebuffer(framebufferDesc, &result);
     throwOnBadResult(result);
   } else {

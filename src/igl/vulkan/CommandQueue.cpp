@@ -53,7 +53,7 @@ SubmitHandle CommandQueue::submit(const ICommandBuffer& cmdBuffer, bool /* endOf
 #if IGL_COMMAND_QUEUE_DEBUG_FENCES
   // Create label with Fence handle and Fence FD, if available
   // A string such as "Submit command buffer (hex: 0x149b90a10, fd: 12345)" has 55 characters
-  char labelName[60];
+  char labelName[60] = {};
   if (vkCmdBuffer->wrapper_.fence_.exportable()) {
     std::snprintf(labelName,
                   sizeof(labelName),
@@ -73,7 +73,7 @@ SubmitHandle CommandQueue::submit(const ICommandBuffer& cmdBuffer, bool /* endOf
                               K_COLOR_COMMAND_BUFFER_SUBMISSION_WITH_FENCE.toFloatPtr());
 #endif // IGL_COMMAND_QUEUE_DEBUG_FENCES
 
-  auto submitHandle = endCommandBuffer(ctx, vkCmdBuffer, true);
+  const auto submitHandle = endCommandBuffer(ctx, vkCmdBuffer, true);
 
   return submitHandle;
 }
@@ -88,16 +88,25 @@ SubmitHandle CommandQueue::endCommandBuffer(VulkanContext& ctx,
   const bool shouldPresent = ctx.hasSwapchain() && cmdBuffer->isFromSwapchain() && present;
 #if USE_DEFAULT_SWAPCHAIN
   if (shouldPresent) {
+    // Injected-semaphore overflow below discards the command buffer and skips present(), leaving
+    // the swapchain image acquired this frame unpresented; sustained failures can perturb swapchain
+    // state and starve acquireNextImage(). Callers must stay within kMaxInjectedSemaphores.
     if (ctx.timelineSemaphore_) {
       // if we are presenting a swapchain image, signal our timeline semaphore
       const uint64_t signalValue =
           ctx.swapchain_->getFrameNumber() + ctx.swapchain_->getNumSwapchainImages();
       // we wait for this value next time we want to acquire this swapchain image
+      if (!ctx.immediate_->signalSemaphore(ctx.timelineSemaphore_->getVkSemaphore(), signalValue)) {
+        ctx.immediate_->discard(cmdBuffer->wrapper_);
+        return finishCommandBuffer({});
+      }
       ctx.swapchain_->timelineWaitValues[ctx.swapchain_->getCurrentImageIndex()] = signalValue;
-      ctx.immediate_->signalSemaphore(ctx.timelineSemaphore_->getVkSemaphore(), signalValue);
     } else {
       // this can be removed once we switch to timeline semaphores
-      ctx.immediate_->waitSemaphore(ctx.swapchain_->getSemaphore());
+      if (!ctx.immediate_->waitSemaphore(ctx.swapchain_->getSemaphore())) {
+        ctx.immediate_->discard(cmdBuffer->wrapper_);
+        return finishCommandBuffer({});
+      }
     }
   }
   cmdBuffer->lastSubmitHandle_ = ctx.immediate_->submit(cmdBuffer->wrapper_);

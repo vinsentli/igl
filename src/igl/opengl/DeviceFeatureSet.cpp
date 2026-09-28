@@ -7,10 +7,12 @@
 
 #include <igl/opengl/DeviceFeatureSet.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <optional>
 #include <igl/Common.h>
+#include <igl/Macros.h>
 #include <igl/opengl/GLIncludes.h>
 #include <igl/opengl/IContext.h>
 
@@ -241,6 +243,7 @@ void DeviceFeatureSet::initializeVersion(GLVersion version, const std::string& v
 
 void DeviceFeatureSet::initializeExtensions(std::string extensions,
                                             std::unordered_set<std::string> supportedExtensions) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   extensions_ = std::move(extensions);
   supportedExtensions_ = std::move(supportedExtensions);
 }
@@ -406,6 +409,7 @@ bool DeviceFeatureSet::isExtensionSupported(Extensions extension) const {
 }
 
 GpuTimerTier DeviceFeatureSet::getGpuTimerTier() const {
+  IGL_PROFILER_FUNCTION();
   if (!hasExtension(Extensions::TimerQuery)) {
     return GpuTimerTier::Disabled;
   }
@@ -420,6 +424,7 @@ uint32_t DeviceFeatureSet::getTimerQueryMaxSlots() const {
 
 // NOLINTNEXTLINE(misc-no-recursion)
 bool DeviceFeatureSet::isFeatureSupportedTextureGroup(DeviceFeatures feature) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (feature) {
   case DeviceFeatures::TextureFilterAnisotropic:
     return hasDesktopVersion(*this, GLVersion::v4_6) ||
@@ -500,6 +505,7 @@ bool DeviceFeatureSet::isFeatureSupportedTextureGroup(DeviceFeatures feature) co
 
 // NOLINTNEXTLINE(misc-no-recursion)
 bool DeviceFeatureSet::isFeatureSupportedMiscGroup(DeviceFeatures feature) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (feature) {
   case DeviceFeatures::MultiSample:
     return hasDesktopVersion(*this, GLVersion::v3_0) ||
@@ -612,8 +618,10 @@ bool DeviceFeatureSet::isFeatureSupportedMiscGroup(DeviceFeatures feature) const
 
 // NOLINTNEXTLINE(misc-no-recursion)
 bool DeviceFeatureSet::isFeatureSupported(DeviceFeatures feature) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (feature) {
   case DeviceFeatures::CopyBuffer:
+  case DeviceFeatures::FillBuffer:
   case DeviceFeatures::MultiSampleResolve:
   case DeviceFeatures::MeshShaders:
   case DeviceFeatures::TextureViews:
@@ -658,6 +666,7 @@ bool DeviceFeatureSet::isFeatureSupported(DeviceFeatures feature) const {
 }
 
 bool DeviceFeatureSet::isInternalFeatureSupportedBufferGroup(InternalFeatures feature) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (feature) {
   case InternalFeatures::DrawArraysIndirect:
     return hasDesktopOrESVersionOrExtension(
@@ -709,6 +718,7 @@ bool DeviceFeatureSet::isInternalFeatureSupportedBufferGroup(InternalFeatures fe
 }
 
 bool DeviceFeatureSet::isInternalFeatureSupportedTextureGroup(InternalFeatures feature) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (feature) {
   case InternalFeatures::TexStorage:
     return hasDesktopOrESVersionOrExtension(
@@ -811,6 +821,7 @@ bool DeviceFeatureSet::isInternalFeatureSupported(InternalFeatures feature) cons
 
 // NOLINTNEXTLINE(misc-no-recursion)
 bool DeviceFeatureSet::isColorFilterableFeatureSupported(TextureFeatures feature) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (feature) {
   case TextureFeatures::ColorFilterable16f:
     return hasDesktopOrESVersion(*this, GLVersion::v2_0, GLVersion::v3_0_ES) ||
@@ -844,6 +855,7 @@ bool DeviceFeatureSet::isColorFilterableFeatureSupported(TextureFeatures feature
 
 // NOLINTNEXTLINE(misc-no-recursion)
 bool DeviceFeatureSet::isColorRenderbufferFeatureSupported(TextureFeatures feature) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (feature) {
   case TextureFeatures::ColorRenderbuffer16f:
     return hasDesktopOrESVersionOrExtension(
@@ -894,6 +906,7 @@ bool DeviceFeatureSet::isColorRenderbufferFeatureSupported(TextureFeatures featu
 
 // NOLINTNEXTLINE(misc-no-recursion)
 bool DeviceFeatureSet::isColorTexImageFeatureSupported(TextureFeatures feature) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (feature) {
   case TextureFeatures::ColorTexImage16f:
     return hasDesktopOrESVersion(*this, GLVersion::v3_0, GLVersion::v3_0_ES) ||
@@ -970,6 +983,7 @@ bool DeviceFeatureSet::isColorTexImageFeatureSupported(TextureFeatures feature) 
 
 // NOLINTNEXTLINE(misc-no-recursion)
 bool DeviceFeatureSet::isColorTexStorageFloatFeatureSupported(TextureFeatures feature) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (feature) {
   case TextureFeatures::ColorTexStorage16f:
     return hasDesktopOrESVersion(*this, GLVersion::v4_2, GLVersion::v3_0_ES) ||
@@ -990,6 +1004,7 @@ bool DeviceFeatureSet::isColorTexStorageFloatFeatureSupported(TextureFeatures fe
 
 // NOLINTNEXTLINE(misc-no-recursion)
 bool DeviceFeatureSet::isColorTexStorageOtherFeatureSupported(TextureFeatures feature) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (feature) {
   case TextureFeatures::ColorTexStorageA8:
     // Sized alpha texture were available on Desktop OpenGL prior to deprecation in
@@ -1038,6 +1053,7 @@ bool DeviceFeatureSet::isColorTexStorageOtherFeatureSupported(TextureFeatures fe
 
 // NOLINTNEXTLINE(misc-no-recursion)
 bool DeviceFeatureSet::isColorTexStorageFeatureSupported(TextureFeatures feature) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (feature) {
   case TextureFeatures::ColorTexStorage16f:
   case TextureFeatures::ColorTexStorage32f:
@@ -1058,6 +1074,7 @@ bool DeviceFeatureSet::isColorTexStorageFeatureSupported(TextureFeatures feature
 }
 
 bool DeviceFeatureSet::isDepthRenderbufferFeatureSupported(TextureFeatures feature) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (feature) {
   case TextureFeatures::DepthFilterable:
     return hasDesktopVersion(*this, GLVersion::v2_0);
@@ -1101,6 +1118,7 @@ bool DeviceFeatureSet::isDepthRenderbufferFeatureSupported(TextureFeatures featu
 
 // NOLINTNEXTLINE(misc-no-recursion)
 bool DeviceFeatureSet::isDepthTexImageFeatureSupported(TextureFeatures feature) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (feature) {
   case TextureFeatures::DepthTexImage:
     return hasDesktopOrESVersion(*this, GLVersion::v2_0, GLVersion::v3_0_ES) ||
@@ -1142,6 +1160,7 @@ bool DeviceFeatureSet::isDepthTexImageFeatureSupported(TextureFeatures feature) 
 
 // NOLINTNEXTLINE(misc-no-recursion)
 bool DeviceFeatureSet::isDepthFeatureSupported(TextureFeatures feature) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (feature) {
   case TextureFeatures::DepthFilterable:
   case TextureFeatures::DepthRenderbuffer16:
@@ -1167,6 +1186,7 @@ bool DeviceFeatureSet::isDepthFeatureSupported(TextureFeatures feature) const {
 }
 
 bool DeviceFeatureSet::isCompressionFeatureSupported(TextureFeatures feature) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (feature) {
   case TextureFeatures::TextureCompressionAstc:
     return hasESVersion(*this, GLVersion::v3_2_ES) ||
@@ -1295,7 +1315,7 @@ bool DeviceFeatureSet::isTextureFeatureSupported(TextureFeatures feature) const 
 bool DeviceFeatureSet::hasExtension(Extensions extension) const {
   const uint64_t extensionIndex = static_cast<uint64_t>(extension);
   IGL_DEBUG_ASSERT(extensionIndex < 64);
-  const uint64_t extensionBit = 1ull << extensionIndex;
+  const uint64_t extensionBit = 1ULL << extensionIndex;
   if ((extensionCacheInitialized_ & extensionBit) == 0) {
     if (isExtensionSupported(extension)) {
       extensionCache_ |= extensionBit;
@@ -1310,7 +1330,7 @@ bool DeviceFeatureSet::hasExtension(Extensions extension) const {
 bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
   const uint64_t featureIndex = static_cast<uint64_t>(feature);
   IGL_DEBUG_ASSERT(featureIndex < 64);
-  const uint64_t featureBit = 1ull << featureIndex;
+  const uint64_t featureBit = 1ULL << featureIndex;
   if ((featureCacheInitialized_ & featureBit) == 0) {
     if (isFeatureSupported(feature)) {
       featureCache_ |= featureBit;
@@ -1339,7 +1359,7 @@ bool DeviceFeatureSet::hasInternalFeature(InternalFeatures feature) const {
 bool DeviceFeatureSet::hasTextureFeature(TextureFeatures feature) const {
   const uint64_t featureIndex = static_cast<uint64_t>(feature);
   IGL_DEBUG_ASSERT(featureIndex < 64);
-  const uint64_t featureBit = 1ull << featureIndex;
+  const uint64_t featureBit = 1ULL << featureIndex;
   if ((textureFeatureCacheInitialized_ & featureBit) == 0) {
     if (isTextureFeatureSupported(feature)) {
       textureFeatureCache_ |= featureBit;
@@ -1396,6 +1416,7 @@ bool DeviceFeatureSet::hasRequirement(DeviceRequirement requirement) const {
 
 // NOLINTNEXTLINE(misc-no-recursion)
 bool DeviceFeatureSet::hasInternalRequirementColorGroup(InternalRequirement requirement) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (requirement) {
   case InternalRequirement::ColorTexImageRgb5A1Unsized:
     return usesOpenGLES() && !hasESVersion(*this, GLVersion::v3_0_ES);
@@ -1417,6 +1438,7 @@ bool DeviceFeatureSet::hasInternalRequirementColorGroup(InternalRequirement requ
 }
 
 bool DeviceFeatureSet::hasInternalRequirementMiscGroup(InternalRequirement requirement) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (requirement) {
   case InternalRequirement::DrawBuffersExtReq:
     return usesOpenGLES() && !hasESVersion(*this, GLVersion::v3_0_ES);
@@ -1492,6 +1514,7 @@ bool DeviceFeatureSet::hasInternalRequirementMiscGroup(InternalRequirement requi
 
 // NOLINTNEXTLINE(misc-no-recursion)
 bool DeviceFeatureSet::hasInternalRequirement(InternalRequirement requirement) const {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (requirement) {
   case InternalRequirement::DebugMessageExtReq:
     return !hasDesktopOrESVersion(*this, GLVersion::v4_3, GLVersion::v3_2_ES);
@@ -1519,16 +1542,18 @@ bool DeviceFeatureSet::hasInternalRequirement(InternalRequirement requirement) c
 }
 
 bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_t& result) const {
+  IGL_PROFILER_FUNCTION();
   GLint tsize = 0;
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (featureLimits) {
   case DeviceFeatureLimits::MaxTextureDimension1D2D:
     glContext_.getIntegerv(GL_MAX_TEXTURE_SIZE, &tsize);
-    result = (size_t)tsize;
+    result = static_cast<size_t>(tsize);
     return true;
 
   case DeviceFeatureLimits::MaxCubeMapDimension:
     glContext_.getIntegerv(GL_MAX_CUBE_MAP_TEXTURE_SIZE, &tsize);
-    result = (size_t)tsize;
+    result = static_cast<size_t>(tsize);
     return true;
 
   case DeviceFeatureLimits::MaxVertexUniformVectors:
@@ -1549,7 +1574,7 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
         glContext_.getIntegerv(GL_MAX_SAMPLES, &tsize);
       }
     }
-    result = (size_t)tsize;
+    result = static_cast<size_t>(tsize);
     return true;
   case DeviceFeatureLimits::MaxPushConstantBytes:
     result = 0;
@@ -1564,7 +1589,7 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
     if (hasFeature(DeviceFeatures::UniformBlocks)) {
       glContext_.getIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &tsize);
     }
-    result = (size_t)tsize;
+    result = static_cast<size_t>(tsize);
     return true;
   case DeviceFeatureLimits::PushConstantsAlignment:
     result = 0;
@@ -1574,14 +1599,14 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
     if (hasFeature(DeviceFeatures::StorageBuffers)) {
       glContext_.getIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &tsize);
     }
-    result = (size_t)tsize;
+    result = static_cast<size_t>(tsize);
     return true;
   case DeviceFeatureLimits::BufferAlignment:
     result = 16;
     if (hasFeature(DeviceFeatures::UniformBlocks)) {
       if (glContext_.isCurrentContext()) {
         glContext_.getIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &tsize);
-        result = std::max((size_t)tsize, result);
+        result = std::max(static_cast<size_t>(tsize), result);
       }
     }
     return true;
@@ -1600,7 +1625,7 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
     return true;
   case DeviceFeatureLimits::MaxTextureDimension3D:
     glContext_.getIntegerv(GL_MAX_3D_TEXTURE_SIZE, &tsize);
-    result = (size_t)tsize;
+    result = static_cast<size_t>(tsize);
     return true;
   case DeviceFeatureLimits::MaxComputeWorkGroupSizeX:
     if (hasFeature(DeviceFeatures::Compute)) {
@@ -1630,7 +1655,7 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
     if (hasFeature(DeviceFeatures::Compute)) {
 #if defined(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS)
       glContext_.getIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &tsize);
-      result = (size_t)tsize;
+      result = static_cast<size_t>(tsize);
 #endif
     } else {
       result = 0;
@@ -1645,11 +1670,11 @@ bool DeviceFeatureSet::getFeatureLimits(DeviceFeatureLimits featureLimits, size_
     return false;
   case DeviceFeatureLimits::MaxVertexInputAttributes:
     glContext_.getIntegerv(GL_MAX_VERTEX_ATTRIBS, &tsize);
-    result = (size_t)tsize;
+    result = static_cast<size_t>(tsize);
     return true;
   case DeviceFeatureLimits::MaxColorAttachments:
     glContext_.getIntegerv(GL_MAX_COLOR_ATTACHMENTS, &tsize);
-    result = (size_t)tsize;
+    result = static_cast<size_t>(tsize);
     return true;
   case DeviceFeatureLimits::MaxVertexShaderStorageBlocks:
     tsize = 0;
@@ -1694,6 +1719,7 @@ DeviceFeatureSet::getColorUNorm8BasicTextureFormatCapabilities(TextureFormat for
   const auto unsupported = ICapabilities::TextureFormatCapabilityBits::Unsupported;
 
   ICapabilities::TextureFormatCapabilities capabilities = unsupported;
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (format) {
   case TextureFormat::LA_UNorm8:
   case TextureFormat::L_UNorm8:
@@ -1757,6 +1783,7 @@ DeviceFeatureSet::getColorUNorm8BgraSrgbTextureFormatCapabilities(TextureFormat 
   const auto unsupported = ICapabilities::TextureFormatCapabilityBits::Unsupported;
 
   ICapabilities::TextureFormatCapabilities capabilities = unsupported;
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (format) {
   case TextureFormat::BGRA_UNorm8:
     // EXT_texture_format_BGRA8888 adds support for GL_BGRA as a Renderbuffer format, but this was
@@ -1810,6 +1837,7 @@ DeviceFeatureSet::getColorUNormWideTextureFormatCapabilities(TextureFormat forma
   const auto all = sampled | sampledFiltered | storage | attachment | sampledAttachment;
 
   ICapabilities::TextureFormatCapabilities capabilities = unsupported;
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (format) {
   case TextureFormat::R_UNorm16:
   case TextureFormat::RG_UNorm16:
@@ -1841,6 +1869,7 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getColorF16TextureFor
   const auto unsupported = ICapabilities::TextureFormatCapabilityBits::Unsupported;
 
   ICapabilities::TextureFormatCapabilities capabilities = unsupported;
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (format) {
   case TextureFormat::RGBA_F16:
     if (hasFeature(DeviceFeatures::TextureHalfFloat)) {
@@ -1910,6 +1939,7 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getColorF32TextureFor
   const auto unsupported = ICapabilities::TextureFormatCapabilityBits::Unsupported;
 
   ICapabilities::TextureFormatCapabilities capabilities = unsupported;
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (format) {
   case TextureFormat::RGBA_F32:
     if (hasFeature(DeviceFeatures::TextureFloat)) {
@@ -1974,6 +2004,7 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getSpecialColorTextur
   const auto all = sampled | sampledFiltered | storage | attachment | sampledAttachment;
 
   ICapabilities::TextureFormatCapabilities capabilities = unsupported;
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (format) {
   case TextureFormat::R_UInt16:
   case TextureFormat::RG_UInt16:
@@ -2027,6 +2058,18 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getSpecialColorTextur
       capabilities |= sampled | sampledFiltered;
     }
     break;
+  case TextureFormat::B10G11R11_UFloat:
+    if (hasDesktopOrESVersion(*this, GLVersion::v3_0, GLVersion::v3_0_ES)) {
+      capabilities |= sampled | sampledFiltered;
+      if (hasInternalFeature(InternalFeatures::TexStorage)) {
+        capabilities |= ICapabilities::TextureFormatCapabilityBits::Storage;
+      }
+      if (hasDesktopOrESVersionOrExtension(
+              *this, GLVersion::v3_0, GLVersion::v3_2_ES, "GL_EXT_color_buffer_float")) {
+        capabilities |= attachment | sampledAttachment;
+      }
+    }
+    break;
   case TextureFormat::RGB10_A2_UNorm_Rev:
     if (hasTextureFeature(TextureFeatures::ColorTexImageRgb10A2)) {
       capabilities |= sampled | sampledFiltered;
@@ -2075,6 +2118,7 @@ DeviceFeatureSet::getDepthUNorm16UNorm32TextureFormatCapabilities(TextureFormat 
   const auto unsupported = ICapabilities::TextureFormatCapabilityBits::Unsupported;
 
   ICapabilities::TextureFormatCapabilities capabilities = unsupported;
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (format) {
   case TextureFormat::Z_UNorm16:
     if (hasTextureFeature(TextureFeatures::DepthTexImage)) {
@@ -2165,6 +2209,7 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getStencilTextureForm
   const auto unsupported = ICapabilities::TextureFormatCapabilityBits::Unsupported;
 
   ICapabilities::TextureFormatCapabilities capabilities = unsupported;
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (format) {
   case TextureFormat::S8_UInt_Z24_UNorm:
     if (hasTextureFeature(TextureFeatures::Depth24Stencil8)) {
@@ -2203,6 +2248,7 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getCompressedTextureF
   const auto unsupported = ICapabilities::TextureFormatCapabilityBits::Unsupported;
 
   ICapabilities::TextureFormatCapabilities capabilities = unsupported;
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (format) {
   case TextureFormat::RGBA_ASTC_4x4:
   case TextureFormat::SRGB8_A8_ASTC_4x4:
@@ -2281,6 +2327,7 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getCompressedTextureF
 /// @return a combination of TextureFormatCapabilities flags
 ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getTextureFormatCapabilities(
     TextureFormat format) const {
+  IGL_PROFILER_FUNCTION();
   // TODO: Remove this fallback once devices can properly provide a supported format
   if (format == TextureFormat::S8_UInt_Z32_UNorm &&
       !hasTextureFeature(TextureFeatures::Depth32FStencil8)) {
@@ -2295,6 +2342,7 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getTextureFormatCapab
   ICapabilities::TextureFormatCapabilities capabilities = unsupported;
 
   // First check common formats
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (format) {
   case TextureFormat::LA_UNorm8:
   case TextureFormat::L_UNorm8:
@@ -2342,6 +2390,7 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getTextureFormatCapab
   case TextureFormat::R4G2B2_UNorm_Rev_Apple:
   case TextureFormat::R5G5B5A1_UNorm:
   case TextureFormat::BGR10_A2_Unorm:
+  case TextureFormat::B10G11R11_UFloat:
   case TextureFormat::RGB10_A2_UNorm_Rev:
   case TextureFormat::RGB10_A2_Uint_Rev:
   case TextureFormat::BGRA_UNorm8_Rev:
@@ -2431,6 +2480,7 @@ ICapabilities::TextureFormatCapabilities DeviceFeatureSet::getTextureFormatCapab
 }
 
 uint32_t DeviceFeatureSet::getMaxVertexUniforms() const {
+  IGL_PROFILER_FUNCTION();
   GLint tsize = 0;
   // MaxVertexUniformVectors is the maximum number of 4-element vectors that can be passed as
   // uniform to a vertex shader. All uniforms are 4-element aligned, a single uniform counts at
@@ -2448,6 +2498,7 @@ uint32_t DeviceFeatureSet::getMaxVertexUniforms() const {
 }
 
 uint32_t DeviceFeatureSet::getMaxFragmentUniforms() const {
+  IGL_PROFILER_FUNCTION();
   GLint tsize = 0;
   // PLease see comments above in getMaxVertexUniforms
   if (hasDesktopOrESVersion(*this, GLVersion::v2_0, GLVersion::v3_0_ES)) {
@@ -2460,6 +2511,7 @@ uint32_t DeviceFeatureSet::getMaxFragmentUniforms() const {
 }
 
 uint32_t DeviceFeatureSet::getMaxComputeUniforms() const {
+  IGL_PROFILER_FUNCTION();
   if (hasFeature(DeviceFeatures::Compute)) {
     GLint tsize = 0;
     glContext_.getIntegerv(GL_MAX_COMPUTE_UNIFORM_COMPONENTS, &tsize);

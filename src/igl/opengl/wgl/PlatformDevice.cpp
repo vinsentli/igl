@@ -10,18 +10,18 @@
 
 #include <igl/opengl/wgl/PlatformDevice.h>
 
+#include <igl/Macros.h>
 #include <igl/opengl/TextureBuffer.h>
 #include <igl/opengl/ViewTextureTarget.h>
 #include <igl/opengl/wgl/Context.h>
 #include <igl/opengl/wgl/Device.h>
 
-namespace igl {
-namespace opengl {
-namespace wgl {
+namespace igl::opengl::wgl {
 
 PlatformDevice::PlatformDevice(Device& owner) : opengl::PlatformDevice(owner) {}
 
 std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(Result* outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   RECT curDimension;
 
   auto context = static_cast<Context*>(getSharedContext().get());
@@ -39,8 +39,8 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(Result
   CopyRect(&dimension_, &curDimension);
 
   const auto desc = TextureDesc::new2D(TextureFormat::RGBA_UNorm8,
-                                       (size_t)(dimension_.right - dimension_.left),
-                                       (size_t)(dimension_.bottom - dimension_.top),
+                                       static_cast<size_t>(dimension_.right - dimension_.left),
+                                       static_cast<size_t>(dimension_.bottom - dimension_.top),
                                        TextureDesc::TextureUsageBits::Attachment,
                                        "NativeDrawable");
   auto texture = std::make_shared<ViewTextureTarget>(getContext(), desc.format);
@@ -61,6 +61,7 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDrawable(Result
 std::shared_ptr<ITexture> PlatformDevice::createTextureFromNativeDepth(int width,
                                                                        int height,
                                                                        Result* outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (drawableTexture_ && drawableTexture_->getWidth() == width &&
       drawableTexture_->getHeight() == height) {
     Result::setResult(outResult, Result::Code::Ok);
@@ -99,6 +100,4 @@ bool PlatformDevice::isType(PlatformDeviceType t) const noexcept {
   return t == Type || opengl::PlatformDevice::isType(t);
 }
 
-} // namespace wgl
-} // namespace opengl
-} // namespace igl
+} // namespace igl::opengl::wgl

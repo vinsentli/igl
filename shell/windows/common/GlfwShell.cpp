@@ -159,19 +159,19 @@ bool GlfwShell::createWindow() noexcept {
     }
     uint32_t modifiers = 0;
     if (mods & GLFW_MOD_SHIFT) {
-      modifiers |= igl::shell::kKeyEventModifierShift;
+      modifiers |= kKeyEventModifierShift;
     }
     if (mods & GLFW_MOD_CONTROL) {
-      modifiers |= igl::shell::kKeyEventModifierControl;
+      modifiers |= kKeyEventModifierControl;
     }
     if (mods & GLFW_MOD_ALT) {
-      modifiers |= igl::shell::kKeyEventModifierOption;
+      modifiers |= kKeyEventModifierOption;
     }
     if (mods & GLFW_MOD_CAPS_LOCK) {
-      modifiers |= igl::shell::kKeyEventModifierCapsLock;
+      modifiers |= kKeyEventModifierCapsLock;
     }
     if (mods & GLFW_MOD_NUM_LOCK) {
-      modifiers |= igl::shell::kKeyEventModifierNumLock;
+      modifiers |= kKeyEventModifierNumLock;
     }
     shell->platform_->getInputDispatcher().queueEvent(
         KeyEvent(action == GLFW_PRESS, key, modifiers));
@@ -248,6 +248,7 @@ void GlfwShell::run() noexcept {
       if (window_) {
         glfwPollEvents();
       }
+      // NOLINTNEXTLINE(facebook-hte-BadCall-sleep_for)
       std::this_thread::sleep_for(std::chrono::milliseconds(16));
       continue;
     }
@@ -275,9 +276,11 @@ void GlfwShell::run() noexcept {
       const double endTime = RenderSession::getSeconds();
       const double frameTimeMs = (endTime - startTime) * 1000.0;
       const double targetMs = params.fpsThrottleRandom
+                                  // NOLINTNEXTLINE(cert-msc50-cpp, facebook-hte-BadCall-rand)
                                   ? static_cast<double>(1 + (std::rand() % params.fpsThrottleMs))
                                   : static_cast<double>(params.fpsThrottleMs);
       if (frameTimeMs < targetMs) {
+        // NOLINTNEXTLINE(facebook-hte-BadCall-sleep_for)
         std::this_thread::sleep_for(
             std::chrono::milliseconds(static_cast<int>(targetMs - frameTimeMs)));
       }

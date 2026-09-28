@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <string>
 #include <vector>
+#include <igl/Macros.h>
 
 namespace igl::opengl {
 
@@ -328,14 +329,15 @@ void toOGLAttribute(const VertexAttribute& attrib,
 } // namespace
 
 Result VertexInputState::create(const VertexInputStateDesc& desc) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (desc.numAttributes == 0) {
     return Result();
   }
 
   if (desc.numInputBindings == 1) {
     // All the attributed should have the same bufferIndex
-    const int bufferIndex = desc.attributes[0].bufferIndex;
-    for (int i = 1; i < desc.numAttributes; i++) {
+    const int bufferIndex = static_cast<int>(desc.attributes[0].bufferIndex);
+    for (size_t i = 1; i < desc.numAttributes; i++) {
       if (desc.attributes[i].bufferIndex != bufferIndex) {
         return Result{
             Result::Code::ArgumentInvalid,
@@ -351,7 +353,7 @@ Result VertexInputState::create(const VertexInputStateDesc& desc) {
     const size_t bufferIndex = desc.attributes[i].bufferIndex;
 
     attribInfo.name = desc.attributes[i].name;
-    attribInfo.stride = desc.inputBindings[bufferIndex].stride;
+    attribInfo.stride = static_cast<GLsizei>(desc.inputBindings[bufferIndex].stride);
     attribInfo.bufferOffset = desc.attributes[i].offset;
 
     toOGLAttribute(desc.attributes[i],

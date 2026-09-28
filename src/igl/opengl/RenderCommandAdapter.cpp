@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <igl/Common.h>
+#include <igl/Macros.h>
 #include <igl/RenderCommandEncoder.h>
 #include <igl/opengl/Buffer.h>
 #include <igl/opengl/DepthStencilState.h>
@@ -30,6 +31,7 @@ namespace igl::opengl {
 RenderCommandAdapter::RenderCommandAdapter(IContext& context) :
   WithContext(context),
   uniformAdapter_(UniformAdapter(context, UniformAdapter::PipelineType::Render)) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   useVAO_ = context.deviceFeatures().hasInternalFeature(InternalFeatures::VertexArrayObject);
   if (useVAO_) {
     activeVAO_ = std::make_shared<VertexArrayObject>(getContext());
@@ -42,6 +44,7 @@ std::unique_ptr<RenderCommandAdapter> RenderCommandAdapter::create(
     const RenderPassDesc& renderPass,
     const std::shared_ptr<IFramebuffer>& framebuffer,
     Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
   std::unique_ptr<RenderCommandAdapter> newAdapter(new RenderCommandAdapter(context));
   newAdapter->initialize(renderPass, framebuffer, outResult);
@@ -51,6 +54,7 @@ std::unique_ptr<RenderCommandAdapter> RenderCommandAdapter::create(
 void RenderCommandAdapter::initialize(const RenderPassDesc& renderPass,
                                       const std::shared_ptr<IFramebuffer>& framebuffer,
                                       Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (!IGL_DEBUG_VERIFY(framebuffer)) {
     Result::setResult(outResult, Result::Code::ArgumentNull, "framebuffer is null");
     return;
@@ -74,6 +78,7 @@ void RenderCommandAdapter::initialize(const RenderPassDesc& renderPass,
 }
 
 void RenderCommandAdapter::setViewport(const Viewport& viewport) {
+  IGL_PROFILER_FUNCTION();
   getContext().viewport(static_cast<GLint>(viewport.x),
                         static_cast<GLint>(viewport.y),
                         static_cast<GLint>(viewport.width),
@@ -81,6 +86,7 @@ void RenderCommandAdapter::setViewport(const Viewport& viewport) {
 }
 
 void RenderCommandAdapter::setScissorRect(const ScissorRect& rect) {
+  IGL_PROFILER_FUNCTION();
   const bool scissorEnabled = !rect.isNull();
   getContext().setEnabled(scissorEnabled, GL_SCISSOR_TEST);
   if (scissorEnabled) {
@@ -90,11 +96,13 @@ void RenderCommandAdapter::setScissorRect(const ScissorRect& rect) {
 
 void RenderCommandAdapter::setDepthStencilState(
     const std::shared_ptr<IDepthStencilState>& newValue) {
+  IGL_PROFILER_FUNCTION();
   depthStencilState_ = newValue;
   setDirty(StateMask::DepthStencil);
 }
 
 void RenderCommandAdapter::setStencilReferenceValue(uint32_t value) {
+  IGL_PROFILER_FUNCTION();
   frontStencilReferenceValue_ = value;
   backStencilReferenceValue_ = value;
 
@@ -102,20 +110,24 @@ void RenderCommandAdapter::setStencilReferenceValue(uint32_t value) {
 }
 
 void RenderCommandAdapter::setBlendColor(const Color& color) {
+  IGL_PROFILER_FUNCTION();
   getContext().blendColor(color.r, color.g, color.b, color.a);
 }
 
 void RenderCommandAdapter::setCullMode(CullMode cullMode) {
+  IGL_PROFILER_FUNCTION();
   cullMode_ = cullMode;
   setDirty(StateMask::CullMode);
 }
 
 void RenderCommandAdapter::setFrontFacingWinding(WindingMode mode) {
+  IGL_PROFILER_FUNCTION();
   windingMode_ = mode;
-  setDirty(StateMask::FrontFace);
+  setDirty(StateMask::FrontFaceWinding);
 }
 
 void RenderCommandAdapter::setDepthBias(float depthBias, float slopeScale, float clamp) {
+  IGL_PROFILER_FUNCTION();
   getContext().setEnabled(true, GL_POLYGON_OFFSET_FILL);
   getContext().polygonOffsetClamp(slopeScale, depthBias, clamp);
 }
@@ -129,6 +141,7 @@ void RenderCommandAdapter::setVertexBuffer(Buffer& buffer,
                                            size_t index,
                                            size_t stride,
                                            Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(index < IGL_BUFFER_BINDINGS_MAX,
                    "Buffer index is beyond max, may want to increase limit");
   if (index < IGL_BUFFER_BINDINGS_MAX) {
@@ -176,6 +189,7 @@ void RenderCommandAdapter::setUniformBuffer(Buffer* IGL_NULLABLE buffer,
 }
 
 void RenderCommandAdapter::setStorageBuffer(Buffer* buffer, size_t offset, uint32_t index) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(index < IGL_BUFFER_BINDINGS_MAX,
                    "Buffer index is beyond max, may want to increase limit");
   if (index < IGL_BUFFER_BINDINGS_MAX) {
@@ -185,6 +199,7 @@ void RenderCommandAdapter::setStorageBuffer(Buffer* buffer, size_t offset, uint3
 }
 
 void RenderCommandAdapter::clearVertexTexture() {
+  IGL_PROFILER_FUNCTION();
   vertexTextureStates_ = TextureStates();
   vertexTextureStatesDirty_.reset();
 }
@@ -192,6 +207,7 @@ void RenderCommandAdapter::clearVertexTexture() {
 void RenderCommandAdapter::setVertexTexture(ITexture* IGL_NULLABLE texture,
                                             size_t index,
                                             Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION();
   if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid);
     return;
@@ -206,6 +222,7 @@ void RenderCommandAdapter::setVertexTexture(ITexture* IGL_NULLABLE texture,
 void RenderCommandAdapter::setVertexSamplerState(ISamplerState* IGL_NULLABLE samplerState,
                                                  size_t index,
                                                  Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION();
   if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid);
     return;
@@ -218,6 +235,7 @@ void RenderCommandAdapter::setVertexSamplerState(ISamplerState* IGL_NULLABLE sam
 }
 
 void RenderCommandAdapter::clearFragmentTexture() {
+  IGL_PROFILER_FUNCTION();
   fragmentTextureStates_ = TextureStates();
   fragmentTextureStatesDirty_.reset();
 }
@@ -225,6 +243,7 @@ void RenderCommandAdapter::clearFragmentTexture() {
 void RenderCommandAdapter::setFragmentTexture(ITexture* IGL_NULLABLE texture,
                                               size_t index,
                                               Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION();
   if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid);
     return;
@@ -239,6 +258,7 @@ void RenderCommandAdapter::setFragmentTexture(ITexture* IGL_NULLABLE texture,
 void RenderCommandAdapter::setFragmentSamplerState(ISamplerState* IGL_NULLABLE samplerState,
                                                    size_t index,
                                                    Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION();
   if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid);
     return;
@@ -254,6 +274,7 @@ void RenderCommandAdapter::setFragmentSamplerState(ISamplerState* IGL_NULLABLE s
 void RenderCommandAdapter::clearDependentResources(
     const std::shared_ptr<IRenderPipelineState>& newValue,
     Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION();
   auto* curStateOpenGL = static_cast<RenderPipelineState*>(pipelineState_.get());
   if (!IGL_DEBUG_VERIFY(curStateOpenGL)) {
     Result::setResult(outResult, Result::Code::RuntimeError, "pipeline state is null");
@@ -282,6 +303,7 @@ void RenderCommandAdapter::clearDependentResources(
 
 void RenderCommandAdapter::setPipelineState(const std::shared_ptr<IRenderPipelineState>& newValue,
                                             Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION();
   Result::setOk(outResult);
   if (pipelineState_) {
     clearDependentResources(newValue, outResult); // Only clear if pipeline state was previously set
@@ -294,12 +316,13 @@ void RenderCommandAdapter::setPipelineState(const std::shared_ptr<IRenderPipelin
     cullMode_ = newStateOpenGL->getCullMode();
     setDirty(StateMask::CullMode);
     windingMode_ = newStateOpenGL->getWindingMode();
-    setDirty(StateMask::FrontFace);
+    setDirty(StateMask::FrontFaceWinding);
   }
   setDirty(StateMask::PIPELINE);
 }
 
 void RenderCommandAdapter::drawArrays(GLenum mode, GLint first, GLsizei count) {
+  IGL_PROFILER_FUNCTION();
   willDraw();
   getContext().drawArrays(toMockWireframeMode(mode), first, count);
   didDraw();
@@ -308,6 +331,7 @@ void RenderCommandAdapter::drawArrays(GLenum mode, GLint first, GLsizei count) {
 void RenderCommandAdapter::drawArraysIndirect(GLenum mode,
                                               Buffer& indirectBuffer,
                                               const GLvoid* IGL_NULLABLE indirectBufferOffset) {
+  IGL_PROFILER_FUNCTION();
   if (!activeVAO_) {
     IGL_DEBUG_ASSERT(false);
     return;
@@ -329,6 +353,7 @@ void RenderCommandAdapter::drawArraysInstanced(GLenum mode,
                                                GLint first,
                                                GLsizei count,
                                                GLsizei instancecount) {
+  IGL_PROFILER_FUNCTION();
   willDraw();
   if (getContext().deviceFeatures().hasFeature(DeviceFeatures::DrawInstanced)) {
     getContext().drawArraysInstanced(toMockWireframeMode(mode), first, count, instancecount);
@@ -342,6 +367,7 @@ void RenderCommandAdapter::drawElements(GLenum mode,
                                         GLsizei indexCount,
                                         GLenum indexType,
                                         const GLvoid* IGL_NULLABLE indexOffset) {
+  IGL_PROFILER_FUNCTION();
   willDraw();
   getContext().drawElements(toMockWireframeMode(mode), indexCount, indexType, indexOffset);
   didDraw();
@@ -352,6 +378,7 @@ void RenderCommandAdapter::drawElementsInstanced(GLenum mode,
                                                  GLenum indexType,
                                                  const GLvoid* IGL_NULLABLE indexOffset,
                                                  GLsizei instancecount) {
+  IGL_PROFILER_FUNCTION();
   willDraw();
   if (getContext().deviceFeatures().hasFeature(DeviceFeatures::DrawInstanced)) {
     getContext().drawElementsInstanced(
@@ -364,6 +391,7 @@ void RenderCommandAdapter::drawElementsIndirect(GLenum mode,
                                                 GLenum indexType,
                                                 Buffer& indirectBuffer,
                                                 const GLvoid* IGL_NULLABLE indirectBufferOffset) {
+  IGL_PROFILER_FUNCTION();
   // VAO 应该在 setIndexBuffer 时已经绑定，这里不需要重复绑定
   // 重复绑定会导致第一次绘制时索引缓冲区状态丢失
   willDraw();
@@ -381,6 +409,7 @@ void RenderCommandAdapter::multiDrawArraysIndirect(GLenum mode,
                                                    const GLvoid* IGL_NULLABLE indirectBufferOffset,
                                                    GLsizei drawcount,
                                                    GLsizei stride) {
+  IGL_PROFILER_FUNCTION();
   willDraw();
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::MultiDrawIndirect)) {
     bindBufferWithShaderStorageBufferOverride(indirectBuffer, GL_DRAW_INDIRECT_BUFFER);
@@ -399,6 +428,7 @@ void RenderCommandAdapter::multiDrawElementsIndirect(GLenum mode,
                                                          indirectBufferOffset,
                                                      GLsizei drawcount,
                                                      GLsizei stride) {
+  IGL_PROFILER_FUNCTION();
   willDraw();
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::MultiDrawIndirect)) {
     bindBufferWithShaderStorageBufferOverride(indirectBuffer, GL_DRAW_INDIRECT_BUFFER);
@@ -411,6 +441,7 @@ void RenderCommandAdapter::multiDrawElementsIndirect(GLenum mode,
 }
 
 void RenderCommandAdapter::endEncoding() {
+  IGL_PROFILER_FUNCTION();
   // Some minimal cleanup needs to occur in order. Otherwise, OpenGL can end in a bad state
   // with complex rendering.
   if (pipelineState_) {
@@ -447,7 +478,7 @@ void RenderCommandAdapter::endEncoding() {
  * validates shader stages when shader validation is enabled.
  */
 void RenderCommandAdapter::willDraw() {
-  IGL_PROFILER_ZONE_GPU_OGL("willDraw");
+  IGL_PROFILER_FUNCTION();
   Result ret;
   auto* pipelineState = static_cast<RenderPipelineState*>(pipelineState_.get());
 
@@ -477,9 +508,9 @@ void RenderCommandAdapter::willDraw() {
       }
       clearDirty(StateMask::CullMode);
     }
-    if (isDirty(StateMask::FrontFace)) {
+    if (isDirty(StateMask::FrontFaceWinding)) {
       getContext().frontFace(windingMode_ == WindingMode::Clockwise ? GL_CW : GL_CCW);
-      clearDirty(StateMask::FrontFace);
+      clearDirty(StateMask::FrontFaceWinding);
     }
   }
 
@@ -592,6 +623,7 @@ void RenderCommandAdapter::didDraw() {
 }
 
 void RenderCommandAdapter::unbindVertexAttributes() {
+  IGL_PROFILER_FUNCTION();
   auto* pipelineState = static_cast<RenderPipelineState*>(pipelineState_.get());
   if (pipelineState) {
     pipelineState->unbindVertexAttributes();
@@ -601,6 +633,7 @@ void RenderCommandAdapter::unbindVertexAttributes() {
 void RenderCommandAdapter::bindBufferWithShaderStorageBufferOverride(
     Buffer& buffer,
     GLenum overrideTargetForShaderStorageBuffer) {
+  IGL_PROFILER_FUNCTION();
   auto& arrayBuffer = static_cast<ArrayBuffer&>(buffer);
   if (arrayBuffer.getTarget() == GL_SHADER_STORAGE_BUFFER) {
     arrayBuffer.bindForTarget(overrideTargetForShaderStorageBuffer);

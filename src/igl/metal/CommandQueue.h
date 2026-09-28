@@ -29,7 +29,7 @@ class CommandQueue final : public ICommandQueue {
    */
   bool beginFrame() override;
     
-  SubmitHandle submit(const igl::ICommandBuffer& commandBuffer, bool endOfFrame = false) override;
+  SubmitHandle submit(const ICommandBuffer& commandBuffer, bool endOfFrame = false) override;
 
   IGL_INLINE id<MTLCommandQueue> get() const {
     return value_;

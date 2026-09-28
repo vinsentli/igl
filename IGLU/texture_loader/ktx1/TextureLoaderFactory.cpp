@@ -8,7 +8,9 @@
 #include <IGLU/texture_loader/ktx1/TextureLoaderFactory.h>
 
 #include <IGLU/texture_loader/ktx1/Header.h>
+#include <algorithm>
 #include <ktx.h>
+#include <igl/Macros.h>
 #include <igl/opengl/util/TextureFormat.h>
 
 namespace iglu::textureloader::ktx1 {
@@ -20,6 +22,7 @@ uint32_t TextureLoaderFactory::minHeaderLength() const noexcept {
 // NOLINTNEXTLINE(bugprone-exception-escape)
 bool TextureLoaderFactory::canCreateInternal(DataReader headerReader,
                                              igl::Result* IGL_NULLABLE outResult) const noexcept {
+  IGL_PROFILER_FUNCTION();
   if (headerReader.data() == nullptr) {
     igl::Result::setResult(
         outResult, igl::Result::Code::ArgumentInvalid, "Reader's data is nullptr.");
@@ -49,6 +52,7 @@ bool TextureLoaderFactory::canCreateInternal(DataReader headerReader,
 }
 
 igl::TextureRangeDesc TextureLoaderFactory::textureRange(DataReader reader) const noexcept {
+  IGL_PROFILER_FUNCTION();
   const Header* header = reader.as<Header>();
 
   const igl::TextureRangeDesc range{
@@ -67,6 +71,7 @@ igl::TextureRangeDesc TextureLoaderFactory::textureRange(DataReader reader) cons
 bool TextureLoaderFactory::validate(DataReader reader,
                                     const igl::TextureRangeDesc& range,
                                     igl::Result* IGL_NULLABLE outResult) const noexcept {
+  IGL_PROFILER_FUNCTION();
   const Header* header = reader.as<Header>();
   const uint32_t length = reader.size();
 
@@ -99,7 +104,8 @@ bool TextureLoaderFactory::validate(DataReader reader,
     if (!reader.tryReadAt<uint32_t>(offset, imageSize, outResult)) {
       return false;
     }
-    const size_t expectedBytes = properties.getBytesPerRange(range.atMipLevel(mipLevel).atFace(0));
+    const size_t expectedBytes =
+        properties.getBytesPerRange(range.atMipLevel(static_cast<uint32_t>(mipLevel)).atFace(0));
     const size_t expectedCubeBytes = expectedBytes * static_cast<size_t>(6);
 
     if (imageSize != expectedBytes) {

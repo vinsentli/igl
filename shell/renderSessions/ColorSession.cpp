@@ -48,7 +48,7 @@ const uint16_t kIndexData[] = {0, 1, 2, 1, 3, 2};
 // @fb-only
 // @fb-only
 
-BufferDesc getVertexBufferDesc(const igl::IDevice& device) {
+BufferDesc getVertexBufferDesc(const IDevice& device) {
 // @fb-only
   // @fb-only
     // @fb-only
@@ -67,7 +67,7 @@ BufferDesc getVertexBufferDesc(const igl::IDevice& device) {
           .debugName = "vertex"};
 }
 
-uint32_t getVertexBufferIndex(const igl::IDevice& device) {
+uint32_t getVertexBufferIndex(const IDevice& device) {
 // @fb-only
   // @fb-only
     return 0;
@@ -76,7 +76,7 @@ uint32_t getVertexBufferIndex(const igl::IDevice& device) {
   return 1;
 }
 
-ResourceStorage getIndexBufferResourceStorage(const igl::IDevice& device) {
+ResourceStorage getIndexBufferResourceStorage(const IDevice& device) {
 // @fb-only
   // @fb-only
     // @fb-only
@@ -473,7 +473,7 @@ std::unique_ptr<IShaderStages> ColorSession::getShaderStagesForBackend(IDevice& 
 }
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
-void ColorSession::initialize() noexcept {
+void ColorSession::initializeImpl() noexcept {
   IDevice& device = getPlatform().getDevice();
   const glm::vec3 fLinearOrangeColor =
       (swapchainColorTextureformat_ == igl::TextureFormat::RGBA_SRGB &&
@@ -569,7 +569,7 @@ void ColorSession::initialize() noexcept {
 
   // init uniforms
   const glm::mat4x4 mvp(1.0f);
-  memcpy(&fragmentParameters_.mvp, &mvp, sizeof(mvp));
+  std::memcpy(&fragmentParameters_.mvp, &mvp, sizeof(mvp));
   fragmentParameters_.color = (colorTestModes_ == ColorTestModes::OrangeClear)
                                   ? gpuLinearOrangeColor
                                   : iglu::simdtypes::float3{1.0f, 1.0f, 1.0f};
@@ -584,7 +584,7 @@ void ColorSession::initialize() noexcept {
 }
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
-void ColorSession::update(SurfaceTextures surfaceTextures) noexcept {
+void ColorSession::updateImpl(const SurfaceTextures& surfaceTextures) noexcept {
   // Per IGL guidelines, surfaceTextures.color may be null on some platforms
   // before the surface is ready (e.g., during window resize on Android/iOS).
   if (!surfaceTextures.color) {
@@ -674,7 +674,7 @@ void ColorSession::update(SurfaceTextures surfaceTextures) noexcept {
   fragmentUniformDescriptors_.back().offset = offsetof(FragmentFormat, mvp);
 
   const auto& mvp = getPlatform().getDisplayContext().preRotationMatrix;
-  memcpy(&fragmentParameters_.mvp, &mvp, sizeof(mvp));
+  std::memcpy(&fragmentParameters_.mvp, &mvp, sizeof(mvp));
   fragmentParamBuffer_->upload(&fragmentParameters_, {sizeof(fragmentParameters_)});
 
   // Submit commands

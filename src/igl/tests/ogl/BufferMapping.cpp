@@ -24,7 +24,6 @@ namespace igl::tests {
 class BufferMappingOGLTest : public ::testing::Test {
  public:
   BufferMappingOGLTest() = default;
-  ~BufferMappingOGLTest() override = default;
 
   void SetUp() override {
     igl::setDebugBreakEnabled(false);
@@ -55,10 +54,8 @@ TEST_F(BufferMappingOGLTest, MapBuffer) {
 
   Result ret;
   const float data[] = {1.0f, 2.0f, 3.0f, 4.0f};
-  BufferDesc bufDesc;
-  bufDesc.type = BufferDesc::BufferTypeBits::Vertex;
-  bufDesc.data = data;
-  bufDesc.length = sizeof(data);
+  const BufferDesc bufDesc{
+      .type = BufferDesc::BufferTypeBits::Vertex, .data = data, .length = sizeof(data)};
 
   auto buffer = iglDev_->createBuffer(bufDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -87,10 +84,8 @@ TEST_F(BufferMappingOGLTest, MapBufferRange) {
 
   Result ret;
   const float data[] = {1.0f, 2.0f, 3.0f, 4.0f};
-  BufferDesc bufDesc;
-  bufDesc.type = BufferDesc::BufferTypeBits::Vertex;
-  bufDesc.data = data;
-  bufDesc.length = sizeof(data);
+  const BufferDesc bufDesc{
+      .type = BufferDesc::BufferTypeBits::Vertex, .data = data, .length = sizeof(data)};
 
   auto buffer = iglDev_->createBuffer(bufDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -118,11 +113,10 @@ TEST_F(BufferMappingOGLTest, WriteAndUnmap) {
   }
 
   Result ret;
-  BufferDesc bufDesc;
-  bufDesc.type = BufferDesc::BufferTypeBits::Vertex;
-  bufDesc.data = nullptr;
-  bufDesc.length = sizeof(float) * 4;
-  bufDesc.storage = ResourceStorage::Shared;
+  const BufferDesc bufDesc{.type = BufferDesc::BufferTypeBits::Vertex,
+                           .data = nullptr,
+                           .length = sizeof(float) * 4,
+                           .storage = ResourceStorage::Shared};
 
   auto buffer = iglDev_->createBuffer(bufDesc, &ret);
   ASSERT_TRUE(ret.isOk()) << ret.message.c_str();

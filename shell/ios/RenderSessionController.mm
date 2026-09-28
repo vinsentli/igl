@@ -14,6 +14,7 @@
 #import "RenderSessionFactoryAdapterInternal.hpp"
 
 #import <QuartzCore/CADisplayLink.h>
+// NOLINTNEXTLINE(facebook-unused-include-check)
 #import <UIKit/UIKit.h>
 #import <shell/shared/input/InputDispatcher.h>
 #import <igl/IGL.h>
@@ -31,6 +32,8 @@
 // @fb-only
 // @fb-only
 #include <memory>
+#include <shell/shared/platform/PresentationRateController.h>
+#include <shell/shared/platform/apple/PresentationRateApple.h>
 #include <shell/shared/platform/ios/PlatformIos.h>
 #include <shell/shared/renderSession/RenderSession.h>
 #include <shell/shared/renderSession/RenderSessionConfig.h>
@@ -53,6 +56,7 @@
 - (instancetype)initWithBackendVersion:(BackendVersion*)backendVersion
                        factoryProvider:(RenderSessionFactoryProvider*)factoryProvider
                        surfaceProvider:(id<IglSurfaceTexturesProvider>)provider {
+  // NOLINTNEXTLINE(bugprone-assignment-in-if-condition)
   if (self = [super init]) {
     self->_backendVersion = [self toBackendVersion:backendVersion];
     _factory = [factoryProvider adapter]->factory;
@@ -69,6 +73,7 @@
   igl::HWDeviceQueryDesc queryDesc(igl::HWDeviceType::DiscreteGpu);
   std::unique_ptr<igl::IDevice> device;
 
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (_backendVersion.flavor) {
   case igl::BackendFlavor::Metal: {
 #if IGL_BACKEND_METAL
@@ -98,7 +103,8 @@
   // @fb-only
 // @fb-only
   default:
-    IGL_DEBUG_ABORT("IGL Samples not set up for backend(%d)", (int)_backendVersion.flavor);
+    IGL_DEBUG_ABORT("IGL Samples not set up for backend(%d)",
+                    static_cast<int>(_backendVersion.flavor));
     break;
   }
 
@@ -116,15 +122,25 @@
 
 - (void)start {
   if (_backendVersion.flavor != igl::BackendFlavor::Metal) {
-    // Render at 60hz
+    // Left at its default cadence: one tick per display refresh, which iOS holds to 60 Hz
+    // unless the app's Info.plist opts out of the minimum frame duration. The rung the
+    // demo picks arrives through the presentation-rate seam below, not from here.
     _renderTimer = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick)];
     [_renderTimer addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
+    if (_platform) {
+      _platform->getPresentationRateController().setBackend(
+          igl::shell::createDisplayLinkPresentationRateBackend(_renderTimer));
+    }
   }
 }
 
 - (void)stop {
   [_renderTimer removeFromRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
   _renderTimer = nullptr;
+  if (_platform) {
+    // Whatever rate was in effect belonged to the link that just went away.
+    _platform->getPresentationRateController().setBackend(nullptr);
+  }
 }
 
 - (void)tick {
@@ -141,7 +157,7 @@
 
   // draw
   if (_backendVersion.flavor == igl::BackendFlavor::Metal) {
-    _session->setPixelsPerPoint((float)[UIScreen mainScreen].scale);
+    _session->setPixelsPerPoint(static_cast<float>([UIScreen mainScreen].scale));
   } else if (_backendVersion.flavor == igl::BackendFlavor::OpenGL) {
     _session->setPixelsPerPoint(1.0f);
   }

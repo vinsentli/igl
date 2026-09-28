@@ -7,6 +7,7 @@
 
 #include "Framebuffer.h"
 
+#include <algorithm>
 #include <igl/CommandBuffer.h>
 #include <igl/CommandQueue.h>
 #include <igl/vulkan/CommandBuffer.h>
@@ -160,7 +161,11 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, // Don't wait for anything
                         VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+                        VkImageSubresourceRange{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                                .baseMipLevel = 0,
+                                                .levelCount = 1,
+                                                .baseArrayLayer = 0,
+                                                .layerCount = 1});
 
   // 2. Transition src into TRANSFER_SRC_OPTIMAL
   srcVkTex.getVulkanTexture().image.transitionLayout(
@@ -169,12 +174,22 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
       VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, // Wait for all previous operation to
                                             // be done
       VK_PIPELINE_STAGE_TRANSFER_BIT,
-      VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+      VkImageSubresourceRange{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                              .baseMipLevel = 0,
+                              .levelCount = 1,
+                              .baseArrayLayer = 0,
+                              .layerCount = 1});
   // 3. Copy Image
   const VkImageCopy copy = {
-      .srcSubresource = VkImageSubresourceLayers{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+      .srcSubresource = VkImageSubresourceLayers{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                                 .mipLevel = 0,
+                                                 .baseArrayLayer = 0,
+                                                 .layerCount = 1},
       .srcOffset = {.x = static_cast<int32_t>(range.x), .y = static_cast<int32_t>(range.y), .z = 0},
-      .dstSubresource = VkImageSubresourceLayers{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+      .dstSubresource = VkImageSubresourceLayers{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                                 .mipLevel = 0,
+                                                 .baseArrayLayer = 0,
+                                                 .layerCount = 1},
       .dstOffset = {.x = static_cast<int32_t>(range.x), .y = static_cast<int32_t>(range.y), .z = 0},
       .extent = {.width = range.width, .height = range.height, .depth = 1u},
   };
@@ -194,7 +209,11 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
       VK_PIPELINE_STAGE_TRANSFER_BIT, // Wait for Copy to be done
       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, // Don't start anything until Copy is
                                          // done
-      VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+      VkImageSubresourceRange{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                              .baseMipLevel = 0,
+                              .levelCount = 1,
+                              .baseArrayLayer = 0,
+                              .layerCount = 1});
   dstVkTex.getVulkanTexture().image.transitionLayout(
       cmdBuf,
       dstVkTex.isSwapchainTexture() ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
@@ -202,7 +221,11 @@ void Framebuffer::copyTextureColorAttachment(ICommandQueue& cmdQueue,
       VK_PIPELINE_STAGE_TRANSFER_BIT, // Wait for vkCmdCopyImage()
       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, // Don't start anything until Copy is
                                          // done
-      VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+      VkImageSubresourceRange{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                              .baseMipLevel = 0,
+                              .levelCount = 1,
+                              .baseArrayLayer = 0,
+                              .layerCount = 1});
 
   cmdQueue.submit(*buffer);
 }
@@ -232,6 +255,18 @@ void Framebuffer::updateDrawableInternal(SurfaceTextures surfaceTextures, bool u
     } else {
       desc_.colorAttachments[0].texture = std::move(surfaceTextures.color);
     }
+    updated = true;
+  }
+
+  // The resolve target is part of the color attachment, so its lifetime must
+  // track color rather than depth/stencil. Update it (not gated on
+  // updateDepthStencil) so the single-texture updateDrawable() overload, which
+  // passes a null colorResolve, clears a stale resolve instead of retaining it
+  // against the new color attachment. Guard on a non-null color attachment
+  // (mirroring updateResolveAttachment()) so a resolve is never installed on a
+  // color-less slot; when color is null the slot was already fully cleared above.
+  if (getColorAttachment(0) && getResolveColorAttachment(0) != surfaceTextures.colorResolve) {
+    desc_.colorAttachments[0].resolveTexture = std::move(surfaceTextures.colorResolve);
     updated = true;
   }
 

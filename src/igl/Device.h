@@ -180,6 +180,7 @@ class IDevice : public ICapabilities, public base::IDeviceBase {
    * @brief Create a timestamp queries object that can hold up to maxTimestamps entries.
    * Returns nullptr if not supported on this backend/device.
    */
+  // NOLINTNEXTLINE(bugprone-exception-escape)
   virtual std::shared_ptr<ITimestampQueries> createTimestampQueries(uint32_t maxTimestamps,
                                                                     Result* IGL_NULLABLE
                                                                         outResult) const noexcept {
@@ -504,7 +505,7 @@ class IDevice : public ICapabilities, public base::IDeviceBase {
     const uint8_t pos = static_cast<uint8_t>(featureEnum);
     IGL_DEBUG_ASSERT(pos < 64);
 
-    return (inDevelopmentFlags_ & (1ull << pos)) != 0u;
+    return (inDevelopmentFlags_ & (1ULL << pos)) != 0u;
   }
 
   /**
@@ -518,9 +519,9 @@ class IDevice : public ICapabilities, public base::IDeviceBase {
     IGL_DEBUG_ASSERT(pos < 64);
 
     if (val) {
-      inDevelopmentFlags_ |= 1ull << pos;
+      inDevelopmentFlags_ |= 1ULL << pos;
     } else {
-      inDevelopmentFlags_ &= ~(1ull << pos);
+      inDevelopmentFlags_ &= ~(1ULL << pos);
     }
   }
     

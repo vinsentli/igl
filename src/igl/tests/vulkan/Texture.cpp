@@ -19,7 +19,6 @@ namespace igl::tests {
 class TextureVulkanTest : public ::testing::Test {
  public:
   TextureVulkanTest() = default;
-  ~TextureVulkanTest() override = default;
 
   // Set up common resources. This will create a device
   void SetUp() override {
@@ -179,6 +178,63 @@ TEST_F(TextureVulkanTest, ManualMipmapGeneration) {
                                      texture->getFullRange(1),
                                      kExpectedMip1Data.data(),
                                      "AutoGen: Generated level (1)");
+}
+
+// Exercises the NoExport branch of Texture::create() where the width/height/depth
+// and numMipLevels are cast to uint32_t to build the VkExtent3D passed to
+// createImage(). Distinct extents (and a >1 mip count) make a dropped or swapped
+// cast observable through the created texture's reported dimensions.
+TEST_F(TextureVulkanTest, VolumeTextureExtentCasts) {
+  constexpr uint32_t kWidth = 8u;
+  constexpr uint32_t kHeight = 4u;
+  constexpr uint32_t kDepth = 2u;
+  const uint32_t expectedMipLevels = TextureDesc::calcNumMipLevels(kWidth, kHeight, kDepth);
+
+  TextureDesc textureDesc = TextureDesc::new3D(
+      TextureFormat::RGBA_UNorm8, kWidth, kHeight, kDepth, TextureDesc::TextureUsageBits::Sampled);
+  textureDesc.numMipLevels = expectedMipLevels;
+
+  Result ret;
+  auto texture = iglDev_->createTexture(textureDesc, &ret);
+  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+  ASSERT_NE(texture, nullptr);
+
+  const Dimensions dims = texture->getDimensions();
+  EXPECT_EQ(dims.width, kWidth) << "width extent cast";
+  EXPECT_EQ(dims.height, kHeight) << "height extent cast";
+  EXPECT_EQ(dims.depth, kDepth) << "depth extent cast";
+  EXPECT_EQ(texture->getType(), TextureType::ThreeD) << "3D image type";
+  EXPECT_EQ(texture->getNumMipLevels(), expectedMipLevels) << "numMipLevels cast";
+  EXPECT_EQ(texture->getFormat(), TextureFormat::RGBA_UNorm8) << "format";
+}
+
+// Exercises the Exportable branch of Texture::create() where the width/height/depth
+// and numMipLevels casts feed the VkExtent3D passed to createWithExportMemory().
+// Exportable textures are only supported on Windows/Linux/Android (see the platform
+// gate in vulkan/Texture.cpp); elsewhere (e.g. Mac) create() returns Unimplemented,
+// so the extent-cast assertions only apply on the supported platforms.
+TEST_F(TextureVulkanTest, ExportableTextureExtentCasts) {
+#if IGL_PLATFORM_WINDOWS || IGL_PLATFORM_LINUX || IGL_PLATFORM_ANDROID
+  constexpr uint32_t kWidth = 8u;
+  constexpr uint32_t kHeight = 4u;
+
+  TextureDesc textureDesc = TextureDesc::new2D(
+      TextureFormat::RGBA_UNorm8, kWidth, kHeight, TextureDesc::TextureUsageBits::Sampled);
+  textureDesc.exportability = TextureDesc::TextureExportability::Exportable;
+
+  Result ret;
+  auto texture = iglDev_->createTexture(textureDesc, &ret);
+  ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
+  ASSERT_NE(texture, nullptr);
+
+  const Dimensions dims = texture->getDimensions();
+  EXPECT_EQ(dims.width, kWidth) << "exportable width extent cast";
+  EXPECT_EQ(dims.height, kHeight) << "exportable height extent cast";
+  EXPECT_EQ(dims.depth, 1u) << "exportable depth extent cast";
+  EXPECT_EQ(texture->getNumMipLevels(), 1u) << "exportable numMipLevels cast";
+#else
+  GTEST_SKIP() << "Exportable textures are not supported on this platform.";
+#endif
 }
 
 } // namespace igl::tests

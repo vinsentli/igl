@@ -29,7 +29,6 @@ class StatePoolTest : public ::testing::Test {
  private:
  public:
   StatePoolTest() = default;
-  ~StatePoolTest() override = default;
 
   //
   // SetUp()
@@ -59,14 +58,14 @@ class StatePoolTest : public ::testing::Test {
     inputDesc.attributes[0].offset = 0;
     inputDesc.attributes[0].location = 0;
     inputDesc.attributes[0].bufferIndex = data::shader::kSimplePosIndex;
-    inputDesc.attributes[0].name = data::shader::kSimplePos;
+    inputDesc.attributes[0].name = std::string(data::shader::kSimplePos);
     inputDesc.inputBindings[0].stride = sizeof(float) * 4;
 
     inputDesc.attributes[1].format = VertexAttributeFormat::Float2;
     inputDesc.attributes[1].offset = 0;
     inputDesc.attributes[1].location = 1;
     inputDesc.attributes[1].bufferIndex = data::shader::kSimpleUvIndex;
-    inputDesc.attributes[1].name = data::shader::kSimpleUv;
+    inputDesc.attributes[1].name = std::string(data::shader::kSimpleUv);
     inputDesc.inputBindings[1].stride = sizeof(float) * 2;
 
     // numAttributes has to equal to bindings when using more than 1 buffer
@@ -78,26 +77,29 @@ class StatePoolTest : public ::testing::Test {
 
     // Initialize Graphics Pipeline Descriptor, but leave the creation
     // to the individual tests in case further customization is required
-    renderPipelineDesc1_.vertexInputState = vertexInputState_;
-    renderPipelineDesc1_.shaderStages = shaderStages_;
-    renderPipelineDesc1_.targetDesc.colorAttachments.resize(1);
-    renderPipelineDesc1_.targetDesc.colorAttachments[0].textureFormat = TextureFormat::RGBA_UNorm8;
-    renderPipelineDesc1_.fragmentUnitSamplerMap[0] = IGL_NAMEHANDLE(data::shader::kSimpleSampler);
-    renderPipelineDesc1_.cullMode = igl::CullMode::Disabled;
+    renderPipelineDesc1_ = {
+        .vertexInputState = vertexInputState_,
+        .shaderStages = shaderStages_,
+        .targetDesc = {.colorAttachments = {{.textureFormat = TextureFormat::RGBA_UNorm8}}},
+        .cullMode = igl::CullMode::Disabled,
+        .fragmentUnitSamplerMap = {{0, IGL_NAMEHANDLE(data::shader::kSimpleSampler)}},
+    };
 
-    renderPipelineDesc2_.vertexInputState = vertexInputState_;
-    renderPipelineDesc2_.shaderStages = shaderStages_;
-    renderPipelineDesc2_.targetDesc.colorAttachments.resize(1);
-    renderPipelineDesc2_.targetDesc.colorAttachments[0].textureFormat = TextureFormat::RGBA_UNorm8;
-    renderPipelineDesc2_.fragmentUnitSamplerMap[0] = IGL_NAMEHANDLE(data::shader::kSimpleSampler);
-    renderPipelineDesc2_.cullMode = igl::CullMode::Disabled;
+    renderPipelineDesc2_ = {
+        .vertexInputState = vertexInputState_,
+        .shaderStages = shaderStages_,
+        .targetDesc = {.colorAttachments = {{.textureFormat = TextureFormat::RGBA_UNorm8}}},
+        .cullMode = igl::CullMode::Disabled,
+        .fragmentUnitSamplerMap = {{0, IGL_NAMEHANDLE(data::shader::kSimpleSampler)}},
+    };
 
-    renderPipelineDesc3_.vertexInputState = vertexInputState_;
-    renderPipelineDesc3_.shaderStages = shaderStages_;
-    renderPipelineDesc3_.targetDesc.colorAttachments.resize(1);
-    renderPipelineDesc3_.targetDesc.colorAttachments[0].textureFormat = TextureFormat::RGBA_UNorm8;
-    renderPipelineDesc3_.fragmentUnitSamplerMap[0] = IGL_NAMEHANDLE(data::shader::kSimpleSampler);
-    renderPipelineDesc3_.cullMode = igl::CullMode::Disabled;
+    renderPipelineDesc3_ = {
+        .vertexInputState = vertexInputState_,
+        .shaderStages = shaderStages_,
+        .targetDesc = {.colorAttachments = {{.textureFormat = TextureFormat::RGBA_UNorm8}}},
+        .cullMode = igl::CullMode::Disabled,
+        .fragmentUnitSamplerMap = {{0, IGL_NAMEHANDLE(data::shader::kSimpleSampler)}},
+    };
   }
 
   void TearDown() override {}
@@ -215,16 +217,14 @@ TEST_F(StatePoolTest, depthStencilStateCaching) {
   Result ret;
   iglu::state_pool::DepthStencilStatePool pool;
 
-  DepthStencilStateDesc descA;
-  descA.compareFunction = CompareFunction::Less;
-  descA.isDepthWriteEnabled = true;
+  const DepthStencilStateDesc descA{.compareFunction = CompareFunction::Less,
+                                    .isDepthWriteEnabled = true};
 
   // Identical to descA - should map to the same cached state object
   const DepthStencilStateDesc descB = descA;
 
-  DepthStencilStateDesc descC;
-  descC.compareFunction = CompareFunction::Greater;
-  descC.isDepthWriteEnabled = false;
+  const DepthStencilStateDesc descC{.compareFunction = CompareFunction::Greater,
+                                    .isDepthWriteEnabled = false};
 
   //------------------------------------------------------------
   // Identical descriptors should return the same cached object
@@ -260,12 +260,9 @@ TEST_F(StatePoolTest, depthStencilStateCachingLRU) {
   iglu::state_pool::DepthStencilStatePool pool;
   pool.setCacheSize(2);
 
-  DepthStencilStateDesc descA;
-  descA.compareFunction = CompareFunction::Less;
-  DepthStencilStateDesc descB;
-  descB.compareFunction = CompareFunction::Greater;
-  DepthStencilStateDesc descC;
-  descC.compareFunction = CompareFunction::Equal;
+  const DepthStencilStateDesc descA{.compareFunction = CompareFunction::Less};
+  const DepthStencilStateDesc descB{.compareFunction = CompareFunction::Greater};
+  const DepthStencilStateDesc descC{.compareFunction = CompareFunction::Equal};
 
   // Insert A, then confirm a second lookup hits the cache (same object)
   std::shared_ptr<IDepthStencilState> a1 = pool.getOrCreate(*iglDev_, descA, &ret);

@@ -7,7 +7,9 @@
 
 #include <igl/d3d12/Device.h>
 
+#include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <d3d12sdklayers.h>
@@ -17,8 +19,9 @@
 #include <fstream>
 #include <mutex> // For std::call_once.
 #include <vector>
-#include <igl/Assert.h> // For IGL_DEBUG_ASSERT in waitForUploadFence.
+#include <igl/Assert.h> // For IGL_DEBUG_ASSERT in waitForUploadFence().
 #include <igl/FramebufferWrapper.h>
+#include <igl/Macros.h>
 #include <igl/Texture.h>
 #include <igl/VertexInputState.h>
 #include <igl/d3d12/Buffer.h>
@@ -298,6 +301,7 @@ void logInfoQueuesForDevice(ID3D12Device* device, const char* context) {
 // Use std::hash<SamplerStateDesc> for deduplication (implemented in igl/SamplerState.cpp).
 } // namespace
 
+namespace {
 // Helper: Calculate root signature size in DWORDs
 // Root signature limit: 64 DWORDs
 // Size formula (per Microsoft documentation):
@@ -306,7 +310,7 @@ void logInfoQueuesForDevice(ID3D12Device* device, const char* context) {
 //   - Descriptor tables: 1 DWORD each (regardless of table size)
 //   - Static samplers: 0 DWORDs (free)
 // Reference: https://learn.microsoft.com/en-us/windows/win32/direct3d12/root-signature-limits
-static uint32_t getRootSignatureDwordSize(const D3D12_ROOT_SIGNATURE_DESC& desc) {
+uint32_t getRootSignatureDwordSize(const D3D12_ROOT_SIGNATURE_DESC& desc) {
   uint32_t totalSize = 0;
 
   for (uint32_t i = 0; i < desc.NumParameters; ++i) {
@@ -375,12 +379,12 @@ static uint32_t getRootSignatureDwordSize(const D3D12_ROOT_SIGNATURE_DESC& desc)
 // consistent with the input layout and render target configuration we build
 // for a graphics PSO. This is intended purely for diagnostics and has no
 // effect on runtime behavior.
-static void validateShaderBindingsAndLayout(
-    const RenderPipelineDesc& desc,
-    const D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc,
-    const std::vector<D3D12_INPUT_ELEMENT_DESC>& inputElements,
-    ID3D12ShaderReflection* IGL_NULLABLE vsRefl,
-    ID3D12ShaderReflection* IGL_NULLABLE psRefl) {
+void validateShaderBindingsAndLayout(const RenderPipelineDesc& desc,
+                                     const D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc,
+                                     const std::vector<D3D12_INPUT_ELEMENT_DESC>& inputElements,
+                                     ID3D12ShaderReflection* IGL_NULLABLE vsRefl,
+                                     ID3D12ShaderReflection* IGL_NULLABLE psRefl) {
+  IGL_PROFILER_FUNCTION();
   // Environment toggle: IGL_D3D12_VALIDATE_SHADER_BINDINGS=0 disables validation.
   if (const char* env = std::getenv("IGL_D3D12_VALIDATE_SHADER_BINDINGS")) {
     if (env[0] == '0') {
@@ -511,8 +515,10 @@ static void validateShaderBindingsAndLayout(
 
   IGL_LOG_INFO("=== END D3D12 VALIDATE_SHADER_BINDINGS ===\n");
 }
+} // namespace
 
 Device::Device(std::unique_ptr<D3D12Context> ctx) : ctx_(std::move(ctx)) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   platformDevice_ = std::make_unique<PlatformDevice>(*this);
 
   // Validate device limits against actual device capabilities.
@@ -527,14 +533,16 @@ Device::Device(std::unique_ptr<D3D12Context> ctx) : ctx_(std::move(ctx)) {
   }
 }
 
-static bool compileFXC(const char* src,
-                       const char* entry,
-                       const char* target,
-                       std::vector<uint8_t>& outBytecode) {
+namespace {
+bool compileFXC(const char* src,
+                const char* entry,
+                const char* target,
+                std::vector<uint8_t>& outBytecode) {
+  IGL_PROFILER_FUNCTION();
   igl::d3d12::ComPtr<ID3DBlob> blob;
   igl::d3d12::ComPtr<ID3DBlob> errors;
   const HRESULT hr = D3DCompile(src,
-                                strlen(src),
+                                std::strlen(src),
                                 nullptr,
                                 nullptr,
                                 nullptr,
@@ -556,15 +564,16 @@ static bool compileFXC(const char* src,
   return true;
 }
 
-static bool compileDXC(DXCCompiler& compiler,
-                       const char* src,
-                       const char* entry,
-                       const char* target,
-                       const char* debugName,
-                       std::vector<uint8_t>& outBytecode) {
+bool compileDXC(DXCCompiler& compiler,
+                const char* src,
+                const char* entry,
+                const char* target,
+                const char* debugName,
+                std::vector<uint8_t>& outBytecode) {
+  IGL_PROFILER_FUNCTION();
   std::string errors;
   const Result result =
-      compiler.compile(src, strlen(src), entry, target, debugName, 0, outBytecode, errors);
+      compiler.compile(src, std::strlen(src), entry, target, debugName, 0, outBytecode, errors);
   if (!result.isOk()) {
     IGL_LOG_ERROR("Failed to compile mipmap shader '%s': %s\n%s\n",
                   debugName,
@@ -574,8 +583,10 @@ static bool compileDXC(DXCCompiler& compiler,
   }
   return true;
 }
+} // namespace
 
 void Device::precompileMipmapShaders(ID3D12Device* IGL_NONNULL device) {
+  IGL_PROFILER_FUNCTION();
   static const char* kVS = R"(
 struct VSOut { float4 pos: SV_POSITION; float2 uv: TEXCOORD0; };
 VSOut main(uint id: SV_VertexID) {
@@ -694,12 +705,13 @@ float4 main(float4 pos:SV_POSITION, float2 uv:TEXCOORD0) : SV_TARGET { return te
 }
 
 Device::~Device() {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
   // Capture D3D12 validation messages for this device if enabled via environment.
   if (ctx_) {
     captureInfoQueueForDevice(ctx_->getDevice());
   }
 
-  // No shared event to clean up; events are per-call in waitForUploadFence.
+  // No shared event to clean up; events are per-call in waitForUploadFence().
 
   // Ensure upload-related resources are released before destroying the device.
   // D3D12Context destructor handles main queue fence waits via waitForGPU().
@@ -714,6 +726,7 @@ Device::~Device() {
 
 // Check for device removal and report detailed error.
 Result Device::checkDeviceRemoval() const {
+  IGL_PROFILER_FUNCTION();
   auto* device = ctx_->getDevice();
   if (!device) {
     // Device not initialized is an invalid operation, not success.
@@ -770,6 +783,7 @@ Result Device::checkDeviceRemoval() const {
 // Alignment validation methods.
 
 bool Device::validateMSAAAlignment(const TextureDesc& desc, Result* IGL_NULLABLE outResult) const {
+  IGL_PROFILER_FUNCTION();
   if (desc.numSamples <= 1) {
     return true; // Not MSAA, no special alignment requirements
   }
@@ -803,6 +817,7 @@ bool Device::validateMSAAAlignment(const TextureDesc& desc, Result* IGL_NULLABLE
 bool Device::validateTextureAlignment(const D3D12_RESOURCE_DESC& resourceDesc,
                                       uint32_t sampleCount,
                                       Result* IGL_NULLABLE outResult) const {
+  IGL_PROFILER_FUNCTION();
   // D3D12 texture alignment requirements:
   // - MSAA textures (SampleDesc.Count > 1): 64KB alignment (automatic via CreateCommittedResource)
   // - Regular textures: 64KB alignment (automatic via CreateCommittedResource)
@@ -841,6 +856,7 @@ bool Device::validateTextureAlignment(const D3D12_RESOURCE_DESC& resourceDesc,
 }
 
 bool Device::validateBufferAlignment(size_t bufferSize, bool isUniform) const {
+  IGL_PROFILER_FUNCTION();
   // D3D12 buffer alignment requirements:
   // - Constant buffers: 256 bytes (D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)
   // - Other buffers: No strict alignment requirement
@@ -864,6 +880,7 @@ Holder<BindGroupTextureHandle> Device::createBindGroup(
     const BindGroupTextureDesc& desc,
     const IRenderPipelineState* IGL_NULLABLE /*compatiblePipeline*/,
     Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   // Store bind group descriptor in pool for later use by encoder
   BindGroupTextureDesc description(desc);
   const auto handle = bindGroupTexturesPool_.create(std::move(description));
@@ -875,6 +892,7 @@ Holder<BindGroupTextureHandle> Device::createBindGroup(
 
 Holder<BindGroupBufferHandle> Device::createBindGroup(const BindGroupBufferDesc& desc,
                                                       Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   // Store bind group descriptor in pool for later use by encoder
   BindGroupBufferDesc description(desc);
   const auto handle = bindGroupBuffersPool_.create(std::move(description));
@@ -885,6 +903,7 @@ Holder<BindGroupBufferHandle> Device::createBindGroup(const BindGroupBufferDesc&
 }
 
 void Device::destroy(BindGroupTextureHandle handle) {
+  IGL_PROFILER_FUNCTION();
   if (handle.empty()) {
     return;
   }
@@ -892,6 +911,7 @@ void Device::destroy(BindGroupTextureHandle handle) {
 }
 
 void Device::destroy(BindGroupBufferHandle handle) {
+  IGL_PROFILER_FUNCTION();
   if (handle.empty()) {
     return;
   }
@@ -908,6 +928,7 @@ void Device::destroy(SamplerHandle /*handle*/) {
 // Command Queue
 std::shared_ptr<ICommandQueue> Device::createCommandQueue(const CommandQueueDesc& /*desc*/,
                                                           Result* IGL_NULLABLE outResult) noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   Result::setOk(outResult);
   return std::make_shared<CommandQueue>(*this);
 }
@@ -915,6 +936,7 @@ std::shared_ptr<ICommandQueue> Device::createCommandQueue(const CommandQueueDesc
 // Resources
 std::unique_ptr<IBuffer> Device::createBuffer(const BufferDesc& desc,
                                               Result* IGL_NULLABLE outResult) const noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   // Single const_cast at the API boundary; all mutation happens in the non-const helper.
   auto& self = const_cast<Device&>(*this);
   return self.createBufferImpl(desc, outResult);
@@ -922,6 +944,7 @@ std::unique_ptr<IBuffer> Device::createBuffer(const BufferDesc& desc,
 
 std::unique_ptr<IBuffer> Device::createBufferImpl(const BufferDesc& desc,
                                                   Result* IGL_NULLABLE outResult) noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   auto* device = ctx_->getDevice();
   if (!device) {
     Result::setResult(outResult, Result::Code::RuntimeError, "D3D12 device is null");
@@ -929,8 +952,8 @@ std::unique_ptr<IBuffer> Device::createBufferImpl(const BufferDesc& desc,
   }
 
   // Determine heap type and initial state based on storage
-  D3D12_HEAP_TYPE heapType;
-  D3D12_RESOURCE_STATES initialState;
+  D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_DEFAULT;
+  D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON;
 
   // CRITICAL: Storage buffers with UAV flags MUST use DEFAULT heap
   // D3D12 does not allow UAV resources on UPLOAD heaps
@@ -1006,10 +1029,10 @@ std::unique_ptr<IBuffer> Device::createBufferImpl(const BufferDesc& desc,
 
   if (FAILED(hr)) {
     char errorMsg[256];
-    snprintf(errorMsg,
-             sizeof(errorMsg),
-             "Failed to create buffer: HRESULT = 0x%08X",
-             static_cast<unsigned>(hr));
+    std::snprintf(errorMsg,
+                  sizeof(errorMsg),
+                  "Failed to create buffer: HRESULT = 0x%08X",
+                  static_cast<unsigned>(hr));
     Result::setResult(outResult, Result::Code::RuntimeError, errorMsg);
     return nullptr;
   }
@@ -1095,11 +1118,11 @@ std::unique_ptr<IBuffer> Device::createBufferImpl(const BufferDesc& desc,
 
               // Transition to a likely-read state based on buffer type
               D3D12_RESOURCE_STATES targetState = D3D12_RESOURCE_STATE_GENERIC_READ;
-              if (desc.type & BufferDesc::BufferTypeBits::Vertex) {
+              if ((desc.type & BufferDesc::BufferTypeBits::Vertex) != 0) {
                 targetState = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-              } else if (desc.type & BufferDesc::BufferTypeBits::Uniform) {
+              } else if ((desc.type & BufferDesc::BufferTypeBits::Uniform) != 0) {
                 targetState = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-              } else if (desc.type & BufferDesc::BufferTypeBits::Index) {
+              } else if ((desc.type & BufferDesc::BufferTypeBits::Index) != 0) {
                 targetState = D3D12_RESOURCE_STATE_INDEX_BUFFER;
               }
               D3D12_RESOURCE_BARRIER toTarget = {};
@@ -1154,23 +1177,27 @@ std::unique_ptr<IBuffer> Device::createBufferImpl(const BufferDesc& desc,
 std::shared_ptr<IDepthStencilState> Device::createDepthStencilState(
     const DepthStencilStateDesc& desc,
     Result* IGL_NULLABLE outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   Result::setOk(outResult);
   return std::make_shared<DepthStencilState>(desc);
 }
 
 std::unique_ptr<IShaderStages> Device::createShaderStages(const ShaderStagesDesc& desc,
                                                           Result* IGL_NULLABLE outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   Result::setOk(outResult);
   return std::make_unique<ShaderStages>(desc);
 }
 
 std::shared_ptr<ISamplerState> Device::createSamplerState(const SamplerStateDesc& desc,
                                                           Result* IGL_NULLABLE outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   return samplerCache_.createSamplerState(desc, outResult);
 }
 
 std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
                                                 Result* IGL_NULLABLE outResult) const noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   auto* device = ctx_->getDevice();
 
   // Check for exportability - D3D12 doesn't support exportable textures
@@ -1183,8 +1210,8 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
   // Convert IGL texture format to DXGI format
   DXGI_FORMAT dxgiFormat = textureFormatToDXGIFormat(desc.format);
   IGL_D3D12_LOG_VERBOSE("Device::createTexture: IGL format=%d -> DXGI format=%d\n",
-                        (int)desc.format,
-                        (int)dxgiFormat);
+                        static_cast<int>(desc.format),
+                        static_cast<int>(dxgiFormat));
   if (dxgiFormat == DXGI_FORMAT_UNKNOWN) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid, "Unsupported texture format");
     return nullptr;
@@ -1268,13 +1295,14 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
       const uint32_t maxSamples = getMaxMSAASamplesForFormat(desc.format);
 
       char errorMsg[512];
-      snprintf(errorMsg,
-               sizeof(errorMsg),
-               "Device::createTexture: Format %d does not support %u samples (max supported: %u). "
-               "Query DeviceFeatureLimits::MaxMultisampleCount before texture creation.",
-               static_cast<int>(dxgiFormat),
-               sampleCount,
-               maxSamples);
+      std::snprintf(
+          errorMsg,
+          sizeof(errorMsg),
+          "Device::createTexture: Format %d does not support %u samples (max supported: %u). "
+          "Query DeviceFeatureLimits::MaxMultisampleCount before texture creation.",
+          static_cast<int>(dxgiFormat),
+          sampleCount,
+          maxSamples);
       IGL_LOG_ERROR("%s\n", errorMsg);
       Result::setResult(outResult, Result::Code::Unsupported, errorMsg);
       return nullptr;
@@ -1300,13 +1328,13 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
   const bool isDepthStencilFormat =
       (desc.format >= TextureFormat::Z_UNorm16 && desc.format <= TextureFormat::S_UInt8);
 
-  if (desc.usage & TextureDesc::TextureUsageBits::Sampled) {
+  if ((desc.usage & TextureDesc::TextureUsageBits::Sampled) != 0) {
     // Shader resource - no special flags needed
   }
 
   // Attachment usage becomes either a color render target or a depth/stencil
   // target depending on the texture format.
-  if (desc.usage & TextureDesc::TextureUsageBits::Attachment) {
+  if ((desc.usage & TextureDesc::TextureUsageBits::Attachment) != 0) {
     if (isDepthStencilFormat) {
       resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
     } else {
@@ -1322,7 +1350,7 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
 
   // Storage (unordered access) is only supported for non-depth/stencil
   // formats. If requested on a depth/stencil texture, log and ignore it.
-  if (desc.usage & TextureDesc::TextureUsageBits::Storage) {
+  if ((desc.usage & TextureDesc::TextureUsageBits::Storage) != 0) {
     if (isDepthStencilFormat) {
       IGL_LOG_ERROR(
           "Device::createTexture: Storage usage (UAV) requested for depth/stencil "
@@ -1354,7 +1382,7 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
   D3D12_CLEAR_VALUE clearValue = {};
   D3D12_CLEAR_VALUE* pClearValue = nullptr;
 
-  if (resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
+  if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0) {
     clearValue.Format = dxgiFormat;
     clearValue.DepthStencil.Depth = 1.0f; // Default far plane
     clearValue.DepthStencil.Stencil = 0;
@@ -1381,17 +1409,17 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
     char errorMsg[512];
     if (hr == DXGI_ERROR_DEVICE_REMOVED) {
       HRESULT removedReason = device->GetDeviceRemovedReason();
-      snprintf(errorMsg,
-               sizeof(errorMsg),
-               "Failed to create texture resource. Device removed! HRESULT: 0x%08X, Removed "
-               "reason: 0x%08X",
-               static_cast<unsigned>(hr),
-               static_cast<unsigned>(removedReason));
+      std::snprintf(errorMsg,
+                    sizeof(errorMsg),
+                    "Failed to create texture resource. Device removed! HRESULT: 0x%08X, Removed "
+                    "reason: 0x%08X",
+                    static_cast<unsigned>(hr),
+                    static_cast<unsigned>(removedReason));
     } else {
-      snprintf(errorMsg,
-               sizeof(errorMsg),
-               "Failed to create texture resource. HRESULT: 0x%08X",
-               static_cast<unsigned>(hr));
+      std::snprintf(errorMsg,
+                    sizeof(errorMsg),
+                    "Failed to create texture resource. HRESULT: 0x%08X",
+                    static_cast<unsigned>(hr));
     }
     Result::setResult(outResult, Result::Code::RuntimeError, errorMsg);
     return nullptr;
@@ -1412,6 +1440,7 @@ std::shared_ptr<ITexture> Device::createTexture(const TextureDesc& desc,
 std::shared_ptr<ITexture> Device::createTextureView(std::shared_ptr<ITexture> texture,
                                                     const TextureViewDesc& desc,
                                                     Result* IGL_NULLABLE outResult) const noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   if (!texture) {
     Result::setResult(outResult, Result::Code::ArgumentInvalid, "Parent texture is null");
     return nullptr;
@@ -1436,6 +1465,7 @@ std::shared_ptr<ITexture> Device::createTextureView(std::shared_ptr<ITexture> te
 }
 
 std::shared_ptr<ITimer> Device::createTimer(Result* IGL_NULLABLE outResult) const noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   auto timer = std::make_shared<Timer>(*this);
   Result::setOk(outResult);
   return timer;
@@ -1444,6 +1474,7 @@ std::shared_ptr<ITimer> Device::createTimer(Result* IGL_NULLABLE outResult) cons
 std::shared_ptr<IVertexInputState> Device::createVertexInputState(const VertexInputStateDesc& desc,
                                                                   Result* IGL_NULLABLE
                                                                       outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   Result::setOk(outResult);
   return std::make_shared<VertexInputState>(desc);
 }
@@ -1451,6 +1482,7 @@ std::shared_ptr<IVertexInputState> Device::createVertexInputState(const VertexIn
 std::shared_ptr<IComputePipelineState> Device::createComputePipeline(
     const ComputePipelineDesc& desc,
     Result* IGL_NULLABLE outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_D3D12_LOG_VERBOSE("Device::createComputePipeline() START - debugName='%s'\n",
                         desc.debugName.c_str());
 
@@ -1735,6 +1767,7 @@ std::shared_ptr<IComputePipelineState> Device::createComputePipeline(
 std::shared_ptr<IRenderPipelineState> Device::createRenderPipeline(const RenderPipelineDesc& desc,
                                                                    Result* IGL_NULLABLE
                                                                        outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_D3D12_LOG_VERBOSE("Device::createRenderPipeline() START - debugName='%s'\n",
                         desc.debugName.c_str());
 
@@ -1920,16 +1953,16 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipeline(const RenderP
 
       // Convert IGL color write mask to D3D12
       UINT8 writeMask = 0;
-      if (att.colorWriteMask & igl::kColorWriteBitsRed) {
+      if ((att.colorWriteMask & igl::kColorWriteBitsRed) != 0) {
         writeMask |= D3D12_COLOR_WRITE_ENABLE_RED;
       }
-      if (att.colorWriteMask & igl::kColorWriteBitsGreen) {
+      if ((att.colorWriteMask & igl::kColorWriteBitsGreen) != 0) {
         writeMask |= D3D12_COLOR_WRITE_ENABLE_GREEN;
       }
-      if (att.colorWriteMask & igl::kColorWriteBitsBlue) {
+      if ((att.colorWriteMask & igl::kColorWriteBitsBlue) != 0) {
         writeMask |= D3D12_COLOR_WRITE_ENABLE_BLUE;
       }
-      if (att.colorWriteMask & igl::kColorWriteBitsAlpha) {
+      if ((att.colorWriteMask & igl::kColorWriteBitsAlpha) != 0) {
         writeMask |= D3D12_COLOR_WRITE_ENABLE_ALPHA;
       }
       psoDesc.BlendState.RenderTarget[i].RenderTargetWriteMask = writeMask;
@@ -2045,7 +2078,7 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipeline(const RenderP
     psoDesc.DepthStencilState.BackFace = psoDesc.DepthStencilState.FrontFace;
 
     IGL_D3D12_LOG_VERBOSE("  PSO Stencil configured: format=%d\n",
-                          (int)desc.targetDesc.stencilAttachmentFormat);
+                          static_cast<int>(desc.targetDesc.stencilAttachmentFormat));
   } else {
     psoDesc.DepthStencilState.StencilEnable = FALSE;
   }
@@ -2132,11 +2165,11 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipeline(const RenderP
       // Case-insensitive helpers
       auto toLower = [](std::string s) {
         for (auto& c : s)
-          c = static_cast<char>(tolower(c));
+          c = static_cast<char>(std::tolower(c));
         return s;
       };
       const std::string nlow = toLower(attr.name);
-      auto startsWith = [&](const char* p) { return nlow.rfind(p, 0) == 0; };
+      auto startsWith = [&](const char* p) { return nlow.starts_with(p); };
       auto contains = [&](const char* p) { return nlow.find(p) != std::string::npos; };
 
       if (startsWith("pos") || startsWith("position") || contains("position")) {
@@ -2180,8 +2213,8 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipeline(const RenderP
           "      bufferIndex=%u, isInstance=%d, sampleFunc=%d, InputSlotClass=%d, StepRate=%u\n",
           attr.bufferIndex,
           isInstanceData,
-          (int)vertexDesc.inputBindings[attr.bufferIndex].sampleFunction,
-          (int)element.InputSlotClass,
+          static_cast<int>(vertexDesc.inputBindings[attr.bufferIndex].sampleFunction),
+          static_cast<int>(element.InputSlotClass),
           element.InstanceDataStepRate);
 
       // Convert IGL vertex format to DXGI format
@@ -2395,24 +2428,24 @@ std::shared_ptr<IRenderPipelineState> Device::createRenderPipeline(const RenderP
     logInfoQueuesForDevice(device, "CreateGraphicsPipelineState");
 
     char errorMsg[512];
-    snprintf(errorMsg,
-             sizeof(errorMsg),
-             "Failed to create pipeline state. HRESULT: 0x%08X\n"
-             "  VS size: %zu, PS size: %zu\n"
-             "  Input elements: %u\n"
-             "  NumRenderTargets: %u, RTV[0]: %d, DSV: %d\n"
-             "  SampleDesc: Count=%u, Quality=%u\n"
-             "  PrimitiveTopologyType: %d\n",
-             static_cast<unsigned>(hr),
-             psoDesc.VS.BytecodeLength,
-             psoDesc.PS.BytecodeLength,
-             psoDesc.InputLayout.NumElements,
-             psoDesc.NumRenderTargets,
-             static_cast<int>(psoDesc.RTVFormats[0]),
-             static_cast<int>(psoDesc.DSVFormat),
-             psoDesc.SampleDesc.Count,
-             psoDesc.SampleDesc.Quality,
-             static_cast<int>(psoDesc.PrimitiveTopologyType));
+    std::snprintf(errorMsg,
+                  sizeof(errorMsg),
+                  "Failed to create pipeline state. HRESULT: 0x%08X\n"
+                  "  VS size: %zu, PS size: %zu\n"
+                  "  Input elements: %u\n"
+                  "  NumRenderTargets: %u, RTV[0]: %d, DSV: %d\n"
+                  "  SampleDesc: Count=%u, Quality=%u\n"
+                  "  PrimitiveTopologyType: %d\n",
+                  static_cast<unsigned>(hr),
+                  psoDesc.VS.BytecodeLength,
+                  psoDesc.PS.BytecodeLength,
+                  psoDesc.InputLayout.NumElements,
+                  psoDesc.NumRenderTargets,
+                  static_cast<int>(psoDesc.RTVFormats[0]),
+                  static_cast<int>(psoDesc.DSVFormat),
+                  psoDesc.SampleDesc.Count,
+                  psoDesc.SampleDesc.Quality,
+                  static_cast<int>(psoDesc.PrimitiveTopologyType));
     IGL_LOG_ERROR(errorMsg);
     Result::setResult(outResult, Result::Code::RuntimeError, errorMsg);
     return nullptr;
@@ -2512,6 +2545,7 @@ igl::d3d12::ComPtr<ID3D12PipelineState> Device::createPipelineStateVariant(
     const RenderPipelineDesc& desc,
     ID3D12RootSignature* rootSignature,
     Result* IGL_NULLABLE outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_D3D12_LOG_VERBOSE(
       "Device::createPipelineStateVariant() - Creating PSO variant for framebuffer formats\n");
 
@@ -2660,16 +2694,16 @@ igl::d3d12::ComPtr<ID3D12PipelineState> Device::createPipelineStateVariant(
       psoDesc.BlendState.RenderTarget[i].BlendOpAlpha = toD3D12BlendOp(att.alphaBlendOp);
 
       UINT8 writeMask = 0;
-      if (att.colorWriteMask & igl::kColorWriteBitsRed) {
+      if ((att.colorWriteMask & igl::kColorWriteBitsRed) != 0) {
         writeMask |= D3D12_COLOR_WRITE_ENABLE_RED;
       }
-      if (att.colorWriteMask & igl::kColorWriteBitsGreen) {
+      if ((att.colorWriteMask & igl::kColorWriteBitsGreen) != 0) {
         writeMask |= D3D12_COLOR_WRITE_ENABLE_GREEN;
       }
-      if (att.colorWriteMask & igl::kColorWriteBitsBlue) {
+      if ((att.colorWriteMask & igl::kColorWriteBitsBlue) != 0) {
         writeMask |= D3D12_COLOR_WRITE_ENABLE_BLUE;
       }
-      if (att.colorWriteMask & igl::kColorWriteBitsAlpha) {
+      if ((att.colorWriteMask & igl::kColorWriteBitsAlpha) != 0) {
         writeMask |= D3D12_COLOR_WRITE_ENABLE_ALPHA;
       }
       psoDesc.BlendState.RenderTarget[i].RenderTargetWriteMask = writeMask;
@@ -2775,11 +2809,11 @@ igl::d3d12::ComPtr<ID3D12PipelineState> Device::createPipelineStateVariant(
       std::string semanticName;
       auto toLower = [](std::string s) {
         for (auto& c : s)
-          c = static_cast<char>(tolower(c));
+          c = static_cast<char>(std::tolower(c));
         return s;
       };
       const std::string nlow = toLower(attr.name);
-      auto startsWith = [&](const char* p) { return nlow.rfind(p, 0) == 0; };
+      auto startsWith = [&](const char* p) { return nlow.starts_with(p); };
       auto contains = [&](const char* p) { return nlow.find(p) != std::string::npos; };
 
       if (startsWith("pos") || startsWith("position") || contains("position")) {
@@ -2853,12 +2887,12 @@ igl::d3d12::ComPtr<ID3D12PipelineState> Device::createPipelineStateVariant(
   if (FAILED(hr)) {
     logInfoQueuesForDevice(device, "CreateGraphicsPipelineState (variant)");
     char errorMsg[256];
-    snprintf(errorMsg,
-             sizeof(errorMsg),
-             "Failed to create PSO variant. HRESULT: 0x%08X, RTV[0]: %d, DSV: %d",
-             static_cast<unsigned>(hr),
-             static_cast<int>(psoDesc.RTVFormats[0]),
-             static_cast<int>(psoDesc.DSVFormat));
+    std::snprintf(errorMsg,
+                  sizeof(errorMsg),
+                  "Failed to create PSO variant. HRESULT: 0x%08X, RTV[0]: %d, DSV: %d",
+                  static_cast<unsigned>(hr),
+                  static_cast<int>(psoDesc.RTVFormats[0]),
+                  static_cast<int>(psoDesc.DSVFormat));
     IGL_LOG_ERROR(errorMsg);
     Result::setResult(outResult, Result::Code::RuntimeError, errorMsg);
     return nullptr;
@@ -2873,6 +2907,7 @@ igl::d3d12::ComPtr<ID3D12PipelineState> Device::createPipelineStateVariant(
 // Shader library and modules.
 std::unique_ptr<IShaderLibrary> Device::createShaderLibrary(const ShaderLibraryDesc& desc,
                                                             Result* IGL_NULLABLE outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_D3D12_LOG_VERBOSE("Device::createShaderLibrary() - moduleInfo count=%zu, debugName='%s'\n",
                         desc.moduleInfo.size(),
                         desc.debugName.c_str());
@@ -2983,7 +3018,7 @@ Result compileShaderFXC(const char* source,
 
   if (FAILED(hr)) {
     char hrBuf[32];
-    snprintf(hrBuf, sizeof(hrBuf), "0x%08lX", static_cast<unsigned long>(hr));
+    std::snprintf(hrBuf, sizeof(hrBuf), "0x%08lX", static_cast<unsigned long>(hr));
     std::string errorMsg = std::string("FXC compilation failed (HRESULT ") + hrBuf + ")";
     if (errors.Get() && errors->GetBufferSize() > 0) {
       outErrors = std::string(static_cast<const char*>(errors->GetBufferPointer()),
@@ -3018,6 +3053,7 @@ Result compileShaderFXC(const char* source,
 
 std::shared_ptr<IShaderModule> Device::createShaderModule(const ShaderModuleDesc& desc,
                                                           Result* IGL_NULLABLE outResult) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_D3D12_LOG_VERBOSE(
       "Device::createShaderModule() - stage=%d, entryPoint='%s', debugName='%s'\n",
       static_cast<int>(desc.info.stage),
@@ -3046,10 +3082,11 @@ std::shared_ptr<IShaderModule> Device::createShaderModule(const ShaderModuleDesc
       return nullptr;
     }
 
-    const size_t sourceLength = strlen(desc.input.source);
+    const size_t sourceLength = std::strlen(desc.input.source);
     IGL_D3D12_LOG_VERBOSE("  Compiling HLSL from string (%zu bytes) using DXC...\n", sourceLength);
 
     // Initialize DXC compiler thread-safely using std::call_once.
+    // @fb-only
     static DXCCompiler dxcCompiler;
     static std::once_flag dxcInitFlag;
     static bool dxcAvailable = false;
@@ -3468,12 +3505,14 @@ std::shared_ptr<IShaderModule> Device::createShaderModule(const ShaderModuleDesc
 // Framebuffer
 std::shared_ptr<IFramebuffer> Device::createFramebuffer(const FramebufferDesc& desc,
                                                         Result* IGL_NULLABLE outResult) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   Result::setOk(outResult);
   return std::make_shared<Framebuffer>(desc);
 }
 
 base::IFramebufferInterop* IGL_NULLABLE
 Device::createFramebufferInterop(const base::FramebufferInteropDesc& desc) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   auto framebuffer = createFramebufferFromBaseDesc(desc);
   if (!framebuffer) {
     return nullptr;
@@ -3536,6 +3575,7 @@ bool Device::hasFeature(DeviceFeatures feature) const {
   case DeviceFeatures::TextureFormatRG:
   case DeviceFeatures::ValidationLayersEnabled:
   case DeviceFeatures::ExternalMemoryObjects:
+  case DeviceFeatures::FillBuffer:
     return false;
   default:
     return false;
@@ -3739,6 +3779,7 @@ bool Device::getFeatureLimits(DeviceFeatureLimits featureLimits, size_t& result)
 
 ICapabilities::TextureFormatCapabilities Device::getTextureFormatCapabilities(
     TextureFormat format) const {
+  IGL_PROFILER_FUNCTION();
   using CapBits = ICapabilities::TextureFormatCapabilityBits;
   uint8_t caps = 0;
 
@@ -3790,19 +3831,19 @@ ICapabilities::TextureFormatCapabilities Device::getTextureFormatCapabilities(
   // Map D3D12_FORMAT_SUPPORT1 flags to IGL capabilities
 
   // Sampled: Can be used with texture sampling instructions
-  if (s1 & D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE) {
+  if ((s1 & D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE) != 0) {
     caps |= CapBits::Sampled;
   }
 
   // SampledFiltered: Supports linear filtering (only for non-integer color formats)
   // Also check D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE_COMPARISON for depth formats
   if (props.hasColor() && !props.isInteger()) {
-    if (s1 & D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE) {
+    if ((s1 & D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE) != 0) {
       caps |= CapBits::SampledFiltered;
     }
   } else if (props.hasDepth() || props.hasStencil()) {
     // Depth formats: check for comparison filtering support
-    if (s1 & D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE_COMPARISON) {
+    if ((s1 & D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE_COMPARISON) != 0) {
       caps |= CapBits::SampledFiltered;
     }
   }
@@ -3813,7 +3854,8 @@ ICapabilities::TextureFormatCapabilities Device::getTextureFormatCapabilities(
   // RGB formats even if D3D12 reports the underlying RGBA format as renderable - using them as
   // render targets causes device removal
   if (!isThreeChannelRgbFormat) {
-    if ((s1 & D3D12_FORMAT_SUPPORT1_RENDER_TARGET) || (s1 & D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL)) {
+    if (((s1 & D3D12_FORMAT_SUPPORT1_RENDER_TARGET) != 0) ||
+        ((s1 & D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL) != 0)) {
       caps |= CapBits::Attachment;
     }
   }
@@ -3821,22 +3863,22 @@ ICapabilities::TextureFormatCapabilities Device::getTextureFormatCapabilities(
   // Storage: Can be used with unordered access (UAV)
   // Check for typed UAV load/store, or atomic operations
   // Enhanced UAV capability detection.
-  const bool hasUAVTypedOps = (s2 & D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD) &&
-                              (s2 & D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE);
+  const bool hasUAVTypedOps = ((s2 & D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD) != 0) &&
+                              ((s2 & D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE) != 0);
   const bool hasUAVAtomicOps =
-      (s2 & D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_ADD) ||
-      (s2 & D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_BITWISE_OPS) ||
-      (s2 & D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_COMPARE_STORE_OR_COMPARE_EXCHANGE) ||
-      (s2 & D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_EXCHANGE) ||
-      (s2 & D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_SIGNED_MIN_OR_MAX) ||
-      (s2 & D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_UNSIGNED_MIN_OR_MAX);
+      ((s2 & D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_ADD) != 0) ||
+      ((s2 & D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_BITWISE_OPS) != 0) ||
+      ((s2 & D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_COMPARE_STORE_OR_COMPARE_EXCHANGE) != 0) ||
+      ((s2 & D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_EXCHANGE) != 0) ||
+      ((s2 & D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_SIGNED_MIN_OR_MAX) != 0) ||
+      ((s2 & D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_UNSIGNED_MIN_OR_MAX) != 0);
 
   if (hasFeature(DeviceFeatures::Compute) && (hasUAVTypedOps || hasUAVAtomicOps)) {
     caps |= CapBits::Storage;
   }
 
   // SampledAttachment: Can be both sampled and used as attachment
-  if ((caps & CapBits::Sampled) && (caps & CapBits::Attachment)) {
+  if (((caps & CapBits::Sampled) != 0) && ((caps & CapBits::Attachment) != 0)) {
     caps |= CapBits::SampledAttachment;
   }
 
@@ -3875,20 +3917,20 @@ ICapabilities::TextureFormatCapabilities Device::getTextureFormatCapabilities(
       const uint32_t MULTISAMPLE_RESOLVE = 0x40; // D3D12_FORMAT_SUPPORT1_MULTISAMPLE_RESOLVE
       const uint32_t MULTISAMPLE_LOAD = 0x100000; // D3D12_FORMAT_SUPPORT1_MULTISAMPLE_LOAD
 
-      if (unmappedS1 & MIP_AUTOGEN) {
+      if ((unmappedS1 & MIP_AUTOGEN) != 0) {
         IGL_D3D12_LOG_VERBOSE("    - MIP_AUTOGEN (0x800)\n");
       }
-      if (unmappedS1 & MULTISAMPLE_RESOLVE) {
+      if ((unmappedS1 & MULTISAMPLE_RESOLVE) != 0) {
         IGL_D3D12_LOG_VERBOSE("    - MULTISAMPLE_RESOLVE (0x40)\n");
       }
-      if (unmappedS1 & MULTISAMPLE_LOAD) {
+      if ((unmappedS1 & MULTISAMPLE_LOAD) != 0) {
         IGL_D3D12_LOG_VERBOSE("    - MULTISAMPLE_LOAD (0x100000)\n");
       }
     }
     if (unmappedS2 != 0) {
       IGL_D3D12_LOG_VERBOSE("  Support2 unmapped flags: 0x%08X\n", unmappedS2);
       const uint32_t OUTPUT_MERGER_LOGIC_OP = 0x2; // D3D12_FORMAT_SUPPORT2_OUTPUT_MERGER_LOGIC_OP
-      if (unmappedS2 & OUTPUT_MERGER_LOGIC_OP) {
+      if ((unmappedS2 & OUTPUT_MERGER_LOGIC_OP) != 0) {
         IGL_D3D12_LOG_VERBOSE("    - OUTPUT_MERGER_LOGIC_OP (0x2)\n");
       }
     }
@@ -3899,6 +3941,7 @@ ICapabilities::TextureFormatCapabilities Device::getTextureFormatCapabilities(
 }
 
 ShaderVersion Device::getShaderVersion() const {
+  IGL_PROFILER_FUNCTION();
   // Report HLSL SM 6.0 if DXC is available; otherwise SM 5.0 (D3DCompile fallback)
   bool dxcAvailable = false;
 #if IGL_PLATFORM_WINDOWS
@@ -3912,16 +3955,19 @@ ShaderVersion Device::getShaderVersion() const {
   }
 #endif
   if (dxcAvailable) {
-    return ShaderVersion{ShaderFamily::Hlsl, 6, 0, 0};
+    return ShaderVersion{
+        .family = ShaderFamily::Hlsl, .majorVersion = 6, .minorVersion = 0, .extra = 0};
   }
-  return ShaderVersion{ShaderFamily::Hlsl, 5, 0, 0};
+  return ShaderVersion{
+      .family = ShaderFamily::Hlsl, .majorVersion = 5, .minorVersion = 0, .extra = 0};
 }
 
 BackendVersion Device::getBackendVersion() const {
+  IGL_PROFILER_FUNCTION();
   // Query highest supported feature level to report backend version
   auto* dev = ctx_->getDevice();
   if (!dev) {
-    return BackendVersion{BackendFlavor::D3D12, 0, 0};
+    return BackendVersion{.flavor = BackendFlavor::D3D12, .majorVersion = 0, .minorVersion = 0};
   }
 
   static const D3D_FEATURE_LEVEL kLevels[] = {
@@ -3939,21 +3985,21 @@ BackendVersion Device::getBackendVersion() const {
   if (SUCCEEDED(dev->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &fls, sizeof(fls)))) {
     switch (fls.MaxSupportedFeatureLevel) {
     case D3D_FEATURE_LEVEL_12_2:
-      return BackendVersion{BackendFlavor::D3D12, 12, 2};
+      return BackendVersion{.flavor = BackendFlavor::D3D12, .majorVersion = 12, .minorVersion = 2};
     case D3D_FEATURE_LEVEL_12_1:
-      return BackendVersion{BackendFlavor::D3D12, 12, 1};
+      return BackendVersion{.flavor = BackendFlavor::D3D12, .majorVersion = 12, .minorVersion = 1};
     case D3D_FEATURE_LEVEL_12_0:
-      return BackendVersion{BackendFlavor::D3D12, 12, 0};
+      return BackendVersion{.flavor = BackendFlavor::D3D12, .majorVersion = 12, .minorVersion = 0};
     case D3D_FEATURE_LEVEL_11_1:
-      return BackendVersion{BackendFlavor::D3D12, 11, 1};
+      return BackendVersion{.flavor = BackendFlavor::D3D12, .majorVersion = 11, .minorVersion = 1};
     case D3D_FEATURE_LEVEL_11_0:
     default:
-      return BackendVersion{BackendFlavor::D3D12, 11, 0};
+      return BackendVersion{.flavor = BackendFlavor::D3D12, .majorVersion = 11, .minorVersion = 0};
     }
   }
 
   // Fallback if CheckFeatureSupport fails
-  return BackendVersion{BackendFlavor::D3D12, 11, 0};
+  return BackendVersion{.flavor = BackendFlavor::D3D12, .majorVersion = 11, .minorVersion = 0};
 }
 
 BackendType Device::getBackendType() const {
@@ -3967,6 +4013,7 @@ SamplerCacheStats Device::getSamplerCacheStats() const {
 
 // Query maximum MSAA sample count for a specific format.
 uint32_t Device::getMaxMSAASamplesForFormat(TextureFormat format) const {
+  IGL_PROFILER_FUNCTION();
   auto* device = ctx_->getDevice();
   if (!device) {
     return 1;
@@ -4005,6 +4052,7 @@ void Device::processCompletedUploads() {
 }
 
 Result Device::waitForUploadFence(UINT64 fenceValue) const {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_WAIT);
   return allocatorPool_.waitForUploadFence(*this, fenceValue);
 }
 

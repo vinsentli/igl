@@ -13,6 +13,7 @@
 
 #include <shell/renderSessions/FireworksSession.h>
 
+#include <algorithm>
 #include <cmath>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
@@ -39,13 +40,11 @@ struct Uniforms {
   glm::mat4 mvp[2];
 };
 
-[[maybe_unused]] glm::mat4 perspectiveAsymmetricFovRH(const igl::shell::Fov& fov,
-                                                      float nearZ,
-                                                      float farZ) {
-  const float tanLeft = tanf(fov.angleLeft);
-  const float tanRight = tanf(fov.angleRight);
-  const float tanDown = tanf(fov.angleDown);
-  const float tanUp = tanf(fov.angleUp);
+[[maybe_unused]] glm::mat4 perspectiveAsymmetricFovRH(const Fov& fov, float nearZ, float farZ) {
+  const float tanLeft = std::tan(fov.angleLeft);
+  const float tanRight = std::tan(fov.angleRight);
+  const float tanDown = std::tan(fov.angleDown);
+  const float tanUp = std::tan(fov.angleUp);
 
   const float tanWidth = tanRight - tanLeft;
   const float tanHeight = tanUp - tanDown;
@@ -313,7 +312,7 @@ float4 main(PSInput input) : SV_Target {
 struct InterleavedVertex {
   glm::vec3 pos;
   glm::vec3 color;
-  float flare;
+  float flare = 0.0f;
   glm::vec2 corner;
 };
 
@@ -413,8 +412,8 @@ void FireworksSession::ParticleSystem::addExplosion(const glm::vec3& pos,
   if (dist > 0.001f) {
     const glm::vec3 viewDir = toViewer / dist;
     // Choose a reference vector that isn't parallel to viewDir
-    const glm::vec3 ref = fabsf(viewDir.y) < 0.99f ? glm::vec3(0.0f, 1.0f, 0.0f)
-                                                   : glm::vec3(1.0f, 0.0f, 0.0f);
+    const glm::vec3 ref = std::fabs(viewDir.y) < 0.99f ? glm::vec3(0.0f, 1.0f, 0.0f)
+                                                       : glm::vec3(1.0f, 0.0f, 0.0f);
     right = glm::normalize(glm::cross(ref, viewDir));
     up = glm::cross(viewDir, right);
   }
@@ -428,7 +427,7 @@ void FireworksSession::ParticleSystem::addExplosion(const glm::vec3& pos,
     const float angle = dist01(rng) * 2.0f * static_cast<float>(M_PI);
     const float depthSpread = (dist01(rng) * 100.0f - 50.0f) / 5000.0f;
     const glm::vec3 vel =
-        radius * cosf(angle) * right + radius * sinf(angle) * up +
+        radius * std::cos(angle) * right + radius * std::sin(angle) * up +
         depthSpread *
             glm::normalize(glm::vec3::length() > 0.001f ? toViewer : glm::vec3(0.0f, 0.0f, 1.0f));
     const glm::vec3 color = palette[paletteIndex] +
@@ -467,11 +466,11 @@ void FireworksSession::generateParticleTexture(std::vector<uint8_t>& image) {
     for (int32_t x = 0; x < kParticleTextureSize; x++) {
       const float dx = static_cast<float>(x) - center;
       const float dy = static_cast<float>(y) - center;
-      const float dist = sqrtf(dx * dx + dy * dy);
+      const float dist = std::sqrt(dx * dx + dy * dy);
       const float normalizedDist = dist < center ? dist / center : 1.0f;
       const float falloff = 1.0f - normalizedDist;
-      const auto value =
-          static_cast<uint8_t>(fminf(255.0f, fmaxf(0.0f, falloff * falloff * falloff * 255.0f)));
+      const auto value = static_cast<uint8_t>(
+          std::fmin(255.0f, std::fmax(0.0f, falloff * falloff * falloff * 255.0f)));
       const size_t pixel = static_cast<size_t>(y) * kParticleTextureSize + x;
 // @fb-only
       // @fb-only
@@ -849,7 +848,7 @@ void FireworksSession::update(SurfaceTextures surfaceTextures) noexcept {
       sceneAnchored_ = true;
     }
     // Single-pass stereo: fill both MVP matrices from shell-provided view params
-    for (size_t i = 0; i < std::min(shellParams().viewParams.size(), size_t(2)); ++i) {
+    for (size_t i = 0; i < std::min(shellParams().viewParams.size(), static_cast<size_t>(2)); ++i) {
       const auto viewIdx = shellParams().viewParams[i].viewIndex;
       const glm::mat4 proj =
           perspectiveAsymmetricFovRH(shellParams().viewParams[i].fov, 0.1f, 100.0f);
@@ -1054,16 +1053,16 @@ void FireworksSession::update(SurfaceTextures surfaceTextures) noexcept {
   const auto buffer = commandQueue_->createCommandBuffer({}, nullptr);
   IGL_DEBUG_ASSERT(buffer != nullptr);
 
-  const igl::Viewport viewport = {.x = 0.0f,
-                                  .y = 0.0f,
-                                  .width = static_cast<float>(dimensions.width),
-                                  .height = static_cast<float>(dimensions.height),
-                                  .minDepth = 0.0f,
-                                  .maxDepth = +1.0f};
-  const igl::ScissorRect scissor = {.x = 0,
-                                    .y = 0,
-                                    .width = static_cast<uint32_t>(dimensions.width),
-                                    .height = static_cast<uint32_t>(dimensions.height)};
+  const Viewport viewport = {.x = 0.0f,
+                             .y = 0.0f,
+                             .width = static_cast<float>(dimensions.width),
+                             .height = static_cast<float>(dimensions.height),
+                             .minDepth = 0.0f,
+                             .maxDepth = +1.0f};
+  const ScissorRect scissor = {.x = 0,
+                               .y = 0,
+                               .width = static_cast<uint32_t>(dimensions.width),
+                               .height = static_cast<uint32_t>(dimensions.height)};
 
   const auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
   IGL_DEBUG_ASSERT(commands != nullptr);

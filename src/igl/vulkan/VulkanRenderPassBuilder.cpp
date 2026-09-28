@@ -7,6 +7,8 @@
 
 #include "VulkanRenderPassBuilder.h"
 
+#include <igl/Macros.h>
+
 // this cannot be put into namespace
 #define CMP(field) (a.field == b.field)
 bool operator==(const VkAttachmentDescription2& a, const VkAttachmentDescription2& b) {
@@ -26,6 +28,7 @@ VkResult VulkanRenderPassBuilder::build(const VulkanFunctionTable& vf,
                                         VkDevice device,
                                         VkRenderPass* outRenderPass,
                                         const char* debugName) const noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   IGL_DEBUG_ASSERT(
       refsColorResolve2_.empty() || (refsColorResolve2_.size() == refsColor2_.size()),
       "If resolve attachments are used, there should be one color resolve attachment for each "
@@ -142,6 +145,7 @@ VulkanRenderPassBuilder& VulkanRenderPassBuilder::addColor(VkFormat format,
                                                            VkImageLayout initialLayout,
                                                            VkImageLayout finalLayout,
                                                            VkSampleCountFlagBits samples) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(format != VK_FORMAT_UNDEFINED, "Invalid color attachment format");
   if (!refsColor2_.empty()) {
     IGL_DEBUG_ASSERT(attachments2_[refsColor2_.back().attachment].samples == samples,
@@ -193,6 +197,7 @@ VulkanRenderPassBuilder& VulkanRenderPassBuilder::addColorResolve(VkFormat forma
                                                                   VkAttachmentStoreOp storeOp,
                                                                   VkImageLayout initialLayout,
                                                                   VkImageLayout finalLayout) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(format != VK_FORMAT_UNDEFINED, "Invalid color resolve attachment format");
 
 #if IGL_VULKAN_HAS_LEGACY_RENDERPASS
@@ -245,6 +250,7 @@ VulkanRenderPassBuilder& VulkanRenderPassBuilder::addDepthStencil(
     VkImageLayout initialLayout,
     VkImageLayout finalLayout,
     VkSampleCountFlagBits samples) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(refDepth2_.layout == VK_IMAGE_LAYOUT_UNDEFINED,
                    "Can have only 1 depth attachment");
   IGL_DEBUG_ASSERT(format != VK_FORMAT_UNDEFINED, "Invalid depth attachment format");
@@ -277,8 +283,9 @@ VulkanRenderPassBuilder& VulkanRenderPassBuilder::addDepthStencil(
       .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
       .attachment = static_cast<uint32_t>(attachments2_.size()),
       .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-      .aspectMask = (hasDepth(format) ? VK_IMAGE_ASPECT_DEPTH_BIT : VkImageAspectFlags(0)) |
-                    (hasStencil(format) ? VK_IMAGE_ASPECT_STENCIL_BIT : VkImageAspectFlags(0)),
+      .aspectMask =
+          (hasDepth(format) ? VK_IMAGE_ASPECT_DEPTH_BIT : static_cast<VkImageAspectFlags>(0)) |
+          (hasStencil(format) ? VK_IMAGE_ASPECT_STENCIL_BIT : static_cast<VkImageAspectFlags>(0)),
   };
 
   attachments2_.push_back(VkAttachmentDescription2{
@@ -305,6 +312,7 @@ VulkanRenderPassBuilder& VulkanRenderPassBuilder::addDepthStencilResolve(
     VkAttachmentStoreOp stencilStoreOp,
     VkImageLayout initialLayout,
     VkImageLayout finalLayout) {
+  IGL_PROFILER_FUNCTION();
   IGL_DEBUG_ASSERT(refDepthResolve2_.layout == VK_IMAGE_LAYOUT_UNDEFINED,
                    "Can have only 1 depth resolve attachment");
   IGL_DEBUG_ASSERT(format != VK_FORMAT_UNDEFINED, "Invalid depth resolve attachment format");
@@ -331,8 +339,9 @@ VulkanRenderPassBuilder& VulkanRenderPassBuilder::addDepthStencilResolve(
       .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
       .attachment = static_cast<uint32_t>(attachments2_.size()),
       .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-      .aspectMask = (hasDepth(format) ? VK_IMAGE_ASPECT_DEPTH_BIT : VkImageAspectFlags(0)) |
-                    (hasStencil(format) ? VK_IMAGE_ASPECT_STENCIL_BIT : VkImageAspectFlags(0)),
+      .aspectMask =
+          (hasDepth(format) ? VK_IMAGE_ASPECT_DEPTH_BIT : static_cast<VkImageAspectFlags>(0)) |
+          (hasStencil(format) ? VK_IMAGE_ASPECT_STENCIL_BIT : static_cast<VkImageAspectFlags>(0)),
   };
 
   attachments2_.push_back(VkAttachmentDescription2{
@@ -368,6 +377,7 @@ bool VulkanRenderPassBuilder::operator==(const VulkanRenderPassBuilder& other) c
 
 uint64_t VulkanRenderPassBuilder::HashFunction::operator()(
     const VulkanRenderPassBuilder& builder) const {
+  IGL_PROFILER_FUNCTION();
   uint64_t hash = 0;
   for (const auto& a : builder.attachments2_) {
     hash ^= std::hash<uint32_t>()(a.flags);

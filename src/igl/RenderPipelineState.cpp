@@ -7,8 +7,9 @@
 
 #include <igl/RenderPipelineState.h>
 
-#include <string>
-#include <unordered_map>
+#include <type_traits>
+
+static_assert(std::is_trivially_copyable_v<igl::RenderPipelineDesc::TargetDesc::ColorAttachment>);
 
 using namespace igl;
 

@@ -10,7 +10,19 @@
 
 #include "NativeHWBuffer.h"
 
+#include <igl/IGLSafeC.h>
+
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
+
+// AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420 (0x23) was introduced in NDK r21 (API 30). Some build
+// configs still compile against older NDK sysroots that do not declare it, so define a
+// fallback when the header does not. It is a real NDK enumerator on newer sysroots, so this
+// must come after <android/hardware_buffer.h> (included via NativeHWBuffer.h above) —
+// defining it earlier would rewrite the enumerator token inside that header.
+#if !defined(AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420)
+// NOLINTNEXTLINE(readability-identifier-naming) - macro name must match the NDK enumerator
+#define AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420 0x23
+#endif
 
 namespace igl::android {
 
@@ -50,10 +62,8 @@ uint32_t getNativeHWFormat(TextureFormat iglFormat) {
   case TextureFormat::YUV_NV12:
     return AHARDWAREBUFFER_FORMAT_YCbCr_420_SP_VENUS;
 
-#if __ANDROID_MIN_SDK_VERSION__ >= 30
   case TextureFormat::YUV_420p:
     return AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420;
-#endif
 
   default:
     return 0;
@@ -123,10 +133,8 @@ TextureFormat getIglFormat(uint32_t nativeFormat) {
   case COLOR_QCOM_FORMATYUV420PackedSemiPlanar32m:
     return TextureFormat::YUV_NV12;
 
-#if __ANDROID_MIN_SDK_VERSION__ >= 30
   case AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420:
     return TextureFormat::YUV_420p;
-#endif
 
   default:
     return TextureFormat::Invalid;
@@ -153,14 +161,15 @@ Result allocateNativeHWBuffer(AHardwareBufferFunctionTable* IGL_NONNULL funcTabl
                               const TextureDesc& desc,
                               bool surfaceComposite,
                               AHardwareBuffer** buffer) {
-  AHardwareBuffer_Desc bufferDesc = {};
-  bufferDesc.format = getNativeHWFormat(desc.format);
-  bufferDesc.width = desc.width;
-  bufferDesc.height = desc.height;
-  bufferDesc.layers = 1;
-  bufferDesc.usage = getNativeHWBufferUsage(desc);
-  bufferDesc.rfu0 = 0;
-  bufferDesc.rfu1 = 0;
+  AHardwareBuffer_Desc bufferDesc = {
+      .width = desc.width,
+      .height = desc.height,
+      .layers = 1,
+      .format = getNativeHWFormat(desc.format),
+      .usage = getNativeHWBufferUsage(desc),
+      .rfu0 = 0,
+      .rfu1 = 0,
+  };
 
 #if __ANDROID_API__ >= 33
   bufferDesc.usage |= surfaceComposite ? AHARDWAREBUFFER_USAGE_COMPOSER_OVERLAY : 0;
@@ -174,6 +183,7 @@ Result allocateNativeHWBuffer(AHardwareBufferFunctionTable* IGL_NONNULL funcTabl
   return Result();
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 INativeHWTextureBuffer::LockGuard::~LockGuard() {
   if (hwBufferOwner_ != nullptr) {
     hwBufferOwner_->unlockHWBuffer();
@@ -231,7 +241,7 @@ Result INativeHWTextureBuffer::createHWBuffer(const TextureDesc& desc,
                   desc.tiling, // 0 = Optimal
 
                   igl::android::getNativeHWFormat(desc.format),
-                  (int)hasStorageAlready,
+                  static_cast<int>(hasStorageAlready),
                   desc.storage // 2 = shared
     );
 
@@ -264,12 +274,12 @@ INativeHWTextureBuffer::LockGuard INativeHWTextureBuffer::lockHWBuffer(std::byte
                                                                        Result* outResult) const {
   Result result = lockHWBuffer(dst, outRange);
   Result::setResult(outResult, result);
-  return INativeHWTextureBuffer::LockGuard(result.isOk() ? this : nullptr);
+  return {result.isOk() ? this : nullptr};
 }
 
 Result INativeHWTextureBuffer::lockHWBuffer(std::byte * IGL_NULLABLE * IGL_NONNULL dst,
                                             RangeDesc& outRange) const {
-  AHardwareBuffer_Desc hwbDesc;
+  AHardwareBuffer_Desc hwbDesc{};
   funcTable_->AHardwareBuffer_describe(hwBuffer_, &hwbDesc);
 
   if (funcTable_->AHardwareBuffer_lock(hwBuffer_,
@@ -344,35 +354,71 @@ Result INativeHWTextureBuffer::uploadToHWBuffer(const TextureFormatProperties& p
                                                 const TextureRangeDesc& range,
                                                 const void* IGL_NULLABLE data,
                                                 size_t bytesPerRow) const {
-  if (hwBuffer_ == nullptr || funcTable_ == nullptr) {
+  if (funcTable_ == nullptr) {
+    return Result{Result::Code::RuntimeError,
+                  "INativeHWTextureBuffer: funcTable_ not initialized"};
+  }
+  if (hwBuffer_ == nullptr) {
     return Result{Result::Code::RuntimeError,
                   "INativeHWTextureBuffer: hardware buffer not initialized"};
+  }
+  if (data == nullptr) {
+    IGL_LOG_ERROR("INativeHWTextureBuffer: source data is null");
+    return Result{Result::Code::ArgumentInvalid, "INativeHWTextureBuffer: source data is null"};
   }
 
   std::byte* dst = nullptr;
   RangeDesc outRange;
   Result lockResult;
-  auto lockGuard [[maybe_unused]] =
-      lockHWBuffer(reinterpret_cast<std::byte**>(&dst), outRange, &lockResult);
+  auto lockGuard
+      [[maybe_unused]] = lockHWBuffer(reinterpret_cast<std::byte**>(&dst), outRange, &lockResult);
+
+  if (!lockResult.isOk()) {
+    IGL_LOG_ERROR("INativeHWTextureBuffer: failed to lock hardware buffer: %s",
+                  lockResult.message.c_str());
+    return Result{Result::Code::RuntimeError,
+                  "INativeHWTextureBuffer: failed to lock hardware buffer"};
+  }
+  if (dst == nullptr) {
+    IGL_LOG_ERROR("INativeHWTextureBuffer: locked hardware buffer returned a null pointer");
+    return Result{Result::Code::RuntimeError,
+                  "INativeHWTextureBuffer: locked hardware buffer returned a null pointer"};
+  }
 
   const size_t internalBpr = props.getBytesPerRow(outRange.stride);
   const size_t srcBpr = bytesPerRow ? bytesPerRow : props.getBytesPerRow(range);
 
-  if (lockResult.isOk() && dst != nullptr && data != nullptr && srcBpr <= internalBpr &&
-      range.width == outRange.width && range.height == outRange.height) {
-    const std::byte* src = static_cast<const std::byte*>(data);
-    size_t srcOffset = 0;
-    size_t dstOffset = 0;
-    for (uint32_t i = 0; i < outRange.height; ++i) {
-      memcpy(dst + dstOffset, src + srcOffset, srcBpr);
-      dstOffset += internalBpr;
-      srcOffset += srcBpr;
-    }
-    return Result{};
+  if (srcBpr > internalBpr) {
+    IGL_LOG_ERROR(
+        "INativeHWTextureBuffer: source bytes-per-row (%zu) exceeds hardware buffer "
+        "bytes-per-row (%zu)",
+        srcBpr,
+        internalBpr);
+    return Result{Result::Code::ArgumentInvalid,
+                  "INativeHWTextureBuffer: source bytes-per-row exceeds hardware buffer "
+                  "bytes-per-row"};
+  }
+  if (range.width != outRange.width || range.height != outRange.height) {
+    IGL_LOG_ERROR(
+        "INativeHWTextureBuffer: upload range (%zux%zu) does not match hardware buffer "
+        "range (%zux%zu)",
+        range.width,
+        range.height,
+        outRange.width,
+        outRange.height);
+    return Result{Result::Code::ArgumentInvalid,
+                  "INativeHWTextureBuffer: upload range does not match hardware buffer range"};
   }
 
-  return Result{Result::Code::Unsupported,
-                "INativeHWTextureBuffer: upload preconditions not met"};
+  const std::byte* src = static_cast<const std::byte*>(data);
+  size_t srcOffset = 0;
+  size_t dstOffset = 0;
+  for (uint32_t i = 0; i < outRange.height; ++i) {
+    checked_memcpy(dst + dstOffset, internalBpr, src + srcOffset, srcBpr);
+    dstOffset += internalBpr;
+    srcOffset += srcBpr;
+  }
+  return Result{};
 }
 
 } // namespace igl::android

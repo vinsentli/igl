@@ -7,8 +7,7 @@
 
 #pragma once
 
-#include <map>
-#include <utility>
+#include <type_traits>
 #include <vector>
 #include <igl/Common.h> // IWYU pragma: keep
 #include <igl/ITrackedResource.h>
@@ -58,6 +57,23 @@ enum class ConstantValueType : uint8_t {
 [[nodiscard]] size_t getConstantValueSize(ConstantValueType type) noexcept;
 
 /**
+ * @brief Selects how aggressively backend shader compilers optimize generated code.
+ *
+ * `Default` preserves IGL's historical compile behavior (optimizer enabled, biased toward size)
+ * so existing clients are byte-for-byte unaffected. The remaining values are opt-in and consumed
+ * per backend (Vulkan/SPIR-V, Metal/MSL); backends without an optimization lever (e.g. OpenGL/ES)
+ * ignore this field.
+ */
+enum class ShaderOptimization : uint8_t {
+  /** @brief Preserve IGL's historical default (optimizer on, optimize for size). */
+  Default = 0,
+  /** @brief Disable the optimizer for clean source-level debugging and reference numerics. */
+  NoOpt,
+  /** @brief Optimize compiled shaders for runtime performance. */
+  Performance,
+};
+
+/**
  * @brief Configuration used when compiling a shader to toggle features such as fast math.
  */
 struct ShaderCompilerOptions {
@@ -65,9 +81,15 @@ struct ShaderCompilerOptions {
    * standard. */
   bool fastMathEnabled = true;
 
+  /** @brief Selects the shader optimization strategy. Defaults to `ShaderOptimization::Default`,
+   * which preserves IGL's historical behavior so existing clients are unaffected. */
+  ShaderOptimization optimization = ShaderOptimization::Default;
+
   bool operator==(const ShaderCompilerOptions& other) const;
   bool operator!=(const ShaderCompilerOptions& other) const;
 };
+
+static_assert(std::is_trivially_copyable_v<ShaderCompilerOptions>);
 
 struct FunctionConstantValues {
   /// @brief One stored constant. The slot's position in `values_` is the binding index;
@@ -112,6 +134,8 @@ struct FunctionConstantValues {
   std::vector<uint8_t> data_;
 };
 
+static_assert(std::is_trivially_copyable_v<FunctionConstantValues::Entry>);
+
 /**
  * @brief Metadata about a shader module.
  */
@@ -149,7 +173,7 @@ struct ShaderInput {
    */
   const char* IGL_NULLABLE source = nullptr;
   /**
-   * @brief Shader compiler configuration. Only used by Metal backends.
+   * @brief Shader compiler configuration. Consumed by the Metal and Vulkan/SPIR-V backends.
    * @remark Only used when type is ShaderInputType::String
    */
   ShaderCompilerOptions options;
@@ -184,6 +208,8 @@ struct ShaderInput {
   bool operator==(const ShaderInput& other) const;
   bool operator!=(const ShaderInput& other) const;
 };
+
+static_assert(std::is_trivially_copyable_v<ShaderInput>);
 
 /**
  * @brief Descriptor used to construct a shader module.

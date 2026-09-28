@@ -18,6 +18,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 
 #if defined(_XLESS_GLFW_)
@@ -65,8 +66,10 @@ constexpr uint32_t kNumCubes = 16;
 
 namespace {
 
+// NOLINTNEXTLINE(facebook-static-object-destructor-check)
 std::unique_ptr<iglu::imgui::Session> imguiSession_;
 
+// NOLINTNEXTLINE(facebook-static-object-destructor-check)
 igl::shell::InputDispatcher inputDispatcher_;
 
 } // namespace
@@ -132,8 +135,11 @@ bool saveScreenshot_ = false;
 
 constexpr uint32_t kNumBufferedFrames = 3;
 
+// NOLINTNEXTLINE(facebook-static-object-destructor-check)
 std::unique_ptr<IDevice> device;
+// NOLINTNEXTLINE(facebook-static-object-destructor-check)
 std::shared_ptr<ICommandQueue> commandQueue_;
+// NOLINTBEGIN(facebook-static-object-destructor-check)
 RenderPassDesc renderPass_;
 FramebufferDesc framebufferDesc_;
 std::shared_ptr<IFramebuffer> framebuffer;
@@ -141,6 +147,7 @@ std::shared_ptr<IRenderPipelineState> renderPipelineState_Mesh_;
 std::shared_ptr<IBuffer> vb0_, ib0_; // buffers for vertices and indices
 std::shared_ptr<IBuffer> screenCopy_;
 std::vector<std::shared_ptr<IBuffer>> ubPerFrame_, ubPerObject;
+// NOLINTEND(facebook-static-object-destructor-check)
 std::shared_ptr<IVertexInputState> vertexInput0_;
 std::shared_ptr<IDepthStencilState> depthStencilState_;
 std::shared_ptr<ITexture> texture0_, texture1_;
@@ -205,7 +212,7 @@ UniformsPerObject perObject[kNumCubes];
 
 GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationLayers) {
   if (!glfwInit()) {
-    printf("glfwInit() failed");
+    std::printf("glfwInit() failed");
     return nullptr;
   }
 
@@ -221,7 +228,7 @@ GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationL
 
   if (newWindow) {
     glfwSetErrorCallback([](int error, const char* description) {
-      printf("GLFW Error (%i): %s\n", error, description);
+      std::printf("GLFW Error (%i): %s\n", error, description);
     });
 
     glfwSetKeyCallback(newWindow, [](GLFWwindow* window, int key, int, int action, int) {
@@ -238,7 +245,7 @@ GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationL
 
     // @lint-ignore CLANGTIDY
     glfwSetWindowSizeCallback(newWindow, [](GLFWwindow* /*window*/, int width, int height) {
-      printf("Window resized! width=%d, height=%d\n", width, height);
+      std::printf("Window resized! width=%d, height=%d\n", width, height);
       width_ = width;
       height_ = height;
 #if !USE_OPENGL_BACKEND
@@ -331,7 +338,7 @@ GLFWwindow* FOLLY_NULLABLE initIGL(bool isHeadless, bool enableVulkanValidationL
                                                 .debugName = "Buffer: screen copy"},
                                      nullptr);
 
-  // create an Uniform buffers to store uniforms for 2 objects
+  // create Uniform buffers to store uniforms for 2 objects
   for (uint32_t i = 0; i != kNumBufferedFrames; i++) {
     ubPerFrame_.push_back(
         device->createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Uniform,
@@ -563,15 +570,16 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
   perFrame.proj = glm::perspectiveLH(fov, aspectRatio, 0.1f, 500.0f);
   // place a "camera" behind the cubes, the distance depends on the total number of cubes
   perFrame.view =
-      glm::translate(mat4(1.0f), vec3(0.0f, 0.0f, sqrtf(kNumCubes / 16) * 20.0f * kHalf));
+      glm::translate(mat4(1.0f), vec3(0.0f, 0.0f, std::sqrt(kNumCubes / 16) * 20.0f * kHalf));
   ubPerFrame_[frameIndex]->upload(&perFrame, igl::BufferRange(sizeof(perFrame)));
 
   // rotate cubes around random axes
   for (uint32_t i = 0; i != kNumCubes; i++) {
-    const float direction = powf(-1, static_cast<float>(i + 1));
-    const uint32_t cubesInLine = static_cast<uint32_t>(sqrt(kNumCubes));
-    const vec3 offset = vec3(-1.5f * sqrt(kNumCubes) + 4.0f * (i % cubesInLine),
-                             -1.5f * sqrt(kNumCubes) + 4.0f * (i / cubesInLine),
+    const float direction = std::pow(-1, static_cast<float>(i + 1));
+    const uint32_t cubesInLine = static_cast<uint32_t>(std::sqrt(kNumCubes));
+    const vec3 offset = vec3(-1.5f * std::sqrt(kNumCubes) + 4.0f * (i % cubesInLine),
+                             // NOLINTNEXTLINE(bugprone-integer-division)
+                             -1.5f * std::sqrt(kNumCubes) + 4.0f * (i / cubesInLine),
                              0);
     perObject[i].model = glm::rotate(glm::translate(mat4(1.0f), offset),
                                      direction * static_cast<float>(glfwGetTime()),
@@ -581,8 +589,7 @@ void render(const std::shared_ptr<ITexture>& nativeDrawable, uint32_t frameIndex
   ubPerObject[frameIndex]->upload(&perObject, igl::BufferRange(sizeof(perObject)));
 
   // Command buffers (1-N per thread): create, submit and forget
-  CommandBufferDesc cbDesc;
-  std::shared_ptr<ICommandBuffer> buffer = commandQueue_->createCommandBuffer(cbDesc, nullptr);
+  std::shared_ptr<ICommandBuffer> buffer = commandQueue_->createCommandBuffer({}, nullptr);
 
   const igl::Viewport viewport = {.x = 0.0f,
                                   .y = 0.0f,
@@ -660,9 +667,9 @@ int main(int argc, char* argv[]) {
   bool enableVulkanValidationLayers = true;
 
   for (int i = 1; i < argc; i++) {
-    if (!strcmp(argv[i], "--headless")) {
+    if (!std::strcmp(argv[i], "--headless")) {
       isHeadless = true;
-    } else if (!strcmp(argv[i], "--disable-vulkan-validation-layers")) {
+    } else if (!std::strcmp(argv[i], "--disable-vulkan-validation-layers")) {
       enableVulkanValidationLayers = false;
     }
   }
@@ -690,7 +697,7 @@ int main(int argc, char* argv[]) {
     if (window) {
       glfwPollEvents();
     } else {
-      printf("We are running headless - breaking after 1 frame\n");
+      std::printf("We are running headless - breaking after 1 frame\n");
       std::shared_ptr<ITexture> texture = framebuffer->getColorAttachment(0);
       const Dimensions dim = texture->getDimensions();
       std::vector<uint8_t> pixelsRGBA(dim.width * dim.height * 4);

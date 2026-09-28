@@ -56,12 +56,16 @@ std::unique_ptr<IRenderCommandEncoder> CommandBuffer::createRenderCommandEncoder
     IGL_DEBUG_ASSERT(depthImg.imageFormat_ != VK_FORMAT_UNDEFINED,
                      "Invalid depth attachment format");
     const VkImageAspectFlags flags = vkDepthTex.getVulkanTexture().image.getImageAspectFlags();
-    depthImg.transitionLayout(
-        wrapper_.cmdBuf,
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        VkImageSubresourceRange{flags, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS});
+    depthImg.transitionLayout(wrapper_.cmdBuf,
+                              VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                              VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                              VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                              VkImageSubresourceRange{.aspectMask = flags,
+                                                      .baseMipLevel = 0,
+                                                      .levelCount = VK_REMAINING_MIP_LEVELS,
+                                                      .baseArrayLayer = 0,
+                                                      .layerCount = VK_REMAINING_ARRAY_LAYERS});
   }
 
   auto encoder = RenderCommandEncoder::create(
@@ -107,18 +111,22 @@ void CommandBuffer::present(const std::shared_ptr<ITexture>& surface) const {
                                               ? VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
                                               : VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     // set the result of the previous render pass
-    img.transitionLayout(
-        wrapper_.cmdBuf,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        srcStage,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // wait for subsequent fragment/compute shaders
-        VkImageSubresourceRange{flags, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS});
+    img.transitionLayout(wrapper_.cmdBuf,
+                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                         srcStage,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // wait for subsequent
+                                                                   // fragment/compute shaders
+                         VkImageSubresourceRange{.aspectMask = flags,
+                                                 .baseMipLevel = 0,
+                                                 .levelCount = VK_REMAINING_MIP_LEVELS,
+                                                 .baseArrayLayer = 0,
+                                                 .layerCount = VK_REMAINING_ARRAY_LAYERS});
   }
 }
 
 void CommandBuffer::pushDebugGroupLabel(const char* label, const igl::Color& color) const {
-  IGL_DEBUG_ASSERT(label != nullptr && *label);
+  IGL_DEBUG_ASSERT(label && *label);
   ivkCmdBeginDebugUtilsLabel(&ctx_.vf_, wrapper_.cmdBuf, label, color.toFloatPtr());
 }
 
@@ -167,6 +175,33 @@ void CommandBuffer::copyBuffer(IBuffer& src,
                    wrapper_.cmdBuf,
                    bufDst.getVkBuffer(),
                    bufDst.getBufferUsageFlags(),
+                   VK_PIPELINE_STAGE_TRANSFER_BIT,
+                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+}
+
+void CommandBuffer::fillBuffer(IBuffer& buffer, const BufferRange& range, uint8_t value) {
+  IGL_PROFILER_FUNCTION();
+  IGL_DEBUG_ASSERT(range.offset % 4u == 0u && range.size % 4u == 0u);
+  IGL_DEBUG_ASSERT(range.offset + range.size <= buffer.getSizeInBytes());
+
+  const auto& vulkanBuffer = static_cast<Buffer&>(buffer);
+  IGL_DEBUG_ASSERT((vulkanBuffer.getBufferUsageFlags() & VK_BUFFER_USAGE_TRANSFER_DST_BIT) != 0u);
+
+  ivkBufferBarrier(&ctx_.vf_,
+                   wrapper_.cmdBuf,
+                   vulkanBuffer.getVkBuffer(),
+                   vulkanBuffer.getBufferUsageFlags(),
+                   VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                   VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+  const uint32_t fillValue = static_cast<uint32_t>(value) * 0x01010101u;
+  ctx_.vf_.vkCmdFillBuffer(
+      wrapper_.cmdBuf, vulkanBuffer.getVkBuffer(), range.offset, range.size, fillValue);
+
+  ivkBufferBarrier(&ctx_.vf_,
+                   wrapper_.cmdBuf,
+                   vulkanBuffer.getVkBuffer(),
+                   vulkanBuffer.getBufferUsageFlags(),
                    VK_PIPELINE_STAGE_TRANSFER_BIT,
                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 }

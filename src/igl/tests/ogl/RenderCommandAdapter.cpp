@@ -35,7 +35,6 @@ namespace igl::tests {
 class RenderCommandAdapterOGLTest : public ::testing::Test {
  public:
   RenderCommandAdapterOGLTest() = default;
-  ~RenderCommandAdapterOGLTest() override = default;
 
   void SetUp() override {
     igl::setDebugBreakEnabled(false);
@@ -58,17 +57,17 @@ class RenderCommandAdapterOGLTest : public ::testing::Test {
     ASSERT_NE(offscreenTexture_, nullptr);
 
     // Create framebuffer
-    FramebufferDesc framebufferDesc;
-    framebufferDesc.colorAttachments[0].texture = offscreenTexture_;
+    const FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = offscreenTexture_}}};
     framebuffer_ = iglDev_->createFramebuffer(framebufferDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
     ASSERT_NE(framebuffer_, nullptr);
 
     // Initialize render pass descriptor
-    renderPass_.colorAttachments.resize(1);
-    renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
-    renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-    renderPass_.colorAttachments[0].clearColor = {0.0, 0.0, 0.0, 1.0};
+    renderPass_ = {
+        .colorAttachments = {{.loadAction = LoadAction::Clear,
+                              .storeAction = StoreAction::Store,
+                              .clearColor = {0.0, 0.0, 0.0, 1.0}}},
+    };
 
     // Initialize shader stages
     std::unique_ptr<IShaderStages> stages;
@@ -76,58 +75,55 @@ class RenderCommandAdapterOGLTest : public ::testing::Test {
     shaderStages_ = std::move(stages);
 
     // Initialize vertex input state
-    VertexInputStateDesc inputDesc;
-    inputDesc.attributes[0].format = VertexAttributeFormat::Float4;
-    inputDesc.attributes[0].offset = 0;
-    inputDesc.attributes[0].bufferIndex = data::shader::kSimplePosIndex;
-    inputDesc.attributes[0].name = data::shader::kSimplePos;
-    inputDesc.attributes[0].location = 0;
-    inputDesc.inputBindings[0].stride = sizeof(float) * 4;
-
-    inputDesc.attributes[1].format = VertexAttributeFormat::Float2;
-    inputDesc.attributes[1].offset = 0;
-    inputDesc.attributes[1].bufferIndex = data::shader::kSimpleUvIndex;
-    inputDesc.attributes[1].name = data::shader::kSimpleUv;
-    inputDesc.attributes[1].location = 1;
-    inputDesc.inputBindings[1].stride = sizeof(float) * 2;
-
-    inputDesc.numAttributes = inputDesc.numInputBindings = 2;
+    // numAttributes has to equal numInputBindings when using more than one buffer
+    const VertexInputStateDesc inputDesc{
+        .numAttributes = 2,
+        .attributes = {{.bufferIndex = data::shader::kSimplePosIndex,
+                        .format = VertexAttributeFormat::Float4,
+                        .offset = 0,
+                        .name = std::string(data::shader::kSimplePos),
+                        .location = 0},
+                       {.bufferIndex = data::shader::kSimpleUvIndex,
+                        .format = VertexAttributeFormat::Float2,
+                        .offset = 0,
+                        .name = std::string(data::shader::kSimpleUv),
+                        .location = 1}},
+        .numInputBindings = 2,
+        .inputBindings = {{.stride = sizeof(float) * 4}, {.stride = sizeof(float) * 2}},
+    };
 
     vertexInputState_ = iglDev_->createVertexInputState(inputDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
     ASSERT_NE(vertexInputState_, nullptr);
 
     // Create vertex buffer
-    BufferDesc vbDesc;
-    vbDesc.type = BufferDesc::BufferTypeBits::Vertex;
-    vbDesc.data = data::vertex_index::kQuadVert.data();
-    vbDesc.length = sizeof(data::vertex_index::kQuadVert);
+    const BufferDesc vbDesc{.type = BufferDesc::BufferTypeBits::Vertex,
+                            .data = data::vertex_index::kQuadVert.data(),
+                            .length = sizeof(data::vertex_index::kQuadVert)};
     vb_ = iglDev_->createBuffer(vbDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
 
     // Create UV buffer
-    BufferDesc uvDesc;
-    uvDesc.type = BufferDesc::BufferTypeBits::Vertex;
-    uvDesc.data = data::vertex_index::kQuadUv.data();
-    uvDesc.length = sizeof(data::vertex_index::kQuadUv);
+    const BufferDesc uvDesc{.type = BufferDesc::BufferTypeBits::Vertex,
+                            .data = data::vertex_index::kQuadUv.data(),
+                            .length = sizeof(data::vertex_index::kQuadUv)};
     uvb_ = iglDev_->createBuffer(uvDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
 
     // Create index buffer
-    BufferDesc ibDesc;
-    ibDesc.type = BufferDesc::BufferTypeBits::Index;
-    ibDesc.data = data::vertex_index::kQuadInd.data();
-    ibDesc.length = sizeof(data::vertex_index::kQuadInd);
+    const BufferDesc ibDesc{.type = BufferDesc::BufferTypeBits::Index,
+                            .data = data::vertex_index::kQuadInd.data(),
+                            .length = sizeof(data::vertex_index::kQuadInd)};
     ib_ = iglDev_->createBuffer(ibDesc, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
 
     // Initialize Render Pipeline Descriptor
-    renderPipelineDesc_.vertexInputState = vertexInputState_;
-    renderPipelineDesc_.shaderStages = shaderStages_;
-    renderPipelineDesc_.targetDesc.colorAttachments.resize(1);
-    renderPipelineDesc_.targetDesc.colorAttachments[0].textureFormat =
-        offscreenTexture_->getFormat();
-    renderPipelineDesc_.cullMode = igl::CullMode::Disabled;
+    renderPipelineDesc_ = {
+        .vertexInputState = vertexInputState_,
+        .shaderStages = shaderStages_,
+        .targetDesc = {.colorAttachments = {{.textureFormat = offscreenTexture_->getFormat()}}},
+        .cullMode = igl::CullMode::Disabled,
+    };
 
     pipelineState_ = iglDev_->createRenderPipeline(renderPipelineDesc_, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
@@ -148,9 +144,8 @@ class RenderCommandAdapterOGLTest : public ::testing::Test {
                           whitePixels);
 
     // Create sampler
-    SamplerStateDesc samplerDesc;
-    samplerDesc.minFilter = SamplerMinMagFilter::Nearest;
-    samplerDesc.magFilter = SamplerMinMagFilter::Nearest;
+    const SamplerStateDesc samplerDesc{.minFilter = SamplerMinMagFilter::Nearest,
+                                       .magFilter = SamplerMinMagFilter::Nearest};
     sampler_ = iglDev_->createSamplerState(samplerDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
   }

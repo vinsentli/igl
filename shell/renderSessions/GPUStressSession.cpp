@@ -11,6 +11,7 @@
 
 #include <IGLU/imgui/Session.h>
 #include <IGLU/managedUniformBuffer/ManagedUniformBuffer.h>
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -25,13 +26,14 @@
 #include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/AppParams.h>
 #include <shell/shared/renderSession/ShellParams.h>
+#include <igl/CommandBuffer.h>
 #include <igl/NameHandle.h>
 #include <igl/ShaderCreator.h>
 
 namespace {
 uint32_t customArc4random() {
-  // NOLINTNEXTLINE(cert-msc50-cpp)
-  return static_cast<uint32_t>(rand()) * (0xffffffff / RAND_MAX);
+  // NOLINTNEXTLINE(cert-msc50-cpp, facebook-hte-BadCall-rand)
+  return static_cast<uint32_t>(std::rand()) * (0xffffffff / RAND_MAX);
 }
 } // namespace
 
@@ -118,23 +120,23 @@ std::string GPUStressSession::getLightingCalc() const {
   }
   for (int i = 0; i < lightCount_; ++i) {
     char tmp[256];
-    snprintf(tmp,
-             sizeof(tmp),
-             "const vec3 lightColor%d = vec3(%f, %f, %f);\n",
-             i,
-             i % 3 == 0 ? 1.0 : static_cast<float>(customArc4random() % 32) / 32.f,
-             i % 3 == 1 ? 1.0 : static_cast<float>(customArc4random() % 32) / 32.f,
-             i % 3 == 2 ? 1.0 : static_cast<float>(customArc4random() % 32) / 32.f);
+    std::snprintf(tmp,
+                  sizeof(tmp),
+                  "const vec3 lightColor%d = vec3(%f, %f, %f);\n",
+                  i,
+                  i % 3 == 0 ? 1.0 : static_cast<float>(customArc4random() % 32) / 32.f,
+                  i % 3 == 1 ? 1.0 : static_cast<float>(customArc4random() % 32) / 32.f,
+                  i % 3 == 2 ? 1.0 : static_cast<float>(customArc4random() % 32) / 32.f);
     params += tmp;
-    snprintf(tmp,
-             sizeof(tmp),
-             "const vec3 lightPos%d = vec3(%f, %f, %f);\n",
-             i,
-             -1.f + static_cast<float>(customArc4random() % 32) / 16.f,
-             -1.f + static_cast<float>(customArc4random() % 32) / 16.f,
-             -1.f + static_cast<float>(customArc4random() % 32) / 16.f);
+    std::snprintf(tmp,
+                  sizeof(tmp),
+                  "const vec3 lightPos%d = vec3(%f, %f, %f);\n",
+                  i,
+                  -1.f + static_cast<float>(customArc4random() % 32) / 16.f,
+                  -1.f + static_cast<float>(customArc4random() % 32) / 16.f,
+                  -1.f + static_cast<float>(customArc4random() % 32) / 16.f);
     params += tmp;
-    snprintf(
+    std::snprintf(
         tmp,
         sizeof(tmp),
         "lightFactor.xyz += calcLighting(-lightPos%d, lightPos%d, color.xyz, 1.0, lightColor%d);\n",
@@ -207,6 +209,7 @@ layout(push_constant) uniform PushConstants {
 std::unique_ptr<IShaderStages> GPUStressSession::getShaderStagesForBackend(
     IDevice& device) const noexcept {
   const bool multiView = device.hasFeature(DeviceFeatures::Multiview);
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (device.getBackendType()) {
   // @fb-only
     // @fb-only
@@ -251,7 +254,7 @@ void GPUStressSession::addNormalsToCube() {
       } else if (!normalSet[oldIndex]) {
         vertexData_.at(oldIndex).baseColor = glm::vec4(normal, 1.0);
         normalSet[oldIndex] = true;
-        indexremap.at(oldIndex) = oldIndex;
+        indexremap.at(oldIndex) = static_cast<int>(oldIndex);
       } else {
         auto vertex = vertexData0_.at(oldIndex);
         vertex.baseColor = glm::vec4(normal, 1.0);
@@ -259,7 +262,7 @@ void GPUStressSession::addNormalsToCube() {
         const size_t nextIndex = (vertexData_.size() - 1);
         indexData_.at(i) = nextIndex;
         normalSet[nextIndex] = true;
-        indexremap.at(oldIndex) = nextIndex;
+        indexremap.at(oldIndex) = static_cast<int>(nextIndex);
       }
     }
   }
@@ -317,6 +320,7 @@ double calcPi(int numberOfDivisions, int core) {
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
 void GPUStressSession::thrashCPU() noexcept {
+  // @fb-only
   static std::vector<std::future<double>> futures;
   static unsigned int threadSpawnId = 0;
   if (goSlowOnCpu_) {
@@ -336,7 +340,7 @@ void GPUStressSession::thrashCPU() noexcept {
       threadSpawnId++;
     }
 
-    for (int i = futures.size() - 1; i > -1; i--) {
+    for (int i = static_cast<int>(futures.size()) - 1; i > -1; i--) {
       auto& future = futures.at(i);
 
       // Use wait_for() with zero milliseconds to check thread status.
@@ -368,6 +372,7 @@ float GPUStressSession::doReadWrite(std::vector<std::vector<std::vector<float>>>
     const int block = randBlocks(gen);
     const int row = randRows(gen);
     const int col = randCols(gen);
+    // NOLINTNEXTLINE(facebook-hte-ParameterUncheckedArrayBounds)
     memBlock[block].at(row)[col] = customArc4random();
   }
 
@@ -412,22 +417,30 @@ void GPUStressSession::thrashMemory() noexcept {
   const static size_t kCols = 1024;
 
   if (!threadCount_) {
-    memoryVal_.store(doReadWrite(memBlock_, kBlocks, kRows, kCols, -1));
+    memoryVal_.store(doReadWrite(memBlock_,
+                                 static_cast<int>(kBlocks),
+                                 static_cast<int>(kRows),
+                                 static_cast<int>(kCols),
+                                 -1));
   } else {
+    // @fb-only
     static std::vector<std::future<float>> futures;
     static int memoryThreadId = 0;
 
     while (futures.size() < threadCount_) {
       auto future = std::async(std::launch::async, [this] {
-        return doReadWrite(
-            memBlock_, kBlocks, kRows, kCols, threadIds_[memoryThreadId % threadCount_]);
+        return doReadWrite(memBlock_,
+                           static_cast<int>(kBlocks),
+                           static_cast<int>(kRows),
+                           static_cast<int>(kCols),
+                           threadIds_[memoryThreadId % threadCount_]);
       });
 
       futures.push_back(std::move(future));
       memoryThreadId++;
     }
 
-    for (int i = futures.size() - 1; i > -1; i--) {
+    for (int i = static_cast<int>(futures.size()) - 1; i > -1; i--) {
       auto& future = futures.at(i);
 
       // Use wait_for() with zero milliseconds to check thread status.
@@ -471,6 +484,7 @@ glm::vec3 GPUStressSession::animateCube(int counter,
     glm::vec3 lastPos;
   };
 
+  // @fb-only
   static std::vector<AnimationInfo> animations;
   if (animations.size() < counter) {
     AnimationInfo info;
@@ -508,7 +522,7 @@ glm::vec3 GPUStressSession::animateCube(int counter,
   return pos;
 }
 
-void GPUStressSession::createSamplerAndTextures(const igl::IDevice& device) {
+void GPUStressSession::createSamplerAndTextures(const IDevice& device) {
   // Sampler & Texture
   const SamplerStateDesc samplerDesc{
       .minFilter = SamplerMinMagFilter::Linear,
@@ -534,8 +548,8 @@ void GPUStressSession::createCubes() {
 
   const float grid = std::ceil(std::pow(cubeCount_, 1.0f / 3.0f));
 
-  const int vertexCount = vertexData_.size();
-  const int indexCount = indexData_.size();
+  const int vertexCount = static_cast<int>(vertexData_.size());
+  const int indexCount = static_cast<int>(indexData_.size());
 
   std::mt19937 gen(0);
   std::uniform_real_distribution<> dis(0, 1.f);
@@ -786,16 +800,16 @@ void GPUStressSession::setModelViewMatrix(float angle,
   vertexParameters_.scaleZ = scaleZ;
 }
 
-void GPUStressSession::initState(const igl::SurfaceTextures& surfaceTextures) {
+void GPUStressSession::initState(const SurfaceTextures& surfaceTextures) {
   Result ret;
 
   // TODO: fix framebuffers so you can update the resolve texture
   if (framebuffer_ == nullptr) {
-    FramebufferDesc framebufferDesc;
-    framebufferDesc.colorAttachments[0].texture = surfaceTextures.color;
-    framebufferDesc.depthAttachment.texture = surfaceTextures.depth;
-    framebufferDesc.mode = surfaceTextures.color->getNumLayers() > 1 ? FramebufferMode::Stereo
-                                                                     : FramebufferMode::Mono;
+    FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = surfaceTextures.color}},
+                                    .depthAttachment = {.texture = surfaceTextures.depth},
+                                    .mode = surfaceTextures.color->getNumLayers() > 1
+                                                ? FramebufferMode::Stereo
+                                                : FramebufferMode::Mono};
 
     if (useMSAA_) {
       const auto dimensions = surfaceTextures.color->getDimensions();
@@ -822,18 +836,18 @@ void GPUStressSession::initState(const igl::SurfaceTextures& surfaceTextures) {
       // without a depth buffer (e.g., 2D overlay sessions). Only build the MSAA
       // depth attachment if the platform actually provided a depth surface.
       if (surfaceTextures.depth) {
-        const igl::TextureDesc depthDesc = {.width = dimensions.width,
-                                            .height = dimensions.height,
-                                            .depth = 1,
-                                            .numLayers = surfaceTextures.depth->getNumLayers(),
-                                            .numSamples = kMsaaSamples,
-                                            .usage = TextureDesc::TextureUsageBits::Attachment,
-                                            .numMipLevels = 1,
-                                            .type = surfaceTextures.depth->getNumLayers() > 1
-                                                        ? TextureType::TwoDArray
-                                                        : TextureType::TwoD,
-                                            .format = surfaceTextures.depth->getFormat(),
-                                            .storage = igl::ResourceStorage::Private};
+        const TextureDesc depthDesc = {.width = dimensions.width,
+                                       .height = dimensions.height,
+                                       .depth = 1,
+                                       .numLayers = surfaceTextures.depth->getNumLayers(),
+                                       .numSamples = kMsaaSamples,
+                                       .usage = TextureDesc::TextureUsageBits::Attachment,
+                                       .numMipLevels = 1,
+                                       .type = surfaceTextures.depth->getNumLayers() > 1
+                                                   ? TextureType::TwoDArray
+                                                   : TextureType::TwoD,
+                                       .format = surfaceTextures.depth->getFormat(),
+                                       .storage = igl::ResourceStorage::Private};
 
         framebufferDesc.depthAttachment.texture =
             getPlatform().getDevice().createTexture(depthDesc, nullptr);
@@ -881,7 +895,7 @@ void GPUStressSession::initState(const igl::SurfaceTextures& surfaceTextures) {
   }
 }
 
-void GPUStressSession::drawCubes(const igl::SurfaceTextures& surfaceTextures,
+void GPUStressSession::drawCubes(const SurfaceTextures& surfaceTextures,
                                  std::shared_ptr<IRenderCommandEncoder> commands) {
   static float angle = 0.0f;
   static int frameCount = 0;
@@ -1179,21 +1193,21 @@ bool GPUStressSession::getRotateCubes() const {
 std::string GPUStressSession::getCurrentUsageString() const {
   char output[2048];
 
-  snprintf(output,
-           sizeof(output),
-           "cubes: %d, draws: %d, lights: %d, threads: %d,  cpu load: %d, memory reads: %lu , "
-           "memory writes: %lu, "
-           "msaa %s , blending %s, framerate: %.2f,",
-           cubeCount_.load(),
-           drawCount_.load(),
-           lightCount_.load(),
-           threadCount_.load(),
-           goSlowOnCpu_.load(),
-           memoryReads_.load() * (thrashMemory_ ? 1 : 0),
-           memoryWrites_.load() * (thrashMemory_ ? 1 : 0),
-           useMSAA_ ? "on" : "off",
-           enableBlending_ ? "on" : "off ",
-           fps_.getAverageFPS());
+  std::snprintf(output,
+                sizeof(output),
+                "cubes: %d, draws: %d, lights: %d, threads: %d,  cpu load: %d, memory reads: %lu , "
+                "memory writes: %lu, "
+                "msaa %s , blending %s, framerate: %.2f,",
+                cubeCount_.load(),
+                drawCount_.load(),
+                lightCount_.load(),
+                threadCount_.load(),
+                goSlowOnCpu_.load(),
+                memoryReads_.load() * (thrashMemory_ ? 1 : 0),
+                memoryWrites_.load() * (thrashMemory_ ? 1 : 0),
+                useMSAA_ ? "on" : "off",
+                enableBlending_ ? "on" : "off ",
+                fps_.getAverageFPS());
 
   return output;
 }

@@ -7,6 +7,8 @@
 
 #include <igl/vulkan/VulkanFeatures.h>
 
+#include <algorithm>
+#include <cstring>
 #include <igl/vulkan/VulkanContext.h>
 
 namespace igl::vulkan {
@@ -275,6 +277,10 @@ VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFORM_BUFFER_STANDARD_LAYOUT_FEATURES_KHR,
       .uniformBufferStandardLayout = VK_TRUE,
   }),
+  featuresScalarBlockLayout({
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES_EXT,
+      .scalarBlockLayout = VK_TRUE,
+  }),
   featuresMultiviewPerViewViewports({
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PER_VIEW_VIEWPORTS_FEATURES_QCOM,
       .multiviewPerViewViewports = VK_TRUE,
@@ -306,6 +312,21 @@ VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_FEATURES,
       .hostImageCopy = VK_FALSE,
   }),
+  featuresTextureCompressionAstcHdr({
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXTURE_COMPRESSION_ASTC_HDR_FEATURES_EXT,
+  }),
+  featuresShaderIntegerDotProduct({
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_FEATURES,
+      .shaderIntegerDotProduct = VK_FALSE,
+  }),
+  featuresExtendedDynamicState({
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,
+      .extendedDynamicState = VK_TRUE,
+  }),
+  featuresExtendedDynamicState2({
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT,
+      .extendedDynamicState2 = VK_TRUE,
+  }),
   config(config) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
 
@@ -320,7 +341,7 @@ VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
 void VulkanFeatures::populateWithAvailablePhysicalDeviceFeatures(
     const VulkanContext& context,
     VkPhysicalDevice physicalDevice) noexcept {
-  IGL_DEBUG_ASSERT(context.vf_.vkGetPhysicalDeviceFeatures2 != nullptr,
+  IGL_DEBUG_ASSERT(context.vf_.vkGetPhysicalDeviceFeatures2,
                    "Pointer to function vkGetPhysicalDeviceFeatures2() is nullptr");
   uint32_t numExtensions = 0;
   context.vf_.vkEnumerateDeviceExtensionProperties(
@@ -334,7 +355,7 @@ void VulkanFeatures::populateWithAvailablePhysicalDeviceFeatures(
 
 bool VulkanFeatures::hasExtension(const char* ext) const {
   for (const VkExtensionProperties& props : extensionProps_) {
-    if (strcmp(ext, props.extensionName) == 0) {
+    if (std::strcmp(ext, props.extensionName) == 0) {
       return true;
     }
   }
@@ -411,6 +432,8 @@ Result VulkanFeatures::checkSelectedFeatures(
   ENABLE_FEATURE_1_1_EXT(featuresShaderDrawParameters,
                          availableFeatures.featuresShaderDrawParameters,
                          shaderDrawParameters)
+  ENABLE_FEATURE_1_1_EXT(
+      featuresSynchronization2, availableFeatures.featuresSynchronization2, synchronization2)
 #undef ENABLE_FEATURE_1_1_EXT
 
 #define ENABLE_FEATURE_1_2_EXT(requestedFeatureStruct, availableFeatureStruct, feature) \
@@ -462,11 +485,14 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& contextConf
   featuresFragmentDensityMap.pNext = nullptr;
   features8BitStorage.pNext = nullptr;
   featuresUniformBufferStandardLayout.pNext = nullptr;
+  featuresScalarBlockLayout.pNext = nullptr;
   featuresMeshShader.pNext = nullptr;
   featuresFragmentShadingRate.pNext = nullptr;
   featuresDescriptorBuffer.pNext = nullptr;
+  featuresTextureCompressionAstcHdr.pNext = nullptr;
   featuresExtendedDynamicState.pNext = nullptr;
   featuresExtendedDynamicState2.pNext = nullptr;
+  featuresShaderIntegerDotProduct.pNext = nullptr;
 
   // Add the required and optional features to the VkPhysicalDeviceFetaures2_
   ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresSamplerYcbcrConversion);
@@ -510,6 +536,9 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& contextConf
 //    ivkAddNext(&vkPhysicalDeviceFeatures2, &deviceMemoryReportCreateInfo);
 //  }
 //#endif
+  if (hasExtension(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME)) {
+    ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresScalarBlockLayout);
+  }
   if (contextConfig.enableMultiviewPerViewViewports) {
     if (hasExtension(VK_QCOM_MULTIVIEW_PER_VIEW_VIEWPORTS_EXTENSION_NAME)) {
       ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresMultiviewPerViewViewports);
@@ -536,6 +565,15 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& contextConf
   }
   if (hasExtension(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)) {
     ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresDescriptorBuffer);
+  }
+  // Gated on the caller's request rather than on the extension being present, unlike the
+  // structs above. The feature is core from Vulkan 1.3, where a device may support it without
+  // still advertising VK_KHR_shader_integer_dot_product, so an extension gate would silently
+  // drop the request on exactly the newest devices. Defaulting to VK_FALSE is what keeps that
+  // safe: the struct stays out of the chain for every caller that does not opt in, so this
+  // adds nothing to the default device.
+  if (featuresShaderIntegerDotProduct.shaderIntegerDotProduct == VK_TRUE) {
+    ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresShaderIntegerDotProduct);
   }
 }
 
@@ -569,12 +607,17 @@ VulkanFeatures& VulkanFeatures::operator=(const VulkanFeatures& other) noexcept 
   featuresFragmentDensityMap = other.featuresFragmentDensityMap;
   features8BitStorage = other.features8BitStorage;
   featuresUniformBufferStandardLayout = other.featuresUniformBufferStandardLayout;
+  featuresScalarBlockLayout = other.featuresScalarBlockLayout;
   featuresMultiviewPerViewViewports = other.featuresMultiviewPerViewViewports;
   featuresMeshShader = other.featuresMeshShader;
   featuresFragmentShadingRate = other.featuresFragmentShadingRate;
   featuresDescriptorBuffer = other.featuresDescriptorBuffer;
   featuresExtendedDynamicState = other.featuresExtendedDynamicState;
   featuresExtendedDynamicState2 = other.featuresExtendedDynamicState2;
+  featuresTextureCompressionAstcHdr = other.featuresTextureCompressionAstcHdr;
+  featuresExtendedDynamicState = other.featuresExtendedDynamicState;
+  featuresExtendedDynamicState2 = other.featuresExtendedDynamicState2;
+  featuresShaderIntegerDotProduct = other.featuresShaderIntegerDotProduct;
 
   extensions_ = other.extensions_;
   enabledExtensions_ = other.enabledExtensions_;
@@ -741,8 +784,11 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
   has_VK_KHR_uniform_buffer_standard_layout =
       enable(VK_KHR_UNIFORM_BUFFER_STANDARD_LAYOUT_EXTENSION_NAME, ExtensionType::Device);
 
-//  has_VK_KHR_synchronization2 =
-//      enable(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, ExtensionType::Device);
+  has_VK_EXT_scalar_block_layout =
+      enable(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME, ExtensionType::Device);
+
+  // has_VK_KHR_synchronization2 =
+  //     enable(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, ExtensionType::Device);
 
   has_VK_KHR_8bit_storage = enable(VK_KHR_8BIT_STORAGE_EXTENSION_NAME, ExtensionType::Device);
 
@@ -763,6 +809,13 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
         enable(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME, ExtensionType::Device) &&
         featuresDescriptorBuffer.descriptorBuffer == VK_TRUE;
   }
+  // VK_KHR_create_renderpass2 (promoted to core in Vulkan 1.2).
+  // Only meaningful when device apiVersion < 1.2; on >= 1.2 the core vkCreateRenderPass2() is used
+  // directly. Enabling here as an extension also loads the *KHR-suffixed function pointers, which
+  // VulkanFunctionTable aliases onto the core slots when those are null. VulkanRenderPassBuilder
+  // needs a non-null vkCreateRenderPass2() on every device it supports.
+  has_VK_KHR_create_renderpass2 =
+      enable(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME, ExtensionType::Device);
 
   has_VK_EXT_descriptor_indexing =
       enable(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, ExtensionType::Device);

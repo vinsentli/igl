@@ -8,6 +8,7 @@
 #include <igl/d3d12/TextureCopyUtils.h>
 
 #include <cstring>
+#include <igl/Macros.h>
 #include <igl/d3d12/Buffer.h>
 #include <igl/d3d12/Common.h>
 #include <igl/d3d12/D3D12Context.h>
@@ -26,6 +27,7 @@ Result executeCopyTextureToBuffer(D3D12Context& ctx,
                                   uint64_t destinationOffset,
                                   uint32_t mipLevel,
                                   uint32_t layer) {
+  IGL_PROFILER_FUNCTION();
   ID3D12Resource* srcRes = srcTex.getResource();
   ID3D12Resource* dstRes = dstBuf.getResource();
 
@@ -127,14 +129,14 @@ Result executeCopyTextureToBuffer(D3D12Context& ctx,
   // Copy from readback staging buffer to final destination
   void* readbackData = nullptr;
   // Map the readback buffer region containing the texture data
-  D3D12_RANGE readRange{static_cast<SIZE_T>(layout.Offset),
-                        static_cast<SIZE_T>(layout.Offset + totalBytes)};
+  D3D12_RANGE readRange{.Begin = static_cast<SIZE_T>(layout.Offset),
+                        .End = static_cast<SIZE_T>(layout.Offset + totalBytes)};
 
   if (SUCCEEDED(readbackBuffer->Map(0, &readRange, &readbackData)) && readbackData) {
     // Check if destination buffer is in DEFAULT heap (Storage buffers)
     // We cannot call map() on DEFAULT heap buffers because Buffer::map() would
     // create its own staging buffer and copy FROM (empty) DEFAULT buffer first
-    D3D12_HEAP_PROPERTIES heapProps;
+    D3D12_HEAP_PROPERTIES heapProps = {};
     dstRes->GetHeapProperties(&heapProps, nullptr);
     const bool isDefaultHeap = (heapProps.Type == D3D12_HEAP_TYPE_DEFAULT);
 

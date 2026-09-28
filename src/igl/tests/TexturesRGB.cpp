@@ -13,6 +13,7 @@
 #include "util/Color.h"
 #include "util/Common.h"
 
+#include <cstdlib>
 #include <string>
 #include <igl/CommandBuffer.h>
 #include <igl/NameHandle.h>
@@ -33,7 +34,6 @@ class TexturesRGBBaseTest : public ::testing::Test {
  private:
  public:
   TexturesRGBBaseTest() = default;
-  ~TexturesRGBBaseTest() override = default;
 
   //
   // SetUp()
@@ -66,18 +66,17 @@ class TexturesRGBBaseTest : public ::testing::Test {
     ASSERT_TRUE(offscreenTexture_ != nullptr);
 
     // Create framebuffer using the offscreen texture
-    FramebufferDesc framebufferDesc;
-
-    framebufferDesc.colorAttachments[0].texture = offscreenTexture_;
+    const FramebufferDesc framebufferDesc{.colorAttachments = {{.texture = offscreenTexture_}}};
     framebuffer_ = iglDev_->createFramebuffer(framebufferDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
     ASSERT_TRUE(framebuffer_ != nullptr);
 
     // Initialize render pass descriptor
-    renderPass_.colorAttachments.resize(1);
-    renderPass_.colorAttachments[0].loadAction = LoadAction::Clear;
-    renderPass_.colorAttachments[0].storeAction = StoreAction::Store;
-    renderPass_.colorAttachments[0].clearColor = {0.0, 0.0, 0.0, 1.0};
+    renderPass_ = {
+        .colorAttachments = {{.loadAction = LoadAction::Clear,
+                              .storeAction = StoreAction::Store,
+                              .clearColor = {0.0, 0.0, 0.0, 1.0}}},
+    };
 
     // Initialize shader stages
     std::unique_ptr<IShaderStages> stages;
@@ -85,24 +84,22 @@ class TexturesRGBBaseTest : public ::testing::Test {
     shaderStages_ = std::move(stages);
 
     // Initialize input to vertex shader
-    VertexInputStateDesc inputDesc;
-
-    inputDesc.attributes[0].format = VertexAttributeFormat::Float4;
-    inputDesc.attributes[0].offset = 0;
-    inputDesc.attributes[0].bufferIndex = data::shader::kSimplePosIndex;
-    inputDesc.attributes[0].name = data::shader::kSimplePos;
-    inputDesc.attributes[0].location = 0;
-    inputDesc.inputBindings[0].stride = sizeof(float) * 4;
-
-    inputDesc.attributes[1].format = VertexAttributeFormat::Float2;
-    inputDesc.attributes[1].offset = 0;
-    inputDesc.attributes[1].bufferIndex = data::shader::kSimpleUvIndex;
-    inputDesc.attributes[1].name = data::shader::kSimpleUv;
-    inputDesc.attributes[1].location = 1;
-    inputDesc.inputBindings[1].stride = sizeof(float) * 2;
-
-    // numAttributes has to equal to bindings when using more than 1 buffer
-    inputDesc.numAttributes = inputDesc.numInputBindings = 2;
+    // numAttributes has to equal numInputBindings when using more than one buffer
+    const VertexInputStateDesc inputDesc{
+        .numAttributes = 2,
+        .attributes = {{.bufferIndex = data::shader::kSimplePosIndex,
+                        .format = VertexAttributeFormat::Float4,
+                        .offset = 0,
+                        .name = std::string(data::shader::kSimplePos),
+                        .location = 0},
+                       {.bufferIndex = data::shader::kSimpleUvIndex,
+                        .format = VertexAttributeFormat::Float2,
+                        .offset = 0,
+                        .name = std::string(data::shader::kSimpleUv),
+                        .location = 1}},
+        .numInputBindings = 2,
+        .inputBindings = {{.stride = sizeof(float) * 4}, {.stride = sizeof(float) * 2}},
+    };
 
     vertexInputState_ = iglDev_->createVertexInputState(inputDesc, &ret);
     ASSERT_EQ(ret.code, Result::Code::Ok);
@@ -144,14 +141,13 @@ class TexturesRGBBaseTest : public ::testing::Test {
 
     // Initialize Graphics Pipeline Descriptor, but leave the creation
     // to the individual tests in case further customization is required
-    renderPipelineDesc_.vertexInputState = vertexInputState_;
-    renderPipelineDesc_.shaderStages = shaderStages_;
-    renderPipelineDesc_.targetDesc.colorAttachments.resize(1);
-    renderPipelineDesc_.targetDesc.colorAttachments[0].textureFormat =
-        offscreenTexture_->getFormat();
-    renderPipelineDesc_.fragmentUnitSamplerMap[textureUnit_] =
-        IGL_NAMEHANDLE(data::shader::kSimpleSampler);
-    renderPipelineDesc_.cullMode = igl::CullMode::Disabled;
+    renderPipelineDesc_ = {
+        .vertexInputState = vertexInputState_,
+        .shaderStages = shaderStages_,
+        .targetDesc = {.colorAttachments = {{.textureFormat = offscreenTexture_->getFormat()}}},
+        .cullMode = igl::CullMode::Disabled,
+        .fragmentUnitSamplerMap = {{textureUnit_, IGL_NAMEHANDLE(data::shader::kSimpleSampler)}},
+    };
 
 // The sRGB hardware extension should decode and re-encode to exactly the same color values
 // which is what this test is trying to test.
@@ -311,10 +307,10 @@ TEST_F(TexturesRGBSmallTest, Passthrough) {
   for (size_t i = 0; i < offscreenTexWidth_ * offscreenTexHeight_; i++) {
     const util::SRgbColor currentColor(pixels[i]);
     const util::SRgbColor testColor(data::texture::kTexRgba2x2[i]);
-    ASSERT_LE(abs(currentColor.r - testColor.r), tolerance_);
-    ASSERT_LE(abs(currentColor.g - testColor.g), tolerance_);
-    ASSERT_LE(abs(currentColor.b - testColor.b), tolerance_);
-    ASSERT_LE(abs(currentColor.a - testColor.a), tolerance_);
+    ASSERT_LE(std::abs(currentColor.r - testColor.r), tolerance_);
+    ASSERT_LE(std::abs(currentColor.g - testColor.g), tolerance_);
+    ASSERT_LE(std::abs(currentColor.b - testColor.b), tolerance_);
+    ASSERT_LE(std::abs(currentColor.a - testColor.a), tolerance_);
   }
 }
 
@@ -395,10 +391,10 @@ TEST_F(TexturesRGBBigTest, Passthrough) {
   for (size_t i = 0; i < offscreenTexWidth_ * offscreenTexHeight_; i++) {
     const util::SRgbColor currentColor(pixels[i]);
     const util::SRgbColor testColor(allColorsBuffer[i]);
-    ASSERT_LE(abs(currentColor.r - testColor.r), tolerance_);
-    ASSERT_LE(abs(currentColor.g - testColor.g), tolerance_);
-    ASSERT_LE(abs(currentColor.b - testColor.b), tolerance_);
-    ASSERT_LE(abs(currentColor.a - testColor.a), tolerance_);
+    ASSERT_LE(std::abs(currentColor.r - testColor.r), tolerance_);
+    ASSERT_LE(std::abs(currentColor.g - testColor.g), tolerance_);
+    ASSERT_LE(std::abs(currentColor.b - testColor.b), tolerance_);
+    ASSERT_LE(std::abs(currentColor.a - testColor.a), tolerance_);
   }
 }
 

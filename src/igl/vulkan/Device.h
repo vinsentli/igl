@@ -65,11 +65,12 @@ class Device final : public IDevice {
                                                             Result* IGL_NULLABLE
                                                                 outResult) const noexcept override;
 
-  std::shared_ptr<ITimer> createTimer(Result* IGL_NULLABLE outResult) const noexcept override;
+  [[nodiscard]] std::shared_ptr<ITimer> createTimer(
+      Result* IGL_NULLABLE outResult) const noexcept override;
 
-  std::shared_ptr<ITimestampQueries> createTimestampQueries(uint32_t maxTimestamps,
-                                                            Result* IGL_NULLABLE
-                                                                outResult) const noexcept override;
+  [[nodiscard]] std::shared_ptr<ITimestampQueries> createTimestampQueries(
+      uint32_t maxTimestamps,
+      Result* IGL_NULLABLE outResult) const noexcept override;
 
   [[nodiscard]] std::shared_ptr<IVertexInputState> createVertexInputState(
       const VertexInputStateDesc& desc,
@@ -143,6 +144,7 @@ class Device final : public IDevice {
                                                          Result* IGL_NULLABLE outResult) const;
   std::shared_ptr<VulkanShaderModule> createShaderModule(ShaderStage stage,
                                                          const char* IGL_NULLABLE source,
+                                                         const ShaderCompilerOptions& options,
                                                          const std::string& debugName,
                                                          Result* IGL_NULLABLE outResult) const;
 

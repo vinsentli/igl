@@ -11,7 +11,9 @@
 
 #include <igl/d3d12/HeadlessContext.h>
 
+#include <algorithm>
 #include <string>
+#include <igl/Macros.h>
 #include <igl/d3d12/DescriptorHeapManager.h>
 
 namespace igl::d3d12 {
@@ -27,6 +29,7 @@ HeadlessD3D12Context::~HeadlessD3D12Context() = default;
 Result HeadlessD3D12Context::initializeHeadless(uint32_t width,
                                                 uint32_t height,
                                                 const D3D12ContextConfig& config) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   width_ = width;
   height_ = height;
 

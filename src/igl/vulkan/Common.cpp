@@ -7,9 +7,11 @@
 
 #include "Common.h"
 
+#include <algorithm>
 // NOLINTNEXTLINE(facebook-unused-include-check) used on Linux (kPreloadLibs, libs arrays)
 #include <array>
 #include <cstdlib>
+#include <type_traits>
 
 // clang-format off
 // NOLINTBEGIN(facebook-unused-include-check)
@@ -35,12 +37,16 @@
 
 #if defined(IGL_USE_STATIC_KOSMICKRISP)
 // KosmicKrisp (Mesa Vulkan-to-Metal driver) is statically linked on macOS and exposes its
-// loader through kk_GetInstanceProcAddr instead of the standard vkGetInstanceProcAddr symbol.
+// loader through kk_GetInstanceProcAddr() instead of the standard vkGetInstanceProcAddr()
+// symbol.
 extern "C" VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL kk_GetInstanceProcAddr(VkInstance instance,
                                                                            const char* pName);
 #endif
 
 namespace igl::vulkan {
+
+static_assert(std::is_trivially_copyable_v<VulkanContextConfig>);
+static_assert(std::is_trivially_copyable_v<VulkanSampler>);
 
 Result getResultFromVkResult(VkResult result) {
   if (result == VK_SUCCESS) {
@@ -183,6 +189,8 @@ VkFormat textureFormatToVkFormat(TextureFormat format) {
     return VK_FORMAT_A2R10G10B10_UINT_PACK32;
   case TextureFormat::BGR10_A2_Unorm:
     return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+  case TextureFormat::B10G11R11_UFloat:
+    return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
   case TextureFormat::R_F32:
     return VK_FORMAT_R32_SFLOAT;
   case TextureFormat::R_UInt32:
@@ -324,6 +332,89 @@ bool isTextureFormatBGR(VkFormat format) {
   return format == VK_FORMAT_B8G8R8A8_UNORM || format == VK_FORMAT_B8G8R8A8_SRGB ||
          format == VK_FORMAT_A2B10G10R10_UNORM_PACK32;
 }
+
+// Single source of truth for sRGB <-> UNORM VkFormat pairs. isSrgbFormat(), srgbToUnorm() and
+// unormToSrgb() are all generated from this X-macro list, so a new format pair only needs to be
+// added in one place to keep the three helpers provably in sync. Each is emitted as a switch over
+// the enum, letting the compiler generate a jump table instead of a linear scan on the
+// Texture-creation hot path.
+//
+// This lists the sRGB formats textureFormatToVkFormat() can produce (RGBA/BGRA 8-bit, ASTC, ETC2,
+// BC7), plus VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK: TextureFormat::SRGB8_A8_EAC_ETC2 and its UNORM
+// sibling currently map to VK_FORMAT_UNDEFINED, so that pair is unreachable today and is kept only
+// so the handling is already right if that mapping is filled in. Other Vulkan sRGB formats
+// (BC1/BC2/BC3, R8/R8G8, 24-bit RGB, A8B8G8R8_*_PACK32) are
+// omitted because no IGL TextureFormat maps to them, so they never reach Texture::create(). A
+// format not listed here is treated as non-sRGB: its VkImage is created directly with the sRGB
+// VkFormat, without the UNORM-image + sRGB-view / linear-storage-view handling. Add the pair here
+// when introducing a new sRGB TextureFormat.
+//
+// igl::sRGBToLinear()/linearTosRGB() (TextureFormat.h) express the same pairing one level up, on
+// TextureFormat. They are not reusable here: they cover only the uncompressed pairs, and they
+// assert on a non-sRGB argument, whereas Texture::create() queries every format and needs an
+// identity result for the ones with no counterpart. CommonTest pins the two against each other
+// wherever they overlap.
+#define IGL_FOR_EACH_SRGB_UNORM_FORMAT_PAIR(FN)                               \
+  FN(VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_R8G8B8A8_UNORM)                       \
+  FN(VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM)                       \
+  FN(VK_FORMAT_ASTC_4x4_SRGB_BLOCK, VK_FORMAT_ASTC_4x4_UNORM_BLOCK)           \
+  FN(VK_FORMAT_ASTC_5x4_SRGB_BLOCK, VK_FORMAT_ASTC_5x4_UNORM_BLOCK)           \
+  FN(VK_FORMAT_ASTC_5x5_SRGB_BLOCK, VK_FORMAT_ASTC_5x5_UNORM_BLOCK)           \
+  FN(VK_FORMAT_ASTC_6x5_SRGB_BLOCK, VK_FORMAT_ASTC_6x5_UNORM_BLOCK)           \
+  FN(VK_FORMAT_ASTC_6x6_SRGB_BLOCK, VK_FORMAT_ASTC_6x6_UNORM_BLOCK)           \
+  FN(VK_FORMAT_ASTC_8x5_SRGB_BLOCK, VK_FORMAT_ASTC_8x5_UNORM_BLOCK)           \
+  FN(VK_FORMAT_ASTC_8x6_SRGB_BLOCK, VK_FORMAT_ASTC_8x6_UNORM_BLOCK)           \
+  FN(VK_FORMAT_ASTC_8x8_SRGB_BLOCK, VK_FORMAT_ASTC_8x8_UNORM_BLOCK)           \
+  FN(VK_FORMAT_ASTC_10x5_SRGB_BLOCK, VK_FORMAT_ASTC_10x5_UNORM_BLOCK)         \
+  FN(VK_FORMAT_ASTC_10x6_SRGB_BLOCK, VK_FORMAT_ASTC_10x6_UNORM_BLOCK)         \
+  FN(VK_FORMAT_ASTC_10x8_SRGB_BLOCK, VK_FORMAT_ASTC_10x8_UNORM_BLOCK)         \
+  FN(VK_FORMAT_ASTC_10x10_SRGB_BLOCK, VK_FORMAT_ASTC_10x10_UNORM_BLOCK)       \
+  FN(VK_FORMAT_ASTC_12x10_SRGB_BLOCK, VK_FORMAT_ASTC_12x10_UNORM_BLOCK)       \
+  FN(VK_FORMAT_ASTC_12x12_SRGB_BLOCK, VK_FORMAT_ASTC_12x12_UNORM_BLOCK)       \
+  FN(VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK, VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK)     \
+  FN(VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK, VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK) \
+  FN(VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK, VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK) \
+  FN(VK_FORMAT_BC7_SRGB_BLOCK, VK_FORMAT_BC7_UNORM_BLOCK)
+
+bool isSrgbFormat(VkFormat format) {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
+  switch (format) {
+#define IGL_SRGB_CASE(srgb, unorm) case srgb:
+    IGL_FOR_EACH_SRGB_UNORM_FORMAT_PAIR(IGL_SRGB_CASE)
+#undef IGL_SRGB_CASE
+    return true;
+  default:
+    return false;
+  }
+}
+
+VkFormat srgbToUnorm(VkFormat format) {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
+  switch (format) {
+#define IGL_SRGB_CASE(srgb, unorm) \
+  case srgb:                       \
+    return unorm;
+    IGL_FOR_EACH_SRGB_UNORM_FORMAT_PAIR(IGL_SRGB_CASE)
+#undef IGL_SRGB_CASE
+  default:
+    return format;
+  }
+}
+
+VkFormat unormToSrgb(VkFormat format) {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
+  switch (format) {
+#define IGL_SRGB_CASE(srgb, unorm) \
+  case unorm:                      \
+    return srgb;
+    IGL_FOR_EACH_SRGB_UNORM_FORMAT_PAIR(IGL_SRGB_CASE)
+#undef IGL_SRGB_CASE
+  default:
+    return format;
+  }
+}
+
+#undef IGL_FOR_EACH_SRGB_UNORM_FORMAT_PAIR
 
 TextureFormat vkFormatToTextureFormat(VkFormat format) {
   return util::vkTextureFormatToTextureFormat(static_cast<int32_t>(format));
@@ -535,11 +626,11 @@ void transitionToGeneral(VkCommandBuffer cmdBuf, ITexture* texture) {
                        VK_IMAGE_LAYOUT_GENERAL,
                        srcStage,
                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                       VkImageSubresourceRange{imgView.getVkImageAspectFlags(),
-                                               0,
-                                               VK_REMAINING_MIP_LEVELS,
-                                               0,
-                                               VK_REMAINING_ARRAY_LAYERS});
+                       VkImageSubresourceRange{.aspectMask = imgView.getVkImageAspectFlags(),
+                                               .baseMipLevel = 0,
+                                               .levelCount = VK_REMAINING_MIP_LEVELS,
+                                               .baseArrayLayer = 0,
+                                               .layerCount = VK_REMAINING_ARRAY_LAYERS});
 }
 
 void transitionToColorAttachment(VkCommandBuffer cmdBuf, ITexture* colorTex) {
@@ -562,17 +653,19 @@ void transitionToColorAttachment(VkCommandBuffer cmdBuf, ITexture* colorTex) {
     IGL_DEBUG_ABORT("Did you forget to specify TextureUsageBit::Attachment usage bit?");
     IGL_LOG_ERROR("Did you forget to specify TextureUsageBit::Attachment usage bit?");
   }
-  if (img.usageFlags_ & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) {
+  if ((img.usageFlags_ & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) != 0) {
     // transition to VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-    img.transitionLayout(
-        cmdBuf,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // wait for all subsequent fragment/compute
-                                                  // shaders
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VkImageSubresourceRange{
-            VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS});
+    img.transitionLayout(cmdBuf,
+                         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // wait for all subsequent
+                                                                   // fragment/compute shaders
+                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                         VkImageSubresourceRange{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                                 .baseMipLevel = 0,
+                                                 .levelCount = VK_REMAINING_MIP_LEVELS,
+                                                 .baseArrayLayer = 0,
+                                                 .layerCount = VK_REMAINING_ARRAY_LAYERS});
   }
 }
 
@@ -595,7 +688,7 @@ void transitionToDepthStencilAttachment(VkCommandBuffer cmdBuf, ITexture* depthS
     IGL_DEBUG_ABORT("Did you forget to specify TextureUsageBit::Attachment usage bit?");
     IGL_LOG_ERROR("Did you forget to specify TextureUsageBit::Attachment usage bit?");
   }
-  if (img.usageFlags_ & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+  if ((img.usageFlags_ & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0) {
     // transition to VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
     VkImageAspectFlags aspectFlags = 0;
     if (img.isDepthFormat_) {
@@ -604,15 +697,17 @@ void transitionToDepthStencilAttachment(VkCommandBuffer cmdBuf, ITexture* depthS
     if (img.isStencilFormat_) {
       aspectFlags |= VK_IMAGE_ASPECT_STENCIL_BIT;
     }
-    img.transitionLayout(
-        cmdBuf,
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // wait for all subsequent fragment/compute
-                                                  // shaders
-        VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-        VkImageSubresourceRange{
-            aspectFlags, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS});
+    img.transitionLayout(cmdBuf,
+                         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // wait for all subsequent
+                                                                   // fragment/compute shaders
+                         VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                         VkImageSubresourceRange{.aspectMask = aspectFlags,
+                                                 .baseMipLevel = 0,
+                                                 .levelCount = VK_REMAINING_MIP_LEVELS,
+                                                 .baseArrayLayer = 0,
+                                                 .layerCount = VK_REMAINING_ARRAY_LAYERS});
   }
 }
 
@@ -629,18 +724,20 @@ void transitionToShaderReadOnly(VkCommandBuffer cmdBuf, ITexture* texture) {
 
   const bool isColor = (imgView.getVkImageAspectFlags() & VK_IMAGE_ASPECT_COLOR_BIT) > 0;
 
-  if (img.usageFlags_ & VK_IMAGE_USAGE_SAMPLED_BIT) {
+  if ((img.usageFlags_ & VK_IMAGE_USAGE_SAMPLED_BIT) != 0) {
     // transition sampled images to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    img.transitionLayout(
-        cmdBuf,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        isColor ? VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-                : VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // wait for subsequent
-                                              // fragment/compute shaders
-        VkImageSubresourceRange{
-            img.getImageAspectFlags(), 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS});
+    img.transitionLayout(cmdBuf,
+                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                         isColor ? VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                                 : VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // wait for subsequent
+                                                                   // fragment/compute shaders
+                         VkImageSubresourceRange{.aspectMask = img.getImageAspectFlags(),
+                                                 .baseMipLevel = 0,
+                                                 .levelCount = VK_REMAINING_MIP_LEVELS,
+                                                 .baseArrayLayer = 0,
+                                                 .layerCount = VK_REMAINING_ARRAY_LAYERS});
   }
 }
 
@@ -793,13 +890,13 @@ PFN_vkGetInstanceProcAddr getVkGetInstanceProcAddr() {
 
     if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
                           FORMAT_MESSAGE_IGNORE_INSERTS,
-                      NULL,
+                      nullptr,
                       dw,
                       MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                      (LPTSTR)&lpMsgBuf,
+                      reinterpret_cast<LPTSTR>(&lpMsgBuf),
                       0,
-                      NULL) != 0) {
-      IGL_LOG_ERROR("Failed to open vulkan-1.dll: %s\n", (LPCTSTR)lpMsgBuf);
+                      nullptr) != 0) {
+      IGL_LOG_ERROR("Failed to open vulkan-1.dll: %s\n", reinterpret_cast<LPCTSTR>(lpMsgBuf));
       LocalFree(lpMsgBuf);
     } else {
       IGL_LOG_ERROR("Failed to open vulkan-1.dll");
@@ -807,7 +904,7 @@ PFN_vkGetInstanceProcAddr getVkGetInstanceProcAddr() {
 
     return nullptr;
   }
-  return (PFN_vkGetInstanceProcAddr)GetProcAddress(lib, "vkGetInstanceProcAddr");
+  return reinterpret_cast<PFN_vkGetInstanceProcAddr>(GetProcAddress(lib, "vkGetInstanceProcAddr"));
 #elif defined(__APPLE__)
   void* lib = dlopen("libvulkan.dylib", RTLD_NOW | RTLD_LOCAL);
   IGL_LOG_INFO("Loading libvulkan.dylib\n");
@@ -825,7 +922,7 @@ PFN_vkGetInstanceProcAddr getVkGetInstanceProcAddr() {
     IGL_LOG_ERROR("Failed to open libMoltenVK.dylib: %s\n", dlerror());
     return nullptr;
   }
-  return (PFN_vkGetInstanceProcAddr)dlsym(lib, "vkGetInstanceProcAddr");
+  return reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(lib, "vkGetInstanceProcAddr"));
 #else
   // Preload libraries that Vulkan ICD drivers commonly depend on.
   // This ensures they're available when the Vulkan loader dlopens() ICD drivers.
@@ -834,7 +931,7 @@ PFN_vkGetInstanceProcAddr getVkGetInstanceProcAddr() {
   // standard system library paths (/lib64, /usr/lib64). We cannot use LD_LIBRARY_PATH
   // or RPATH because they would interfere with Buck2's hermetic build environment.
 #if IGL_PLATFORM_LINUX && !defined(IGL_CMAKE_BUILD)
-  const std::array<const char*, 25> kPreloadLibs = {
+  const std::array<const char*, 24> kPreloadLibs = {
       // Base system libraries (leaf dependencies)
       "/lib64/libtinfo.so.6", // Required by libedit
       "/lib64/liblzma.so.5", // Required by libxml2
@@ -861,7 +958,6 @@ PFN_vkGetInstanceProcAddr getVkGetInstanceProcAddr() {
       "/lib64/libdrm.so.2", // Required by all hardware drivers
       "/usr/lib64/libdrm_amdgpu.so.1", // Required by Radeon driver
       // High-level dependencies
-      "/lib64/libLLVM.so.20.1", // Required by Lavapipe and Radeon drivers
       "/lib64/libSPIRV-Tools.so", // Required by Lavapipe
       "/lib64/libSPIRV-Tools-opt.so", // Required by libVkLayer_khronos_validation
       // Additional X11 libraries for Intel drivers
@@ -887,6 +983,27 @@ PFN_vkGetInstanceProcAddr getVkGetInstanceProcAddr() {
       }
     }
   }
+
+  // Lavapipe and Radeon link whichever LLVM major their Mesa build was compiled against, and
+  // several majors can be installed side by side. Stop at the first one that loads: pulling two
+  // LLVM copies into the global namespace collides on `llvm::cl` symbols and crashes on the
+  // second registration. Newest first, since that is what a current Mesa links.
+  const std::array<const char*, 3> kLlvmPreloadCandidates = {
+      "/lib64/libLLVM.so.22.1",
+      "/lib64/libLLVM.so.21.1",
+      "/lib64/libLLVM.so.20.1",
+  };
+  for (const char* candidate : kLlvmPreloadCandidates) {
+    const char* libName = strrchr(candidate, '/') + 1;
+    if (dlopen(libName, RTLD_NOW | RTLD_GLOBAL | RTLD_NODELETE)) {
+      IGL_LOG_DEBUG("IGL/Vulkan: preloaded `%s` (via library name).\n", libName);
+      break;
+    }
+    if (dlopen(candidate, RTLD_NOW | RTLD_GLOBAL | RTLD_NODELETE)) {
+      IGL_LOG_DEBUG("IGL/Vulkan: preloaded `%s` (via full path).\n", candidate);
+      break;
+    }
+  }
 #endif // IGL_PLATFORM_LINUX && !defined(IGL_CMAKE_BUILD)
   const std::array<const char*, 4> libs = {
       "libvulkan.so.1",
@@ -907,7 +1024,7 @@ PFN_vkGetInstanceProcAddr getVkGetInstanceProcAddr() {
     IGL_LOG_ERROR("IGL/Vulkan: no Vulkan library was found.\n");
     return nullptr;
   }
-  return (PFN_vkGetInstanceProcAddr)dlsym(lib, "vkGetInstanceProcAddr");
+  return reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(lib, "vkGetInstanceProcAddr"));
 #endif
 }
 } // namespace
@@ -924,13 +1041,13 @@ void initialize(VulkanFunctionTable& table) {
 void loadInstanceFunctions(VulkanFunctionTable& table,
                            VkInstance instance,
                            bool enableExtDebugUtils) {
-  IGL_DEBUG_ASSERT(table.vkGetInstanceProcAddr != nullptr);
+  IGL_DEBUG_ASSERT(table.vkGetInstanceProcAddr);
   loadVulkanInstanceFunctions(
       &table, instance, table.vkGetInstanceProcAddr, enableExtDebugUtils ? VK_TRUE : VK_FALSE);
 }
 
 void loadDeviceFunctions(VulkanFunctionTable& table, VkDevice device, uint32_t vulkanAPIVersion) {
-  IGL_DEBUG_ASSERT(table.vkGetDeviceProcAddr != nullptr);
+  IGL_DEBUG_ASSERT(table.vkGetDeviceProcAddr);
   loadVulkanDeviceFunctions(&table, device, table.vkGetDeviceProcAddr, vulkanAPIVersion);
 }
 

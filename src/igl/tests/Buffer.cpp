@@ -10,6 +10,7 @@
 #include "util/Common.h"
 
 #include <array>
+#include <cstring>
 #include <string>
 #include <igl/Uniform.h>
 
@@ -24,7 +25,6 @@ namespace igl::tests {
 class BufferTest : public ::testing::Test {
  public:
   BufferTest() = default;
-  ~BufferTest() override = default;
 
   // Set up common resources. This will create a device and a command queue
   void SetUp() override {
@@ -110,7 +110,7 @@ TEST_F(BufferTest, sizeForUniformElementType) {
 TEST_F(BufferTest, sizeForUniformType) {
   // Invalid type has size of 0
   ASSERT_EQ(0, sizeForUniformType(UniformType::Invalid));
-  ASSERT_EQ(0, sizeForUniformType((UniformType)-1));
+  ASSERT_EQ(0, sizeForUniformType(static_cast<UniformType>(-1)));
 
   // Types with element of Float
   ASSERT_EQ(4, sizeForUniformType(UniformType::Float));
@@ -191,7 +191,7 @@ TEST_F(BufferTest, mapIndexBuffer) {
   }
   ASSERT_EQ(ret.code, Result::Code::Ok);
 
-  memcpy(bufferData.data(), data, sizeof(indexData));
+  std::memcpy(bufferData.data(), data, sizeof(indexData));
 
   for (int i = 0; i < indexDataSize; ++i) {
     ASSERT_EQ(bufferData[i], indexData[i]);
@@ -235,7 +235,7 @@ TEST_F(BufferTest, mapBufferRangeIndexBuffer) {
   }
   ASSERT_EQ(ret.code, Result::Code::Ok);
 
-  memcpy(bufferPartialData.data(), data, sizeBytes);
+  std::memcpy(bufferPartialData.data(), data, sizeBytes);
 
   for (int i = 0; i < numElementsToMap; ++i) {
     ASSERT_EQ(bufferPartialData[i], indexData[i + numElementsToSkip]);
@@ -297,7 +297,7 @@ TEST_F(BufferTest, mapUniformBuffer) {
   auto range = BufferRange(sizeof(color), 0);
   auto* data = buffer->map(range, &ret);
 
-  memcpy(bufferData.data(), data, sizeof(color));
+  std::memcpy(bufferData.data(), data, sizeof(color));
 
   ASSERT_EQ(ret.code, Result::Code::Ok);
   ASSERT_EQ(color.r, bufferData[0]);

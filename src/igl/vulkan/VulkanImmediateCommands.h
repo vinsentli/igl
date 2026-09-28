@@ -23,6 +23,7 @@ class VulkanImmediateCommands final {
   // The maximum number of command buffers which can simultaneously exist in the system; when we run
   // out of buffers, we stall and wait until an existing buffer becomes available
   static constexpr uint32_t kMaxCommandBuffers = 12;
+  static constexpr uint32_t kMaxInjectedSemaphores = 4;
 
   /** @brief Creates an instance of the class for a specific queue family and whether the fences
    * created for each command buffer are exportable (see VulkanFence for more details about the
@@ -61,7 +62,8 @@ class VulkanImmediateCommands final {
 
     /// @brief Creates a SubmitHandle object from an existing handle
     explicit SubmitHandle(uint64_t handle) :
-      bufferIndex(uint32_t(handle & 0xffffffff)), submitId(uint32_t(handle >> 32)) {
+      bufferIndex(static_cast<uint32_t>(handle & 0xffffffff)),
+      submitId(static_cast<uint32_t>(handle >> 32)) {
       IGL_DEBUG_ASSERT(submitId);
     }
 
@@ -74,7 +76,7 @@ class VulkanImmediateCommands final {
     /// @brief Returns a unique identifiable handle, which is made of the `submitId_` and the
     /// `bufferIndex_` member variables
     [[nodiscard]] uint64_t handle() const {
-      return (uint64_t(submitId) << 32) + bufferIndex;
+      return (static_cast<uint64_t>(submitId) << 32) + bufferIndex;
     }
 
     [[nodiscard]] bool operator==(const SubmitHandle& rhs) const {
@@ -87,6 +89,7 @@ class VulkanImmediateCommands final {
 
   /// Ensures that the `SubmitHandle` structure size is not larger than a `uint64_t`
   static_assert(sizeof(SubmitHandle) == sizeof(uint64_t));
+  static_assert(std::is_trivially_copyable_v<SubmitHandle>);
 
   /// @brief The CommandBufferWrapper structure encapsulates all the information needed to manage
   /// the synchronization of a command buffer along with a command buffer
@@ -123,17 +126,31 @@ class VulkanImmediateCommands final {
    * returns the `SubmitHandle` associated with the command buffer. Caches the semaphore associated
    * with the command buffer bineg submitted as the last submitted semaphore
    * (`lastSubmitSemaphore_`). Caches the SubmitHandle associated with the command buffer being
-   * submitted for execution in `lastSubmitHandle_`. Resets the current wait semaphore member
-   * variable (`waitSemaphore_`).
-   *  Submitting a command buffer also marks the `CommandBufferWrapper::encoding_` variable to
-   * `false`
+   * submitted for execution in `lastSubmitHandle_`. Submitting a command buffer also marks the
+   * `CommandBufferWrapper::isEncoding` variable to false and clears the injected wait- and
+   * signal-semaphore queues.
    */
   SubmitHandle submit(const CommandBufferWrapper& wrapper, VkSemaphore signalSemaphore = VK_NULL_HANDLE, VkFence signalFence = VK_NULL_HANDLE);
+  void discard(const CommandBufferWrapper& wrapper);
 
-  /// @brief Stores the semaphore as the current wait semaphore (`waitSemaphore_`)
-  void waitSemaphore(VkSemaphore semaphore);
-  /// @brief Inject one timeline semaphore to be signalled (`signalSemaphore_`)
-  void signalSemaphore(VkSemaphore semaphore, uint64_t signalValue);
+  /// @brief Adds a semaphore to the waits for the next submission.
+  [[nodiscard]] bool waitSemaphore(VkSemaphore semaphore, uint64_t waitValue = 0);
+  /// @brief Adds a semaphore to the signals for the next submission.
+  [[nodiscard]] bool signalSemaphore(VkSemaphore semaphore, uint64_t signalValue);
+
+  [[nodiscard]] bool hasPendingInjectedSemaphores() const noexcept {
+    return numWaitSemaphores_ != 0 || numSignalSemaphores_ != 0;
+  }
+
+  /// @brief Drops the most recently injected wait semaphore (see `waitSemaphore()`). Used to roll
+  /// back a wait that was reserved before the operation meant to signal it ran, when that operation
+  /// fails to signal it (e.g. a `vkAcquireNextImageKHR()` that returns `VK_ERROR_OUT_OF_DATE_KHR`,
+  /// which leaves the acquire semaphore unsignaled).
+  void cancelLastWaitSemaphore() noexcept {
+    if (numWaitSemaphores_ > 0) {
+      --numWaitSemaphores_;
+    }
+  }
 
   /// @brief Returns the last semaphore (`lastSubmitSemaphore_`) and reset the member variable to
   /// `VK_NULL_HANDLE`
@@ -201,11 +218,12 @@ class VulkanImmediateCommands final {
 
   /// @brief The semaphore submitted with the last command buffer. Updated on `submit()`
   VkSemaphoreSubmitInfo lastSubmitSemaphore_{};
-  /// @brief A semaphore to be associated with the next command buffer to be submitted. Can be used
-  /// with command buffers that present swapchain images.
-  VkSemaphoreSubmitInfo waitSemaphore_{};
-  // an extra "signal" timeline semaphore
-  VkSemaphoreSubmitInfo signalSemaphore_{};
+  // @lint-ignore CLANGTIDY
+  VkSemaphoreSubmitInfo waitSemaphores_[kMaxInjectedSemaphores] = {};
+  // @lint-ignore CLANGTIDY
+  VkSemaphoreSubmitInfo signalSemaphores_[kMaxInjectedSemaphores] = {};
+  uint32_t numWaitSemaphores_ = 0;
+  uint32_t numSignalSemaphores_ = 0;
 
   uint32_t numAvailableCommandBuffers_ = kMaxCommandBuffers;
 

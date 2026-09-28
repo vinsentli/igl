@@ -83,7 +83,7 @@ TEST_F(VulkanFeaturesTest, SelfAssignment) {
 }
 
 // Check Selected Features ****************************************************
-TEST_F(VulkanFeaturesTest, CheckSelectedFeatures_AllPresent) {
+TEST_F(VulkanFeaturesTest, CheckSelectedFeaturesAllPresent) {
   const igl::vulkan::VulkanContextConfig config;
 
   const igl::vulkan::VulkanFeatures requested(config);
@@ -159,7 +159,7 @@ TEST_F(VulkanFeaturesTest, EnableDefaultFeatures) {
   }
 }
 
-TEST_F(VulkanFeaturesTest, CheckSelectedFeatures_MissingCoreFeature) {
+TEST_F(VulkanFeaturesTest, CheckSelectedFeaturesMissingCoreFeature) {
   igl::setDebugBreakEnabled(false);
 
   const igl::vulkan::VulkanContextConfig config;
@@ -176,7 +176,7 @@ TEST_F(VulkanFeaturesTest, CheckSelectedFeatures_MissingCoreFeature) {
 #endif
 }
 
-TEST_F(VulkanFeaturesTest, CheckSelectedFeatures_MissingMultiview) {
+TEST_F(VulkanFeaturesTest, CheckSelectedFeaturesMissingMultiview) {
   igl::setDebugBreakEnabled(false);
 
   const igl::vulkan::VulkanContextConfig config;
@@ -211,7 +211,7 @@ TEST_F(VulkanFeaturesTest, ConfigDisablesShaderInt16) {
   EXPECT_FALSE(features.vkPhysicalDeviceFeatures2.features.shaderInt16);
 }
 
-TEST_F(VulkanFeaturesTest, CheckSelectedFeatures_DescriptorIndexingEnabled_AllPresent) {
+TEST_F(VulkanFeaturesTest, CheckSelectedFeaturesDescriptorIndexingEnabledAllPresent) {
   igl::vulkan::VulkanContextConfig config;
   config.enableDescriptorIndexing = true;
 
@@ -240,7 +240,7 @@ TEST_F(VulkanFeaturesTest, ConfigDisables16BitStorageAccess) {
   EXPECT_FALSE(features.features16BitStorage.storageBuffer16BitAccess);
 }
 
-TEST_F(VulkanFeaturesTest, CheckSelectedFeatures_MissingShaderDrawParameters) {
+TEST_F(VulkanFeaturesTest, CheckSelectedFeaturesMissingShaderDrawParameters) {
   igl::setDebugBreakEnabled(false);
 
   const igl::vulkan::VulkanContextConfig config;
@@ -255,6 +255,60 @@ TEST_F(VulkanFeaturesTest, CheckSelectedFeatures_MissingShaderDrawParameters) {
 #else
   EXPECT_FALSE(result.isOk());
 #endif
+}
+
+// shaderIntegerDotProduct opt-in **************************************************
+
+namespace {
+// Whether `wanted` is reachable from the feature chain's head. The chain is what reaches
+// vkCreateDevice(), so membership -- not the member's value alone -- is what decides whether
+// a feature is actually requested.
+bool chainContains(const VkPhysicalDeviceFeatures2& features2, const void* wanted) {
+  for (const auto* node = static_cast<const VkBaseOutStructure*>(features2.pNext); node != nullptr;
+       node = node->pNext) {
+    if (static_cast<const void*>(node) == wanted) {
+      return true;
+    }
+  }
+  return false;
+}
+} // namespace
+
+// The default must be inert: off, and absent from the chain. Every other feature struct here
+// is chained on the device advertising an extension, so a caller that never heard of integer
+// dot product would silently start requesting it if this one followed that pattern.
+TEST_F(VulkanFeaturesTest, IntegerDotProductDefaultsToDisabledAndUnchained) {
+  const igl::vulkan::VulkanContextConfig config;
+  const igl::vulkan::VulkanFeatures features(config);
+
+  EXPECT_EQ(features.featuresShaderIntegerDotProduct.sType,
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_FEATURES);
+  EXPECT_FALSE(features.featuresShaderIntegerDotProduct.shaderIntegerDotProduct);
+  EXPECT_FALSE(
+      chainContains(features.vkPhysicalDeviceFeatures2, &features.featuresShaderIntegerDotProduct));
+}
+
+// Requesting it puts it in the chain, and the request survives the copy that VulkanContext
+// makes of a caller's VulkanFeatures -- operator= reassembles the chain from scratch, so a
+// member it forgot to copy, or a pNext it forgot to reset, would drop the request on the floor
+// while leaving the member reading VK_TRUE.
+TEST_F(VulkanFeaturesTest, IntegerDotProductChainedOnceRequestedAndSurvivesCopy) {
+  const igl::vulkan::VulkanContextConfig config;
+
+  igl::vulkan::VulkanFeatures featuresSrc(config);
+  featuresSrc.featuresShaderIntegerDotProduct.shaderIntegerDotProduct = VK_TRUE;
+
+  igl::vulkan::VulkanFeatures featuresDst(config);
+  ASSERT_FALSE(featuresDst.featuresShaderIntegerDotProduct.shaderIntegerDotProduct);
+  featuresDst = featuresSrc;
+
+  EXPECT_TRUE(featuresDst.featuresShaderIntegerDotProduct.shaderIntegerDotProduct);
+  // The copy must chain ITS OWN struct, never the source's -- a chain pointing into another
+  // object dangles the moment that object goes away.
+  EXPECT_TRUE(chainContains(featuresDst.vkPhysicalDeviceFeatures2,
+                            &featuresDst.featuresShaderIntegerDotProduct));
+  EXPECT_FALSE(chainContains(featuresDst.vkPhysicalDeviceFeatures2,
+                             &featuresSrc.featuresShaderIntegerDotProduct));
 }
 
 // allAvailableExtensions initial state ********************************************
@@ -320,6 +374,23 @@ TEST_F(VulkanFeaturesTest, CheckSelectedFeaturesDescriptorIndexingEnabledMissing
   igl::vulkan::VulkanFeatures available(config);
   // Remove one of the required descriptor-indexing features from "available"
   available.featuresDescriptorIndexing.shaderSampledImageArrayNonUniformIndexing = VK_FALSE;
+
+  const igl::Result result = requested.checkSelectedFeatures(available);
+#if IGL_PLATFORM_APPLE
+  EXPECT_TRUE(result.isOk());
+#else
+  EXPECT_FALSE(result.isOk());
+#endif
+}
+
+TEST_F(VulkanFeaturesTest, CheckSelectedFeaturesMissingSynchronization2) {
+  igl::setDebugBreakEnabled(false);
+
+  const igl::vulkan::VulkanContextConfig config;
+
+  const igl::vulkan::VulkanFeatures requested(config);
+  igl::vulkan::VulkanFeatures available(config);
+  available.featuresSynchronization2.synchronization2 = VK_FALSE;
 
   const igl::Result result = requested.checkSelectedFeatures(available);
 #if IGL_PLATFORM_APPLE

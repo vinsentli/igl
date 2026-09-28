@@ -14,6 +14,7 @@
 #include <shell/shared/platform/DisplayContext.h>
 #include <shell/shared/renderSession/RenderSession.h>
 #include <shell/shared/renderSession/ShellParams.h>
+#include <igl/CommandBuffer.h>
 #include <igl/NameHandle.h>
 #include <igl/ShaderCreator.h>
 
@@ -194,7 +195,7 @@ void YUVColorSession::initialize() noexcept {
         const auto fileData = fileLoader.loadBinaryData(fileName);
         IGL_DEBUG_ASSERT(fileData.data && fileData.length, "Cannot load texture file");
 
-        const igl::TextureDesc textureDesc = igl::TextureDesc::new2D(
+        const TextureDesc textureDesc = igl::TextureDesc::new2D(
             yuvFormat, width, height, TextureDesc::TextureUsageBits::Sampled, "YUV texture");
         IGL_DEBUG_ASSERT(width * height + width * height / 2 == fileData.length);
         const auto texture = device.createTexture(textureDesc, nullptr);

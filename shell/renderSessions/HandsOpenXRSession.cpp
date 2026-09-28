@@ -92,6 +92,7 @@ struct Vertex {
     IDevice& device,
     const iglu::ShaderCross& shaderCross,
     bool stereoRendering) noexcept {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (device.getBackendType()) {
   case igl::BackendType::Metal:
     IGL_DEBUG_ABORT("Metal is not supported");
@@ -139,15 +140,15 @@ struct Vertex {
   return device.hasFeature(DeviceFeatures::Multiview);
 }
 
-[[nodiscard]] glm::mat4 perspectiveAsymmetricFovRH(const igl::shell::Fov& fov,
+[[nodiscard]] glm::mat4 perspectiveAsymmetricFovRH(const Fov& fov,
                                                    float nearZ,
                                                    float farZ) noexcept {
   glm::mat4 mat;
 
-  const float tanLeft = tanf(fov.angleLeft);
-  const float tanRight = tanf(fov.angleRight);
-  const float tanDown = tanf(fov.angleDown);
-  const float tanUp = tanf(fov.angleUp);
+  const float tanLeft = std::tan(fov.angleLeft);
+  const float tanRight = std::tan(fov.angleRight);
+  const float tanDown = std::tan(fov.angleDown);
+  const float tanUp = std::tan(fov.angleUp);
 
   const float tanWidth = tanRight - tanLeft;
   const float tanHeight = tanUp - tanDown;
@@ -296,7 +297,7 @@ void HandsOpenXRSession::update(SurfaceTextures surfaceTextures) noexcept {
   }
 
   // Update uniforms.
-  for (size_t i = 0; i < std::min(shellParams().viewParams.size(), size_t(2)); ++i) {
+  for (size_t i = 0; i < std::min(shellParams().viewParams.size(), static_cast<size_t>(2)); ++i) {
     const auto currentViewId = shellParams().viewParams[i].viewIndex;
     ub_.viewProjectionMatrix[currentViewId] =
         perspectiveAsymmetricFovRH(shellParams().viewParams[i].fov, 0.1f, 100.0f) *

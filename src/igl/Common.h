@@ -16,8 +16,8 @@
 #include <string>
 #include <type_traits>
 #include <utility>
-#include <vector>
-#include <igl/Color.h>
+#include <vector> // NOLINT(facebook-unused-include-check)
+#include <igl/Color.h> // IWYU pragma: export
 #include <igl/Core.h>
 #include <igl/base/Common.h>
 
@@ -169,6 +169,9 @@ struct ScissorRect {
   }
 };
 
+static_assert(sizeof(ScissorRect) == 4 * sizeof(uint32_t));
+static_assert(std::is_trivially_copyable_v<ScissorRect>);
+
 ///--------------------------------------
 /// MARK: - Size
 
@@ -217,6 +220,9 @@ struct Viewport {
   float maxDepth = 1.0f;
 };
 
+static_assert(sizeof(Viewport) == 6 * sizeof(float));
+static_assert(std::is_trivially_copyable_v<Viewport>);
+
 inline bool operator==(const Viewport& lhs, const Viewport& rhs) {
   return lhs.x == rhs.x && lhs.y == rhs.y && lhs.width == rhs.width && lhs.height == rhs.height &&
          lhs.minDepth == rhs.minDepth && lhs.maxDepth == rhs.maxDepth;
@@ -234,8 +240,8 @@ constexpr Viewport kInvalidViewport =
 
 // Get value of enum by stripping enum class type
 template<typename E>
-constexpr typename std::underlying_type<E>::type EnumToValue(E enumerator) noexcept {
-  return static_cast<typename std::underlying_type<E>::type>(enumerator);
+constexpr std::underlying_type_t<E> EnumToValue(E enumerator) noexcept {
+  return static_cast<std::underlying_type_t<E>>(enumerator);
 }
 
 ///--------------------------------------
@@ -259,8 +265,7 @@ class ScopeGuard {
 };
 
 template<typename T>
-// Ignore readability-named-parameter
-// @lint-ignore CLANGTIDY
+// NOLINTNEXTLINE(readability-named-parameter)
 ScopeGuard<T> operator+(ScopeGuardOnExit /*guard*/, T&& fn) {
   return ScopeGuard<T>(std::forward<T>(fn));
 }

@@ -10,6 +10,7 @@
 #include <igl/metal/Texture.h>
 
 #import <CoreVideo/CVPixelBuffer.h>
+#include <algorithm>
 #include <utility>
 #include <igl/metal/CommandBuffer.h>
 #include <igl/metal/PlatformDevice.h>
@@ -30,7 +31,6 @@ namespace igl::tests {
 class TextureMTLTest : public ::testing::Test {
  public:
   TextureMTLTest() = default;
-  ~TextureMTLTest() override = default;
 
   void SetUp() override {
     setDebugBreakEnabled(false);
@@ -58,7 +58,6 @@ class TextureMTLTest : public ::testing::Test {
 class TextureFormatMTLTest : public util::TextureFormatTestBase {
  public:
   TextureFormatMTLTest() = default;
-  ~TextureFormatMTLTest() override = default;
 };
 
 // Test basic getter methods for successful construction
@@ -379,6 +378,42 @@ TEST_F(TextureMTLTest, createTextureFromNativePixelBufferWithInvalidFormat) {
   auto texture =
       createCVPixelBufferTextureWithSize(TextureFormat::Invalid, 100, 100, device_, result);
   ASSERT_EQ(result.isOk(), false) << result.message.c_str();
+}
+
+TEST_F(TextureMTLTest, createTextureFromNativePixelBufferWithInvalidPlaneSetsError) {
+  CVPixelBufferRef pixelBuffer = nullptr;
+  NSDictionary* bufferAttributes = @{
+    (NSString*)kCVPixelBufferIOSurfacePropertiesKey : @{},
+    (NSString*)kCVPixelBufferMetalCompatibilityKey : @YES,
+  };
+  const CVReturn pixelBufferResult =
+      CVPixelBufferCreate(kCFAllocatorDefault,
+                          100,
+                          100,
+                          kCVPixelFormatType_32BGRA,
+                          (__bridge CFDictionaryRef)(bufferAttributes),
+                          &pixelBuffer);
+  ASSERT_EQ(pixelBufferResult, kCVReturnSuccess);
+
+  auto* platformDevice = device_->getPlatformDevice<igl::metal::PlatformDevice>();
+  Result result;
+  auto texture = platformDevice->createTextureFromNativePixelBuffer(
+      pixelBuffer, TextureFormat::BGRA_UNorm8, 1, &result);
+  CVPixelBufferRelease(pixelBuffer);
+
+  EXPECT_EQ(texture, nullptr);
+  EXPECT_FALSE(result.isOk());
+}
+
+TEST_F(TextureMTLTest, B10G11R11UFloatRoundTrip) {
+  constexpr auto kIglFormat = TextureFormat::B10G11R11_UFloat;
+  constexpr auto kMtlFormat = MTLPixelFormatRG11B10Float;
+
+  EXPECT_EQ(metal::Texture::textureFormatToMTLPixelFormat(kIglFormat), kMtlFormat);
+  EXPECT_EQ(metal::Texture::mtlPixelFormatToTextureFormat(kMtlFormat), kIglFormat);
+  EXPECT_EQ(metal::Texture::mtlPixelFormatToTextureFormat(
+                metal::Texture::textureFormatToMTLPixelFormat(kIglFormat)),
+            kIglFormat);
 }
 
 TEST_F(TextureMTLTest, ConvertTextureFormats) {

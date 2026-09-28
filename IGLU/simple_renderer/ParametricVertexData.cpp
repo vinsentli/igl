@@ -10,16 +10,23 @@
 #include "ParametricVertexData.h"
 
 #include <array>
+#include <type_traits>
+#include <igl/Macros.h>
+
+static_assert(std::is_trivially_copyable_v<iglu::vertexdata::VertexPosUv>);
 
 namespace iglu::vertexdata {
 
+namespace {
 // Assumption: <name, location> for OpenGL and Metal, respectively
-static const std::pair<const char*, int> kSAttrPosition("a_position", 0);
-static const std::pair<const char*, int> kSAttrUv("a_uv", 1);
+const std::pair<const char*, int> kSAttrPosition("a_position", 0);
+const std::pair<const char*, int> kSAttrUv("a_uv", 1);
+} // namespace
 
 namespace Quad {
 
 igl::VertexInputStateDesc inputStateDesc() {
+  IGL_PROFILER_FUNCTION();
   const igl::VertexInputStateDesc inputDesc = {
       .numAttributes = 2,
       .attributes = {{.bufferIndex = 0,
@@ -43,6 +50,7 @@ std::shared_ptr<VertexData> create(igl::IDevice& device,
                                    iglu::simdtypes::float2 posMax,
                                    iglu::simdtypes::float2 uvMin,
                                    iglu::simdtypes::float2 uvMax) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   // - UV origin: bottom left
   // - Vertex layout:
   // 0 -- 2
@@ -73,8 +81,7 @@ std::shared_ptr<VertexData> create(igl::IDevice& device,
   IGL_DEBUG_ASSERT(result.isOk(), "createVertexInputState() failed: %s", result.message.c_str());
   IGL_DEBUG_ASSERT(vertexInput != nullptr);
 
-  PrimitiveDesc primitiveDesc;
-  primitiveDesc.numEntries = sizeof(indexData) / sizeof(indexData[0]);
+  const PrimitiveDesc primitiveDesc{.numEntries = sizeof(indexData) / sizeof(indexData[0])};
 
   auto vb = device.createBuffer(vbDesc, &result);
   IGL_DEBUG_ASSERT(result.isOk(), "createBuffer(vertex) failed: %s", result.message.c_str());
@@ -106,6 +113,7 @@ std::shared_ptr<VertexData> create(igl::IDevice& device,
                                    iglu::simdtypes::float2 posMax,
                                    iglu::simdtypes::float2 uvMin,
                                    iglu::simdtypes::float2 uvMax) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   iglu::simdtypes::float2 uvMinAdjusted = uvMin;
   iglu::simdtypes::float2 uvMaxAdjusted = uvMax;
 

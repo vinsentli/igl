@@ -47,7 +47,6 @@ namespace igl::tests {
 class DescriptorPoolArenaTest : public ::testing::Test {
  public:
   DescriptorPoolArenaTest() = default;
-  ~DescriptorPoolArenaTest() override = default;
 
   void SetUp() override {
     igl::setDebugBreakEnabled(false);
@@ -56,7 +55,7 @@ class DescriptorPoolArenaTest : public ::testing::Test {
     ASSERT_EQ(iglDev_->getBackendType(), BackendType::Vulkan) << "Test requires Vulkan backend";
 
     Result ret;
-    cmdQueue_ = iglDev_->createCommandQueue(CommandQueueDesc{}, &ret);
+    cmdQueue_ = iglDev_->createCommandQueue({}, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
     ASSERT_NE(cmdQueue_, nullptr);
 
@@ -142,7 +141,7 @@ class DescriptorPoolArenaTest : public ::testing::Test {
     ASSERT_NE(pipelineLine_, nullptr);
 
     // Sampler state
-    sampler_ = iglDev_->createSamplerState(SamplerStateDesc{}, &ret);
+    sampler_ = iglDev_->createSamplerState({}, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
     ASSERT_NE(sampler_, nullptr);
 
@@ -204,7 +203,7 @@ class DescriptorPoolArenaTest : public ::testing::Test {
                        const std::shared_ptr<IRenderPipelineState>& altPipeline = nullptr,
                        const uint32_t switchAfter = 0) {
     Result ret;
-    const auto cmdBuf = cmdQueue_->createCommandBuffer(CommandBufferDesc{}, &ret);
+    const auto cmdBuf = cmdQueue_->createCommandBuffer({}, &ret);
     ASSERT_TRUE(ret.isOk()) << ret.message.c_str();
     ASSERT_NE(cmdBuf, nullptr);
 

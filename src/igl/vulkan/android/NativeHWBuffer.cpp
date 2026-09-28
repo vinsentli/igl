@@ -14,11 +14,17 @@
 
 #include <android/hardware_buffer.h>
 #include <vulkan/vulkan_android.h>
+#include <igl/Macros.h>
 #include <igl/vulkan/Device.h>
 #include <igl/vulkan/VulkanContext.h>
+#include <igl/vulkan/VulkanEnumToString.h>
 #include <igl/vulkan/VulkanImage.h>
 #include <igl/vulkan/VulkanImmediateCommands.h>
 #include <igl/vulkan/VulkanTexture.h>
+
+#if IGL_LOGGING_ENABLED
+#include <mutex>
+#endif
 
 namespace igl::vulkan::android {
 
@@ -38,9 +44,67 @@ uint32_t ivkGetMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties& memProps,
   }
   return 0;
 }
+
+#if IGL_LOGGING_ENABLED
+// Emits a one-time debug snapshot of the first imported AHB's Vulkan format and driver
+// properties. The std::call_once guard is owned here rather than on the texture-creation path,
+// so callers add a single line and the diagnostics never re-run per import.
+void logFirstAhbImportDiagnostics(const VkAndroidHardwareBufferFormatPropertiesANDROID& formatProps,
+                                  const VkPhysicalDeviceDriverPropertiesKHR& driverProps) {
+  static std::once_flag once;
+  std::call_once(once, [&formatProps, &driverProps]() {
+    const VkComponentMapping& components = formatProps.samplerYcbcrConversionComponents;
+    if (formatProps.format == VK_FORMAT_UNDEFINED) {
+      IGL_LOG_DEBUG(
+          "[vulkan][ahb][first_frame] Vulkan AHB import\n"
+          "  format=%s (%d) externalFormat=0x%llx\n"
+          "  components r=%s g=%s b=%s a=%s\n"
+          "  ycbcrModel=%s ycbcrRange=%s\n"
+          "  driverID=%s (%d) conformance=%u.%u.%u.%u\n",
+          vkFormatToString(formatProps.format),
+          static_cast<int>(formatProps.format),
+          static_cast<unsigned long long>(formatProps.externalFormat),
+          vkComponentSwizzleToString(components.r),
+          vkComponentSwizzleToString(components.g),
+          vkComponentSwizzleToString(components.b),
+          vkComponentSwizzleToString(components.a),
+          vkSamplerYcbcrModelConversionToString(formatProps.suggestedYcbcrModel),
+          vkSamplerYcbcrRangeToString(formatProps.suggestedYcbcrRange),
+          vkDriverIdToString(driverProps.driverID),
+          static_cast<int>(driverProps.driverID),
+          static_cast<unsigned>(driverProps.conformanceVersion.major),
+          static_cast<unsigned>(driverProps.conformanceVersion.minor),
+          static_cast<unsigned>(driverProps.conformanceVersion.subminor),
+          static_cast<unsigned>(driverProps.conformanceVersion.patch));
+      return;
+    }
+
+    IGL_LOG_DEBUG(
+        "[vulkan][ahb][first_frame] Vulkan AHB import\n"
+        "  format=%s (%d)\n"
+        "  components r=%s g=%s b=%s a=%s\n"
+        "  ycbcrModel=%s ycbcrRange=%s\n"
+        "  driverID=%s (%d) conformance=%u.%u.%u.%u\n",
+        vkFormatToString(formatProps.format),
+        static_cast<int>(formatProps.format),
+        vkComponentSwizzleToString(components.r),
+        vkComponentSwizzleToString(components.g),
+        vkComponentSwizzleToString(components.b),
+        vkComponentSwizzleToString(components.a),
+        vkSamplerYcbcrModelConversionToString(formatProps.suggestedYcbcrModel),
+        vkSamplerYcbcrRangeToString(formatProps.suggestedYcbcrRange),
+        vkDriverIdToString(driverProps.driverID),
+        static_cast<int>(driverProps.driverID),
+        static_cast<unsigned>(driverProps.conformanceVersion.major),
+        static_cast<unsigned>(driverProps.conformanceVersion.minor),
+        static_cast<unsigned>(driverProps.conformanceVersion.subminor),
+        static_cast<unsigned>(driverProps.conformanceVersion.patch));
+  });
+}
+#endif // IGL_LOGGING_ENABLED
 } // namespace
 
-NativeHWTextureBuffer::NativeHWTextureBuffer(igl::vulkan::Device& device, std::shared_ptr<AHardwareBufferFunctionTable> funcTable, TextureFormat format) :
+NativeHWTextureBuffer::NativeHWTextureBuffer(Device& device, std::shared_ptr<AHardwareBufferFunctionTable> funcTable, TextureFormat format) :
   Super(device, format), INativeHWTextureBuffer(funcTable) {
   IGL_LOG_INFO("Create NativeHWTextureBuffer : %s", textureDesc_.debugName.c_str());
 }
@@ -59,21 +123,23 @@ size_t NativeHWTextureBuffer::getMapBytesPerRow() const {
 
 VkSamplerYcbcrConversion NativeHWTextureBuffer::getVkSamplerYcbcrConversion() const noexcept {
   // Null texture_ and null ycbcrConversion_ are both valid "not available" states.
-  if (texture_ == nullptr) {
+  if (!texture_) {
     return VK_NULL_HANDLE;
   }
   return texture_->image.ycbcrConversion_;
 }
 
 Result NativeHWTextureBuffer::create(const TextureDesc& desc) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   return createHWBuffer(desc, false, false);
 }
 
 Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
-  if (hwBuffer == nullptr) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
+  if (!hwBuffer) {
     return Result(Result::Code::RuntimeError, "null buffer passed to create texture");
   }
-  AHardwareBuffer_Desc hwbDesc;
+  AHardwareBuffer_Desc hwbDesc{};
   funcTable_->AHardwareBuffer_describe(hwBuffer, &hwbDesc);
 
   VkImageAspectFlags aspectMask = 0;
@@ -99,93 +165,98 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
   }
 
   auto& ctx = device_.getVulkanContext();
-  auto device = device_.getVulkanContext().getVkDevice();
-  VkImageCreateFlags create_flags = 0;
+  auto* device = device_.getVulkanContext().getVkDevice();
+  VkImageCreateFlags createFlags = 0;
   if (hwbDesc.usage & AHARDWAREBUFFER_USAGE_PROTECTED_CONTENT) {
-    create_flags |= VK_IMAGE_CREATE_PROTECTED_BIT;
+    createFlags |= VK_IMAGE_CREATE_PROTECTED_BIT;
   }
-  VkImageUsageFlags usage_flags = 0;
+  VkImageUsageFlags usageFlags = 0;
   if (hwbDesc.usage & AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE) {
-    usage_flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    usageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
   }
   if (hwbDesc.usage & AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT) {
-    usage_flags |= (aspectMask == VK_IMAGE_ASPECT_COLOR_BIT)
-                       ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                       : VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    usageFlags |= (aspectMask == VK_IMAGE_ASPECT_COLOR_BIT)
+                      ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                      : VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
   }
   if (hwbDesc.usage & AHARDWAREBUFFER_USAGE_GPU_DATA_BUFFER) {
-    usage_flags |= VK_IMAGE_USAGE_STORAGE_BIT;
+    usageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
   }
 
-  VkAndroidHardwareBufferFormatPropertiesANDROID ahb_format_props = {
+  VkAndroidHardwareBufferFormatPropertiesANDROID ahbFormatProps = {
       .sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_ANDROID,
       .pNext = nullptr,
   };
-  VkAndroidHardwareBufferPropertiesANDROID ahb_props = {
+  VkAndroidHardwareBufferPropertiesANDROID ahbProps = {
       .sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID,
-      .pNext = &ahb_format_props,
+      .pNext = &ahbFormatProps,
   };
 
-  VK_ASSERT(ctx.vf_.vkGetAndroidHardwareBufferPropertiesANDROID(device, hwBuffer, &ahb_props));
+  VK_ASSERT(ctx.vf_.vkGetAndroidHardwareBufferPropertiesANDROID(device, hwBuffer, &ahbProps));
 
-  VkExternalFormatANDROID external_format = {
+#if IGL_LOGGING_ENABLED
+  logFirstAhbImportDiagnostics(ahbFormatProps, ctx.getVkPhysicalDeviceDriverProperties());
+#endif
+
+  VkExternalFormatANDROID externalFormat = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_FORMAT_ANDROID,
   };
 
-  if (ahb_format_props.format == VK_FORMAT_UNDEFINED) {
-    external_format.externalFormat = ahb_format_props.externalFormat;
+  if (ahbFormatProps.format == VK_FORMAT_UNDEFINED) {
+    externalFormat.externalFormat = ahbFormatProps.externalFormat;
   }
 
-  VkExternalMemoryImageCreateInfo external_memory_image_info = {
+  VkExternalMemoryImageCreateInfo externalMemoryImageInfo = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-      .pNext = &external_format,
+      .pNext = &externalFormat,
       .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID,
   };
 
   auto desc = TextureDesc::newNativeHWBufferImage(
-      igl::vulkan::vkFormatToTextureFormat(ahb_format_props.format),
+      igl::vulkan::vkFormatToTextureFormat(ahbFormatProps.format),
       igl::android::getIglBufferUsage(hwbDesc.usage),
       hwbDesc.width,
       hwbDesc.height);
 
-  VkImage vk_image;
+  VkImage vkImage = VK_NULL_HANDLE;
 
-  VkImageCreateInfo vk_image_info = {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-      .pNext = &external_memory_image_info,
-      .flags = create_flags,
-      .imageType = VK_IMAGE_TYPE_2D,
-      .format = ahb_format_props.format,
-      .extent = {.width = (uint32_t)desc.width, .height = (uint32_t)desc.height, .depth = 1},
-      .mipLevels = 1,
-      .arrayLayers = 1,
-      .samples = VK_SAMPLE_COUNT_1_BIT,
-      .tiling = VK_IMAGE_TILING_OPTIMAL,
-      .usage = usage_flags,
-      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-      .queueFamilyIndexCount = 0,
-      .pQueueFamilyIndices = nullptr,
-      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
+  VkImageCreateInfo vkImageInfo = {.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+                                   .pNext = &externalMemoryImageInfo,
+                                   .flags = createFlags,
+                                   .imageType = VK_IMAGE_TYPE_2D,
+                                   .format = ahbFormatProps.format,
+                                   .extent = {.width = static_cast<uint32_t>(desc.width),
+                                              .height = static_cast<uint32_t>(desc.height),
+                                              .depth = 1},
+                                   .mipLevels = 1,
+                                   .arrayLayers = 1,
+                                   .samples = VK_SAMPLE_COUNT_1_BIT,
+                                   .tiling = VK_IMAGE_TILING_OPTIMAL,
+                                   .usage = usageFlags,
+                                   .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                                   .queueFamilyIndexCount = 0,
+                                   .pQueueFamilyIndices = nullptr,
+                                   .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
   // Create Vk Image.
-  VK_ASSERT(ctx.vf_.vkCreateImage(device, &vk_image_info, nullptr, &vk_image));
+  VK_ASSERT(ctx.vf_.vkCreateImage(device, &vkImageInfo, nullptr, &vkImage));
 
-  if (vk_image == VK_NULL_HANDLE) {
+  if (vkImage == VK_NULL_HANDLE) {
     IGL_LOG_ERROR("failed to create image view format is %d and external format is %d",
-                  vk_image_info.format,
-                  external_format.externalFormat);
+                  vkImageInfo.format,
+                  externalFormat.externalFormat);
     return Result(Result::Code::RuntimeError, "Failed to create vulkan image");
   }
 
   VK_ASSERT(ivkSetDebugObjectName(&ctx.vf_,
                                   device,
                                   VK_OBJECT_TYPE_IMAGE,
-                                  (uint64_t)vk_image,
+                                  (uint64_t)vkImage,
                                   "Image: AHB NativeHWTextureBuffer"));
 
   // To import memory created outside of the current Vulkan instance from an
   // Android hardware buffer, add a VkImportAndroidHardwareBufferInfoANDROID
   // structure to the pNext chain of the VkMemoryAllocateInfo structure.
-  VkImportAndroidHardwareBufferInfoANDROID ahb_import_info = {
+  VkImportAndroidHardwareBufferInfoANDROID ahbImportInfo = {
       .sType = VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID,
       .pNext = nullptr,
       .buffer = hwBuffer};
@@ -194,60 +265,66 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
   // VkMemoryDedicatedAllocateInfo structure, then that structure includes a
   // handle of the sole buffer or image resource that the memory can be bound
   // to.
-  VkMemoryDedicatedAllocateInfo dedicated_alloc_info = {
+  VkMemoryDedicatedAllocateInfo dedicatedAllocInfo = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
-      .pNext = &ahb_import_info,
-      .image = vk_image,
+      .pNext = &ahbImportInfo,
+      .image = vkImage,
       .buffer = VK_NULL_HANDLE};
 
   // Find the memory type that supports the required properties.
-  uint32_t memory_type_bits = ahb_props.memoryTypeBits;
+  uint32_t memoryTypeBits = ahbProps.memoryTypeBits;
 
-  uint32_t type_index = ivkGetMemoryTypeIndex(
-      ctx.memoryProperties, memory_type_bits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  uint32_t typeIndex = ivkGetMemoryTypeIndex(
+      ctx.memoryProperties, memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
   // An instance of the VkMemoryAllocateInfo structure defines a memory import
   // operation.
-  VkMemoryAllocateInfo mem_alloc_info = {
+  VkMemoryAllocateInfo memAllocInfo = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-      .pNext = &dedicated_alloc_info,
+      .pNext = &dedicatedAllocInfo,
       // If the parameters define an import operation and the external handle type
       // is VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID,
       // allocationSize must be the size returned by
-      // vkGetAndroidHardwareBufferPropertiesANDROID for the Android hardware
+      // vkGetAndroidHardwareBufferPropertiesANDROID() for the Android hardware
       // buffer.
-      .allocationSize = ahb_props.allocationSize,
-      .memoryTypeIndex = type_index};
+      .allocationSize = ahbProps.allocationSize,
+      .memoryTypeIndex = typeIndex};
 
   // A Vulkan device operates on data in device memory via memory objects that
   // are represented in the API by a VkDeviceMemory handle.
   // Allocate memory.
-  VkDeviceMemory vk_device_memory;
-  VK_ASSERT(ctx.vf_.vkAllocateMemory(device, &mem_alloc_info, nullptr, &vk_device_memory));
+  VkDeviceMemory vkDeviceMemory = VK_NULL_HANDLE;
+  VK_ASSERT(ctx.vf_.vkAllocateMemory(device, &memAllocInfo, nullptr, &vkDeviceMemory));
+
+  VK_ASSERT(ivkSetDebugObjectName(&ctx.vf_,
+                                  device,
+                                  VK_OBJECT_TYPE_DEVICE_MEMORY,
+                                  (uint64_t)vkDeviceMemory,
+                                  "Memory: AHB NativeHWTextureBuffer"));
 
   // Attach memory to the image object.
-  VK_ASSERT(ctx.vf_.vkBindImageMemory(device, vk_image, vk_device_memory, 0));
+  VK_ASSERT(ctx.vf_.vkBindImageMemory(device, vkImage, vkDeviceMemory, 0));
 
   auto vulkanImage = VulkanImage(ctx,
-                                 vk_image,
+                                 vkImage,
                                  "Image: videoTexture",
-                                 usage_flags,
+                                 usageFlags,
                                  false,
-                                 vk_image_info.extent,
-                                 vk_image_info.imageType,
-                                 vk_image_info.format,
-                                 vk_image_info.mipLevels,
-                                 vk_image_info.arrayLayers,
+                                 vkImageInfo.extent,
+                                 vkImageInfo.imageType,
+                                 vkImageInfo.format,
+                                 vkImageInfo.mipLevels,
+                                 vkImageInfo.arrayLayers,
                                  VK_SAMPLE_COUNT_1_BIT,
                                  true);
-  vulkanImage.vkMemory_[0] = vk_device_memory;
-  vulkanImage.extendedFormat_ = external_format.externalFormat;
+  vulkanImage.vkMemory_[0] = vkDeviceMemory;
+  vulkanImage.extendedFormat_ = externalFormat.externalFormat;
 
   VkImageViewCreateInfo viewInfo = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-      .image = vk_image,
+      .image = vkImage,
       .viewType = VK_IMAGE_VIEW_TYPE_2D,
-      .format = vk_image_info.format,
+      .format = vkImageInfo.format,
       .components =
           {
               .r = VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -257,7 +334,7 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
           },
       .subresourceRange = {.aspectMask = aspectMask,
                            .baseMipLevel = 0,
-                           .levelCount = vk_image_info.mipLevels,
+                           .levelCount = vkImageInfo.mipLevels,
                            .baseArrayLayer = 0,
                            .layerCount = 1},
   };
@@ -269,12 +346,12 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
       .conversion = VK_NULL_HANDLE,
   };
 
-  if (ahb_format_props.format == VK_FORMAT_UNDEFINED && external_format.externalFormat) {
+  if (ahbFormatProps.format == VK_FORMAT_UNDEFINED && externalFormat.externalFormat) {
     viewInfo.pNext = &conversionInfo;
     // Use the driver-reported raw-plane swizzle, with a legacy Qualcomm-Adreno correction for
     // Camera2 YUV_420_888 streams whose reported IDENTITY mapping still swaps Cb/Cr.
     // VK_KHR_driver_properties gives a narrow gate; zeroed pre-1.2 properties skip the workaround.
-    VkComponentMapping components = ahb_format_props.samplerYcbcrConversionComponents;
+    VkComponentMapping components = ahbFormatProps.samplerYcbcrConversionComponents;
     const VkPhysicalDeviceDriverPropertiesKHR& driverProps =
         ctx.getVkPhysicalDeviceDriverProperties();
     const bool isQualcommDriver = driverProps.driverID == VK_DRIVER_ID_QUALCOMM_PROPRIETARY;
@@ -287,13 +364,13 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
     }
     vulkanImage.samplerYcbcrConversionCreateInfo_ = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_CREATE_INFO,
-        .pNext = &external_format,
-        .format = ahb_format_props.format,
-        .ycbcrModel = ahb_format_props.suggestedYcbcrModel,
-        .ycbcrRange = ahb_format_props.suggestedYcbcrRange,
+        .pNext = &externalFormat,
+        .format = ahbFormatProps.format,
+        .ycbcrModel = ahbFormatProps.suggestedYcbcrModel,
+        .ycbcrRange = ahbFormatProps.suggestedYcbcrRange,
         .components = components,
-        .xChromaOffset = ahb_format_props.suggestedXChromaOffset,
-        .yChromaOffset = ahb_format_props.suggestedYChromaOffset,
+        .xChromaOffset = ahbFormatProps.suggestedXChromaOffset,
+        .yChromaOffset = ahbFormatProps.suggestedYChromaOffset,
         .chromaFilter = VK_FILTER_LINEAR,
         .forceExplicitReconstruction = VK_FALSE};
 
@@ -307,7 +384,7 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
     }
     // Expose the non-owning handle to consumers that need a matching VkSampler.
     vulkanImage.ycbcrConversion_ = conversionInfo.conversion;
-  } else if (igl::vulkan::getNumImagePlanes(ahb_format_props.format) > 1) {
+  } else if (igl::vulkan::getNumImagePlanes(ahbFormatProps.format) > 1) {
     auto createInfo = ctx.getOrCreateYcbcrConversionInfo(VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM);
     conversionInfo.conversion = createInfo.conversion;
   }
@@ -333,6 +410,7 @@ Result NativeHWTextureBuffer::uploadInternal(TextureType /*type*/,
                                              const void* IGL_NULLABLE data,
                                              size_t bytesPerRow,
                                              const uint32_t* IGL_NULLABLE /*mipLevelBytes*/) const {
+  IGL_PROFILER_FUNCTION();  
   if (hwBuffer_ == nullptr || funcTable_ == nullptr) {
     return Result{Result::Code::RuntimeError,
                   "NativeHWTextureBuffer(vulkan): hardware buffer not initialized"};
@@ -357,30 +435,33 @@ Result NativeHWTextureBuffer::uploadInternal(TextureType /*type*/,
   // not legal to sample from in shaders. Transition to SHADER_READ_ONLY_OPTIMAL via
   // a one-shot immediate command buffer so subsequent draws can sample the texture.
   if (texture_) {
-    auto& ctx = device_.getVulkanContext();
-    const auto& vulkanImage = texture_->image;
-    const VkImageAspectFlags aspectMask =
-        igl::vulkan::getNumImagePlanes(vulkanImage.imageFormat_) > 1
-            ? (VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT |
-               VK_IMAGE_ASPECT_PLANE_2_BIT)
-            : VK_IMAGE_ASPECT_COLOR_BIT;
-
     const VkImageSubresourceRange subresourceRange = {
-        .aspectMask = aspectMask,
+        .aspectMask = [numPlanes = igl::vulkan::getNumImagePlanes(
+                           texture_->image.imageFormat_)]() -> VkImageAspectFlags {
+          if (numPlanes < 2) {
+            return VK_IMAGE_ASPECT_COLOR_BIT;
+          }
+          VkImageAspectFlags aspectMask = 0;
+          for (uint32_t p = 0; p < numPlanes; p++) {
+            aspectMask |= static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_PLANE_0_BIT << p);
+          }
+          return aspectMask;
+        }(),
         .baseMipLevel = 0,
         .levelCount = VK_REMAINING_MIP_LEVELS,
         .baseArrayLayer = 0,
         .layerCount = VK_REMAINING_ARRAY_LAYERS,
     };
 
+    auto& ctx = device_.getVulkanContext();
     const auto& wrapper = ctx.immediate_->acquire();
-    vulkanImage.transitionLayout(
-        wrapper.cmdBuf,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        subresourceRange);
+    texture_->image.transitionLayout(wrapper.cmdBuf,
+                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+                                         VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+                                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                     subresourceRange);
     ctx.immediate_->submit(wrapper);
   }
 

@@ -11,9 +11,14 @@
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 namespace igl::shell {
+
+static_assert(sizeof(Fov) == 16);
+static_assert(std::is_trivially_copyable_v<Fov>);
+
 namespace {
 
 // Returns true if arg matches any of the given flags.
@@ -71,10 +76,10 @@ std::optional<BenchmarkRenderSessionParams> parseBenchmarkRenderSessionParams(
       found = true;
     } else if (arg == "--force-multiview") {
       // handled in parseShellParams; skip here
-    } else if (arg.rfind("--", 0) == 0) {
+    } else if (arg.starts_with("--")) {
       std::string key = arg.substr(2);
       std::string value;
-      if (i + 1 < args.size() && args[i + 1].rfind("--", 0) != 0) {
+      if (i + 1 < args.size() && !args[i + 1].starts_with("--")) {
         value = args[++i];
       }
       p.customParams.emplace_back(key, value);
@@ -121,7 +126,7 @@ void parseShellParams(const std::vector<std::string>& args, ShellParams& shellPa
     } else if (arg == "--viewport-size" && tryConsumeNext(args, i)) {
       unsigned int w = 0;
       unsigned int h = 0;
-      if (sscanf(args[i].c_str(), "%ux%u", &w, &h) == 2 && w && h) {
+      if (std::sscanf(args[i].c_str(), "%ux%u", &w, &h) == 2 && w && h) {
         shellParams.viewportSize = glm::vec2(w, h);
       }
     } else if (arg == "--fps-throttle" && tryConsumeNext(args, i)) {

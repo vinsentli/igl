@@ -22,23 +22,26 @@
 #endif
 
 namespace igl::shell {
+
+namespace {
+
 struct VertexPosUv {
   iglu::simdtypes::float3 position; // SIMD 128b aligned
   iglu::simdtypes::float2 uv; // SIMD 128b aligned
 };
-static const VertexPosUv kVertexData0[] = {
+const VertexPosUv kVertexData0[] = {
     {.position = {-0.9f, 0.9f, 0.0}, .uv = {0.0, 1.0}},
     {.position = {-0.05f, 0.9f, 0.0}, .uv = {1.0, 1.0}},
     {.position = {-0.9f, -0.9f, 0.0}, .uv = {0.0, 0.0}},
     {.position = {-0.05f, -0.9f, 0.0}, .uv = {1.0, 0.0}},
 };
-static const VertexPosUv kVertexData1[] = {
+const VertexPosUv kVertexData1[] = {
     {.position = {0.05f, 0.9f, 0.0}, .uv = {0.0, 1.0}},
     {.position = {0.90f, 0.9f, 0.0}, .uv = {1.0, 1.0}},
     {.position = {0.05f, -0.9f, 0.0}, .uv = {0.0, 0.0}},
     {.position = {0.90f, -0.9f, 0.0}, .uv = {1.0, 0.0}},
 };
-static const uint16_t kIndexData[] = {
+const uint16_t kIndexData[] = {
     0,
     1,
     2,
@@ -46,8 +49,6 @@ static const uint16_t kIndexData[] = {
     3,
     2,
 };
-
-namespace {
 
 enum class ShaderPrecision { Low, Medium, High };
 
@@ -412,7 +413,7 @@ void MRTSession::initialize() noexcept {
 }
 
 // NOLINTNEXTLINE(facebook-hte-ConstantArgumentPassByValue)
-void MRTSession::update(const igl::SurfaceTextures surfaceTextures) noexcept {
+void MRTSession::update(const SurfaceTextures surfaceTextures) noexcept {
   // Per IGL guidelines, surfaceTextures.color may be null on some platforms
   // before the surface is ready (e.g., during window resize on Android/iOS).
   if (!surfaceTextures.color) {
@@ -560,7 +561,7 @@ std::shared_ptr<ITexture> MRTSession::createTexture2D(const std::shared_ptr<ITex
   return getPlatform().getDevice().createTexture(desc, nullptr);
 }
 
-void MRTSession::createOrUpdateFramebufferDisplayLast(const igl::SurfaceTextures& surfaceTextures) {
+void MRTSession::createOrUpdateFramebufferDisplayLast(const SurfaceTextures& surfaceTextures) {
   if (framebufferDisplayLast_) {
     framebufferDisplayLast_->updateDrawable(surfaceTextures.color);
     return;
@@ -574,7 +575,7 @@ void MRTSession::createOrUpdateFramebufferDisplayLast(const igl::SurfaceTextures
   framebufferDisplayLast_ = getPlatform().getDevice().createFramebuffer(framebufferDesc, nullptr);
 }
 
-void MRTSession::createOrUpdateFramebufferMRT(const igl::SurfaceTextures& surfaceTextures) {
+void MRTSession::createOrUpdateFramebufferMRT(const SurfaceTextures& surfaceTextures) {
   if (framebufferMRT_) {
     return;
   }

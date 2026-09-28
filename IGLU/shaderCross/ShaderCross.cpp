@@ -11,16 +11,20 @@
 #include <spirv_glsl.hpp>
 #include <spirv_msl.hpp>
 #include <vector>
+#include <igl/Macros.h>
 #include <igl/glslang/GlslCompiler.h>
 #include <igl/glslang/GlslangHelpers.h>
 
 namespace iglu {
 
-ShaderCross::ShaderCross(igl::IDevice& device) noexcept : device_(device) {
+ShaderCross::ShaderCross(igl::IDevice& device, ShaderCrossOptions options) noexcept :
+  device_(device), options_(options) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   igl::glslang::initializeCompiler();
 }
 
 ShaderCross::~ShaderCross() noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
   igl::glslang::finalizeCompiler();
 }
 
@@ -40,6 +44,7 @@ std::string ShaderCross::crossCompileFromVulkanSource(const char* source,
                                                       igl::ShaderStage stage,
                                                       igl::Result* IGL_NULLABLE
                                                           outResult) const noexcept {
+  IGL_PROFILER_FUNCTION();
   if (device_.getBackendType() == igl::BackendType::Vulkan) {
     return source;
   }
@@ -65,7 +70,11 @@ std::string ShaderCross::crossCompileFromVulkanSource(const char* source,
 #else
     options.platform = spirv_cross::CompilerMSL::Options::iOS;
 #endif
-    options.set_msl_version(2, 2);
+    // 2.3 is the floor for SPIR-V subgroup ops beyond broadcast/ballot/shuffle on
+    // iOS; below it SPIRV-Cross hard-fails instead of degrading. Metal 2.3 ships in
+    // iOS 14 / macOS 11, well under any supported deployment target.
+    options.set_msl_version(2, 3);
+    options.ios_use_simdgroup_functions = options_.iosUseSimdgroupFunctions;
     options.enable_decoration_binding = true;
     mslCompiler.set_msl_options(options);
     try {

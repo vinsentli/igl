@@ -7,11 +7,15 @@
 
 #include <IGLU/texture_loader/TextureLoaderFactory.h>
 
+#include <algorithm>
+#include <igl/Macros.h>
+
 namespace iglu::textureloader {
 
 TextureLoaderFactory::TextureLoaderFactory(
     std::vector<std::unique_ptr<ITextureLoaderFactory>>&& factories) :
   factories_(std::move(factories)), minHeaderLength_(0), maxHeaderLength_(0) {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   bool first = true;
   for (const auto& factory : factories_) {
     if (first) {
@@ -24,17 +28,11 @@ TextureLoaderFactory::TextureLoaderFactory(
   }
 }
 
-uint32_t TextureLoaderFactory::minHeaderLength() const noexcept {
-  return minHeaderLength_;
-}
-
-uint32_t TextureLoaderFactory::maxHeaderLength() const noexcept {
-  return maxHeaderLength_;
-}
-
 // NOLINTNEXTLINE(bugprone-exception-escape)
-bool TextureLoaderFactory::canCreateInternal(DataReader headerReader,
-                                             igl::Result* IGL_NULLABLE outResult) const noexcept {
+bool TextureLoaderFactory::canCreateInternalImpl(DataReader headerReader,
+                                                 igl::Result* IGL_NULLABLE
+                                                     outResult) const noexcept {
+  IGL_PROFILER_FUNCTION();
   for (const auto& factory : factories_) {
     if (factory->canCreate(headerReader, nullptr)) {
       return true;
@@ -46,10 +44,11 @@ bool TextureLoaderFactory::canCreateInternal(DataReader headerReader,
 }
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
-std::unique_ptr<ITextureLoader> TextureLoaderFactory::tryCreateInternal(
+std::unique_ptr<ITextureLoader> TextureLoaderFactory::tryCreateInternalImpl(
     DataReader reader,
     igl::TextureFormat preferredFormat,
     igl::Result* IGL_NULLABLE outResult) const noexcept {
+  IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   for (const auto& factory : factories_) {
     auto loader = factory->tryCreate(reader, preferredFormat, nullptr);
     if (loader) {

@@ -42,6 +42,8 @@
 
 #include <memory>
 #include <shell/shared/input/TouchListener.h>
+#include <shell/shared/platform/PresentationRateController.h>
+#include <shell/shared/platform/apple/PresentationRateApple.h>
 #include <shell/shared/platform/ios/PlatformIos.h>
 #include <shell/shared/renderSession/RenderSessionConfig.h>
 #include <igl/DeviceFeatures.h>
@@ -114,6 +116,7 @@
 // clang-format off
 - (igl::SurfaceTextures)createSurfaceTexturesInternal {
   [[maybe_unused]] auto& device = [self platform]->getDevice();
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (_config.backendVersion.flavor) {
 #if IGL_BACKEND_METAL
   case igl::BackendFlavor::Metal: {
@@ -163,6 +166,7 @@
 }
 
 - (void)loadView {
+  // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
   switch (_config.backendVersion.flavor) {
   case igl::BackendFlavor::Invalid:
     IGL_DEBUG_ASSERT_NOT_REACHED();
@@ -181,6 +185,11 @@
     [metalView setTouchDelegate:self];
     self.view = metalView;
     _layer = metalView.layer;
+
+    // The Metal path has no CADisplayLink of its own — drawInMTKView: is called from the
+    // one MTKView owns — so the view itself is the tick source the seam has to reach.
+    [self platform]->getPresentationRateController().setBackend(
+        igl::shell::createMTKViewPresentationRateBackend(metalView));
 #endif
     break;
   }
@@ -191,6 +200,7 @@
 
     NSString* drawablePropertyColorFormat = kEAGLColorFormatRGBA8;
 
+    // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
     switch (_config.swapchainColorTextureFormat) {
     case igl::TextureFormat::BGRA_UNorm8:
       drawablePropertyColorFormat = kEAGLColorFormatRGBA8;

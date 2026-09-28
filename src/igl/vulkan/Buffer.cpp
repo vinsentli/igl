@@ -7,6 +7,7 @@
 
 #include <igl/vulkan/Buffer.h>
 
+#include <algorithm>
 #include <cstring>
 #include <memory>
 #include <igl/IGLSafeC.h>
@@ -52,22 +53,22 @@ Result Buffer::create(const BufferDesc& desc) {
     return Result(Result::Code::InvalidOperation, "Invalid buffer type");
   }
 
-  if (desc_.type & BufferDesc::BufferTypeBits::Index) {
+  if ((desc_.type & BufferDesc::BufferTypeBits::Index) != 0) {
     usageFlags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
   }
-  if (desc_.type & BufferDesc::BufferTypeBits::Vertex) {
+  if ((desc_.type & BufferDesc::BufferTypeBits::Vertex) != 0) {
     usageFlags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
   }
-  if (desc_.type & BufferDesc::BufferTypeBits::Uniform) {
+  if ((desc_.type & BufferDesc::BufferTypeBits::Uniform) != 0) {
     usageFlags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | optionalBDA;
   }
 
-  if (desc_.type & BufferDesc::BufferTypeBits::Storage) {
+  if ((desc_.type & BufferDesc::BufferTypeBits::Storage) != 0) {
     usageFlags |=
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | optionalBDA;
   }
 
-  if (desc_.type & BufferDesc::BufferTypeBits::Indirect) {
+  if ((desc_.type & BufferDesc::BufferTypeBits::Indirect) != 0) {
     usageFlags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | optionalBDA;
   }
 
@@ -248,7 +249,7 @@ uint64_t Buffer::gpuAddress(size_t offset) const {
   IGL_DEBUG_ASSERT((offset & 7) == 0,
                    "Buffer offset must be 8 bytes aligned as per GLSL_EXT_buffer_reference spec.");
 
-  return (uint64_t)currentVulkanBuffer()->getVkDeviceAddress() + offset;
+  return static_cast<uint64_t>(currentVulkanBuffer()->getVkDeviceAddress()) + offset;
 }
 
 VkBuffer Buffer::getVkBuffer() const {
@@ -259,7 +260,7 @@ VkBufferUsageFlags Buffer::getBufferUsageFlags() const {
   return currentVulkanBuffer()->getBufferUsageFlags();
 }
 
-void* FOLLY_NULLABLE Buffer::map(const BufferRange& range, Result* outResult) {
+void* IGL_NULLABLE Buffer::map(const BufferRange& range, Result* outResult) {
   IGL_PROFILER_FUNCTION();
 
   IGL_DEBUG_ASSERT(!isRingBuffer_, "Buffer::map() operation not supported for ring buffer");
@@ -317,7 +318,7 @@ BufferDesc::BufferAPIHint Buffer::requestedApiHints() const noexcept {
 }
 
 BufferDesc::BufferAPIHint Buffer::acceptedApiHints() const noexcept {
-  if (desc_.type & BufferDesc::BufferTypeBits::Uniform) {
+  if ((desc_.type & BufferDesc::BufferTypeBits::Uniform) != 0) {
     return BufferDesc::BufferAPIHintBits::UniformBlock;
   }
 
