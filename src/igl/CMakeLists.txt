@@ -49,7 +49,11 @@ if(NOT EMSCRIPTEN)
   endif()
 endif()
 
-igl_set_cxxstd(IGLLibrary 17)
+if (MSVC)
+  igl_set_cxxstd(IGLLibrary 20)
+else ()
+  igl_set_cxxstd(IGLLibrary 17)
+endif ()
 igl_set_folder(IGLLibrary "IGL")
 
 if(IGL_WITH_OPENGL OR IGL_WITH_OPENGLES OR IGL_WITH_WEBGL)
