@@ -153,7 +153,13 @@ void VulkanStagingDevice::mergeRegionsAndFreeBuffers() {
     if (currRegion.size == currRegion.alignedSize) {
       freeStagingBufferSize_ -= currRegion.size;
       // free the staging buffer
-      stagingBuffers_[currRegion.stagingBufferIndex].reset();
+      IGL_DEBUG_ASSERT(currRegion.stagingBufferIndex < stagingBuffers_.size(),
+                       "stagingBufferIndex[%d] out of bounds[%d].",
+                       currRegion.stagingBufferIndex,
+                       stagingBuffers_.size());
+      if (currRegion.stagingBufferIndex < stagingBuffers_.size()) {
+        stagingBuffers_[currRegion.stagingBufferIndex].reset();
+      }
       // remove the region
       regions_.erase(regions_.begin() + regionIndex);
 
