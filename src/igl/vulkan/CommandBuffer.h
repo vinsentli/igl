@@ -63,7 +63,8 @@ class CommandBuffer final : public ICommandBuffer,
                            IBuffer& dst,
                            uint64_t dstOffset,
                            uint32_t level,
-                           uint32_t layer) override;
+                           uint32_t layer,
+                           ImageAspectFlags aspect = ImageAspectBits_Invalid) override;
 
   /// @brief Waits until the command bufer has been executed by the device.
   void waitUntilCompleted() override;

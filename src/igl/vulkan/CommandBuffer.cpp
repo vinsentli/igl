@@ -175,7 +175,8 @@ void CommandBuffer::copyTextureToBuffer(ITexture& src,
                                         IBuffer& dst,
                                         uint64_t dstOffset,
                                         uint32_t level,
-                                        uint32_t layer) {
+                                        uint32_t layer,
+                                        ImageAspectFlags aspect) {
   IGL_PROFILER_FUNCTION();
 
   const auto& texSrc = static_cast<Texture&>(src);
@@ -194,17 +195,38 @@ void CommandBuffer::copyTextureToBuffer(ITexture& src,
                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                    VK_PIPELINE_STAGE_TRANSFER_BIT);
 
-  const VkImageAspectFlags aspectMask =
-      image.isDepthFormat_
-          ? VK_IMAGE_ASPECT_DEPTH_BIT
-          : (image.isStencilFormat_ ? VK_IMAGE_ASPECT_STENCIL_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
+  // For combined depth-stencil formats, `aspect` selects which component to copy.
+  // Note that the copied component data is tightly packed (depth: 4 bytes/pixel, stencil: 1 byte/pixel).
+  VkImageAspectFlags aspectMask;
+  switch (aspect) {
+  case ImageAspectBits_Depth:
+    IGL_DEBUG_ASSERT(image.isDepthFormat_);
+    aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    break;
+  case ImageAspectBits_Stencil:
+    IGL_DEBUG_ASSERT(image.isStencilFormat_);
+    aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
+    break;
+  case ImageAspectBits_Color:
+    IGL_DEBUG_ASSERT(!image.isDepthFormat_ && !image.isStencilFormat_);
+    aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    break;
+  case ImageAspectBits_Invalid:
+  default:
+    aspectMask = image.isDepthFormat_ ? VK_IMAGE_ASPECT_DEPTH_BIT
+                                      : (image.isStencilFormat_ ? VK_IMAGE_ASPECT_STENCIL_BIT
+                                                                : VK_IMAGE_ASPECT_COLOR_BIT);
+    break;
+  }
 
+  // Copy a single (level, layer) subresource, matching the Metal backend semantics.
+  // For cube textures each face is one array layer, addressed by `layer`.
   const VkImageSubresourceRange range = {
       .aspectMask = aspectMask,
       .baseMipLevel = level,
       .levelCount = 1u,
       .baseArrayLayer = layer,
-      .layerCount = texSrc.getNumFaces() == 6 ? 6u : 1u,
+      .layerCount = 1u,
   };
 
   image.transitionLayout(wrapper_.cmdBuf,
@@ -212,6 +234,14 @@ void CommandBuffer::copyTextureToBuffer(ITexture& src,
                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          range);
+
+  // imageExtent must be scaled to the requested mip level, minimum 1 per dimension
+  // (e.g. NPOT textures with full mip chain).
+  const VkExtent3D levelExtent = {
+      .width = std::max(image.extent_.width >> level, 1u),
+      .height = std::max(image.extent_.height >> level, 1u),
+      .depth = std::max(image.extent_.depth >> level, 1u),
+  };
 
   const VkBufferImageCopy region = {
       .bufferOffset = dstOffset,
@@ -222,10 +252,10 @@ void CommandBuffer::copyTextureToBuffer(ITexture& src,
               .aspectMask = aspectMask,
               .mipLevel = level,
               .baseArrayLayer = layer,
-              .layerCount = texSrc.getNumFaces() == 6 ? 6u : 1u,
+              .layerCount = 1u,
           },
       .imageOffset = {},
-      .imageExtent = image.extent_,
+      .imageExtent = levelExtent,
   };
 
   ctx_.vf_.vkCmdCopyImageToBuffer(wrapper_.cmdBuf,

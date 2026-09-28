@@ -16,6 +16,15 @@ namespace igl {
 class ICommandBuffer;
 namespace opengl {
 
+void readPixelsByFormat(IContext& context,
+                        TextureFormat textureFormat,
+                        GLint x,
+                        GLint y,
+                        GLsizei width,
+                        GLsizei height,
+                        void* IGL_NULLABLE pixelBytes,
+                        GLenum halfFloatFormat);  
+
 ///--------------------------------------
 /// MARK: - FramebufferBindingGuard
 

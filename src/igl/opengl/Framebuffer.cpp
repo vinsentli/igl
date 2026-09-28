@@ -17,8 +17,6 @@
 
 namespace igl::opengl {
 
-namespace {
-
 /// Read pixels for half-float texture formats (RGBA_F16, RGB_F16, RG_F16, R_F16).
 void readPixelsByFormatHalfFloat(IContext& context,
                                  TextureFormat textureFormat,
@@ -181,7 +179,6 @@ Texture::AttachmentParams toReadAttachmentParams(const TextureRangeDesc& range,
   params.stereo = mode == FramebufferMode::Stereo;
   return params;
 }
-} // namespace
 
 FramebufferBindingGuard::FramebufferBindingGuard(IContext& context) : context_(context) {
   context_.getIntegerv(GL_RENDERBUFFER_BINDING, reinterpret_cast<GLint*>(&currentRenderbuffer_));

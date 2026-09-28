@@ -152,12 +152,27 @@ class ICommandBuffer {
                           uint64_t size) = 0;
   /**
    * @brief Copy texture data into a buffer.
+   *
+   * For combined depth-stencil formats (e.g. TextureFormat::S8_UInt_Z32_UNorm), `aspect`
+   * selects which component to copy (ImageAspectBits_Depth or ImageAspectBits_Stencil);
+   * depth and stencil must be copied in separate calls. The default
+   * (ImageAspectBits_Invalid) picks the natural component: color for color formats,
+   * depth for depth-only and combined depth-stencil formats, stencil for stencil-only
+   * formats.
+   *
+   * The copied data is tightly packed per row: depth components of combined formats are
+   * 32-bit floats (4 bytes/pixel), stencil components are 8-bit (1 byte/pixel), so the
+   * destination buffer size depends on `aspect` for combined formats.
+   *
+   * Note: Metal requires depth/stencil copies to cover the whole subresource; this API
+   * copies the whole (level, layer) subresource by design.
    */
   virtual void copyTextureToBuffer(ITexture& src,
                                    IBuffer& dst,
                                    uint64_t dstOffset,
                                    uint32_t level = 0,
-                                   uint32_t layer = 0) = 0;
+                                   uint32_t layer = 0,
+                                   ImageAspectFlags aspect = ImageAspectBits_Invalid) = 0;
 
   /**
    * @returns the number of draw operations tracked by this CommandBuffer. This is tracked manually
