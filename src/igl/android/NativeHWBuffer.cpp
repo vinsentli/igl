@@ -72,10 +72,14 @@ uint32_t getNativeHWBufferUsage(const TextureDesc& desc) {
   if (desc.usage & TextureDesc::TextureUsageBits::Attachment) {
     bufferUsage |= AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT;
     bufferUsage |= AHARDWAREBUFFER_USAGE_COMPOSER_OVERLAY;
-    // 高通的默认交换链有此flag，带来GPU Write Total指标的下降。
-    bufferUsage |= AHARDWAREBUFFER_USAGE_VENDOR_0;
+
+    if (desc.storage == ResourceStorage::Private) {
+      // 高通默认【关闭】UBWC纹理压缩，需要加上 VENDOR_0 flag才会【开启】UBWC纹理压缩。
+      bufferUsage |= AHARDWAREBUFFER_USAGE_VENDOR_0;
+    }
   }
   if (desc.storage == ResourceStorage::Shared) {
+    // ARM默认【开启】AFBC纹理压缩，需要打开CPU_READ_OFTEN才会【关闭】AFBC纹理压缩。
     bufferUsage |= AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN | AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN;
   }
 
