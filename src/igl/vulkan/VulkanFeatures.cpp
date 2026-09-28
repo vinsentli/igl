@@ -292,7 +292,7 @@ VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
   }),
   featuresDescriptorBuffer({
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
-      .descriptorBuffer = VK_TRUE,
+      .descriptorBuffer = VK_FALSE,
   }),
   featuresExtendedDynamicState({
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,
@@ -760,7 +760,8 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
   // VK_EXT_descriptor_buffer在ARM Mali/Immortalis驱动上有bug（渲染闪烁），按设备驱动判断是否启用
   if (IsValidDeviceSupport_VK_EXT_descriptor_buffer(driverPro)) {
     has_VK_EXT_descriptor_buffer =
-        enable(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME, ExtensionType::Device);
+        enable(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME, ExtensionType::Device) &&
+        featuresDescriptorBuffer.descriptorBuffer == VK_TRUE;
   }
 
   has_VK_EXT_descriptor_indexing =
@@ -800,6 +801,7 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
 
   IGL_LOG_INFO("has_VK_EXT_extended_dynamic_state:%d", has_VK_EXT_extended_dynamic_state);
   IGL_LOG_INFO("has_VK_EXT_extended_dynamic_state2:%d", has_VK_EXT_extended_dynamic_state2);
+  IGL_LOG_INFO("has_VK_EXT_descriptor_buffer:%d", has_VK_EXT_descriptor_buffer);
 
   // Enable fragment shading rate extension (required when primitiveFragmentShadingRateMeshShader is
   // used)
