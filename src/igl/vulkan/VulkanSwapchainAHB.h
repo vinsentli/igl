@@ -184,7 +184,7 @@ class VulkanSwapchain : public std::enable_shared_from_this<VulkanSwapchain> {
                                                                                 int height);
 
  private:
-  void submitFrameToSystem(int gpuFenceFd, VkSemaphore waitSemaphore, Result& outResult);
+  void submitFrameToSystem(int gpuFenceFd, Result& outResult);
   std::shared_ptr<VulkanSemaphore> createSemaphoreFromFD(igl::android::UniqueFd fd);
   int exportFDFromVkSemaphore(VkSemaphore semaphore);
   void printFileDescriptorCount() const;

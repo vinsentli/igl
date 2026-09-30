@@ -1279,14 +1279,12 @@ Result VulkanContext::initContext(const HWDeviceDesc& desc,
     vf_.vkGetPhysicalDeviceProperties2(vkPhysicalDevice_, &vkPhysicalDeviceProperties2_);
   }
 
-  if (features_.available(VK_EXT_MESH_SHADER_EXTENSION_NAME,
-                          VulkanFeatures::ExtensionType::Device)) {
+  if (features_.enabled(VK_EXT_MESH_SHADER_EXTENSION_NAME)) {
     vkPhysicalDeviceDescriptorIndexingProperties_.pNext = &vkPhysicalDeviceMeshShaderPropertiesEXT_;
     vf_.vkGetPhysicalDeviceProperties2(vkPhysicalDevice_, &vkPhysicalDeviceProperties2_);
   }
 
-  if (features_.available(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME,
-                          VulkanFeatures::ExtensionType::Device)) {
+  if (features_.enabled(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME)) {
     vkPhysicalDeviceHostImageCopyProperties_.pNext = vkPhysicalDeviceProperties2_.pNext;
     vkPhysicalDeviceProperties2_.pNext = &vkPhysicalDeviceHostImageCopyProperties_;
     vf_.vkGetPhysicalDeviceProperties2(vkPhysicalDevice_, &vkPhysicalDeviceProperties2_);

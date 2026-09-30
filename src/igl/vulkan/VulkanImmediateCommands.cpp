@@ -306,6 +306,13 @@ VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
     }
     uint32_t numSignalSemaphores = numSignalSemaphores_;
     signalSemaphores[numSignalSemaphores++] = wrapper.semaphore.vkSemaphore_;
+
+    // 使用外部参数传入的signalSemaphore
+    if (signalSemaphore) {
+      signalSemaphores[0] = signalSemaphore;
+      numSignalSemaphores = 1;
+    }
+
     const VkSubmitInfo si = {
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .waitSemaphoreCount = numWaitSemaphores,
@@ -317,16 +324,16 @@ VulkanImmediateCommands::SubmitHandle VulkanImmediateCommands::submit(
         .pSignalSemaphores = signalSemaphores,
     };
     // @lint-ignore CLANGTIDY
-    const VkFence vkFence = wrapper.fence.vkFence_;
+    const VkFence vkFence = signalFence ? signalFence : wrapper.fence.vkFence_;
     IGL_PROFILER_ZONE("vkQueueSubmit()", IGL_PROFILER_COLOR_SUBMIT);
 #if IGL_VULKAN_PRINT_COMMANDS
     IGL_LOG_INFO("%p vkQueueSubmit()\n\n", wrapper.cmdBuf);
 #endif // IGL_VULKAN_PRINT_COMMANDS
-    VK_ASSERT(vf_.vkQueueSubmit(queue_, 1u, &si, signalFence ? signalFence : vkFence));
+    VK_ASSERT(vf_.vkQueueSubmit(queue_, 1u, &si, vkFence));
     IGL_PROFILER_ZONE_END();
   }
 
-  lastSubmitSemaphore_.semaphore = signalSemaphore ? VK_NULL_HANDLE : wrapper.semaphore.vkSemaphore_;
+  lastSubmitSemaphore_.semaphore = wrapper.semaphore.vkSemaphore_;
   lastSubmitHandle_ = wrapper.handle;
   numWaitSemaphores_ = 0;
   numSignalSemaphores_ = 0;

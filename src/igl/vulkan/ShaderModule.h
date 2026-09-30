@@ -11,7 +11,7 @@
 #if !defined(VK_NO_PROTOTYPES)
 #define VK_NO_PROTOTYPES
 #endif // !defined(VK_NO_PROTOTYPES)
-#include <vulkan/vulkan_core.h>
+#include <vulkan_v1.3/vulkan_core.h>
 #include <igl/Shader.h>
 
 namespace igl::vulkan {

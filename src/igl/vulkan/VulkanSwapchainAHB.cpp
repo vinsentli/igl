@@ -329,7 +329,7 @@ std::shared_ptr<ITexture> VulkanSwapchain::getCurrentVulkanTexture(Device& devic
   return currentAcquireTexture_ ? currentAcquireTexture_->texture() : nullptr;
 }
 
-Result VulkanSwapchain::present(VkSemaphore waitSemaphore) {
+Result VulkanSwapchain::present(VkSemaphore /*waitSemaphore*/) {
   getNextImage_ = true;
 
   IGL_DEBUG_ASSERT(frameSync_[frameId_].presentReady);
@@ -340,7 +340,7 @@ Result VulkanSwapchain::present(VkSemaphore waitSemaphore) {
   }
 
   Result result;
-  submitFrameToSystem(fenceFd, waitSemaphore, result);
+  submitFrameToSystem(fenceFd, result);
   return result;
 }
 
@@ -351,7 +351,6 @@ struct TransactionInFlightData {
 };
 
 void VulkanSwapchain::submitFrameToSystem(int gpuFenceFd,
-                                          VkSemaphore waitSemaphore,
                                           Result& outResult) {
   igl::android::UniqueFd gpuFence{gpuFenceFd};
 

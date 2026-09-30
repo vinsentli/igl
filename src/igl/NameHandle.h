@@ -16,7 +16,7 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <igl/Config.h>
+#include <igl/IGLConfig.h>
 
 namespace igl {
 // Constexpr as constexpr. In most cases all hashes from string would be generated in compile-time

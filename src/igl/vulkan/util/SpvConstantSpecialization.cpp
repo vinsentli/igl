@@ -13,7 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
-#include <igl/Assert.h>
+#include <igl/IGLAssert.h>
 #include <igl/Macros.h>
 
 namespace igl::vulkan::util {

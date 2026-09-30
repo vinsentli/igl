@@ -11,6 +11,12 @@
 #include <igl/vulkan/Common.h>
 #include <igl/vulkan/VulkanHelpers.h>
 
+#if !defined(VK_NO_PROTOTYPES)
+#define VK_NO_PROTOTYPES
+#endif // !defined(VK_NO_PROTOTYPES)
+
+#include <vulkan_v1.3/vulkan_core.h>
+
 namespace igl::vulkan {
 
 class VulkanContext;
@@ -99,13 +105,10 @@ class VulkanFeatures final {
   VkPhysicalDeviceExtendedDynamicStateFeaturesEXT featuresExtendedDynamicState{};
   // VK_EXT_extended_dynamic_state2 (promoted to Vulkan 1.3)
   VkPhysicalDeviceExtendedDynamicState2FeaturesEXT featuresExtendedDynamicState2{};
-
-  // VK_EXT_extended_dynamic_state (promoted to Vulkan 1.3)
-  VkPhysicalDeviceExtendedDynamicStateFeaturesEXT featuresExtendedDynamicState{};
-  // VK_EXT_extended_dynamic_state2 (promoted to Vulkan 1.3)
-  VkPhysicalDeviceExtendedDynamicState2FeaturesEXT featuresExtendedDynamicState2{};
   // VK_EXT_host_image_copy (promoted to Vulkan 1.4)
   VkPhysicalDeviceHostImageCopyFeatures featureHostImageCopy{};
+
+  static constexpr bool kEnableHostImageCopy = false;
 
   // We need to reassemble the feature chain because of the pNext pointers
   VulkanFeatures& operator=(const VulkanFeatures& other) noexcept;
@@ -161,7 +164,6 @@ class VulkanFeatures final {
   bool has_VK_EXT_scalar_block_layout = false; // promoted to Vulkan 1.2
   bool has_VK_KHR_8bit_storage = false; // promoted to Vulkan 1.2
   bool has_VK_KHR_buffer_device_address = false; // promoted to Vulkan 1.2
-  bool has_VK_KHR_create_renderpass2 = false; // promoted to Vulkan 1.2
   bool has_VK_KHR_get_surface_capabilities2 = false;
   bool has_VK_KHR_portability_enumeration = false;
   bool has_VK_KHR_shader_non_semantic_info = false; // promoted to Vulkan 1.3
