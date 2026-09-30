@@ -45,7 +45,10 @@ extern "C" VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL kk_GetInstanceProcAddr(VkIns
 
 namespace igl::vulkan {
 
-static_assert(std::is_trivially_copyable_v<VulkanContextConfig>);
+// 本地 VulkanContextConfig 增加了 std::string appName（Android 应用名，用于 SurfaceControl 命名），
+// 因此不再是 trivially copyable。上游这条断言与本地改动冲突，且 config 只按值拷贝（VulkanContext /
+// VulkanFeatures 均为值传递），没有任何地方对它做 memcpy，故去掉。
+// static_assert(std::is_trivially_copyable_v<VulkanContextConfig>);
 static_assert(std::is_trivially_copyable_v<VulkanSampler>);
 
 Result getResultFromVkResult(VkResult result) {

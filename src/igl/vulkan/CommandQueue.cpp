@@ -86,6 +86,13 @@ SubmitHandle CommandQueue::endCommandBuffer(VulkanContext& ctx,
 
   // Submit to the graphics queue.
   const bool shouldPresent = ctx.hasSwapchain() && cmdBuffer->isFromSwapchain() && present;
+  const auto finishCommandBuffer = [&](VulkanImmediateCommands::SubmitHandle submitHandle) {
+    cmdBuffer->lastSubmitHandle_ = submitHandle;
+    ctx.syncMarkSubmitted(submitHandle);
+    ctx.processDeferredTasks();
+    ctx.stagingDevice_->mergeRegionsAndFreeBuffers();
+    return submitHandle.handle();
+  };
 #if USE_DEFAULT_SWAPCHAIN
   if (shouldPresent) {
     // Injected-semaphore overflow below discards the command buffer and skips present(), leaving
@@ -109,36 +116,35 @@ SubmitHandle CommandQueue::endCommandBuffer(VulkanContext& ctx,
       }
     }
   }
-  cmdBuffer->lastSubmitHandle_ = ctx.immediate_->submit(cmdBuffer->wrapper_);
+  const auto submitHandle = ctx.immediate_->submit(cmdBuffer->wrapper_);
   if (shouldPresent) {
     ctx.present();
   }
+  return finishCommandBuffer(submitHandle);
 #else
-  VkSemaphore signalSemaphore = VK_NULL_HANDLE;
-  VkFence signalFence = VK_NULL_HANDLE;
-
   if (shouldPresent) {
-    ctx.immediate_->waitSemaphore(ctx.swapchain_->getWaitSemaphore());
-    signalSemaphore = ctx.swapchain_->getSignalSemaphore();
-    signalFence = ctx.swapchain_->getAcquireFence();
-  }
+    if (const VkSemaphore waitSemaphore = ctx.swapchain_->getWaitSemaphore()) {
+      ctx.immediate_->waitSemaphore(waitSemaphore);
+    }
+    if (const VkSemaphore signalSemaphore = ctx.swapchain_->getSignalSemaphore()) {
+      ctx.immediate_->signalSemaphore(signalSemaphore, 0);
+    }
+    VkFence signalFence = ctx.swapchain_->getAcquireFence();
 
-  cmdBuffer->lastSubmitHandle_ = ctx.immediate_->submit(cmdBuffer->wrapper_, signalSemaphore, signalFence);
-  if (signalFence) {
-    //如果有signalFence，必须要让wrapper_中的fence_激活一下，否则会一直处于等待状态，导致画面卡住
-    cmdBuffer->wrapper_.fence.signal(ctx.immediate_->queue_);
-  }
+    const auto submitHandle = ctx.immediate_->submit(cmdBuffer->wrapper_, signalFence);
 
-  if (shouldPresent) {
+    if (signalFence) {
+      //如果有signalFence，必须要让wrapper_中的fence_激活一下，否则会一直处于等待状态，导致画面卡住
+      cmdBuffer->wrapper_.fence.signal(ctx.immediate_->queue_);
+    }
+
     ctx.present();
+    return finishCommandBuffer(submitHandle);
+  } else {
+    const auto submitHandle = ctx.immediate_->submit(cmdBuffer->wrapper_);
+    return finishCommandBuffer(submitHandle);
   }
 #endif
-
-  ctx.syncMarkSubmitted(cmdBuffer->lastSubmitHandle_);
-  ctx.processDeferredTasks();
-  ctx.stagingDevice_->mergeRegionsAndFreeBuffers();
-
-  return cmdBuffer->lastSubmitHandle_.handle();
 }
 
 } // namespace igl::vulkan

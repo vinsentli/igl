@@ -130,7 +130,7 @@ class VulkanImmediateCommands final {
    * `CommandBufferWrapper::isEncoding` variable to false and clears the injected wait- and
    * signal-semaphore queues.
    */
-  SubmitHandle submit(const CommandBufferWrapper& wrapper, VkSemaphore signalSemaphore = VK_NULL_HANDLE, VkFence signalFence = VK_NULL_HANDLE);
+  SubmitHandle submit(const CommandBufferWrapper& wrapper, VkFence signalFence = VK_NULL_HANDLE);
   void discard(const CommandBufferWrapper& wrapper);
 
   /// @brief Adds a semaphore to the waits for the next submission.

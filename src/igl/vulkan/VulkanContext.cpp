@@ -82,6 +82,11 @@ vulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT msgSeverity,
     return VK_FALSE;
   }
 
+  // [UNASSIGNED-CoreValidation-Shader-OutputNotConsumed : 101294395]
+  if (cbData->messageIdNumber == 101294395) {
+    return VK_FALSE;
+  }
+
   const bool isError = (msgSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0;
   // Driver-emitted performance hints (e.g. Adreno's VKDBGUTILWARN###) are
   // suggestions, not Vulkan spec violations. Some drivers emit them at ERROR
@@ -1279,14 +1284,12 @@ Result VulkanContext::initContext(const HWDeviceDesc& desc,
     vf_.vkGetPhysicalDeviceProperties2(vkPhysicalDevice_, &vkPhysicalDeviceProperties2_);
   }
 
-  if (features_.available(VK_EXT_MESH_SHADER_EXTENSION_NAME,
-                          VulkanFeatures::ExtensionType::Device)) {
+  if (features_.enabled(VK_EXT_MESH_SHADER_EXTENSION_NAME)) {
     vkPhysicalDeviceDescriptorIndexingProperties_.pNext = &vkPhysicalDeviceMeshShaderPropertiesEXT_;
     vf_.vkGetPhysicalDeviceProperties2(vkPhysicalDevice_, &vkPhysicalDeviceProperties2_);
   }
 
-  if (features_.available(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME,
-                          VulkanFeatures::ExtensionType::Device)) {
+  if (features_.enabled(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME)) {
     vkPhysicalDeviceHostImageCopyProperties_.pNext = vkPhysicalDeviceProperties2_.pNext;
     vkPhysicalDeviceProperties2_.pNext = &vkPhysicalDeviceHostImageCopyProperties_;
     vf_.vkGetPhysicalDeviceProperties2(vkPhysicalDevice_, &vkPhysicalDeviceProperties2_);
@@ -1828,7 +1831,11 @@ Result VulkanContext::present() const {
     return Result(Result::Code::InvalidOperation, "No swapchain available");
   }
 
+#if USE_DEFAULT_SWAPCHAIN
   return swapchain_->present(immediate_->acquireLastSubmitSemaphore());
+#else
+  return swapchain_->present();
+#endif
 }
 
 std::unique_ptr<VulkanBuffer> VulkanContext::createBuffer(VkDeviceSize bufferSize,

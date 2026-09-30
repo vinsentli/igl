@@ -7,7 +7,11 @@
 
 #pragma once
 
-#include <vulkan/vulkan_core.h>
+#if !defined(VK_NO_PROTOTYPES)
+#define VK_NO_PROTOTYPES
+#endif // !defined(VK_NO_PROTOTYPES)
+
+#include <vulkan_v1.3/vulkan_core.h>
 
 namespace igl::vulkan {
 

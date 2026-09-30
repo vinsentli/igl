@@ -188,8 +188,6 @@ class RenderCommandAdapter final : public WithContext {
   std::shared_ptr<VertexArrayObject> activeVAO_ = nullptr;
   uint32_t frontStencilReferenceValue_ = 0xFF;
   uint32_t backStencilReferenceValue_ = 0xFF;
-  CullMode cullMode_ = CullMode::Disabled;
-  WindingMode windingMode_ = WindingMode::CounterClockwise;
 
   // Effective cull mode for the next draw call. Written by both setCullMode()
   // (explicit user override) and setPipelineState() (falls back to the pipeline
