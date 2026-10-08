@@ -121,6 +121,41 @@ size_t NativeHWTextureBuffer::getMapBytesPerRow() const {
   return igl::android::INativeHWTextureBuffer::getCpuReadBytesPerRow();
 }
 
+NativeHWTextureBuffer::AHBImportUsage NativeHWTextureBuffer::resolveAHBImportUsage(
+    uint64_t ahbUsage,
+    VkImageAspectFlags aspectMask,
+    uint64_t externalFormat) noexcept {
+  AHBImportUsage out;
+  out.textureUsage = igl::android::getIglBufferUsage(ahbUsage);
+
+  if ((ahbUsage & AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE) != 0) {
+    out.imageUsage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+  }
+  if (((ahbUsage & AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT) != 0) &&
+      aspectMask == VK_IMAGE_ASPECT_COLOR_BIT) {
+    out.imageUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  }
+  // Depth/stencil buffers are not required to advertise GPU_COLOR_OUTPUT, so the attachment
+  // usage is derived from the format alone.
+  if ((aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0) {
+    out.imageUsage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+  }
+  if ((ahbUsage & AHARDWAREBUFFER_USAGE_GPU_DATA_BUFFER) != 0) {
+    out.imageUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
+  }
+
+  if (externalFormat != 0) {
+    // VUID-VkImageCreateInfo-pNext-09457: with a nonzero externalFormat and without the
+    // externalFormatResolve feature (which IGL never enables), usage must not include
+    // COLOR_ATTACHMENT_BIT. The attachment bit above comes from the producer's AHB usage
+    // flags, but IGL only samples imported external images, so drop it from both contracts.
+    out.imageUsage &= ~VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    out.textureUsage = static_cast<TextureDesc::TextureUsage>(
+        out.textureUsage & ~TextureDesc::TextureUsageBits::Attachment);
+  }
+  return out;
+}
+
 VkSamplerYcbcrConversion NativeHWTextureBuffer::getVkSamplerYcbcrConversion() const noexcept {
   // Null texture_ and null ycbcrConversion_ are both valid "not available" states.
   if (!texture_) {
@@ -170,18 +205,6 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
   if (hwbDesc.usage & AHARDWAREBUFFER_USAGE_PROTECTED_CONTENT) {
     createFlags |= VK_IMAGE_CREATE_PROTECTED_BIT;
   }
-  VkImageUsageFlags usageFlags = 0;
-  if (hwbDesc.usage & AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE) {
-    usageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
-  }
-  if (hwbDesc.usage & AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT) {
-    usageFlags |= (aspectMask == VK_IMAGE_ASPECT_COLOR_BIT)
-                      ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                      : VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-  }
-  if (hwbDesc.usage & AHARDWAREBUFFER_USAGE_GPU_DATA_BUFFER) {
-    usageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
-  }
 
   VkAndroidHardwareBufferFormatPropertiesANDROID ahbFormatProps = {
       .sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_ANDROID,
@@ -206,6 +229,9 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
     externalFormat.externalFormat = ahbFormatProps.externalFormat;
   }
 
+  const AHBImportUsage importUsage =
+      resolveAHBImportUsage(hwbDesc.usage, aspectMask, externalFormat.externalFormat);
+
   VkExternalMemoryImageCreateInfo externalMemoryImageInfo = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
       .pNext = &externalFormat,
@@ -214,7 +240,7 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
 
   auto desc = TextureDesc::newNativeHWBufferImage(
       igl::vulkan::vkFormatToTextureFormat(ahbFormatProps.format),
-      igl::android::getIglBufferUsage(hwbDesc.usage),
+      importUsage.textureUsage,
       hwbDesc.width,
       hwbDesc.height);
 
@@ -232,7 +258,7 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
                                    .arrayLayers = 1,
                                    .samples = VK_SAMPLE_COUNT_1_BIT,
                                    .tiling = VK_IMAGE_TILING_OPTIMAL,
-                                   .usage = usageFlags,
+                                   .usage = importUsage.imageUsage,
                                    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
                                    .queueFamilyIndexCount = 0,
                                    .pQueueFamilyIndices = nullptr,
@@ -308,7 +334,7 @@ Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
   auto vulkanImage = VulkanImage(ctx,
                                  vkImage,
                                  "Image: videoTexture",
-                                 usageFlags,
+                                 importUsage.imageUsage,
                                  false,
                                  vkImageInfo.extent,
                                  vkImageInfo.imageType,

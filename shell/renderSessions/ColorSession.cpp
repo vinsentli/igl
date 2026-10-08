@@ -296,6 +296,57 @@ std::string getVulkanFragmentShaderSourceGradient() {
                 )";
 }
 
+// Bind convention: texture unit 0 at @group(0) @binding(0), its sampler at @binding(1), buffer 0
+// at @group(1) @binding(0).
+const char* getWgslShaderSource() {
+  return R"(
+struct UniformBlock {
+  color : vec3f,
+  mvp : mat4x4f,
+};
+
+@group(1) @binding(0) var<uniform> ub : UniformBlock;
+@group(0) @binding(0) var diffuseTex : texture_2d<f32>;
+@group(0) @binding(1) var linearSampler : sampler;
+
+struct VertexOut {
+  @builtin(position) position : vec4f,
+  @location(0) uv : vec2f,
+};
+
+@vertex
+fn vertexShader(@location(0) position : vec3f, @location(1) uv : vec2f) -> VertexOut {
+  return VertexOut(ub.mvp * vec4f(position, 1.0), uv);
+}
+
+@fragment
+fn fragmentShader(v : VertexOut) -> @location(0) vec4f {
+  return vec4f(ub.color, 1.0) * textureSample(diffuseTex, linearSampler, v.uv);
+}
+
+@vertex
+fn vertexShaderGradient(@location(0) position : vec3f, @location(1) uv : vec2f) -> VertexOut {
+  return VertexOut(vec4f(position, 1.0), uv);
+}
+
+@fragment
+fn fragmentShaderGradient(v : VertexOut) -> @location(0) vec4f {
+  let numSteps = 20.0;
+  var uvX : f32;
+  if (v.uv.y < 0.25) {
+    uvX = v.uv.x;
+  } else if (v.uv.y < 0.5) {
+    uvX = floor(v.uv.x * numSteps + 0.5) / numSteps;
+  } else if (v.uv.y < 0.75) {
+    uvX = 1.0 - v.uv.x;
+  } else {
+    uvX = floor((1.0 - v.uv.x) * numSteps + 0.5) / numSteps;
+  }
+  return vec4f(vec3f(uvX), 1.0);
+}
+)";
+}
+
 // @fb-only
 
 } // namespace
@@ -306,6 +357,16 @@ std::unique_ptr<IShaderStages> ColorSession::getShaderStagesForBackend(IDevice& 
   case igl::BackendType::Custom:
     IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
+  case igl::BackendType::WebGPU: {
+    const bool gradient = colorTestModes_ == ColorTestModes::Gradient;
+    return igl::ShaderStagesCreator::fromLibraryStringInput(
+        device,
+        getWgslShaderSource(),
+        gradient ? "vertexShaderGradient" : "vertexShader",
+        gradient ? "fragmentShaderGradient" : "fragmentShader",
+        "",
+        nullptr);
+  }
   case igl::BackendType::Vulkan: {
     auto vertexSource = getVulkanVertexShaderSource();
     if (device.hasFeature(DeviceFeatures::Multiview)) {
@@ -526,14 +587,17 @@ void ColorSession::initializeImpl() noexcept {
       nullptr);
   IGL_DEBUG_ASSERT(samp0_ != nullptr);
 
+  // OpenGL ES 2.0 without GL_OES_texture_npot cannot mipmap the non-power-of-two images; the
+  // sampler does not use mipmaps anyway.
+  const bool withMipmaps = device.hasFeature(DeviceFeatures::TextureNotPot);
   if (colorTestModes_ == ColorTestModes::MacbethTexture) {
-    tex0_ = getPlatform().loadTexture("macbeth.png", true, swapchainColorTextureformat_);
+    tex0_ = getPlatform().loadTexture("macbeth.png", withMipmaps, swapchainColorTextureformat_);
   } else if (colorTestModes_ == ColorTestModes::MacbethTexture720) {
-    tex0_ = getPlatform().loadTexture("macbeth720.png", true, swapchainColorTextureformat_);
+    tex0_ = getPlatform().loadTexture("macbeth720.png", withMipmaps, swapchainColorTextureformat_);
   } else if (colorTestModes_ == ColorTestModes::MacbethTextureKtx) {
-    tex0_ = getPlatform().loadTexture("macbeth.ktx", true, swapchainColorTextureformat_);
+    tex0_ = getPlatform().loadTexture("macbeth.ktx", withMipmaps, swapchainColorTextureformat_);
   } else if (colorTestModes_ == ColorTestModes::MacbethTextureKtx2) {
-    tex0_ = getPlatform().loadTexture("macbeth.ktx2", true, swapchainColorTextureformat_);
+    tex0_ = getPlatform().loadTexture("macbeth.ktx2", withMipmaps, swapchainColorTextureformat_);
   // @fb-only
     // @fb-only
         // @fb-only
@@ -541,9 +605,9 @@ void ColorSession::initializeImpl() noexcept {
     // @fb-only
         // @fb-only
   } else if (colorTestModes_ == ColorTestModes::EyeChartTexture720) {
-    tex0_ = getPlatform().loadTexture("eyechart720.png", true, swapchainColorTextureformat_);
+    tex0_ = getPlatform().loadTexture("eyechart720.png", withMipmaps, swapchainColorTextureformat_);
   } else if (colorTestModes_ == ColorTestModes::OrangeTexture) {
-    tex0_ = getPlatform().loadTexture("orange.png", true, swapchainColorTextureformat_);
+    tex0_ = getPlatform().loadTexture("orange.png", withMipmaps, swapchainColorTextureformat_);
   } else if (colorTestModes_ == ColorTestModes::OrangeClear) {
     tex0_ = getPlatform().loadTexture(igl::shell::ImageLoader::white());
     setPreferredClearColor(
@@ -645,6 +709,7 @@ void ColorSession::updateImpl(const SurfaceTextures& surfaceTextures) noexcept {
 
   framebuffer_->updateDrawable(drawableSurface);
 
+  fragmentUniformDescriptors_.clear();
   // Uniform: "color"
   fragmentUniformDescriptors_.emplace_back();
   // @fb-only
@@ -686,7 +751,10 @@ void ColorSession::updateImpl(const SurfaceTextures& surfaceTextures) noexcept {
     if (getPlatform().getDevice().hasFeature(DeviceFeatures::BindUniform)) {
       // Bind non block uniforms
       for (const auto& uniformDesc : fragmentUniformDescriptors_) {
-        commands->bindUniform(uniformDesc, &fragmentParameters_);
+        // Uniforms the shader compiler optimized out have no location.
+        if (uniformDesc.location >= 0) {
+          commands->bindUniform(uniformDesc, &fragmentParameters_);
+        }
       }
     } else if (getPlatform().getDevice().hasFeature(DeviceFeatures::UniformBlocks)) {
       // @fb-only

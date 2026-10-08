@@ -162,12 +162,34 @@ std::string getVulkanFragmentShaderSource() {
                 )";
 }
 
+std::string getWgslShaderSource() {
+  return R"(
+struct VertexOut {
+  @builtin(position) position : vec4f,
+  @location(0) color : vec4f,
+};
+
+@vertex
+fn vertexShader(@location(0) position : vec3f, @location(1) color : vec4f) -> VertexOut {
+  return VertexOut(vec4f(position, 1.0), color);
+}
+
+@fragment
+fn fragmentShader(in : VertexOut) -> @location(0) vec4f {
+  return in.color;
+}
+)";
+}
+
 std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device, bool useBindlessShader) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
   case igl::BackendType::Custom:
     IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
+  case igl::BackendType::WebGPU:
+    return igl::ShaderStagesCreator::fromLibraryStringInput(
+        device, getWgslShaderSource().c_str(), "vertexShader", "fragmentShader", "", nullptr);
   case igl::BackendType::Vulkan: {
     const auto& vsSource = useBindlessShader ? getVulkanBindlessVertexShaderSource()
                                              : getVulkanStandardVertexShaderSource();
@@ -233,10 +255,13 @@ void BindlessBufferSession::initialize() noexcept {
   }
 
   // Create vertex and index buffers.
+  // Storage buffers are only needed (and only available everywhere) for the bindless path.
+  const BufferDesc::BufferType vertexBufferType =
+      isBindlessSupported_
+          ? BufferDesc::BufferTypeBits::Vertex | BufferDesc::BufferTypeBits::Storage
+          : BufferDesc::BufferTypeBits::Vertex;
   vertexBuffer_ = device.createBuffer(
-      BufferDesc{.type = BufferDesc::BufferTypeBits::Vertex | BufferDesc::BufferTypeBits::Storage,
-                 .data = vertexData,
-                 .length = sizeof(vertexData)},
+      BufferDesc{.type = vertexBufferType, .data = vertexData, .length = sizeof(vertexData)},
       nullptr);
   IGL_DEBUG_ASSERT(vertexBuffer_ != nullptr);
 

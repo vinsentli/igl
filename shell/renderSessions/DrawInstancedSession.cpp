@@ -115,12 +115,41 @@ void main() {
 )";
 }
 
+const char* getWgslShaderSource() {
+  return R"(
+var<private> pos : array<vec2f, 6> = array<vec2f, 6>(
+  vec2f(-0.05, 0.05), vec2f(0.05, -0.05), vec2f(-0.05, -0.05),
+  vec2f(-0.05, 0.05), vec2f(0.05, -0.05), vec2f(0.05, 0.05));
+var<private> col : array<vec3f, 6> = array<vec3f, 6>(
+  vec3f(1.0, 0.0, 0.0), vec3f(0.0, 1.0, 0.0), vec3f(0.0, 0.0, 1.0),
+  vec3f(1.0, 0.0, 0.0), vec3f(0.0, 1.0, 0.0), vec3f(0.0, 0.0, 1.0));
+
+struct VertexOut {
+  @builtin(position) position : vec4f,
+  @location(0) color : vec3f,
+};
+
+@vertex
+fn vertexShader(@builtin(vertex_index) vid : u32, @location(0) offset : vec2f) -> VertexOut {
+  return VertexOut(vec4f(pos[vid] + offset, 0.0, 1.0), col[vid]);
+}
+
+@fragment
+fn fragmentShader(v : VertexOut) -> @location(0) vec4f {
+  return vec4f(v.color, 1.0);
+}
+)";
+}
+
 std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
   case igl::BackendType::Custom:
     IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
+  case igl::BackendType::WebGPU:
+    return igl::ShaderStagesCreator::fromLibraryStringInput(
+        device, getWgslShaderSource(), "vertexShader", "fragmentShader", "", nullptr);
   case igl::BackendType::Vulkan:
     return igl::ShaderStagesCreator::fromModuleStringInput(device,
                                                            getVulkanVertexShaderSource(),
@@ -158,7 +187,7 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
       return igl::ShaderStagesCreator::fromModuleStringInput(
           device, codeVS.c_str(), "main", "", codeFS.c_str(), "main", "", nullptr);
     } else {
-      IGL_DEBUG_ABORT("This sample is incompatible with OpenGL 2.1");
+      IGL_LOG_INFO("DrawInstancedSession: needs OpenGL 3.0 / OpenGL ES 3.0; skipping\n");
       return nullptr;
     }
 #else
@@ -219,6 +248,8 @@ void DrawInstancedSession::initialize() noexcept {
           .type = BufferDesc::BufferTypeBits::Index, .data = &indexes, .length = sizeof(indexes)},
       nullptr);
   IGL_DEBUG_ASSERT(indexBuffer_);
+
+  shaderStages_ = getShaderStagesForBackend(getPlatform().getDevice());
 }
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
@@ -233,7 +264,7 @@ void DrawInstancedSession::update(SurfaceTextures surfaceTextures) noexcept {
       FramebufferDesc{.colorAttachments = {{.texture = surfaceTextures.color}}}, nullptr);
   IGL_DEBUG_ASSERT(framebuffer_);
 
-  if (!renderPipelineStateTriangle_) {
+  if (!renderPipelineStateTriangle_ && shaderStages_) {
     const VertexInputStateDesc inputDesc = {
         .numAttributes = 1,
         .attributes =
@@ -261,7 +292,7 @@ void DrawInstancedSession::update(SurfaceTextures surfaceTextures) noexcept {
 
     const RenderPipelineDesc desc = {
         .vertexInputState = vertexInput0,
-        .shaderStages = getShaderStagesForBackend(getPlatform().getDevice()),
+        .shaderStages = shaderStages_,
         .targetDesc =
             {
                 .colorAttachments =
@@ -323,14 +354,16 @@ void DrawInstancedSession::update(SurfaceTextures surfaceTextures) noexcept {
   // This will clear the framebuffer
   const auto commands = buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
 
-  commands->bindRenderPipelineState(renderPipelineStateTriangle_);
-  commands->bindViewport(viewport);
-  commands->bindScissorRect(scissor);
-  commands->pushDebugGroupLabel("Render Triangle", Color(1, 0, 0));
-  commands->bindVertexBuffer(1, *vertexBuffer_);
-  commands->bindIndexBuffer(*indexBuffer_, IndexFormat::UInt16);
-  commands->drawIndexed(6, 100);
-  commands->popDebugGroupLabel();
+  if (renderPipelineStateTriangle_) {
+    commands->bindRenderPipelineState(renderPipelineStateTriangle_);
+    commands->bindViewport(viewport);
+    commands->bindScissorRect(scissor);
+    commands->pushDebugGroupLabel("Render Triangle", Color(1, 0, 0));
+    commands->bindVertexBuffer(1, *vertexBuffer_);
+    commands->bindIndexBuffer(*indexBuffer_, IndexFormat::UInt16);
+    commands->drawIndexed(6, 100);
+    commands->popDebugGroupLabel();
+  }
   commands->endEncoding();
 
   if (shellParams().shouldPresent) {

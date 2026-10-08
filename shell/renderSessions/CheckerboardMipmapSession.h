@@ -26,6 +26,9 @@ class CheckerboardMipmapSession : public RenderSession {
     RenderSession(std::move(platform)) {}
   void initialize() noexcept override;
   void update(SurfaceTextures surfaceTextures) noexcept override;
+  void releaseFramebuffer() override {
+    framebuffer_ = nullptr;
+  }
 
  private:
   RenderPassDesc renderPass_;
@@ -36,7 +39,6 @@ class CheckerboardMipmapSession : public RenderSession {
   std::shared_ptr<ITexture> tex0_;
   std::shared_ptr<ISamplerState> samp0_;
   std::shared_ptr<IFramebuffer> framebuffer_;
-  std::shared_ptr<ICommandQueue> commandQueue_;
   std::shared_ptr<IBuffer> mvpUniformBuffer_;
 
   // Initial angle of the plane, so that it starts at an angle

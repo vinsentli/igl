@@ -28,6 +28,9 @@ class RecordingDevice final : public IDevice {
 
   bool reportsBufferNoCopy = true;
   bool reportsBufferRing = false;
+  bool reportsBindBytes = false;
+  // DeviceFeatureLimits::MaxBindBytesBytes; reported only when nonzero.
+  size_t maxBindBytesBytes = 0;
 
   // Recorded as scalars rather than as a BufferDesc copy: createBuffer() is noexcept, and copying
   // the descriptor's std::string debugName could throw.
@@ -60,13 +63,18 @@ class RecordingDevice final : public IDevice {
     if (feature == DeviceFeatures::BufferRing) {
       return reportsBufferRing;
     }
+    if (feature == DeviceFeatures::BindBytes) {
+      return reportsBindBytes;
+    }
     return false;
   }
 
   // Any backend other than OpenGL reaches createBuffer(), and only Metal takes the Apple-only
-  // page-aligned allocation branch, so this keeps the test host-independent.
+  // page-aligned allocation branch, so the Vulkan default keeps the test host-independent.
+  BackendType backendType = BackendType::Vulkan;
+
   [[nodiscard]] BackendType getBackendType() const final {
-    return BackendType::Vulkan;
+    return backendType;
   }
 
   [[nodiscard]] const IPlatformDevice& getPlatformDevice() const noexcept final {
@@ -94,8 +102,12 @@ class RecordingDevice final : public IDevice {
       TextureFormat /*format*/) const final {
     return TextureFormatCapabilityBits::Unsupported;
   }
-  [[nodiscard]] bool getFeatureLimits(DeviceFeatureLimits /*featureLimits*/,
-                                      size_t& /*result*/) const final {
+  [[nodiscard]] bool getFeatureLimits(DeviceFeatureLimits featureLimits,
+                                      size_t& result) const final {
+    if (featureLimits == DeviceFeatureLimits::MaxBindBytesBytes && maxBindBytesBytes != 0) {
+      result = maxBindBytesBytes;
+      return true;
+    }
     return false;
   }
   [[nodiscard]] ShaderVersion getShaderVersion() const final {

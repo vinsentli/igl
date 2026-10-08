@@ -408,7 +408,9 @@ TEST_F(TextureFloatTest, UploadRGBA32) {
 TEST_F(TextureFloatTest, UploadRGB32) {
   if (iglDev_->getBackendType() == BackendType::Vulkan ||
       iglDev_->getBackendType() == BackendType::Metal ||
-      iglDev_->getBackendVersion().flavor == BackendFlavor::OpenGL_ES) {
+      iglDev_->getBackendVersion().flavor == BackendFlavor::OpenGL_ES ||
+      iglDev_->getTextureFormatCapabilities(igl::TextureFormat::RGB_F32) ==
+          ICapabilities::TextureFormatCapabilityBits::Unsupported) {
     GTEST_SKIP() << "Skip due to lack of support for RGB";
   }
   runUploadTest(*iglDev_, *cmdQueue_, igl::TextureFormat::RGB_F32, kTextureDataRGB.data());
@@ -438,7 +440,9 @@ TEST_F(TextureFloatTest, PassthroughSampleRGB32) {
 #endif
   if (iglDev_->getBackendType() == BackendType::Vulkan ||
       iglDev_->getBackendType() == BackendType::Metal ||
-      iglDev_->getBackendVersion().flavor == BackendFlavor::OpenGL_ES) {
+      iglDev_->getBackendVersion().flavor == BackendFlavor::OpenGL_ES ||
+      iglDev_->getTextureFormatCapabilities(igl::TextureFormat::RGB_F32) ==
+          ICapabilities::TextureFormatCapabilityBits::Unsupported) {
     GTEST_SKIP() << "Skip due to lack of support for RGB";
   }
   runPassthroughFormat(igl::TextureFormat::RGB_F32, kTextureDataRGB.data());

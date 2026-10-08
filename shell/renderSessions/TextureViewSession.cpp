@@ -134,6 +134,33 @@ const char* getVulkanVertexShaderSource() {
   )";
 }
 
+const char* getWgslShaderSource() {
+  return R"(
+struct PerFrame {
+  mvpMatrix : mat4x4f,
+};
+
+@group(3) @binding(0) var<uniform> perFrame : PerFrame;
+@group(0) @binding(0) var input2D : texture_2d<f32>;
+@group(0) @binding(1) var linearSampler : sampler;
+
+struct VertexOut {
+  @builtin(position) position : vec4f,
+  @location(0) uv : vec2f,
+};
+
+@vertex
+fn vertexShader(@location(0) position : vec3f, @location(1) uv : vec2f) -> VertexOut {
+  return VertexOut(perFrame.mvpMatrix * vec4f(position, 1.0), uv);
+}
+
+@fragment
+fn fragmentShader(v : VertexOut) -> @location(0) vec4f {
+  return textureSample(input2D, linearSampler, v.uv);
+}
+)";
+}
+
 std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
@@ -175,11 +202,14 @@ std::unique_ptr<igl::IShaderStages> getShaderStagesForBackend(igl::IDevice& devi
   // @fb-only
     // @fb-only
     // @fb-only
+  case igl::BackendType::WebGPU:
+    return igl::ShaderStagesCreator::fromLibraryStringInput(
+        device, getWgslShaderSource(), "vertexShader", "fragmentShader", "", nullptr);
   case igl::BackendType::Metal:
     return igl::ShaderStagesCreator::fromLibraryStringInput(
         device, getMetalShaderSource().c_str(), "vertexShader", "fragmentShader", "", nullptr);
   case igl::BackendType::OpenGL:
-    IGL_DEBUG_ABORT("OpenGL not supported");
+    IGL_LOG_INFO("TextureViewSession: OpenGL is not supported; skipping\n");
     return nullptr;
   }
   IGL_UNREACHABLE_RETURN(nullptr)
@@ -199,9 +229,9 @@ TextureViewSession::TextureViewSession(std::shared_ptr<Platform> platform) :
 void TextureViewSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
 
-  if (!device.hasFeature(DeviceFeatures::TextureViews)) {
-    IGL_SOFT_ERROR("Texture views are not supported");
-    std::terminate();
+  const bool hasTextureViews = device.hasFeature(DeviceFeatures::TextureViews);
+  if (!hasTextureViews) {
+    IGL_LOG_INFO("TextureViewSession: texture views are not supported; drawing without them\n");
   }
 
   vb_ = device.createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Vertex,
@@ -238,6 +268,9 @@ void TextureViewSession::initialize() noexcept {
   vertexInput0_ = device.createVertexInputState(inputDesc, nullptr);
 
   shaderStages_ = getShaderStagesForBackend(device);
+  if (!shaderStages_) {
+    return;
+  }
 
   commandQueue_ = device.createCommandQueue({}, nullptr);
 
@@ -254,9 +287,11 @@ void TextureViewSession::initialize() noexcept {
   desc.numMipLevels = igl::TextureDesc::calcNumMipLevels(texWidth, texHeight);
   texture_ = device.createTexture(desc, nullptr);
 
-  textureViews_.reserve(desc.numMipLevels);
-  for (uint32_t mip = 0; mip != desc.numMipLevels; mip++) {
-    textureViews_.push_back(device.createTextureView(texture_, {.mipLevel = mip}, nullptr));
+  if (hasTextureViews) {
+    textureViews_.reserve(desc.numMipLevels);
+    for (uint32_t mip = 0; mip != desc.numMipLevels; mip++) {
+      textureViews_.push_back(device.createTextureView(texture_, {.mipLevel = mip}, nullptr));
+    }
   }
 
   // render into the texture to generate custom colored mipmap pyramid
@@ -300,7 +335,7 @@ void TextureViewSession::initialize() noexcept {
 void TextureViewSession::update(SurfaceTextures surfaceTextures) noexcept {
   // Per IGL guidelines, surfaceTextures.color may be null on some platforms
   // before the surface is ready (e.g., during window resize on Android/iOS).
-  if (!surfaceTextures.color) {
+  if (!surfaceTextures.color || !shaderStages_) {
     return;
   }
   auto& device = getPlatform().getDevice();
@@ -376,7 +411,8 @@ void TextureViewSession::update(SurfaceTextures surfaceTextures) noexcept {
   commands->bindTexture(0, texture_.get());
   commands->bindSamplerState(0, BindTarget::kFragment, sampler_.get());
   commands->bindRenderPipelineState(pipelineState_);
-  if (device.getBackendType() == BackendType::Vulkan) {
+  if (device.getBackendType() == BackendType::Vulkan ||
+      device.getBackendType() == BackendType::WebGPU) {
     commands->bindPushConstants(&mvpMatrix, sizeof(mvpMatrix));
   } else if (device.getBackendType() == BackendType::Metal) {
     commands->bindBytes(0, BindTarget::kVertex, &mvpMatrix, sizeof(mvpMatrix));

@@ -34,7 +34,9 @@ public class SampleLib {
     OpenGL_ES,
     Metal,
     Vulkan,
+    D3D12,
     // @fb-only
+    WebGPU
   }
 
   // Must match igl/DeviceFeatures.h

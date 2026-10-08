@@ -195,19 +195,51 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
 
   return shaderStages;
 }
+
+// WebGPU has no mesh shaders: a vertex shader emits the same triangle from the vertex index.
+const char* getWgslVertexFallbackShaderSource() {
+  return R"(
+struct UniformBlock {
+  mvpMatrix : mat4x4f,
+};
+
+@group(1) @binding(1) var<uniform> vUniform : UniformBlock;
+
+struct VertexOut {
+  @builtin(position) position : vec4f,
+  @location(0) color : vec4f,
+};
+
+@vertex
+fn vertexMain(@builtin(vertex_index) i : u32) -> VertexOut {
+  var vertexData = array<vec4f, 3>(
+      vec4f(-0.6, -0.4, 0.0, 1.0), vec4f(0.6, -0.4, 0.0, 1.0), vec4f(0.0, 0.6, 0.0, 1.0));
+  var colorData = array<vec4f, 3>(
+      vec4f(1.0, 0.0, 0.0, 1.0), vec4f(0.0, 1.0, 0.0, 1.0), vec4f(0.0, 0.0, 1.0, 1.0));
+  return VertexOut(vUniform.mvpMatrix * vertexData[i], colorData[i]);
+}
+
+@fragment
+fn fragmentMain(v : VertexOut) -> @location(0) vec4f {
+  return v.color;
+}
+)";
+}
 } // namespace
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
 void MeshShaderTriangleSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
 
-  if (!device.hasFeature(DeviceFeatures::MeshShaders)) {
-    IGL_DEBUG_ABORT("Mesh shaders are not supported.\n");
-    return;
-  };
-
-  shaderStages_ = getShaderStagesForBackend(device);
-  IGL_DEBUG_ASSERT(shaderStages_ != nullptr);
+  useMeshShaders_ = device.hasFeature(DeviceFeatures::MeshShaders);
+  if (useMeshShaders_) {
+    shaderStages_ = getShaderStagesForBackend(device);
+  } else if (device.getShaderVersion().family == ShaderFamily::Wgsl) {
+    shaderStages_ = ShaderStagesCreator::fromLibraryStringInput(
+        device, getWgslVertexFallbackShaderSource(), "vertexMain", "fragmentMain", "", nullptr);
+  } else {
+    IGL_LOG_INFO("MeshShaderTriangleSession: mesh shaders are not supported; only clearing\n");
+  }
 
   const BufferDesc uboDesc{
       .type = igl::BufferDesc::BufferTypeBits::Uniform,
@@ -257,7 +289,7 @@ void MeshShaderTriangleSession::update(SurfaceTextures surfaceTextures) noexcept
   }
 
   // Graphics pipeline
-  if (!pipelineState_) {
+  if (!pipelineState_ && shaderStages_) {
     const RenderPipelineDesc graphicsDesc = {
         .shaderStages = shaderStages_,
         .targetDesc =
@@ -286,15 +318,24 @@ void MeshShaderTriangleSession::update(SurfaceTextures surfaceTextures) noexcept
   frameNum_ = (++frameNum_) % 360;
   const float angle = static_cast<float>(frameNum_) * M_PI / 180.0f;
   const glm::mat4 matrix = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 0.0f, 1.0f));
-  ubo_->upload(&matrix, {sizeof(matrix)});
+  if (pipelineState_ && ubo_) {
+    ubo_->upload(&matrix, {sizeof(matrix)});
+  }
 
   // Submit commands
   const std::shared_ptr<IRenderCommandEncoder> commands =
       buffer->createRenderCommandEncoder(renderPass_, framebuffer_);
   IGL_DEBUG_ASSERT(commands != nullptr);
-  commands->bindRenderPipelineState(pipelineState_);
-  commands->bindBuffer(1, BindTarget::kMesh, ubo_.get());
-  commands->drawMeshTasks({1, 1, 1}, {1, 1, 1}, {1, 1, 1});
+  if (pipelineState_) {
+    commands->bindRenderPipelineState(pipelineState_);
+    if (useMeshShaders_) {
+      commands->bindBuffer(1, BindTarget::kMesh, ubo_.get());
+      commands->drawMeshTasks({1, 1, 1}, {1, 1, 1}, {1, 1, 1});
+    } else {
+      commands->bindBuffer(1, BindTarget::kVertex, ubo_.get());
+      commands->draw(3);
+    }
+  }
   commands->endEncoding();
 
   IGL_DEBUG_ASSERT(buffer != nullptr);

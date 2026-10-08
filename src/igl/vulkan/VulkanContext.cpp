@@ -1002,6 +1002,11 @@ void VulkanContext::createInstance() {
   std::vector<const char*> layers;
   // @fb-only
 #if !IGL_PLATFORM_MACOSX
+#if IGL_PLATFORM_ANDROID
+  if (!config_.enableValidationOnAndroid) {
+    config_.enableValidation = false;
+  }
+#endif
   if (config_.enableValidation) {
     const auto hasLayer = [&availableLayers](const char* name) {
       return std::any_of(availableLayers.begin(), availableLayers.end(), [name](const auto& layer) {
@@ -1016,13 +1021,17 @@ void VulkanContext::createInstance() {
       config_.enableValidation = false;
     }
   }
+#else
+  // No layer is ever requested here, so areValidationLayersEnabled() must report false rather than
+  // what the caller asked for. Must stay below enableCommonInstanceExtensions(), which reads the
+  // requested value to decide on VK_EXT_validation_features.
+  config_.enableValidation = false;
 #endif
   if (config_.enableGfxReconstruct) {
     layers.emplace_back(kGfxReconstructLayerName);
   }
 
-  // Validation Features not available on most Android devices
-#if !IGL_PLATFORM_ANDROID && !IGL_PLATFORM_MACOSX
+#if !IGL_PLATFORM_MACOSX
   std::vector<VkValidationFeatureEnableEXT> valFeatures;
   if (config_.enableGPUAssistedValidation) {
     valFeatures.push_back(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT);
@@ -1032,7 +1041,7 @@ void VulkanContext::createInstance() {
       .enabledValidationFeatureCount = static_cast<uint32_t>(valFeatures.size()),
       .pEnabledValidationFeatures = valFeatures.empty() ? nullptr : valFeatures.data(),
   };
-#endif // !IGL_PLATFORM_ANDROID
+#endif // !IGL_PLATFORM_MACOSX
 
   // Request the highest API version the loader supports (>= 1.3 on modern loaders). We use core
   // entry points that were promoted in Vulkan 1.3 (the dynamic-state setters vkCmdSetCullMode(),
@@ -1053,7 +1062,7 @@ void VulkanContext::createInstance() {
 
   const VkInstanceCreateInfo ci = {
       .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-#if !IGL_PLATFORM_ANDROID && !IGL_PLATFORM_MACOSX
+#if !IGL_PLATFORM_MACOSX
       .pNext = config_.enableValidation ? &features : nullptr,
 #endif
       .flags = features_.has_VK_KHR_portability_enumeration
@@ -1216,6 +1225,10 @@ Result VulkanContext::initContext(const HWDeviceDesc& desc,
   }
 
   features_.populateWithAvailablePhysicalDeviceFeatures(*this, vkPhysicalDevice_);
+
+  // The query above fills the request structs with supported values, so resolve any mutually
+  // exclusive pairs before the request is checked and passed to vkCreateDevice().
+  features_.resolveMutuallyExclusiveFeatures();
 
   // ... and check whether they are available in the physical device (they should be)
   {
@@ -2402,11 +2415,11 @@ void VulkanContext::updateBindingsStorageImages(
   VkDescriptorSet dset = arena.getNextDescriptorSet(*immediate_, nextSubmitHandle);
 
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  VkDescriptorImageInfo infoStorageImages[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
+  VkDescriptorImageInfo infoStorageImages[IGL_STORAGE_IMAGES_MAX]; // uninitialized
   uint32_t numStorageImages = 0;
 
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  VkWriteDescriptorSet writes[IGL_TEXTURE_SAMPLERS_MAX]; // uninitialized
+  VkWriteDescriptorSet writes[IGL_STORAGE_IMAGES_MAX]; // uninitialized
   uint32_t numWrites = 0;
 
   // make sure the guard value is always there
@@ -2418,7 +2431,7 @@ void VulkanContext::updateBindingsStorageImages(
   for (const util::ImageDescription& d : info.images) {
     IGL_DEBUG_ASSERT(d.descriptorSet == kBindPoint_StorageImages);
     const uint32_t loc = d.bindingLocation;
-    IGL_DEBUG_ASSERT(loc < IGL_TEXTURE_SAMPLERS_MAX);
+    IGL_DEBUG_ASSERT(loc < IGL_STORAGE_IMAGES_MAX);
     VkImageView imageView = data.images[loc];
     writes[numWrites++] = ivkGetWriteDescriptorSetImageInfo(
         dset, loc, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, &infoStorageImages[numStorageImages]);
@@ -2614,7 +2627,7 @@ void VulkanContext::updateBindingsStorageImagesByDescriptorBuffer(
   for (const util::ImageDescription& d : info.images) {
     IGL_DEBUG_ASSERT(d.descriptorSet == kBindPoint_StorageImages);
     const uint32_t loc = d.bindingLocation;
-    IGL_DEBUG_ASSERT(loc < IGL_TEXTURE_SAMPLERS_MAX);
+    IGL_DEBUG_ASSERT(loc < IGL_STORAGE_IMAGES_MAX);
     VkImageView imageView = data.images[loc];
 
     VkDescriptorImageInfo imageInfo{

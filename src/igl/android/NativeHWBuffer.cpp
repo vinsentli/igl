@@ -141,7 +141,7 @@ TextureFormat getIglFormat(uint32_t nativeFormat) {
   }
 }
 
-TextureDesc::TextureUsage getIglBufferUsage(uint32_t nativeUsage) {
+TextureDesc::TextureUsage getIglBufferUsage(uint64_t nativeUsage) {
   TextureDesc::TextureUsage bufferUsage = 0;
 
   if (nativeUsage & AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE) {

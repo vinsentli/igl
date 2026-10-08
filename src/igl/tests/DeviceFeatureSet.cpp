@@ -175,6 +175,32 @@ TEST_F(DeviceFeatureSetTest, hasFeatureForMacOSOrWinOrAndroidTest) {
     EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::DynamicCullMode));
     EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::DynamicFrontFacingWinding));
 #endif // IGL_BACKEND_OPENGL
+  } else if (iglDev_->getBackendType() == igl::BackendType::WebGPU) {
+    EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::TextureNotPot));
+    EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::SRGB));
+    EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::ShaderLibrary));
+    EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::ShaderTextureLod));
+    EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::SamplerMinMaxLod));
+    EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::DrawIndexedIndirect));
+    EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::MultipleRenderTargets));
+    EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::ExplicitBinding));
+    EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::TextureFormatRG));
+    EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::ValidationLayersEnabled));
+    EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ReadWriteFramebuffer));
+    EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::SRGBWriteControl));
+    EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::TextureArrayExt));
+    EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::TextureExternalImage));
+    EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::Multiview));
+    EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::BindUniform));
+    EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::BufferRing));
+    EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::BufferNoCopy));
+    EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::BufferDeviceAddress));
+    EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ShaderTextureLodExt));
+    EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::StandardDerivativeExt));
+    EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ExplicitBindingExt));
+    EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ExternalMemoryObjects));
+    EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::DynamicCullMode));
+    EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::DynamicFrontFacingWinding));
   } else {
     // non OpenGL backends
     EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::ReadWriteFramebuffer));
@@ -205,12 +231,13 @@ TEST_F(DeviceFeatureSetTest, hasFeatureForMacOSOrWinOrAndroidTest) {
       EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::ExplicitBinding));
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ExplicitBindingExt));
       EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::TextureFormatRG));
-      // On Android Validation Layers are only enabled for debug builds by default
-#if (IGL_PLATFORM_ANDROID && !IGL_DEBUG) || !IGL_DEBUG || defined(IGL_DISABLE_VALIDATION)
+      // createInstance() requests the validation layer on neither Android nor macOS, so the
+      // feature reports false there in every build mode.
+#if IGL_PLATFORM_ANDROID || IGL_PLATFORM_MACOSX || !IGL_DEBUG || defined(IGL_DISABLE_VALIDATION)
       EXPECT_FALSE(iglDev_->hasFeature(DeviceFeatures::ValidationLayersEnabled));
 #else
       EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::ValidationLayersEnabled));
-#endif // IGL_PLATFORM_ANDROID
+#endif // IGL_PLATFORM_ANDROID || IGL_PLATFORM_MACOSX
       EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::ExternalMemoryObjects));
       EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::PushConstants));
       EXPECT_TRUE(iglDev_->hasFeature(DeviceFeatures::FillBuffer));

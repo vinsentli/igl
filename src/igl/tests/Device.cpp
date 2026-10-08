@@ -41,7 +41,7 @@ class DeviceTest : public ::testing::Test {
     // I suspect that might be the actual issue, but it requires deeper D3D12 backend investigation
     // first Release all GPU resources before destroying the device Resources must be released in
     // reverse order of creation and before the device is destroyed to avoid VMA cleanup issues
-    if (iglDev_->getBackendType() == igl::BackendType::D3D12) {
+    if (iglDev_ && iglDev_->getBackendType() == igl::BackendType::D3D12) {
       ib_.reset();
       vertexInputState_.reset();
       shaderStages_.reset();
@@ -222,6 +222,8 @@ TEST_F(DeviceTest, GetBackendType) {
     ASSERT_EQ(backend_, util::kBackendVul);
   } else if (iglDev_->getBackendType() == igl::BackendType::D3D12) {
     ASSERT_EQ(backend_, util::kBackendD3D12);
+  } else if (iglDev_->getBackendType() == igl::BackendType::WebGPU) {
+    ASSERT_EQ(backend_, util::kBackendWebGPU);
   } else {
     ASSERT_TRUE(0);
   }

@@ -30,6 +30,9 @@
 #if IGL_D3D12_SUPPORTED
 #include <igl/tests/util/device/d3d12/TestDevice.h>
 #endif
+#if IGL_WEBGPU_SUPPORTED
+#include <igl/tests/util/device/webgpu/TestDevice.h>
+#endif
 // @fb-only
 // @fb-only
 // @fb-only
@@ -52,6 +55,8 @@ bool isBackendTypeSupported(BackendType backendType) {
     return IGL_D3D12_SUPPORTED;
   // @fb-only
     // @fb-only
+  case ::igl::BackendType::WebGPU:
+    return IGL_WEBGPU_SUPPORTED;
   }
   IGL_UNREACHABLE_RETURN(false)
 }
@@ -88,6 +93,13 @@ std::unique_ptr<IDevice> createTestDevice(BackendType backendType, const TestDev
       IGL_LOG_INFO("[Tests] D3D12 test device created OK\n");
     }
     return dev;
+#else
+    return nullptr;
+#endif
+  }
+  if (backendType == ::igl::BackendType::WebGPU) {
+#if IGL_WEBGPU_SUPPORTED
+    return webgpu::createTestDevice();
 #else
     return nullptr;
 #endif

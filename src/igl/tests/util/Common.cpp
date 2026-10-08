@@ -167,6 +167,20 @@ void createSimpleShaderStages(const std::shared_ptr<IDevice>& dev,
                        fragShader,
                        std::string(igl::tests::data::shader::kShaderFunc),
                        stages);
+  } else if (backendVersion.flavor == igl::BackendFlavor::WebGPU) {
+    // WebGPU requires the fragment output type to match the color target's sample type; extra
+    // output components are dropped.
+    const bool isUint = outputFormat != TextureFormat::Invalid &&
+                        TextureFormatProperties::fromTextureFormat(outputFormat).isInteger();
+    const std::string_view fragShader = isUint
+                                            ? igl::tests::data::shader::kWgslSimpleFragShaderUint4
+                                            : igl::tests::data::shader::kWgslSimpleFragShader;
+    createShaderStages(dev,
+                       igl::tests::data::shader::kWgslSimpleVertShader,
+                       igl::tests::data::shader::kShaderFunc,
+                       fragShader,
+                       igl::tests::data::shader::kShaderFunc,
+                       stages);
   } else if (backendVersion.flavor == igl::BackendFlavor::D3D12) {
     // Minimal HLSL equivalent used for D3D12 tests
     const char* vsHlsl = R"(

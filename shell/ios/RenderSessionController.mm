@@ -26,6 +26,9 @@
 #if IGL_BACKEND_OPENGL
 #include <igl/opengl/ios/HWDevice.h>
 #endif
+#if IGL_BACKEND_WEBGPU
+#include <igl/webgpu/HWDevice.h>
+#endif
 // @fb-only
 // @fb-only
 // @fb-only
@@ -50,6 +53,15 @@
 }
 - (igl::BackendVersion)toBackendVersion:(BackendVersion*)version;
 @end
+
+static_assert(static_cast<uint8_t>(igl::BackendFlavor::Invalid) == kBackendFlavorInvalid);
+static_assert(static_cast<uint8_t>(igl::BackendFlavor::OpenGL) == kBackendFlavorOpenGL);
+static_assert(static_cast<uint8_t>(igl::BackendFlavor::OpenGL_ES) == kBackendFlavorOpenGLES);
+static_assert(static_cast<uint8_t>(igl::BackendFlavor::Metal) == kBackendFlavorMetal);
+static_assert(static_cast<uint8_t>(igl::BackendFlavor::Vulkan) == kBackendFlavorVulkan);
+static_assert(static_cast<uint8_t>(igl::BackendFlavor::D3D12) == kBackendFlavorD3D12);
+// @fb-only
+static_assert(static_cast<uint8_t>(igl::BackendFlavor::WebGPU) == kBackendFlavorWebGPU);
 
 @implementation RenderSessionController
 
@@ -86,6 +98,24 @@
   case igl::BackendFlavor::OpenGL_ES: {
 #if IGL_BACKEND_OPENGL
     device = igl::opengl::ios::HWDevice().create(_backendVersion, nullptr);
+#endif
+    break;
+  }
+  case igl::BackendFlavor::WebGPU: {
+#if IGL_BACKEND_WEBGPU
+    igl::Result result;
+    auto context = igl::webgpu::HWDevice::createContext({}, &result);
+    if (context) {
+      // Any adapter type: the simulator's adapter is not a discrete GPU.
+      auto devices = igl::webgpu::HWDevice::queryDevices(
+          *context, igl::HWDeviceQueryDesc(igl::HWDeviceType::Unknown), &result);
+      if (!devices.empty()) {
+        device = igl::webgpu::HWDevice::create(std::move(context), devices[0], &result);
+      }
+    }
+    if (!device) {
+      IGL_LOG_ERROR("WebGPU device creation failed: %s\n", result.message.c_str());
+    }
 #endif
     break;
   }
@@ -156,7 +186,8 @@
   _platform->getInputDispatcher().processEvents();
 
   // draw
-  if (_backendVersion.flavor == igl::BackendFlavor::Metal) {
+  if (_backendVersion.flavor == igl::BackendFlavor::Metal ||
+      _backendVersion.flavor == igl::BackendFlavor::WebGPU) {
     _session->setPixelsPerPoint(static_cast<float>([UIScreen mainScreen].scale));
   } else if (_backendVersion.flavor == igl::BackendFlavor::OpenGL) {
     _session->setPixelsPerPoint(1.0f);

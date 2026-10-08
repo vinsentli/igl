@@ -156,12 +156,34 @@ std::string getVulkanFragmentShaderSource() {
                 )";
 }
 
+std::string getWgslShaderSource() {
+  return R"(
+struct VertexOut {
+  @builtin(position) position : vec4f,
+  @location(0) color : vec4f,
+};
+
+@vertex
+fn vertexShader(@location(0) position : vec3f, @location(1) color : vec4f) -> VertexOut {
+  return VertexOut(vec4f(position, 1.0), color);
+}
+
+@fragment
+fn fragmentShader(in : VertexOut) -> @location(0) vec4f {
+  return in.color;
+}
+)";
+}
+
 std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
   case igl::BackendType::Custom:
     IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
+  case igl::BackendType::WebGPU:
+    return igl::ShaderStagesCreator::fromLibraryStringInput(
+        device, getWgslShaderSource().c_str(), "vertexShader", "fragmentShader", "", nullptr);
   case igl::BackendType::Vulkan:
     return igl::ShaderStagesCreator::fromModuleStringInput(device,
                                                            getVulkanVertexShaderSource().c_str(),
@@ -207,6 +229,11 @@ std::unique_ptr<IShaderStages> getShaderStagesForBackend(IDevice& device) {
 
 void MultiDrawIndexedIndirectSession::initialize() noexcept {
   auto& device = getPlatform().getDevice();
+  if (!device.hasFeature(DeviceFeatures::DrawIndexedIndirect) ||
+      !device.hasFeature(DeviceFeatures::StorageBuffers)) {
+    IGL_LOG_INFO("MultiDrawIndexedIndirectSession: indirect draws are not supported; skipping\n");
+    return;
+  }
 
   // Vertex buffer (all shapes share one buffer)
   vertexBuffer_ = device.createBuffer(BufferDesc{.type = BufferDesc::BufferTypeBits::Vertex,
@@ -308,7 +335,7 @@ void MultiDrawIndexedIndirectSession::initialize() noexcept {
 void MultiDrawIndexedIndirectSession::update(SurfaceTextures textures) noexcept {
   // Per IGL guidelines, textures.color may be null on some platforms
   // before the surface is ready (e.g., during window resize on Android/iOS).
-  if (!textures.color) {
+  if (!textures.color || !indirectBuffer_) {
     return;
   }
   Result ret;

@@ -19,7 +19,9 @@ typedef NS_ENUM(NSUInteger, BackendFlavor) {
   kBackendFlavorOpenGLES,
   kBackendFlavorMetal,
   kBackendFlavorVulkan,
+  kBackendFlavorD3D12,
   // @fb-only
+  kBackendFlavorWebGPU,
 };
 
 @interface BackendVersion : NSObject

@@ -50,6 +50,9 @@ namespace {
   // @fb-only
     // @fb-only
     // @fb-only
+  case BackendFlavor::WebGPU:
+    str = "WebGPU";
+    break;
   }
 
   str += " " + std::to_string(static_cast<int>(backendVersion->majorVersion)) + " " +
@@ -109,6 +112,7 @@ jobject toJava(JNIEnv* env, BackendFlavor backendFlavor) {
   const std::string returnType = std::string("()[") + toTypeSignature(kBackendFlavorClassName);
   jmethodID values = env->GetStaticMethodID(jclass, "values", returnType.c_str());
   auto* backendFlavorValues = (jobjectArray)env->CallStaticObjectMethod(jclass, values);
+  IGL_DEBUG_ASSERT(static_cast<jsize>(backendFlavor) < env->GetArrayLength(backendFlavorValues));
 
   jobject backendFlavorValue =
       env->GetObjectArrayElement(backendFlavorValues, static_cast<int>(backendFlavor));

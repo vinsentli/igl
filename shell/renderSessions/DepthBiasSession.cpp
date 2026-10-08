@@ -135,12 +135,32 @@ std::string getShadowVulkanFragmentShaderSource() {
                 )";
 }
 
+std::string getShadowWgslShaderSource() {
+  return R"(
+@vertex
+fn shadowVertexShader(@location(0) position : vec3f, @location(1) normal : vec3f)
+    -> @builtin(position) vec4f {
+  return vec4f(position.x * 0.5, -position.z * 0.5, (position.y + 1.0) * 0.5, 1.0);
+}
+
+@fragment
+fn shadowFragmentShader() {}
+)";
+}
+
 std::unique_ptr<IShaderStages> getShadowShaderStagesForBackend(IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
   case igl::BackendType::Custom:
     IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
+  case igl::BackendType::WebGPU:
+    return igl::ShaderStagesCreator::fromLibraryStringInput(device,
+                                                            getShadowWgslShaderSource().c_str(),
+                                                            "shadowVertexShader",
+                                                            "shadowFragmentShader",
+                                                            "",
+                                                            nullptr);
   case igl::BackendType::Vulkan:
     return igl::ShaderStagesCreator::fromModuleStringInput(
         device,
@@ -347,12 +367,49 @@ std::string getMainVulkanFragmentShaderSource() {
                 )";
 }
 
+std::string getMainWgslShaderSource() {
+  return R"(
+@group(0) @binding(0) var shadowMap : texture_depth_2d;
+@group(0) @binding(1) var shadowSampler : sampler;
+
+struct VertexOut {
+  @builtin(position) position : vec4f,
+  @location(0) normal : vec3f,
+  @location(1) shadowCoord : vec3f,
+};
+
+@vertex
+fn vertexShader(@location(0) position : vec3f, @location(1) normal : vec3f) -> VertexOut {
+  var out : VertexOut;
+  out.position = vec4f(position.x * 0.8, position.y * 0.8 + 0.1, position.z * 0.1 + 0.5, 1.0);
+  out.normal = normal;
+  out.shadowCoord = vec3f(position.x * 0.5 * 0.5 + 0.5,
+                          -position.z * 0.5 * 0.5 + 0.5,
+                          (position.y + 1.0) * 0.5);
+  return out;
+}
+
+@fragment
+fn fragmentShader(in : VertexOut) -> @location(0) vec4f {
+  let baseColor = select(vec3f(0.2, 0.5, 1.0), vec3f(0.8, 0.8, 0.8), in.normal.y > 0.5);
+  let lightDir = normalize(vec3f(0.3, 1.0, 0.5));
+  let ndotl = max(dot(in.normal, lightDir), 0.3);
+  let shadowDepth = textureSample(shadowMap, shadowSampler, in.shadowCoord.xy);
+  let shadow = select(1.0, 0.4, in.shadowCoord.z > shadowDepth + 0.005);
+  return vec4f(baseColor * ndotl * shadow, 1.0);
+}
+)";
+}
+
 std::unique_ptr<IShaderStages> getMainShaderStagesForBackend(IDevice& device) {
   switch (device.getBackendType()) {
   case igl::BackendType::Invalid:
   case igl::BackendType::Custom:
     IGL_DEBUG_ASSERT_NOT_REACHED();
     return nullptr;
+  case igl::BackendType::WebGPU:
+    return igl::ShaderStagesCreator::fromLibraryStringInput(
+        device, getMainWgslShaderSource().c_str(), "vertexShader", "fragmentShader", "", nullptr);
   case igl::BackendType::Vulkan:
     return igl::ShaderStagesCreator::fromModuleStringInput(
         device,
@@ -533,6 +590,7 @@ void DepthBiasSession::initialize() noexcept {
   };
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 void DepthBiasSession::update(SurfaceTextures textures) noexcept {
   // Per IGL guidelines, textures.color may be null on some platforms
   // before the surface is ready (e.g., during window resize on Android/iOS).
@@ -544,13 +602,15 @@ void DepthBiasSession::update(SurfaceTextures textures) noexcept {
 
   // Create the shadow map texture (depth-only, also sampled for shadow testing)
   if (shadowMap_ == nullptr) {
-    shadowMap_ = device.createTexture(TextureDesc::new2D(TextureFormat::Z_UNorm24,
-                                                         kShadowMapSize,
-                                                         kShadowMapSize,
-                                                         TextureDesc::TextureUsageBits::Attachment |
-                                                             TextureDesc::TextureUsageBits::Sampled,
-                                                         "Shadow Map"),
-                                      &ret);
+    TextureDesc shadowMapDesc = TextureDesc::new2D(TextureFormat::Z_UNorm24,
+                                                   kShadowMapSize,
+                                                   kShadowMapSize,
+                                                   TextureDesc::TextureUsageBits::Attachment |
+                                                       TextureDesc::TextureUsageBits::Sampled,
+                                                   "Shadow Map");
+    // Metal on the iOS simulator rejects depth textures in shared storage.
+    shadowMapDesc.storage = ResourceStorage::Private;
+    shadowMap_ = device.createTexture(shadowMapDesc, &ret);
     IGL_DEBUG_ASSERT(ret.isOk());
     IGL_DEBUG_ASSERT(shadowMap_ != nullptr);
   }
