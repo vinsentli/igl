@@ -64,7 +64,7 @@ class INativeHWTextureBuffer {
 
   Result createWithHWBuffer(AHardwareBuffer* IGL_NULLABLE buffer);
 
-  Result createHWBuffer(const TextureDesc& desc, bool hasStorageAlready, bool surfaceComposite);
+  Result createHWBuffer(const TextureDesc& desc, bool hasStorageAlready, bool surfaceComposite, bool isVulkanQualcomm);
 
   [[nodiscard]] LockGuard lockHWBuffer(std::byte * IGL_NULLABLE * IGL_NONNULL dst,
                                        RangeDesc& outRange,
@@ -101,7 +101,7 @@ class INativeHWTextureBuffer {
 // utils
 
 uint32_t getNativeHWFormat(TextureFormat iglFormat);
-uint32_t getNativeHWBufferUsage(const TextureDesc& desc);
+uint32_t getNativeHWBufferUsage(const TextureDesc& desc, bool isVulkanQualcomm);
 
 TextureFormat getIglFormat(uint32_t nativeFormat);
 TextureDesc::TextureUsage getIglBufferUsage(uint64_t nativeUsage);
@@ -109,6 +109,7 @@ TextureDesc::TextureUsage getIglBufferUsage(uint64_t nativeUsage);
 Result allocateNativeHWBuffer(AHardwareBufferFunctionTable* IGL_NONNULL funcTable,
                               const TextureDesc& desc,
                               bool surfaceComposite,
+                              bool isVulkanQualcomm,
                               AHardwareBuffer* IGL_NULLABLE* IGL_NONNULL buffer);
 
 } // namespace igl::android

@@ -70,7 +70,7 @@ uint32_t getNativeHWFormat(TextureFormat iglFormat) {
   }
 }
 
-uint32_t getNativeHWBufferUsage(const TextureDesc& desc) {
+uint32_t getNativeHWBufferUsage(const TextureDesc& desc, bool isVulkanQualcomm) {
   uint64_t bufferUsage = 0;
 
   if (desc.usage & TextureDesc::TextureUsageBits::Sampled) {
@@ -83,7 +83,7 @@ uint32_t getNativeHWBufferUsage(const TextureDesc& desc) {
     bufferUsage |= AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT;
     bufferUsage |= AHARDWAREBUFFER_USAGE_COMPOSER_OVERLAY;
 
-    if (desc.storage == ResourceStorage::Private) {
+    if (desc.storage == ResourceStorage::Private && isVulkanQualcomm) {
       // 高通默认【关闭】UBWC纹理压缩，需要加上 VENDOR_0 flag才会【开启】UBWC纹理压缩。
       bufferUsage |= AHARDWAREBUFFER_USAGE_VENDOR_0;
     }
@@ -160,13 +160,14 @@ TextureDesc::TextureUsage getIglBufferUsage(uint64_t nativeUsage) {
 Result allocateNativeHWBuffer(AHardwareBufferFunctionTable* IGL_NONNULL funcTable,
                               const TextureDesc& desc,
                               bool surfaceComposite,
+                              bool isVulkanQualcomm,
                               AHardwareBuffer** buffer) {
   AHardwareBuffer_Desc bufferDesc = {
       .width = desc.width,
       .height = desc.height,
       .layers = 1,
       .format = getNativeHWFormat(desc.format),
-      .usage = getNativeHWBufferUsage(desc),
+      .usage = getNativeHWBufferUsage(desc, isVulkanQualcomm),
       .rfu0 = 0,
       .rfu1 = 0,
   };
@@ -218,7 +219,8 @@ Result INativeHWTextureBuffer::createWithHWBuffer(AHardwareBuffer* buffer) {
 
 Result INativeHWTextureBuffer::createHWBuffer(const TextureDesc& desc,
                                               bool hasStorageAlready,
-                                              bool surfaceComposite) {
+                                              bool surfaceComposite,
+                                              bool isVulkanQualcomm) {
   if (hwBuffer_) {
     IGL_LOG_ERROR("hw already provided");
     return Result{Result::Code::InvalidOperation, "Hardware buffer already provided"};
@@ -250,7 +252,7 @@ Result INativeHWTextureBuffer::createHWBuffer(const TextureDesc& desc,
 
   AHardwareBuffer* buffer = nullptr;
   auto allocationResult =
-      igl::android::allocateNativeHWBuffer(funcTable_.get(), desc, surfaceComposite, &buffer);
+      igl::android::allocateNativeHWBuffer(funcTable_.get(), desc, surfaceComposite, isVulkanQualcomm, &buffer);
   if (!allocationResult.isOk()) {
     IGL_LOG_ERROR("HW alloc failed");
     return allocationResult;

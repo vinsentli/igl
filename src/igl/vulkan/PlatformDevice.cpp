@@ -168,8 +168,10 @@ std::shared_ptr<ITexture> PlatformDevice::createTextureWithSharedMemory(const Te
 
   Result subResult;
 
+  bool isQualcomm = device_.getVulkanContext().getVkPhysicalDeviceDriverProperties().driverID == VK_DRIVER_ID_QUALCOMM_PROPRIETARY;
+
   auto texture = std::make_shared<android::NativeHWTextureBuffer>(device_, funcTable_,  desc.format);
-  subResult = texture->createHWBuffer(desc, false, false);
+  subResult = texture->createHWBuffer(desc, false, false, isQualcomm);
   Result::setResult(outResult, subResult.code, subResult.message);
   if (!subResult.isOk()) {
     return nullptr;

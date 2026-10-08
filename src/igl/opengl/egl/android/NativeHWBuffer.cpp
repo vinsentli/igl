@@ -74,7 +74,7 @@ bool NativeHWTextureBuffer::supportsUpload() const {
 
 Result NativeHWTextureBuffer::create(const TextureDesc& desc, bool hasStorageAlready) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
-  return createHWBuffer(desc, hasStorageAlready, false);
+  return createHWBuffer(desc, hasStorageAlready, false, false);
 }
 
 Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* buffer) {

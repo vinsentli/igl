@@ -166,7 +166,7 @@ VkSamplerYcbcrConversion NativeHWTextureBuffer::getVkSamplerYcbcrConversion() co
 
 Result NativeHWTextureBuffer::create(const TextureDesc& desc) {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
-  return createHWBuffer(desc, false, false);
+  return createHWBuffer(desc, false, false, false);
 }
 
 Result NativeHWTextureBuffer::createTextureInternal(AHardwareBuffer* hwBuffer) {
