@@ -132,16 +132,13 @@ DeviceFeatureSet::DeviceFeatureSet(id<MTLDevice> device) {
     maxBufferLength_ = [device maxBufferLength];
   }
 
-  // 苹果文档中显示此API是从IOS14.0开始，但是实际测试中也有14.0, 18.5~18.7的设备不支持。
-  if (@available(macOS 11.0, iOS 18.8, *)) {
-    supports32BitFloatFiltering_ = device.supports32BitFloatFiltering;
-  } else if(@available(iOS 18.4, *)){
-    //18.4~18.8之间的系统不支持
-    //Do Nothing
-  } else if(@available(iOS 15.0, *)){
-    supports32BitFloatFiltering_ = device.supports32BitFloatFiltering;
-  } else{
-    //15.0以下的系统不支持
+  if (@available(macOS 11.0, iOS 14.0, *)) {
+    // this API became available as of iOS 14 and macOS 11
+    @try {
+      supports32BitFloatFiltering_ = device.supports32BitFloatFiltering;
+    } @catch (NSException *exception) {
+    } @finally {
+    }
   }
 
   if (@available(macOS 10.15, iOS 14.0, *)) {
