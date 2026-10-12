@@ -171,36 +171,20 @@ void ComputeCommandAdapter::willDispatch() {
     if (!IS_DIRTY(textureStatesDirty_, index)) {
       continue;
     }
+    CLEAR_DIRTY(textureStatesDirty_, index);
     auto& textureState = textureStates_[index];
     if (auto* texture = static_cast<Texture*>(textureState.first)) {
-      // Bind the texture to image unit (for compute shader image2D access)
-      ret = pipelineState->bindTextureUnit(index, texture);
-      
-      if (!ret.isOk()) {
-        IGL_LOG_INFO_ONCE(ret.message.c_str());
-        CLEAR_DIRTY(textureStatesDirty_, index);
-        continue;
-      }
-      
-      // CRITICAL: Must explicitly activate texture unit before binding texture object
-      // In multi-pass scenarios, texture units may be left in incorrect states from previous passes
-      // This ensures the texture is bound to the correct unit matching the image unit binding
-      getContext().activeTexture(static_cast<GLenum>(GL_TEXTURE0 + index));
-      
-      // Now bind the texture object to the activated texture unit
-      // This is necessary for:
-      // 1. Proper sampler2D access in shaders (if texture is sampled)
-      // 2. RenderDoc and other debugging tools to capture correct texture state
-      // 3. Preventing state pollution from render target bindings in previous render passes
-      texture->bind();
-      
-      // If there's a sampler state, bind it too
-      if (textureState.second) {
-        auto* samplerState = static_cast<SamplerState*>(textureState.second);
+      if (auto* samplerState = static_cast<SamplerState*>(textureState.second)) {
+        getContext().activeTexture(static_cast<GLenum>(GL_TEXTURE0 + index));
+        texture->bind();
         samplerState->bind(texture);
+      } else {
+        ret = pipelineState->bindTextureUnit(index, texture);
+        if (!ret.isOk()) {
+          IGL_LOG_INFO_ONCE(ret.message.c_str());
+          continue;
+        }
       }
-      
-      CLEAR_DIRTY(textureStatesDirty_, index);
     }
   }
 }
