@@ -27,7 +27,8 @@ class ComputePipelineState final : public WithContext, public IComputePipelineSt
   Result create(const ComputePipelineDesc& desc);
   void bind();
   void unbind();
-  Result bindTextureUnit(size_t unit, Texture* texture);
+  Result bindImageTextureUnit(size_t unit, Texture* texture);
+  Result bindSamplerTextureUnit(size_t unit, Texture* texture);
   Result bindBuffer(size_t unit, Buffer* buffer);
 
   std::shared_ptr<IComputePipelineReflection> computePipelineReflection() override;
@@ -43,6 +44,7 @@ class ComputePipelineState final : public WithContext, public IComputePipelineSt
 
   std::array<GLint, IGL_BUFFER_BINDINGS_MAX> bufferUnitMap_{};
   std::array<GLint, IGL_TEXTURE_SAMPLERS_MAX> imageUnitMap_{};
+  std::array<GLint, IGL_TEXTURE_SAMPLERS_MAX> samplerUnitMap_{};
 
   std::shared_ptr<ShaderStages> shaderStages_;
   std::shared_ptr<ComputePipelineReflection> reflection_;

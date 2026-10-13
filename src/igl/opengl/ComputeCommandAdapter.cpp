@@ -44,7 +44,9 @@ void ComputeCommandAdapter::setSamplerState(ISamplerState* samplerState, uint32_
   SET_DIRTY(textureStatesDirty_, index);
 }
 
-void ComputeCommandAdapter::setImageTexture(ITexture* texture, uint32_t index, TextureFormat format) {
+void ComputeCommandAdapter::setImageTexture(ITexture* texture,
+                                            uint32_t index,
+                                            TextureFormat format) {
   if (!IGL_DEBUG_VERIFY(index < IGL_TEXTURE_SAMPLERS_MAX)) {
     return;
   }
@@ -53,7 +55,7 @@ void ComputeCommandAdapter::setImageTexture(ITexture* texture, uint32_t index, T
   textureStates_[index].first = texture;
   textureStates_[index].second = nullptr; // Image textures don't use samplers
   SET_DIRTY(textureStatesDirty_, index);
-  
+
   // Store format information for later use (we'll need to extend the state if needed)
   (void)format; // For now, format is handled by the pipeline state
 }
@@ -175,15 +177,14 @@ void ComputeCommandAdapter::willDispatch() {
     auto& textureState = textureStates_[index];
     if (auto* texture = static_cast<Texture*>(textureState.first)) {
       if (auto* samplerState = static_cast<SamplerState*>(textureState.second)) {
-        getContext().activeTexture(static_cast<GLenum>(GL_TEXTURE0 + index));
-        texture->bind();
+        ret = pipelineState->bindSamplerTextureUnit(index, texture);
         samplerState->bind(texture);
       } else {
-        ret = pipelineState->bindTextureUnit(index, texture);
-        if (!ret.isOk()) {
-          IGL_LOG_INFO_ONCE(ret.message.c_str());
-          continue;
-        }
+        ret = pipelineState->bindImageTextureUnit(index, texture);
+      }
+      if (!ret.isOk()) {
+        IGL_LOG_INFO_ONCE(ret.message.c_str());
+        continue;
       }
     }
   }
@@ -214,7 +215,7 @@ void ComputeCommandAdapter::didDispatch() {
 void ComputeCommandAdapter::endEncoding() {
   IGL_PROFILER_FUNCTION();
   pipelineState_ = nullptr;
-  textureStates_ = TextureStates(); // This will clear all pairs to {nullptr, nullptr}
+  textureStates_ = TextureStates();
 
   buffersDirty_.reset();
   textureStatesDirty_.reset();

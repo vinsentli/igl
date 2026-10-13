@@ -13,7 +13,9 @@
 #include <igl/opengl/Texture.h>
 
 namespace igl::opengl {
-ComputePipelineState::ComputePipelineState(IContext& context) : WithContext(context) {}
+ComputePipelineState::ComputePipelineState(IContext& context) : WithContext(context) {
+  samplerUnitMap_.fill(-1);
+}
 ComputePipelineState::~ComputePipelineState() = default;
 
 Result ComputePipelineState::create(const ComputePipelineDesc& desc) {
@@ -40,7 +42,7 @@ Result ComputePipelineState::create(const ComputePipelineDesc& desc) {
 
     IGL_DEBUG_ASSERT(!imageName.toString().empty());
     const int loc = reflection_->getIndexByName(imageName);
-    if (IGL_DEBUG_VERIFY(loc >= 0)) {
+    if (loc >= 0) {
       GLint unit = 0;
       getContext().getUniformiv(shaderStages_->getProgramID(), loc, &unit);
       if (IGL_DEBUG_VERIFY(unit >= 0)) {
@@ -50,6 +52,25 @@ Result ComputePipelineState::create(const ComputePipelineDesc& desc) {
       }
     } else {
       IGL_LOG_ERROR("Image uniform (%s) not found in shader.\n", imageName.c_str());
+    }
+  }
+
+  for (const auto& unitSampler : desc.samplersMap) {
+    const auto textureUnit = unitSampler.first;
+    const auto& samplerName = unitSampler.second;
+
+    IGL_DEBUG_ASSERT(!samplerName.toString().empty());
+    const int loc = reflection_->getIndexByName(samplerName);
+    if (loc >= 0) {
+      GLint unit = 0;
+      getContext().getUniformiv(shaderStages_->getProgramID(), loc, &unit);
+      if (IGL_DEBUG_VERIFY(unit >= 0)) {
+        samplerUnitMap_[textureUnit] = unit;
+      } else {
+        IGL_LOG_ERROR("Sampler uniform unit (%s) not found in shader.\n", samplerName.c_str());
+      }
+    } else {
+      IGL_LOG_ERROR("Sampler uniform (%s) not found in shader.\n", samplerName.c_str());
     }
   }
 
@@ -78,6 +99,15 @@ Result ComputePipelineState::create(const ComputePipelineDesc& desc) {
     }
   }
 
+  // [txmapsdk] maleoon creates compute PSOs with shaderStages only (never fills
+  // ComputePipelineDesc::buffersMap), so the loop above never sets the flag.
+  // Fall back to the pipeline reflection: a shader that declares SSBO blocks is one
+  // whose writes/reads need memory barriers between dispatches.
+  if (!usingShaderStorageBuffers_ && reflection_ != nullptr &&
+      !reflection_->getShaderStorageBufferObjectDictionary().empty()) {
+    usingShaderStorageBuffers_ = true;
+  }
+
   return Result();
 }
 
@@ -100,7 +130,7 @@ void ComputePipelineState::unbind() {
   }
 }
 
-Result ComputePipelineState::bindTextureUnit(const size_t unit, Texture* texture) {
+Result ComputePipelineState::bindImageTextureUnit(const size_t unit, Texture* texture) {
   IGL_PROFILER_FUNCTION();
   if (!shaderStages_) {
     return Result{Result::Code::InvalidOperation, "No shader set\n"};
@@ -117,6 +147,37 @@ Result ComputePipelineState::bindTextureUnit(const size_t unit, Texture* texture
   }
 
   texture->bindImage(samplerUnit);
+
+  return Result();
+}
+
+Result ComputePipelineState::bindSamplerTextureUnit(const size_t unit, Texture* texture) {
+  IGL_PROFILER_FUNCTION();
+  if (!shaderStages_) {
+    return Result{Result::Code::InvalidOperation, "No shader set\n"};
+  }
+
+  if (unit >= IGL_TEXTURE_SAMPLERS_MAX) {
+    return Result{Result::Code::ArgumentInvalid, "Sampler unit specified greater than maximum\n"};
+  }
+
+  if (IGL_DEBUG_VERIFY_NOT(texture == nullptr)) {
+    return Result{Result::Code::ArgumentInvalid, "Texture is nullptr\n"};
+  }
+
+  getContext().activeTexture(static_cast<GLenum>(GL_TEXTURE0 + unit));
+  texture->bind();
+
+  // A sampler uniform defaults to 0 in GLES, so without this the shader reads GL_TEXTURE0 no
+  // matter which unit the texture was bound to.
+  const GLint samplerLocation(samplerUnitMap_[unit]);
+  if (samplerLocation >= 0) {
+    getContext().uniform1i(samplerLocation, static_cast<GLint>(unit));
+  } else {
+    IGL_LOG_INFO_ONCE(
+        "No sampler uniform mapped for compute texture unit %zu; shader will read GL_TEXTURE0\n",
+        unit);
+  }
 
   return Result();
 }
