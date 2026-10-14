@@ -99,15 +99,6 @@ Result ComputePipelineState::create(const ComputePipelineDesc& desc) {
     }
   }
 
-  // [txmapsdk] maleoon creates compute PSOs with shaderStages only (never fills
-  // ComputePipelineDesc::buffersMap), so the loop above never sets the flag.
-  // Fall back to the pipeline reflection: a shader that declares SSBO blocks is one
-  // whose writes/reads need memory barriers between dispatches.
-  if (!usingShaderStorageBuffers_ && reflection_ != nullptr &&
-      !reflection_->getShaderStorageBufferObjectDictionary().empty()) {
-    usingShaderStorageBuffers_ = true;
-  }
-
   return Result();
 }
 
@@ -199,7 +190,7 @@ Result ComputePipelineState::bindBuffer(const size_t unit, Buffer* buffer) {
   }
 
   Result result;
-  static_cast<ArrayBuffer&>(*buffer).bindBase(unit, &result);
+  static_cast<ArrayBuffer&>(*buffer).bindBase(bufferLocation, &result);
 
   return result;
 }
