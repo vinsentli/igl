@@ -51,6 +51,11 @@ using PFASurfaceTransaction_create = ASurfaceTransaction* (*)();
 using PFASurfaceTransaction_delete = void (*)(ASurfaceTransaction*);
 using PFASurfaceTransaction_apply = void (*)(ASurfaceTransaction*);
 using PFASurfaceTransaction_setBuffer = void (*)(ASurfaceTransaction *, ASurfaceControl *, AHardwareBuffer *, int);
+using PFASurfaceTransaction_setGeometry = void (*)(ASurfaceTransaction*,
+                                                    ASurfaceControl*,
+                                                    const ARect&,
+                                                    const ARect&,
+                                                    int32_t);
 using PFASurfaceTransaction_setBufferDataSpace = void (*)(ASurfaceTransaction* transaction, ASurfaceControl* surface_control, int32_t data_space);
 using PFASurfaceTransaction_setBufferTransparency = void (*)(ASurfaceTransaction* transaction, ASurfaceControl* surface_control, IglASurfaceTransactionTransparency transparency);
 typedef void(* ASurfaceTransaction_OnComplete_Callback)(void *_Null_unspecified context, ASurfaceTransactionStats *_Nonnull stats);
@@ -87,6 +92,7 @@ struct AHardwareBufferFunctionTable {
   PFASurfaceTransaction_delete ASurfaceTransaction_delete = nullptr;
   PFASurfaceTransaction_apply ASurfaceTransaction_apply = nullptr;
   PFASurfaceTransaction_setBuffer ASurfaceTransaction_setBuffer = nullptr;
+  PFASurfaceTransaction_setGeometry ASurfaceTransaction_setGeometry = nullptr;
   PFASurfaceTransaction_setBufferDataSpace ASurfaceTransaction_setBufferDataSpace = nullptr;
   PFASurfaceTransaction_setBufferTransparency ASurfaceTransaction_setBufferTransparency = nullptr;
   PFASurfaceTransaction_setOnComplete ASurfaceTransaction_setOnComplete = nullptr;

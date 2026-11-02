@@ -385,6 +385,22 @@ void VulkanSwapchain::submitFrameToSystem(int gpuFenceFd,
                                             swapchainTexture->texture()->getHardwareBuffer(),
                                             gpuFence.release());
 
+  // The AHB is intentionally smaller than the parent ANativeWindow. Ask
+  // SurfaceFlinger to scale it directly into the full View instead of adding
+  // an SDK-side upscale pass or allocating a full-size intermediate image.
+  const int32_t destinationWidth = ANativeWindow_getWidth(nativeWindow_);
+  const int32_t destinationHeight = ANativeWindow_getHeight(nativeWindow_);
+  if (destinationWidth > 0 && destinationHeight > 0) {
+    const ARect sourceRect = {0, 0, static_cast<int32_t>(width_),
+                              static_cast<int32_t>(height_)};
+    const ARect destinationRect = {0, 0, destinationWidth, destinationHeight};
+    funcTable_->ASurfaceTransaction_setGeometry(transaction,
+                                                surfaceControl_->impl,
+                                                sourceRect,
+                                                destinationRect,
+                                                ANATIVEWINDOW_TRANSFORM_IDENTITY);
+  }
+
   // Set as opaque to fix the flicker issue on Xiaomi devices when switching to background.
   funcTable_->ASurfaceTransaction_setBufferTransparency(
       transaction, surfaceControl_->impl, IglASURFACE_TRANSACTION_TRANSPARENCY_OPAQUE);
