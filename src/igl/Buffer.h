@@ -102,6 +102,21 @@ struct BufferDesc {
   size_t storageStride = 0;
 };
 
+// Convenience factory for common buffer creation patterns
+inline BufferDesc MakeBufferDesc(BufferDesc::BufferType type, const void* IGL_NULLABLE data, size_t length,
+                                 ResourceStorage storage = ResourceStorage::Shared,
+                                 BufferDesc::BufferAPIHint hint = 0,
+                                 std::string debugName = "") {
+  BufferDesc desc;
+  desc.type = type;
+  desc.data = data;
+  desc.length = length;
+  desc.storage = storage;
+  desc.hint = hint;
+  desc.debugName = std::move(debugName);
+  return desc;
+}
+
 class IBuffer : public ITrackedResource<IBuffer> {
  public:
   /**
