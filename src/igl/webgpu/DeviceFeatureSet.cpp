@@ -9,6 +9,9 @@
 
 #include <algorithm>
 #include <optional>
+#include <webgpu/webgpu.h>
+#include <igl/Config.h>
+#include <igl/IGLFolly.h>
 #include <igl/webgpu/Common.h>
 #include <igl/webgpu/UniformArena.h>
 
@@ -148,16 +151,25 @@ bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
   case DeviceFeatures::MeshShaders:
   case DeviceFeatures::Multiview:
   case DeviceFeatures::MultiViewMultisample:
+  case DeviceFeatures::MultiviewSubpasses:
   case DeviceFeatures::ReadWriteFramebuffer:
   case DeviceFeatures::ShaderTextureLodExt:
   case DeviceFeatures::SRGBSwapchain:
   case DeviceFeatures::SRGBWriteControl:
   case DeviceFeatures::StandardDerivativeExt:
+  case DeviceFeatures::Subpasses:
   case DeviceFeatures::TextureArrayExt:
   case DeviceFeatures::TextureBindless:
   case DeviceFeatures::TextureExternalImage:
   case DeviceFeatures::TextureFormatRGB:
+  case DeviceFeatures::UpdateBuffer:
     return false;
+  case DeviceFeatures::MemorylessAttachments:
+#if IGL_PLATFORM_EMSCRIPTEN
+    return false;
+#else
+    return hasWGPUFeature(WGPUFeatureName_TransientAttachments);
+#endif
   case DeviceFeatures::TimestampQueries:
   case DeviceFeatures::Timers:
     return hasWGPUFeature(WGPUFeatureName_TimestampQuery);

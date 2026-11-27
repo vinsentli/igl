@@ -17,6 +17,7 @@
 #include <igl/webgpu/DeviceFeatureSet.h>
 #include <igl/webgpu/MipmapGenerator.h>
 #include <igl/webgpu/Readback.h>
+#include <igl/webgpu/WebGPUCompat.h>
 #include <igl/webgpu/WebGPUContext.h>
 
 namespace igl::webgpu {
@@ -211,6 +212,17 @@ std::shared_ptr<Texture> Texture::create(WebGPUContext& ctx,
   if (renderable && desc.numMipLevels > 1) {
     usage |= WGPUTextureUsage_TextureBinding;
   }
+  // Dawn allows a transient attachment only with one layer and one mip level; other shapes fall
+  // back to an ordinary texture.
+  const bool transient = desc.storage == ResourceStorage::Memoryless &&
+                         features.hasFeature(DeviceFeatures::MemorylessAttachments) &&
+                         getWGPULayerCount(desc) == 1 && desc.numMipLevels == 1;
+#if !IGL_PLATFORM_EMSCRIPTEN
+  if (transient) {
+    // Dawn allows no other usage on a transient attachment.
+    usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_TransientAttachment;
+  }
+#endif
 
   WGPUTextureDescriptor textureDesc = WGPU_TEXTURE_DESCRIPTOR_INIT;
   textureDesc.label = toWGPUStringView(desc.debugName);
@@ -233,7 +245,9 @@ std::shared_ptr<Texture> Texture::create(WebGPUContext& ctx,
   textureDesc.format = *format;
   textureDesc.mipLevelCount = desc.numMipLevels;
   textureDesc.sampleCount = desc.numSamples;
-  const WGPUTextureFormat viewFormat = getViewFormatCounterpart(*format);
+  // Dawn rejects view formats on a transient attachment.
+  const WGPUTextureFormat viewFormat = transient ? WGPUTextureFormat_Undefined
+                                                 : getViewFormatCounterpart(*format);
   if (viewFormat != WGPUTextureFormat_Undefined) {
     textureDesc.viewFormatCount = 1;
     textureDesc.viewFormats = &viewFormat;
@@ -250,10 +264,12 @@ std::shared_ptr<Texture> Texture::create(WebGPUContext& ctx,
 
   auto result = std::shared_ptr<Texture>(new Texture(
       std::make_shared<Storage>(ctx, std::move(texture), *format, caps), desc, *format, 0, 0));
-  Result ret = result->createSampledView();
-  if (!ret.isOk()) {
-    Result::setResult(outResult, std::move(ret));
-    return nullptr;
+  if (!transient) {
+    Result ret = result->createSampledView();
+    if (!ret.isOk()) {
+      Result::setResult(outResult, std::move(ret));
+      return nullptr;
+    }
   }
   Result::setOk(outResult);
   return result;
@@ -487,6 +503,10 @@ TextureType Texture::getType() const {
 
 TextureDesc::TextureUsage Texture::getUsage() const {
   return desc_.usage;
+}
+
+ResourceStorage Texture::getStorage() const {
+  return desc_.storage;
 }
 
 uint32_t Texture::getSamples() const {
@@ -787,6 +807,9 @@ Result Texture::getBytes(const TextureRangeDesc& range,
                          void* IGL_NONNULL outData,
                          size_t bytesPerRow,
                          bool flipVertically) const {
+  if (desc_.storage == ResourceStorage::Memoryless) {
+    return Result(Result::Code::Unsupported, "Can't retrieve the data from a memoryless texture");
+  }
   const uint32_t bytesPerTexel = getCopyBytesPerTexel(wgpuFormat_, aspect);
   if (bytesPerTexel == 0) {
     return Result(Result::Code::Unsupported, "This texture aspect cannot be read back on WebGPU");
