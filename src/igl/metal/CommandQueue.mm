@@ -65,7 +65,13 @@ std::shared_ptr<ICommandBuffer> CommandQueue::createCommandBuffer(const CommandB
 }
 
 bool CommandQueue::beginFrame() {
-  return bufferSyncManager_->manageEndOfFrameSync();
+  const bool synced = bufferSyncManager_->manageEndOfFrameSync();
+  if (synced) {
+    if (auto* bindless = device_.getBindlessResources()) {
+      bindless->onFrameCompleted();
+    }
+  }
+  return synced;
 }
 
 SubmitHandle CommandQueue::submit(const ICommandBuffer& commandBuffer, bool endOfFrame) {

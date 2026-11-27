@@ -118,6 +118,9 @@ class VulkanFeatures final {
   // VK_EXT_host_image_copy (promoted to Vulkan 1.4)
   VkPhysicalDeviceHostImageCopyFeatures featureHostImageCopy{};
 
+  // VK_EXT_image_compression_control (never promoted to core)
+  VkPhysicalDeviceImageCompressionControlFeaturesEXT featuresImageCompressionControl{};
+
   static constexpr bool kEnableHostImageCopy = false;
 
   // We need to reassemble the feature chain because of the pNext pointers
@@ -185,6 +188,7 @@ class VulkanFeatures final {
   bool has_VK_EXT_extended_dynamic_state = false; // promoted to Vulkan 1.3
   bool has_VK_EXT_extended_dynamic_state2 = false; // promoted to Vulkan 1.3
   bool has_VK_EXT_host_image_copy = false; // promoted to Vulkan 1.4
+  bool has_VK_EXT_image_compression_control = false;
   // NOLINTEND(readability-identifier-naming)
 
  private:

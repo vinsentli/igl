@@ -586,7 +586,7 @@ bool TextureDesc::operator==(const TextureDesc& rhs) const {
          (height == rhs.height) && (depth == rhs.depth) && (numLayers == rhs.numLayers) &&
          (numSamples == rhs.numSamples) && (usage == rhs.usage) &&
          (numMipLevels == rhs.numMipLevels) && (storage == rhs.storage) &&
-         (debugName == rhs.debugName);
+         (compress == rhs.compress) && (debugName == rhs.debugName);
 }
 
 bool TextureDesc::operator!=(const TextureDesc& rhs) const {

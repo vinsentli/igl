@@ -15,6 +15,7 @@
 #include <igl/Macros.h>
 #include <igl/RenderPass.h>
 #include <igl/metal/Buffer.h>
+#include <igl/metal/BindlessResources.h>
 #include <igl/metal/DepthStencilState.h>
 #include <igl/metal/Device.h>
 #include <igl/metal/Framebuffer.h>
@@ -189,6 +190,25 @@ void RenderCommandEncoder::initialize(const std::shared_ptr<CommandBuffer>& comm
   }
 
   encoder_ = [commandBuffer->get() renderCommandEncoderWithDescriptor:metalRenderPassDesc];
+
+  if (auto* bindless = device_.getBindlessResources()) {
+    if (id<MTLBuffer> bindlessBuffer = bindless->getBuffer()) {
+      [encoder_ setVertexBuffer:bindlessBuffer offset:0 atIndex:BindlessResources::kBufferIndex];
+      [encoder_ setFragmentBuffer:bindlessBuffer offset:0 atIndex:BindlessResources::kBufferIndex];
+      if (@available(macOS 13.0, iOS 16.0, *)) {
+        id<MTLRenderCommandEncoder> encoder = encoder_;
+        bindless->forEachResource([encoder](const __unsafe_unretained id<MTLResource>* data,
+                                            size_t count) {
+          if (count > 0) {
+            [encoder useResources:data
+                            count:count
+                            usage:MTLResourceUsageRead
+                           stages:MTLRenderStageVertex | MTLRenderStageFragment];
+          }
+        });
+      }
+    }
+  }
 }
 
 std::unique_ptr<RenderCommandEncoder> RenderCommandEncoder::create(

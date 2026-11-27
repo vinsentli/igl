@@ -250,6 +250,9 @@ Result Texture::create(const TextureDesc& desc) {
   Result result;
   VulkanImage image;
 
+  const bool compress = desc_.compress && tiling == VK_IMAGE_TILING_OPTIMAL &&
+                        desc_.storage != ResourceStorage::Memoryless;
+
   if (desc_.exportability == TextureDesc::TextureExportability::NoExport) {
     image = ctx.createImage(imageType,
                             VkExtent3D{static_cast<uint32_t>(desc_.width),
@@ -264,7 +267,8 @@ Result Texture::create(const TextureDesc& desc) {
                             createFlags,
                             samples,
                             &result,
-                            debugNameImage.c_str());
+                            debugNameImage.c_str(),
+                            compress);
     if (!IGL_DEBUG_VERIFY(result.isOk())) {
       return result; // NOLINT(clang-diagnostic-nrvo)
     }

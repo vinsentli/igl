@@ -833,7 +833,6 @@ class IContext {
   GLuint programID_ = 0;
   std::array<bool, 32> enableVertexAttribArray_{};
   std::array<GLuint, 32> vertexAttribDivisors_{};
-  std::map<GLenum, GLuint> bindBufferIndexs_;
   std::map<GLint, GLint> samplerLocations_;
   std::map<GLenum, bool> enableGLFeatures_;
   GLenum activeTexture_ = 0;

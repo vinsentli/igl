@@ -209,6 +209,15 @@ class ISamplerState : public ITrackedResource<ISamplerState> {
    * @return true if the sampler is configured for YUV format, false otherwise.
    */
   [[nodiscard]] virtual bool isYUV() const noexcept = 0;
+
+  /**
+   * @brief Returns the index of this sampler inside the backend's global sampler table, which is
+   * what shaders address it with in bindless rendering. Backends without bindless support
+   * return 0, which is always a valid (dummy) sampler.
+   */
+  [[nodiscard]] virtual uint32_t getSamplerId() const {
+    return 0;
+  }
 };
 
 } // namespace igl

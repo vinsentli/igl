@@ -128,6 +128,7 @@ enum class DeviceFeatures {
   TextureFormatRG,
   TextureFormatRGB,
   TextureCompressionAstc,
+  TextureCompressionRuntime,
   TextureHalfFloat,
   TextureNotPot,
   TexturePartialMipChain,

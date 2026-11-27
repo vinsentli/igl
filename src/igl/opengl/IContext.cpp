@@ -1517,9 +1517,6 @@ void IContext::attachShader(GLuint program, GLuint shader) {
 }
 
 void IContext::bindBuffer(GLenum target, GLuint buffer) {
-  if (bindBufferIndexs_.count(target) && bindBufferIndexs_[target] == buffer)
-    return;
-  bindBufferIndexs_[target] = buffer;
 #if IGL_API_LOG
   GLuint unboundBuffer = boundBuffer(target);
   setBoundBuffer(target, buffer);
@@ -4948,7 +4945,6 @@ void IContext::clearCacheState() {
   programID_ = 0;
   enableVertexAttribArray_.fill(false);
   vertexAttribDivisors_.fill(-1);
-  bindBufferIndexs_.clear();
   samplerLocations_.clear();
   enableGLFeatures_.clear();
   activeTexture_ = 0;

@@ -315,6 +315,10 @@ VulkanFeatures::VulkanFeatures(VulkanContextConfig config) noexcept :
   featuresTextureCompressionAstcHdr({
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXTURE_COMPRESSION_ASTC_HDR_FEATURES_EXT,
   }),
+  featuresImageCompressionControl({
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_COMPRESSION_CONTROL_FEATURES_EXT,
+      .imageCompressionControl = VK_TRUE,
+  }),
   featuresShaderIntegerDotProduct({
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_FEATURES,
       .shaderIntegerDotProduct = VK_FALSE,
@@ -496,6 +500,7 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& contextConf
   featuresExtendedDynamicState.pNext = nullptr;
   featuresExtendedDynamicState2.pNext = nullptr;
   featuresShaderIntegerDotProduct.pNext = nullptr;
+  featuresImageCompressionControl.pNext = nullptr;
 
   // Add the required and optional features to the VkPhysicalDeviceFetaures2_
   ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresSamplerYcbcrConversion);
@@ -571,6 +576,9 @@ void VulkanFeatures::assembleFeatureChain(const VulkanContextConfig& contextConf
   if (hasExtension(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)) {
     ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresDescriptorBuffer);
   }
+  if (hasExtension(VK_EXT_IMAGE_COMPRESSION_CONTROL_EXTENSION_NAME)) {
+    ivkAddNext(&vkPhysicalDeviceFeatures2, &featuresImageCompressionControl);
+  }
   // Gated on the caller's request rather than on the extension being present, unlike the
   // structs above. The feature is core from Vulkan 1.3, where a device may support it without
   // still advertising VK_KHR_shader_integer_dot_product, so an extension gate would silently
@@ -617,9 +625,8 @@ VulkanFeatures& VulkanFeatures::operator=(const VulkanFeatures& other) noexcept 
   featuresMeshShader = other.featuresMeshShader;
   featuresFragmentShadingRate = other.featuresFragmentShadingRate;
   featuresDescriptorBuffer = other.featuresDescriptorBuffer;
-  featuresExtendedDynamicState = other.featuresExtendedDynamicState;
-  featuresExtendedDynamicState2 = other.featuresExtendedDynamicState2;
   featuresTextureCompressionAstcHdr = other.featuresTextureCompressionAstcHdr;
+  featuresImageCompressionControl = other.featuresImageCompressionControl;
   featuresExtendedDynamicState = other.featuresExtendedDynamicState;
   featuresExtendedDynamicState2 = other.featuresExtendedDynamicState2;
   featuresShaderIntegerDotProduct = other.featuresShaderIntegerDotProduct;
@@ -869,6 +876,12 @@ void VulkanFeatures::enableCommonDeviceExtensions(const VulkanContextConfig& con
         enable(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME, ExtensionType::Device) &&
         featureHostImageCopy.hostImageCopy == VK_TRUE;
   }
+
+#if 0
+  has_VK_EXT_image_compression_control =
+      enable(VK_EXT_IMAGE_COMPRESSION_CONTROL_EXTENSION_NAME, ExtensionType::Device) &&
+      featuresImageCompressionControl.imageCompressionControl == VK_TRUE;
+#endif
 }
 
 bool VulkanFeatures::enabled(const char* extensionName) const {

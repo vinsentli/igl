@@ -44,7 +44,7 @@ class SamplerState final : public ISamplerState {
    * This ID is intended for bindless rendering. See the ResourcesBinder and VulkanContext classes
    * for more information
    */
-  [[nodiscard]] uint32_t getSamplerId() const;
+  [[nodiscard]] uint32_t getSamplerId() const override;
 
   /**
    * @brief Returns true if this sampler is a YUV sampler.

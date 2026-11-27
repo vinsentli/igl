@@ -12,11 +12,19 @@
 
 namespace igl::metal {
 
+class BindlessResources;
+
 class SamplerState final : public ISamplerState {
  public:
   explicit SamplerState(id<MTLSamplerState> value);
+  ~SamplerState() override;
   IGL_INLINE id<MTLSamplerState> get() const {
     return value_;
+  }
+
+  void setBindlessSamplerId(BindlessResources* resources, uint32_t samplerId) {
+    bindlessResources_ = resources;
+    samplerId_ = samplerId;
   }
 
   static MTLSamplerMinMagFilter convertMinMagFilter(SamplerMinMagFilter value);
@@ -28,8 +36,14 @@ class SamplerState final : public ISamplerState {
    */
   [[nodiscard]] bool isYUV() const noexcept override;
 
+  [[nodiscard]] uint32_t getSamplerId() const override {
+    return samplerId_;
+  }
+
  private:
   id<MTLSamplerState> value_;
+  BindlessResources* bindlessResources_ = nullptr;
+  uint32_t samplerId_ = 0;
 };
 
 } // namespace igl::metal

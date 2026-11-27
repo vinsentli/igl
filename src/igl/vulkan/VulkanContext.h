@@ -130,7 +130,8 @@ class VulkanContext final {
                           VkImageCreateFlags flags,
                           VkSampleCountFlagBits samples,
                           Result* IGL_NULLABLE outResult,
-                          const char* IGL_NULLABLE debugName = nullptr) const;
+                          const char* IGL_NULLABLE debugName = nullptr,
+                          bool compress = false) const;
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
   std::unique_ptr<VulkanImage> createImageFromAndroidHardwareBuffer(

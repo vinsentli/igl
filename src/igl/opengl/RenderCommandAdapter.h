@@ -73,7 +73,7 @@ class RenderCommandAdapter final : public WithContext {
                        size_t index,
                        size_t stride = 0,
                        Result* IGL_NULLABLE outResult = nullptr);
-  void setIndexBuffer(Buffer& buffer, bool bindVAO = true);
+  void setIndexBuffer(Buffer& buffer, bool bindVAO);
 
   void clearUniformBuffers();
   void setUniformBuffer(Buffer* IGL_NULLABLE buffer,
@@ -202,7 +202,6 @@ class RenderCommandAdapter final : public WithContext {
   WindingMode windingMode_ = WindingMode::CounterClockwise;
 
   bool useVAO_ = false;
-  bool vaoBound_ = false;
 };
 } // namespace opengl
 } // namespace igl

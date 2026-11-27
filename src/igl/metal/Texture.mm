@@ -10,6 +10,7 @@
 #include <utility>
 #include <igl/IGLSafeC.h>
 #include <igl/Macros.h>
+#include <igl/metal/BindlessResources.h>
 #include <igl/metal/CommandBuffer.h>
 #include <igl/metal/CommandQueue.h>
 
@@ -47,6 +48,10 @@ Texture::Texture(id<CAMetalDrawable> drawable,
 
 Texture::~Texture() {
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_DESTROY);
+  if (bindlessResources_) {
+    bindlessResources_->removeTexture(bindlessTextureId_);
+    bindlessResources_ = nullptr;
+  }
   value_ = nil;
   if (iosurface_) {
     CFRelease(iosurface_);
@@ -82,7 +87,7 @@ Result Texture::uploadInternal(TextureType type,
                                const uint32_t* IGL_NULLABLE /*mipLevelBytes*/) const {
   IGL_PROFILER_FUNCTION();
   if (data == nullptr) {
-    return Result(Result::Code::Ok);
+    return Result{Result::Code::ArgumentNull, "Need a valid input buffer"};
   }
   const auto& properties = getProperties();
   const auto rangeBytesPerRow = bytesPerRow > 0 ? bytesPerRow : properties.getBytesPerRow(range);
@@ -383,10 +388,12 @@ Result Texture::uploadViaStagingBuffer(TextureType type,
     }
     [encoder endEncoding];
     [mtlCmdBuffer commit];
+#if 1 // @fb only
     [mtlCmdBuffer waitUntilCompleted];
     if (mtlCmdBuffer.status != MTLCommandBufferStatusCompleted) {
       return Result{Result::Code::RuntimeError, "Texture upload command buffer failed"};
     }
+#endif
     if (autoGenerate) {
       mipmapsAreAvailableAndUploaded_ = true;
     }
@@ -507,9 +514,7 @@ bool Texture::isRequiredGenerateMipmap() const {
 }
 
 uint64_t Texture::getTextureId() const {
-  // TODO: implement via gpuResourceID
-  IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
-  return 0;
+  return bindlessTextureId_;
 }
 
 TextureDesc::TextureMipmapGeneration Texture::getMipmapGeneration() const {
@@ -999,11 +1004,7 @@ MTLPixelFormat Texture::textureFormatToMTLPixelFormat(TextureFormat value) {
 
     // Depth & Stencil
   case TextureFormat::Z_UNorm16:
-    if (@available(macOS 10.12, iOS 13.0, *)) {
-      return MTLPixelFormatDepth16Unorm;
-    } else {
-      return MTLPixelFormatDepth32Float;
-    }
+    return MTLPixelFormatDepth32Float;
   case TextureFormat::Z_UNorm24:
     return MTLPixelFormatDepth32Float;
   case TextureFormat::Z_UNorm32:
@@ -1041,11 +1042,6 @@ MTLPixelFormat Texture::textureFormatToMTLPixelFormat(TextureFormat value) {
  */
 TextureFormat Texture::mtlPixelFormatToTextureFormat(MTLPixelFormat value) {
 // Some fbsource targets don't allow enum default, this makes sure all of them compile
-  if (@available(macOS 10.12, iOS 13.0, *)) {
-    if (value == MTLPixelFormatDepth16Unorm) {
-      return TextureFormat::Z_UNorm16;
-    }
-  }
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wswitch-enum"
   switch (value) {

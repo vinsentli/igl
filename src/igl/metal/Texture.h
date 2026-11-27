@@ -23,6 +23,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 namespace igl::metal {
 
+class BindlessResources;
+
 class Texture final : public ITexture {
   friend class Device;
   friend class PlatformDevice;
@@ -68,6 +70,11 @@ class Texture final : public ITexture {
     return drawable_;
   }
 
+  void setBindlessTextureId(BindlessResources* resources, uint32_t textureId) {
+    bindlessResources_ = resources;
+    bindlessTextureId_ = textureId;
+  }
+
   // IAttachmentInterop interface
   [[nodiscard]] void* IGL_NULLABLE getNativeImage() const override;
   [[nodiscard]] void* IGL_NULLABLE getNativeImageView() const override;
@@ -111,6 +118,8 @@ class Texture final : public ITexture {
 
   id<MTLTexture> _Nullable value_;
   id<CAMetalDrawable> _Nullable drawable_;
+  BindlessResources* _Nullable bindlessResources_ = nullptr;
+  uint32_t bindlessTextureId_ = 0;
   mutable void* cpuReadMemoryAddress_ = nullptr;
   const ICapabilities& capabilities_;
   TextureDesc::TextureMipmapGeneration mipmapGeneration_ =

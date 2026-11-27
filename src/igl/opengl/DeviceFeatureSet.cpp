@@ -660,6 +660,9 @@ bool DeviceFeatureSet::isFeatureSupported(DeviceFeatures feature) const {
   case DeviceFeatures::TextureCompressionAstc:
     return isCompressionFeatureSupported(TextureFeatures::TextureCompressionAstc);
 
+  case DeviceFeatures::TextureCompressionRuntime:
+    return false;
+
   default:
     return isFeatureSupportedMiscGroup(feature);
   }

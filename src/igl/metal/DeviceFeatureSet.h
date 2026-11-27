@@ -48,6 +48,7 @@ class DeviceFeatureSet final {
   bool supports32BitFloatFiltering_ = false;
   bool supportsTimestampQueries_ = false;
   bool supportsDynamicVertexBufferStride_ = false;
+  bool supportsBindlessTextures_ = false;
 };
 
 } // namespace igl::metal

@@ -92,6 +92,8 @@ std::shared_ptr<SamplerState> PlatformDevice::createSamplerState(const SamplerSt
   metalDesc.tAddressMode = SamplerState::convertAddressMode(desc.addressModeV);
   metalDesc.rAddressMode = SamplerState::convertAddressMode(desc.addressModeW);
   metalDesc.maxAnisotropy = desc.maxAnisotropic;
+  // BindLess时需要设置supportArgumentBuffers=YES，否则gpuResourceID无效。同时总的个数不能超过maxArgumentBufferSamplerCount。
+  //metalDesc.supportArgumentBuffers = YES;
   if (desc.depthCompareEnabled && device_.hasFeature(DeviceFeatures::DepthCompare)) {
     metalDesc.compareFunction =
         DepthStencilState::convertCompareFunction(desc.depthCompareFunction);
@@ -99,6 +101,9 @@ std::shared_ptr<SamplerState> PlatformDevice::createSamplerState(const SamplerSt
 
   id<MTLSamplerState> metalObject = [device_.get() newSamplerStateWithDescriptor:metalDesc];
   auto resource = std::make_shared<SamplerState>(metalObject);
+  if (auto* bindless = device_.getBindlessResources()) {
+    resource->setBindlessSamplerId(bindless, bindless->addSampler(metalObject));
+  }
   if (device_.hasResourceTracker()) {
     resource->initResourceTracker(device_.getResourceTracker(), desc.debugName);
   }

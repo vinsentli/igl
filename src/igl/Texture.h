@@ -544,6 +544,7 @@ struct TextureDesc {
   uint32_t numSamples = 1;
   TextureUsage usage = 0;
   uint32_t numMipLevels = 1;
+  bool compress = false;
   TextureType type = TextureType::Invalid;
   TextureFormat format = TextureFormat::Invalid;
   ResourceStorage storage = ResourceStorage::Invalid;

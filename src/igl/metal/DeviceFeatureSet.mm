@@ -153,6 +153,9 @@ DeviceFeatureSet::DeviceFeatureSet(id<MTLDevice> device) {
   if (@available(macOS 14.0, iOS 17.0, *)) {
     supportsDynamicVertexBufferStride_ = (gpuFamily_ >= 4);
   }
+  if (@available(macOS 13.0, iOS 16.0, *)) {
+    supportsBindlessTextures_ = [device argumentBuffersSupport] >= MTLArgumentBuffersTier2;
+  }
 }
 
 /**
@@ -219,6 +222,11 @@ bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
     return false;
   case DeviceFeatures::TextureCompressionAstc:
     return true;
+  case DeviceFeatures::TextureCompressionRuntime:
+    if (@available(macOS 12.5, iOS 15.0, tvOS 16.0, *)) {
+      return gpuFamily_ >= 8;
+    }
+    return false;
   case DeviceFeatures::ExplicitBindingExt:
   case DeviceFeatures::StandardDerivativeExt:
   case DeviceFeatures::ShaderTextureLodExt:
@@ -239,6 +247,7 @@ bool DeviceFeatureSet::hasFeature(DeviceFeatures feature) const {
   case DeviceFeatures::Compute:
     return true;
   case DeviceFeatures::TextureBindless:
+    //return supportsBindlessTextures_;
     return false;
   case DeviceFeatures::BufferDeviceAddress:
     return false;

@@ -13,6 +13,7 @@
 #include <igl/CommandEncoder.h>
 #include <igl/Device.h>
 #include <igl/Shader.h>
+#include <igl/metal/BindlessResources.h>
 #include <igl/metal/DeviceFeatureSet.h>
 #include <igl/metal/DeviceStatistics.h>
 #include <igl/metal/PlatformDevice.h>
@@ -111,6 +112,10 @@ class Device : public IDevice {
   IGL_INLINE id<MTLDevice> IGL_NONNULL get() const {
     return device_;
   }
+
+  [[nodiscard]] metal::BindlessResources* IGL_NULLABLE getBindlessResources() const {
+    return bindlessResources_.get();
+  }
     
   //@tencent only
   void * IGL_NONNULL getImpl() override { return (__bridge void *)device_;}
@@ -175,6 +180,7 @@ class Device : public IDevice {
 
   id<MTLDevice> IGL_NONNULL device_;
   PlatformDevice platformDevice_;
+  std::unique_ptr<BindlessResources> bindlessResources_;
 
   DeviceFeatureSet deviceFeatureSet_;
   std::shared_ptr<BufferSynchronizationManager> bufferSyncManager_;

@@ -192,7 +192,8 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
                          VkImageCreateFlags createFlags,
                          VkSampleCountFlagBits samples,
                          const char* debugName,
-                         bool isSrgbMutableFormat) :
+                         bool isSrgbMutableFormat,
+                         bool compress) :
   ctx_(&ctx),
   physicalDevice_(ctx.getVkPhysicalDevice()),
   device_(ctx.getVkDevice()),
@@ -246,7 +247,18 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
       .pViewFormats = needsFormatList ? viewFormats : nullptr,
   };
 
-  const VkImageCreateInfo ci = {
+  const bool useFixedRateCompression =
+      compress && ctx.features().has_VK_EXT_image_compression_control;
+
+  const VkImageCompressionControlEXT compressionControl = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_CONTROL_EXT,
+      .pNext = needsFormatList ? &formatListCI : nullptr,
+      .flags = VK_IMAGE_COMPRESSION_FIXED_RATE_DEFAULT_EXT,
+      .compressionControlPlaneCount = 0,
+      .pFixedRateFlags = nullptr,
+  };
+
+  const VkImageCreateInfo ciUncompressed = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
       .pNext = needsFormatList ? &formatListCI : nullptr,
       .flags = createFlags,
@@ -261,6 +273,11 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
       .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
   };
+
+  VkImageCreateInfo ci = ciUncompressed;
+  if (useFixedRateCompression) {
+    ci.pNext = &compressionControl;
+  }
 
   if (IGL_VULKAN_USE_VMA && !isDisjoint) {
     const bool isHostVisible = (memFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
@@ -277,7 +294,13 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
                               : static_cast<VkMemoryPropertyFlags>(0),
     };
 
-    tryAllocateImageVma(*ctx_, ci, ciAlloc, &vkImage_, &vmaAllocation_, imageFormat_, memFlags);
+    const bool allocated =
+        tryAllocateImageVma(*ctx_, ci, ciAlloc, &vkImage_, &vmaAllocation_, imageFormat_, memFlags);
+
+    if (!allocated && useFixedRateCompression) {
+      tryAllocateImageVma(
+          *ctx_, ciUncompressed, ciAlloc, &vkImage_, &vmaAllocation_, imageFormat_, memFlags);
+    }
 
     if (vmaAllocation_) {
       VkMemoryRequirements memRequirements{};
@@ -303,7 +326,11 @@ VulkanImage::VulkanImage(const VulkanContext& ctx,
     }
   } else {
     // create a disjoint image - TODO: merge it with the VMA code path above
-    VK_ASSERT(ctx_->vf_.vkCreateImage(device_, &ci, nullptr, &vkImage_));
+    VkResult createResult = ctx_->vf_.vkCreateImage(device_, &ci, nullptr, &vkImage_);
+    if (createResult == VK_ERROR_COMPRESSION_EXHAUSTED_EXT) {
+      createResult = ctx_->vf_.vkCreateImage(device_, &ciUncompressed, nullptr, &vkImage_);
+    }
+    VK_ASSERT(createResult);
 
     VkMemoryRequirements2 memRequirements[3] = {
         {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2},

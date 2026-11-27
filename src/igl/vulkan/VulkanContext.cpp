@@ -1891,7 +1891,8 @@ VulkanImage VulkanContext::createImage(VkImageType imageType,
                                        VkImageCreateFlags flags,
                                        VkSampleCountFlagBits samples,
                                        Result* IGL_NULLABLE outResult,
-                                       const char* IGL_NULLABLE debugName) const {
+                                       const char* IGL_NULLABLE debugName,
+                                       bool compress) const {
   IGL_PROFILER_FUNCTION();
 
   if (!validateImageLimits(
@@ -1910,7 +1911,9 @@ VulkanImage VulkanContext::createImage(VkImageType imageType,
           memFlags,
           flags,
           samples,
-          debugName};
+          debugName,
+          false,
+          compress};
 }
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)

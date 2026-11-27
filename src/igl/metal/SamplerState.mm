@@ -7,9 +7,18 @@
 
 #include <igl/metal/SamplerState.h>
 
+#include <igl/metal/BindlessResources.h>
+
 namespace igl::metal {
 
 SamplerState::SamplerState(id<MTLSamplerState> value) : value_(value) {}
+
+SamplerState::~SamplerState() {
+  if (bindlessResources_) {
+    bindlessResources_->removeSampler(samplerId_);
+    bindlessResources_ = nullptr;
+  }
+}
 
 MTLSamplerMinMagFilter SamplerState::convertMinMagFilter(SamplerMinMagFilter value) {
   switch (value) {

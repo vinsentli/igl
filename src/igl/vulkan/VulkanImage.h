@@ -88,7 +88,8 @@ class VulkanImage final {
               VkImageCreateFlags createFlags,
               VkSampleCountFlagBits samples,
               const char* debugName = nullptr,
-              bool isSrgbMutableFormat = false);
+              bool isSrgbMutableFormat = false,
+              bool compress = false);
 
 #if defined(IGL_ANDROID_HWBUFFER_SUPPORTED)
   /**

@@ -43,6 +43,9 @@ Device::Device(id<MTLDevice> device) :
   IGL_PROFILER_FUNCTION_COLOR(IGL_PROFILER_COLOR_CREATE);
   bufferSyncManager_ =
       std::make_shared<BufferSynchronizationManager>(IGL_METAL_MAX_IN_FLIGHT_BUFFERS);
+  if (deviceFeatureSet_.hasFeature(DeviceFeatures::TextureBindless)) {
+    bindlessResources_ = std::make_unique<BindlessResources>(device_);
+  }
 }
 
 Device::~Device() = default;
@@ -132,6 +135,57 @@ uint32_t mtlPixelFormatToIOSurfacePixelFormat(MTLPixelFormat format) {
     default:
       return 0;
   }
+}
+
+bool isLossyCompressionSupportedPixelFormat(MTLPixelFormat format) {
+  switch (format) {
+    // Ordinary 8-bit ---------------------------------------------------------
+    case MTLPixelFormatA8Unorm:
+    case MTLPixelFormatR8Unorm:
+    case MTLPixelFormatR8Unorm_sRGB:
+    case MTLPixelFormatR8Snorm:
+    case MTLPixelFormatRG8Unorm:
+    case MTLPixelFormatRG8Unorm_sRGB:
+    case MTLPixelFormatRG8Snorm:
+    case MTLPixelFormatRGBA8Unorm:
+    case MTLPixelFormatRGBA8Unorm_sRGB:
+    case MTLPixelFormatRGBA8Snorm:
+    case MTLPixelFormatBGRA8Unorm:
+    case MTLPixelFormatBGRA8Unorm_sRGB:
+    // Ordinary 16-bit --------------------------------------------------------
+    case MTLPixelFormatR16Unorm:
+    case MTLPixelFormatR16Snorm:
+    case MTLPixelFormatR16Float:
+    case MTLPixelFormatRG16Unorm:
+    case MTLPixelFormatRG16Snorm:
+    case MTLPixelFormatRG16Float:
+    case MTLPixelFormatRGBA16Unorm:
+    case MTLPixelFormatRGBA16Snorm:
+    case MTLPixelFormatRGBA16Float:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool canUseLossyCompression(MTLTextureDescriptor* desc,
+                            uint32_t bytesPerBlock) {
+  if (desc == nil) {
+    return false;
+  }
+  if (desc.storageMode != MTLStorageModePrivate) {
+    return false;
+  }
+  if ((desc.usage & MTLTextureUsageShaderWrite) != 0 ||
+      (desc.usage & MTLTextureUsagePixelFormatView) != 0) {
+    return false;
+  }
+  // 当采用R8格式时，Lossy 纹理的 copyFromBuffer 要求width是 16 的倍数，
+  // 否则真机 blit 引擎会静默丢弃。
+  if (bytesPerBlock == 1 && desc.width % 16 != 0) {
+    return false;
+  }
+  return isLossyCompressionSupportedPixelFormat(desc.pixelFormat);
 }
 
 /// Create an IOSurface-backed `MTLTexture` for shared CPU/GPU memory.
@@ -423,6 +477,14 @@ std::shared_ptr<ITexture> Device::createTexture( // NOLINT(bugprone-exception-es
       return nullptr;
     }
   } else {
+    if (@available(macOS 12.5, iOS 15.0, tvOS 16.0, *)) {
+      const uint32_t bytesPerBlock =
+          TextureFormatProperties::fromTextureFormat(sanitized.format).bytesPerBlock;
+      if (desc.compress && deviceFeatureSet_.hasFeature(DeviceFeatures::TextureCompressionRuntime)
+          && canUseLossyCompression(metalDesc, bytesPerBlock)) {
+        metalDesc.compressionType = MTLTextureCompressionTypeLossy;
+      }
+    }
     metalObject = [device_ newTextureWithDescriptor:metalDesc];
   }
         
@@ -433,7 +495,11 @@ std::shared_ptr<ITexture> Device::createTexture( // NOLINT(bugprone-exception-es
   }
   metalObject.label = [NSString stringWithUTF8String:desc.debugName.c_str()];
   auto iglObject = std::make_shared<Texture>(metalObject, *this, desc.mipmapGeneration);
-  iglObject->iosurface_ = ioSurface; // ownership transferred; released in ~Texture
+  iglObject->iosurface_ = ioSurface; 
+  if (bindlessResources_ && sanitized.storage != ResourceStorage::Memoryless) {
+    iglObject->setBindlessTextureId(bindlessResources_.get(),
+                                    bindlessResources_->addTexture(iglObject->get()));
+  }
   if (hasResourceTracker()) {
     iglObject->initResourceTracker(getResourceTracker(), desc.debugName);
   }

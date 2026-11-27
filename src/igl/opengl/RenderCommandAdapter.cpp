@@ -154,14 +154,19 @@ void RenderCommandAdapter::setVertexBuffer(Buffer& buffer,
 }
 
 void RenderCommandAdapter::setIndexBuffer(Buffer& buffer, bool bindVAO) {
-  // 确保 VAO 在绑定索引缓冲区之前已经绑定
-  // 索引缓冲区绑定是 VAO 状态的一部分
-  // 只有 DrawElementsIndirect 开启 vao
-  if (bindVAO && activeVAO_) {
+  // 间接渲染(如glDrawElementsIndirect等)必须绑定一个非0的VAO，
+  // 且须将Vertex Buffer, Index Buffer, Indirect Buffer绑定到VAO上。
+  if (bindVAO) {
+    if (!IGL_DEBUG_VERIFY(activeVAO_)) {
+      return;
+    }
     activeVAO_->bind();
-    vaoBound_ = true;
   }
   bindBufferWithShaderStorageBufferOverride(buffer, GL_ELEMENT_ARRAY_BUFFER);
+  if (bindVAO) {
+    IGL_DEBUG_ASSERT(activeVAO_);
+    activeVAO_->unbind();
+  }
 }
 
 void RenderCommandAdapter::clearUniformBuffers() {
@@ -332,11 +337,9 @@ void RenderCommandAdapter::drawArraysIndirect(GLenum mode,
                                               Buffer& indirectBuffer,
                                               const GLvoid* IGL_NULLABLE indirectBufferOffset) {
   IGL_PROFILER_FUNCTION();
-  if (!activeVAO_) {
-    IGL_DEBUG_ASSERT(false);
+  if (!IGL_DEBUG_VERIFY(activeVAO_)) {
     return;
   }
-
   activeVAO_->bind();
   willDraw();
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::DrawArraysIndirect)) {
@@ -392,8 +395,10 @@ void RenderCommandAdapter::drawElementsIndirect(GLenum mode,
                                                 Buffer& indirectBuffer,
                                                 const GLvoid* IGL_NULLABLE indirectBufferOffset) {
   IGL_PROFILER_FUNCTION();
-  // VAO 应该在 setIndexBuffer 时已经绑定，这里不需要重复绑定
-  // 重复绑定会导致第一次绘制时索引缓冲区状态丢失
+  if (!IGL_DEBUG_VERIFY(activeVAO_)) {
+    return;
+  }
+  activeVAO_->bind();
   willDraw();
   if (getContext().deviceFeatures().hasFeature(DeviceFeatures::DrawIndexedIndirect)) {
     bindBufferWithShaderStorageBufferOverride(indirectBuffer, GL_DRAW_INDIRECT_BUFFER);
@@ -402,6 +407,7 @@ void RenderCommandAdapter::drawElementsIndirect(GLenum mode,
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   }
   didDraw();
+  activeVAO_->unbind();
 }
 
 void RenderCommandAdapter::multiDrawArraysIndirect(GLenum mode,
@@ -410,6 +416,10 @@ void RenderCommandAdapter::multiDrawArraysIndirect(GLenum mode,
                                                    GLsizei drawcount,
                                                    GLsizei stride) {
   IGL_PROFILER_FUNCTION();
+  if (!IGL_DEBUG_VERIFY(activeVAO_)) {
+    return;
+  }
+  activeVAO_->bind();
   willDraw();
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::MultiDrawIndirect)) {
     bindBufferWithShaderStorageBufferOverride(indirectBuffer, GL_DRAW_INDIRECT_BUFFER);
@@ -419,6 +429,7 @@ void RenderCommandAdapter::multiDrawArraysIndirect(GLenum mode,
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   }
   didDraw();
+  activeVAO_->unbind();
 }
 
 void RenderCommandAdapter::multiDrawElementsIndirect(GLenum mode,
@@ -429,6 +440,10 @@ void RenderCommandAdapter::multiDrawElementsIndirect(GLenum mode,
                                                      GLsizei drawcount,
                                                      GLsizei stride) {
   IGL_PROFILER_FUNCTION();
+  if (!IGL_DEBUG_VERIFY(activeVAO_)) {
+    return;
+  }
+  activeVAO_->bind();
   willDraw();
   if (getContext().deviceFeatures().hasInternalFeature(InternalFeatures::MultiDrawIndirect)) {
     bindBufferWithShaderStorageBufferOverride(indirectBuffer, GL_DRAW_INDIRECT_BUFFER);
@@ -438,6 +453,7 @@ void RenderCommandAdapter::multiDrawElementsIndirect(GLenum mode,
     IGL_DEBUG_ASSERT_NOT_IMPLEMENTED();
   }
   didDraw();
+  activeVAO_->unbind();
 }
 
 void RenderCommandAdapter::endEncoding() {
@@ -446,12 +462,6 @@ void RenderCommandAdapter::endEncoding() {
   // with complex rendering.
   if (pipelineState_) {
     unbindVertexAttributes();
-  }
-
-  // 清理 VAO 状态，避免影响后续渲染
-  if (vaoBound_ && activeVAO_) {
-    activeVAO_->unbind();
-    vaoBound_ = false;
   }
 
   pipelineState_ = nullptr;
